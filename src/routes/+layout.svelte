@@ -88,6 +88,8 @@
 	let userSheetOpen = $state(false);
 	let profileName = $state('');
 	let profileEmail = $state('');
+	let profileSaving = $state(false);
+	let profileSaved = $state(false);
 
 	$effect(() => {
 		const user = data.user;
@@ -98,11 +100,29 @@
 			}
 		});
 	});
-	let profileSaved = $state(false);
 
-	function saveProfile() {
-		profileSaved = true;
-		setTimeout(() => (profileSaved = false), 1500);
+	async function saveProfile() {
+		if (profileSaving) return;
+		profileSaving = true;
+		profileSaved = false;
+
+		const originalName = data.user?.name ?? '';
+
+		profileName = profileName.trim() || originalName;
+
+		try {
+			await authClient.updateUser({
+				name: profileName
+			});
+			await invalidateAll();
+			profileSaved = true;
+			setTimeout(() => (profileSaved = false), 1500);
+		} catch (error) {
+			console.error('Failed to update profile:', error);
+			profileName = originalName;
+		} finally {
+			profileSaving = false;
+		}
 	}
 
 	// Change password
@@ -421,10 +441,12 @@
 						</div>
 						<div class="flex flex-col gap-1.5">
 							<Label>Email Address</Label>
-							<Input bind:value={profileEmail} type="email" />
+							<Input bind:value={profileEmail} type="email" disabled />
 						</div>
-						<Button size="sm" onclick={saveProfile} class="w-fit">
-							{#if profileSaved}
+						<Button size="sm" onclick={saveProfile} disabled={profileSaving} class="w-fit">
+							{#if profileSaving}
+								Saving...
+							{:else if profileSaved}
 								<Check class="h-3 w-3" /> Saved
 							{:else}
 								Save Profile
@@ -505,7 +527,9 @@
 									<div class="flex items-center justify-between py-2.5">
 										<div class="min-w-0">
 											<p class="truncate text-sm font-medium text-fyra-gray-100">{key.name}</p>
-											<p class="mt-0.5 truncate font-mono text-[11px] text-fyra-gray-500">{key.fingerprint}</p>
+											<p class="mt-0.5 truncate font-mono text-[11px] text-fyra-gray-500">
+												{key.fingerprint}
+											</p>
 										</div>
 										<Button
 											variant="ghost"
@@ -588,7 +612,9 @@
 											<p class="truncate text-sm font-medium text-fyra-gray-100">{token.name}</p>
 											<p class="mt-0.5 truncate font-mono text-[11px] text-fyra-gray-500">
 												{token.token}
-												<span class="ml-2 font-sans text-fyra-gray-600">Created {token.created}</span>
+												<span class="ml-2 font-sans text-fyra-gray-600"
+													>Created {token.created}</span
+												>
 											</p>
 										</div>
 										<Button

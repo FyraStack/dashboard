@@ -70,6 +70,82 @@
 		createProjectOpen = false;
 	}
 
+	// Project Sheet
+	type ProjectMember = { userId: string; permissions: string };
+	type ProjectInfo = {
+		id: string;
+		projectName: string;
+		ownerUserId: string;
+		members: ProjectMember[];
+	};
+	let projectSheetOpen = $state(false);
+	let projectSheetLoading = $state(false);
+	let projectSheetName = $state('');
+	let projectSheetOwnerId = $state('');
+	let projectSheetMembers = $state<ProjectMember[]>([]);
+	let projectSheetSaving = $state(false);
+	let projectSheetSaved = $state(false);
+	let projectDeleteConfirm = $state('');
+	let projectDeleting = $state(false);
+
+	async function openProjectSheet() {
+		if (!selectedProjectId) return;
+		projectSheetLoading = true;
+		projectSheetOpen = true;
+		try {
+			const proj = await rpc<ProjectInfo>('projects.get', { projectId: selectedProjectId });
+			projectSheetName = proj.projectName;
+			projectSheetOwnerId = proj.ownerUserId;
+			projectSheetMembers = proj.members;
+		} catch (e) {
+			console.error('Failed to load project:', e);
+			projectSheetOpen = false;
+		} finally {
+			projectSheetLoading = false;
+		}
+	}
+
+	async function saveProjectName() {
+		if (projectSheetSaving || !selectedProjectId) return;
+		const originalName = selectedProject?.projectName;
+		projectSheetSaving = true;
+		projectSheetSaved = false;
+		try {
+			await rpc('projects.update', {
+				projectId: selectedProjectId,
+				name: projectSheetName.trim() || originalName
+			});
+			const idx = projects.findIndex((p) => p.id === selectedProjectId);
+			if (idx !== -1) {
+				projects[idx] = { ...projects[idx], projectName: projectSheetName.trim() || originalName };
+			}
+			projectSheetSaved = true;
+			setTimeout(() => (projectSheetSaved = false), 1500);
+		} catch (e) {
+			console.error('Failed to update project:', e);
+			projectSheetName = originalName;
+		} finally {
+			projectSheetSaving = false;
+		}
+	}
+
+	async function deleteProjectConfirm() {
+		if (projectDeleting || !selectedProjectId) return;
+		if (projectDeleteConfirm.trim() !== selectedProject?.projectName) return;
+		projectDeleting = true;
+		try {
+			await rpc('projects.delete', { projectId: selectedProjectId });
+			projects = projects.filter((p) => p.id !== selectedProjectId);
+			selectedProjectId = projects[0]?.id ?? '';
+			projectSheetOpen = false;
+			projectDeleteConfirm = '';
+		} catch (e) {
+			console.error('Failed to delete project:', e);
+		} finally {
+			projectDeleting = false;
+		}
+	}
+
 	const navItems = [
 		{ icon: Server, label: 'Servers', href: '/' },
 		{ icon: Warehouse, label: 'Colocation', href: '/colocation' },
@@ -364,6 +440,10 @@
 						<DropdownMenu.Item class="gap-2" onclick={() => (createProjectOpen = true)}>
 							<Plus class="h-3.5 w-3.5" />
 							Create Project
+						</DropdownMenu.Item>
+						<DropdownMenu.Item class="gap-2" onclick={() => openProjectSheet()}>
+							<Settings class="h-3.5 w-3.5" />
+							Settings
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
@@ -764,6 +844,131 @@
 			</Dialog.Footer>
 		</Dialog.Content>
 	</Dialog.Root>
+
+	<!-- Project Settings Sheet -->
+	<Sheet.Root bind:open={projectSheetOpen}>
+		<Sheet.Content
+			side="right"
+			class="overflow-y-auto border-fyra-gray-800 bg-fyra-gray-900 sm:max-w-md"
+		>
+			<Sheet.Header class="px-6 pt-5 pb-5">
+				<Sheet.Title class="text-sm font-medium text-fyra-gray-100">Project Settings</Sheet.Title>
+				<Sheet.Description class="text-xs text-fyra-gray-500"
+					>Manage your project name and members.</Sheet.Description
+				>
+			</Sheet.Header>
+
+			{#if projectSheetLoading}
+				<div class="flex items-center justify-center py-10">
+					<p class="text-sm text-fyra-gray-500">Loading...</p>
+				</div>
+			{:else}
+				<div class="flex flex-col gap-4 px-6 pb-6">
+					<!-- Project Name -->
+					<div class="rounded-xs border border-fyra-gray-800/60 p-4">
+						<div class="mb-3 flex items-center gap-2 border-b border-fyra-gray-800/50 pb-2">
+							<Settings class="h-3.5 w-3.5 text-fyra-red-400" />
+							<p class="text-xs font-semibold tracking-wider text-fyra-gray-400 uppercase">
+								Project Name
+							</p>
+						</div>
+						<div class="flex flex-col gap-3">
+							<Input bind:value={projectSheetName} class="font-medium" />
+							<Button size="sm" onclick={saveProjectName} disabled={projectSheetSaving} class="w-fit">
+								{#if projectSheetSaving}
+									Saving...
+								{:else if projectSheetSaved}
+									<Check class="h-3 w-3" /> Saved
+								{:else}
+									Save Name
+								{/if}
+							</Button>
+						</div>
+					</div>
+
+					<!-- Members -->
+					<div class="rounded-xs border border-fyra-gray-800/60 p-4">
+						<div class="mb-3 flex items-center gap-2 border-b border-fyra-gray-800/50 pb-2">
+							<User class="h-3.5 w-3.5 text-fyra-red-400" />
+							<p class="text-xs font-semibold tracking-wider text-fyra-gray-400 uppercase">
+								Members
+							</p>
+						</div>
+						<div class="max-h-48 overflow-y-auto">
+							<!-- Owner -->
+							{#if projectSheetOwnerId}
+								<div class="flex items-center justify-between py-2.5">
+									<div class="min-w-0">
+										<p class="truncate text-sm font-medium text-fyra-gray-100">
+											{projectSheetOwnerId}
+										</p>
+										<span
+											class="mt-0.5 inline-block rounded-xs bg-fyra-red-500/20 px-1.5 py-0.5 text-[10px] font-medium text-fyra-red-400"
+											>Owner</span
+										>
+									</div>
+								</div>
+								<div class="border-b border-fyra-gray-800/30"></div>
+							{/if}
+							<!-- Other members -->
+							{#if projectSheetMembers.length > 0}
+								{#each projectSheetMembers as member (member.userId)}
+									<div class="flex items-center justify-between py-2.5">
+										<div class="min-w-0">
+											<p class="truncate text-sm font-medium text-fyra-gray-100">
+												{member.userId}
+											</p>
+											<span
+												class="mt-0.5 inline-block rounded-xs bg-fyra-gray-800 px-1.5 py-0.5 text-[10px] font-medium text-fyra-gray-400"
+												>{member.permissions}</span
+											>
+										</div>
+									</div>
+								{/each}
+							{:else if !projectSheetOwnerId}
+								<p class="py-2 text-center text-xs text-fyra-gray-500">No members added.</p>
+							{/if}
+						</div>
+					</div>
+
+					<!-- Delete Project -->
+					<div class="rounded-xs border border-fyra-red-900/30 bg-fyra-red-950/10 p-4">
+						<div class="mb-3 flex items-center gap-2 border-b border-fyra-red-900/20 pb-2">
+							<Trash2 class="h-3.5 w-3.5 text-fyra-red-400" />
+							<p class="text-xs font-semibold tracking-wider text-fyra-red-400 uppercase">
+								Delete Project
+							</p>
+						</div>
+						<p class="mb-3 text-xs text-fyra-gray-400">
+							This will permanently delete the project and all its resources. Type the project
+							name to confirm.
+						</p>
+						<div class="flex flex-col gap-3">
+							<Input
+								bind:value={projectDeleteConfirm}
+								placeholder={selectedProject?.projectName ?? 'project name'}
+								class="border-fyra-red-900/50"
+							/>
+							<Button
+								variant="destructive"
+								size="sm"
+								onclick={deleteProjectConfirm}
+								disabled={projectDeleteConfirm.trim() !== selectedProject?.projectName ||
+									projectDeleting}
+								class="w-fit"
+							>
+								{#if projectDeleting}
+									Deleting...
+								{:else}
+									Delete Project
+								{/if}
+							</Button>
+						</div>
+					</div>
+				</div>
+			{/if}
+		</Sheet.Content>
+	</Sheet.Root>
 
 	<!-- Command Palette -->
 	<Command.Dialog

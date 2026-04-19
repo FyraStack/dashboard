@@ -4,7 +4,7 @@ import { type } from 'arktype';
 import { eq } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
 import { ipBlocks, ipAssignments, vms } from '$lib/server/db/schema';
-import { requireProjectAccess } from '$lib/server/rpc/context';
+import { requireProjectAccess } from '$lib/server/auth-context';
 
 type ListBlocksResult = { id: string; ipBlock: string }[];
 
@@ -62,7 +62,7 @@ export const assignIp = command(assignParams, async (params) => {
 const unassignParams = type({ assignmentId: 'string', ip: 'string' });
 export const unassignIp = command(unassignParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?. locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) error(401, 'Authentication required');
 
 	const db = initDrizzle();
 	const assignment = await db.query.ipAssignments.findFirst({
@@ -77,7 +77,5 @@ export const unassignIp = command(unassignParams, async (params) => {
 		await requireProjectAccess(db, event.locals.user.id, vm.ownerProjectId, 'admin');
 	}
 
-	await db
-		.delete(ipAssignments)
-		.where(eq(ipAssignments.ip, params.ip));
+	await db.delete(ipAssignments).where(eq(ipAssignments.ip, params.ip));
 });

@@ -106,9 +106,7 @@
 
 <div class="flex flex-1 flex-col overflow-hidden">
 	<!-- Header -->
-	<div
-		class="flex h-10 shrink-0 items-center gap-2 border-b border-fyra-gray-800 px-5"
-	>
+	<div class="flex h-10 shrink-0 items-center gap-2 border-b border-fyra-gray-800 px-5">
 		<Network class="h-4 w-4 text-fyra-gray-400" />
 		<span class="text-sm font-semibold text-fyra-gray-100">Networking</span>
 	</div>
@@ -118,22 +116,17 @@
 		<div class="border-b border-fyra-gray-800">
 			<div class="flex items-center gap-2 px-5 py-3">
 				<Globe class="h-3.5 w-3.5 text-fyra-gray-500" />
-				<span class="text-xs font-semibold uppercase tracking-wider text-fyra-gray-500"
+				<span class="text-xs font-semibold tracking-wider text-fyra-gray-500 uppercase"
 					>IP Addresses</span
 				>
 			</div>
 			<table class="w-full">
 				<thead>
 					<tr class="border-y border-fyra-gray-800/50">
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-fyra-gray-500"
-							>Address</th
-						>
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-fyra-gray-500">Address</th>
 						<th class="px-5 py-2.5 text-left text-xs font-medium text-fyra-gray-500">Type</th>
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-fyra-gray-500"
-							>Server</th
-						>
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-fyra-gray-500"
-							>Reverse DNS</th
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-fyra-gray-500">Server</th>
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-fyra-gray-500">Reverse DNS</th
 						>
 						<th class="px-5 py-2.5 text-right text-xs font-medium text-fyra-gray-500"></th>
 					</tr>
@@ -162,12 +155,7 @@
 										>
 											<Check class="h-3 w-3" />
 										</Button>
-										<Button
-											variant="ghost"
-											size="sm"
-											class="h-7 w-7 p-0"
-											onclick={cancelEdit}
-										>
+										<Button variant="ghost" size="sm" class="h-7 w-7 p-0" onclick={cancelEdit}>
 											<X class="h-3 w-3" />
 										</Button>
 									</div>
@@ -200,7 +188,7 @@
 			<div class="flex items-center justify-between px-5 py-3">
 				<div class="flex items-center gap-2">
 					<Network class="h-3.5 w-3.5 text-fyra-gray-500" />
-					<span class="text-xs font-semibold uppercase tracking-wider text-fyra-gray-500"
+					<span class="text-xs font-semibold tracking-wider text-fyra-gray-500 uppercase"
 						>Private Networks</span
 					>
 				</div>
@@ -219,12 +207,8 @@
 					<tr class="border-y border-fyra-gray-800/50">
 						<th class="px-5 py-2.5 text-left text-xs font-medium text-fyra-gray-500">Name</th>
 						<th class="px-5 py-2.5 text-left text-xs font-medium text-fyra-gray-500">CIDR</th>
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-fyra-gray-500"
-							>Servers</th
-						>
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-fyra-gray-500"
-							>Enabled</th
-						>
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-fyra-gray-500">Servers</th>
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-fyra-gray-500">Enabled</th>
 						<th class="px-5 py-2.5 text-right text-xs font-medium text-fyra-gray-500"></th>
 					</tr>
 				</thead>

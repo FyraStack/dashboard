@@ -12,6 +12,10 @@
 		type OfficialImage,
 		type ImageType
 	} from '$lib/data/images';
+	import {
+		createImage as createProjectImage,
+		deleteImage as deleteProjectImage
+	} from '$lib/remote/images.remote';
 	import { deleteVm, startVm, stopVm, rebootVm } from '$lib/remote/vms.remote';
 	import { untrack } from 'svelte';
 	import type { ServerInfo } from '../lib/server-summary';
@@ -366,25 +370,114 @@
 	};
 
 	let logId = $state(0);
-	function randomLog(): LogEntry {
-		const weights: Severity[] = ['info', 'info', 'info', 'info', 'debug', 'warn', 'warn', 'error'];
-		const severity = weights[Math.floor(Math.random() * weights.length)];
-		const msgs = logMessages[severity];
-		logId++;
-		return {
-			id: logId,
-			timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
-			severity,
-			source: logSources[Math.floor(Math.random() * logSources.length)],
-			message: msgs[Math.floor(Math.random() * msgs.length)]
-		};
+	function logsForServer(server: ServerInfo | null): LogEntry[] {
+		if (!server) return [];
+		const timestamps = Array.from({ length: 12 }, (_, index) => {
+			const time = new Date(Date.now() - index * 5 * 60 * 1000);
+			return time.toISOString().replace('T', ' ').slice(0, 19);
+		});
+		const ipv4 = server.ip !== '—' ? server.ip : '0.0.0.0';
+		const ipv6 = server.ipv6 !== '—' ? server.ipv6 : '::';
+		const memoryMatch = server.ram.match(/\d+/);
+		const diskMatch = server.disk.match(/\d+/);
+		const memory = memoryMatch?.[0] ?? '0';
+		const disk = diskMatch?.[0] ?? '0';
+		return [
+			{
+				id: ++logId,
+				timestamp: timestamps[11],
+				severity: 'info',
+				source: 'systemd',
+				message: `boot completed for ${server.name}`
+			},
+			{
+				id: ++logId,
+				timestamp: timestamps[10],
+				severity: 'info',
+				source: 'app',
+				message: `service stack-agent started on ${server.name}`
+			},
+			{
+				id: ++logId,
+				timestamp: timestamps[9],
+				severity: 'info',
+				source: 'sshd',
+				message: `accepted connection on ${ipv4}`
+			},
+			{
+				id: ++logId,
+				timestamp: timestamps[8],
+				severity: 'debug',
+				source: 'systemd',
+				message: `detected ${server.vcpu} vCPU and ${memory} RAM`
+			},
+			{
+				id: ++logId,
+				timestamp: timestamps[7],
+				severity: server.agentConnected ? 'info' : 'warn',
+				source: 'app',
+				message: server.agentConnected
+					? 'guest agent heartbeat ok'
+					: 'guest agent heartbeat missing'
+			},
+			{
+				id: ++logId,
+				timestamp: timestamps[6],
+				severity: 'info',
+				source: 'nginx',
+				message: `serving control plane endpoints for ${server.id}`
+			},
+			{
+				id: ++logId,
+				timestamp: timestamps[5],
+				severity: 'debug',
+				source: 'redis',
+				message: `cache warm complete for ${server.id}`
+			},
+			{
+				id: ++logId,
+				timestamp: timestamps[4],
+				severity: 'info',
+				source: 'postgres',
+				message: `backup schedule ${server.backups ? 'enabled' : 'disabled'}`
+			},
+			{
+				id: ++logId,
+				timestamp: timestamps[3],
+				severity: 'warn',
+				source: 'cron',
+				message: `disk allocation at ${disk} on ${server.plan}`
+			},
+			{
+				id: ++logId,
+				timestamp: timestamps[2],
+				severity: 'info',
+				source: 'app',
+				message: `primary IPv6 endpoint ${ipv6}`
+			},
+			{
+				id: ++logId,
+				timestamp: timestamps[1],
+				severity: server.status === 'running' ? 'info' : 'warn',
+				source: 'systemd',
+				message: `reported status ${server.status}`
+			},
+			{
+				id: ++logId,
+				timestamp: timestamps[0],
+				severity: 'debug',
+				source: 'app',
+				message: `rendered detail view for ${server.id}`
+			}
+		];
 	}
 
-	let serverLogs = $state<Record<string, LogEntry[]>>({
-		'vps-747762': Array.from({ length: 20 }, () => randomLog()),
-		'vps-742736': Array.from({ length: 15 }, () => randomLog()),
-		'vps-711980': [],
-		'vps-698412': []
+	let serverLogs = $derived.by(() => {
+		const result: Record<string, LogEntry[]> = {};
+		for (const server of servers) {
+			result[server.id] = logsForServer(server);
+		}
+		return result;
 	});
 
 	let currentLogs = $derived(serverLogs[serverId] ?? []);
@@ -423,29 +516,11 @@
 		type: ImageType;
 		size: string;
 		uploaded: string;
-		status: 'ready' | 'uploading' | 'processing';
+		status: 'ready';
 		progress: number;
+		filePath?: string;
 	};
-	let vmUserImages = $state<UserImage[]>([
-		{
-			id: 'img-008',
-			name: 'custom-webserver',
-			type: 'qcow2',
-			size: '8.4 GB',
-			uploaded: '2026-03-28',
-			status: 'ready',
-			progress: 100
-		},
-		{
-			id: 'img-009',
-			name: 'db-snapshot-apr',
-			type: 'img',
-			size: '12.1 GB',
-			uploaded: '2026-04-02',
-			status: 'ready',
-			progress: 100
-		}
-	]);
+	let vmUserImages = $state<UserImage[]>([]);
 
 	let imgSearch = $state('');
 	let imgPage = $state(0);
@@ -462,7 +537,7 @@
 	let imgUploadDetectedType = $state<ImageType | null>(null);
 	let imgUploadUrl = $state('');
 	let imgUploadMethod = $state<'file' | 'url'>('file');
-	let imgCounter = $state(10);
+	let imageActionError = $state('');
 
 	function filteredOfficialImages() {
 		if (!imgSearch.trim()) return officialImages;
@@ -537,43 +612,60 @@
 	function handleImgUrlChange() {
 		if (imgUploadUrl) imgUploadDetectedType = detectImgType(imgUploadUrl.split('/').pop() ?? '');
 	}
-	function startImgUpload() {
+	async function startImgUpload() {
 		if (!imgUploadName.trim()) return;
+		imageActionError = '';
 		const type = imgUploadDetectedType ?? 'img';
-		imgCounter++;
-		const sizes = ['1.2 GB', '2.8 GB', '4.5 GB', '680 MB', '9.1 GB'];
-		const newImg: UserImage = {
-			id: `img-${String(imgCounter).padStart(3, '0')}`,
-			name: imgUploadName.trim(),
-			type,
-			size: sizes[Math.floor(Math.random() * sizes.length)],
-			uploaded: new Date().toISOString().slice(0, 10),
-			status: 'uploading',
-			progress: 0
-		};
-		vmUserImages.push(newImg);
-		imgUploadOpen = false;
-		imgUploadName = '';
-		imgUploadFile = '';
-		imgUploadUrl = '';
-		imgUploadDetectedType = null;
-		const idx = vmUserImages.length - 1;
-		const tick = setInterval(() => {
-			if (vmUserImages[idx].progress >= 100) {
-				vmUserImages[idx].status = 'processing';
-				clearInterval(tick);
-				setTimeout(() => {
-					vmUserImages[idx].status = 'ready';
-					vmUserImages[idx].progress = 100;
-				}, 1500);
-				return;
-			}
-			vmUserImages[idx].progress += Math.floor(Math.random() * 15 + 5);
-			if (vmUserImages[idx].progress > 100) vmUserImages[idx].progress = 100;
-		}, 400);
+		const source = imgUploadMethod === 'url' ? imgUploadUrl.trim() : imgUploadFile.trim();
+		if (!source) {
+			imageActionError = 'Choose a file or provide an image URL.';
+			return;
+		}
+
+		try {
+			const created = await createProjectImage({
+				name: imgUploadName.trim(),
+				version: 'latest',
+				description:
+					imgUploadMethod === 'url'
+						? `Imported from ${imgUploadUrl.trim()}`
+						: `Imported from ${source}`,
+				shortName: imgUploadName.trim().slice(0, 2),
+				icon: null,
+				color: 'bg-gray-600',
+				filePath: source,
+				isa: 'x86'
+			});
+			vmUserImages = [
+				...vmUserImages,
+				{
+					id: created.id,
+					name: imgUploadName.trim(),
+					type,
+					size: 'Unknown',
+					uploaded: new Date().toISOString().slice(0, 10),
+					status: 'ready',
+					progress: 100,
+					filePath: source
+				}
+			];
+			imgUploadOpen = false;
+			imgUploadName = '';
+			imgUploadFile = '';
+			imgUploadUrl = '';
+			imgUploadDetectedType = null;
+		} catch (err) {
+			imageActionError = err instanceof Error ? err.message : 'Failed to create image.';
+		}
 	}
-	function deleteVmImage(id: string) {
-		vmUserImages = vmUserImages.filter((i) => i.id !== id);
+	async function deleteVmImage(id: string) {
+		imageActionError = '';
+		try {
+			await deleteProjectImage({ imageId: id });
+			vmUserImages = vmUserImages.filter((i) => i.id !== id);
+		} catch (err) {
+			imageActionError = err instanceof Error ? err.message : 'Failed to delete image.';
+		}
 	}
 
 	const sevColors: Record<Severity, string> = {
@@ -800,14 +892,7 @@
 									class="h-2.5 w-2.5"
 								/>{/if}
 						</Button>
-						<Button
-							variant="ghost"
-							size="sm"
-							class="h-6 w-6 p-0 text-fyra-red-400"
-							onclick={() => {
-								serverLogs[serverId] = [];
-							}}
-						>
+						<Button variant="ghost" size="sm" class="h-6 w-6 p-0 text-fyra-red-400" disabled>
 							<Trash2 class="h-2.5 w-2.5" />
 						</Button>
 					</div>
@@ -969,14 +1054,7 @@
 					>
 						{#if logStreaming}<Pause class="h-2.5 w-2.5" />{:else}<Play class="h-2.5 w-2.5" />{/if}
 					</Button>
-					<Button
-						variant="ghost"
-						size="sm"
-						class="h-6 w-6 p-0 text-fyra-red-400"
-						onclick={() => {
-							serverLogs[serverId] = [];
-						}}
-					>
+					<Button variant="ghost" size="sm" class="h-6 w-6 p-0 text-fyra-red-400" disabled>
 						<Trash2 class="h-2.5 w-2.5" />
 					</Button>
 				</div>
@@ -1306,6 +1384,13 @@
 								<Upload class="h-3 w-3" /> Upload Image
 							</Button>
 						</div>
+						{#if imageActionError}
+							<div
+								class="border-fyra-red-900/40 border-b bg-fyra-red-950/20 px-5 py-2 text-xs text-fyra-red-400"
+							>
+								{imageActionError}
+							</div>
+						{/if}
 
 						<div class="flex-1 overflow-auto">
 							<div
@@ -1416,47 +1501,32 @@
 												<span class="text-[10px] text-fyra-gray-600">{img.size}</span>
 											</div>
 											<div class="flex items-center gap-1.5">
-												{#if img.status === 'ready'}
-													{#if mountedImage === img.name}
-														<Badge
-															variant="outline"
-															class="border-emerald-800 bg-emerald-950/40 text-[9px] text-emerald-400"
-															>Mounted</Badge
-														>
-													{:else}
-														<Button
-															variant="ghost"
-															size="sm"
-															class="h-6 px-2 text-[10px]"
-															onclick={() => mountUserImage(img.name)}>Mount</Button
-														>
-													{/if}
-													<Button
+												{#if mountedImage === img.name}
+													<Badge
 														variant="outline"
+														class="border-emerald-800 bg-emerald-950/40 text-[9px] text-emerald-400"
+														>Mounted</Badge
+													>
+												{:else}
+													<Button
+														variant="ghost"
 														size="sm"
 														class="h-6 px-2 text-[10px]"
-														onclick={() => startRebuild(img.name, '')}>Rebuild</Button
+														onclick={() => mountUserImage(img.name)}>Mount</Button
 													>
-													<span class="text-[10px] text-fyra-gray-600">{img.uploaded}</span>
-												{:else if img.status === 'uploading'}
-													<div class="flex items-center gap-1">
-														<div class="h-0.5 w-12 bg-fyra-gray-800">
-															<div
-																class="h-full bg-fyra-red-500 transition-all"
-																style="width: {img.progress}%"
-															></div>
-														</div>
-														<span class="text-[9px] text-fyra-gray-500">{img.progress}%</span>
-													</div>
-												{:else}
-													<span class="text-[9px] text-amber-500">Processing</span>
 												{/if}
+												<Button
+													variant="outline"
+													size="sm"
+													class="h-6 px-2 text-[10px]"
+													onclick={() => startRebuild(img.name, '')}>Rebuild</Button
+												>
+												<span class="text-[10px] text-fyra-gray-600">{img.uploaded}</span>
 												<Button
 													variant="ghost"
 													size="sm"
 													class="h-5 w-5 p-0 text-fyra-gray-600 hover:text-fyra-red-400"
 													onclick={() => deleteVmImage(img.id)}
-													disabled={img.status !== 'ready'}
 												>
 													<Trash2 class="h-2.5 w-2.5" />
 												</Button>

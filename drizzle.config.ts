@@ -1,8 +1,7 @@
 import { defineConfig } from 'drizzle-kit';
 
 const raw =
-	process.env.DATABASE_URL ||
-	process.env.CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE;
+	process.env.DATABASE_URL || process.env.CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE;
 
 // node-postgres can't handle sslrootcert=system (a libpq-only feature) —
 // it tries to open a file literally named "system".  Strip it; sslmode

@@ -112,9 +112,7 @@ export const createVm = command(createParams, async (params) => {
 		const keys = await db.query.sshKeys.findMany({
 			where: eq(sshKeys.userId, event.locals.user.id)
 		});
-		publicKeys = keys
-			.filter((k) => params.sshKeyIds!.includes(k.id))
-			.map((k) => k.publicKey);
+		publicKeys = keys.filter((k) => params.sshKeyIds!.includes(k.id)).map((k) => k.publicKey);
 	}
 
 	const [inserted] = await db

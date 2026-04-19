@@ -54,10 +54,6 @@ export function initAuth() {
 			})
 		},
 
-		plugins: [
-			twoFactor(),
-			passkey(),
-			sveltekitCookies(getRequestEvent)
-		]
+		plugins: [twoFactor(), passkey(), sveltekitCookies(getRequestEvent)]
 	});
 }

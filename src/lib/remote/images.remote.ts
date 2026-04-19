@@ -18,19 +18,34 @@ type ImageRow = {
 	isa: string;
 };
 
-export const listImages = query(type({}), async () => {
+export const listImages = query(async () => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
 
 	const db = initDrizzle();
-	return db.query.baseImages.findMany();
+	const rows = await db.query.baseImages.findMany();
+	return rows.map((row) => ({
+		id: row.id,
+		filePath: row.filePath,
+		name: row.name,
+		version: row.version,
+		description: row.description,
+		shortName: row.shortName,
+		icon: row.icon,
+		color: row.color,
+		isa: row.isa
+	}));
 });
 
 const createParams = type({
 	name: 'string',
-	source: 'string',
-	architecture: "'x86' | 'arm' | 'risc-v'",
-	url: 'string?'
+	version: 'string',
+	description: 'string',
+	shortName: 'string',
+	icon: 'string|null',
+	color: 'string',
+	filePath: 'string',
+	isa: "'x86' | 'arm' | 'risc-v'"
 });
 export const createImage = command(createParams, async (params) => {
 	const event = getRequestEvent();
@@ -42,13 +57,13 @@ export const createImage = command(createParams, async (params) => {
 		.insert(baseImages)
 		.values({
 			name: params.name,
-			version: params.source,
-			description: '',
-			shortName: params.name,
-			icon: null,
-			color: '#3b82f6',
-			filePath: params.url ?? '',
-			isa: params.architecture
+			version: params.version,
+			description: params.description,
+			shortName: params.shortName,
+			icon: params.icon,
+			color: params.color,
+			filePath: params.filePath,
+			isa: params.isa
 		})
 		.returning();
 
@@ -58,8 +73,13 @@ export const createImage = command(createParams, async (params) => {
 const updateParams = type({
 	imageId: 'string',
 	name: 'string?',
-	isPublic: 'boolean?',
-	url: 'string?'
+	version: 'string?',
+	description: 'string?',
+	shortName: 'string?',
+	icon: 'string|null',
+	color: 'string?',
+	filePath: 'string?',
+	isa: "'x86' | 'arm' | 'risc-v'?"
 });
 export const updateImage = command(updateParams, async (params) => {
 	const event = getRequestEvent();
@@ -71,12 +91,9 @@ export const updateImage = command(updateParams, async (params) => {
 	});
 	if (!existing) error(404, 'Image not found');
 
-	const updates: Record<string, unknown> = {};
-	if (params.name !== undefined) updates.name = params.name;
-	if (params.url !== undefined) updates.filePath = params.url;
-
-	const keys = Object.keys(updates);
-	if (keys.length === 0) return;
+	const { imageId, ...fields } = params;
+	const updates = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+	if (Object.keys(updates).length === 0) return;
 
 	await db.update(baseImages).set(updates).where(eq(baseImages.id, params.imageId));
 });
@@ -102,9 +119,9 @@ type ProxmoxIso = {
 	node: string;
 };
 
-export const listProxmoxIsos = query(type({}), async () => {
+export const listProxmoxIsos = query(async () => {
 	const event = getRequestEvent();
-	if (!event?. locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) error(401, 'Authentication required');
 
 	const backend = getBackend('proxmox');
 	const client = (backend as any).client;
@@ -117,9 +134,7 @@ export const listProxmoxIsos = query(type({}), async () => {
 	for (const node of nodes) {
 		try {
 			const storages = await client.listStorage(node.node);
-			const isoStorages = storages.filter(
-				(s: any) => s.content?.includes('iso') && s.active !== 0
-			);
+			const isoStorages = storages.filter((s: any) => s.content?.includes('iso') && s.active !== 0);
 
 			for (const storage of isoStorages) {
 				try {

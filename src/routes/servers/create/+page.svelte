@@ -3,7 +3,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { officialImages, type OfficialImage } from '$lib/data/images';
+	import { createVolume as createProjectVolume } from '$lib/remote/volumes.remote';
 	import { createVm } from '$lib/remote/vms.remote';
+	import { untrack } from 'svelte';
 	import {
 		ArrowLeft,
 		HardDrive,
@@ -27,6 +29,7 @@
 		}[];
 		vmTypes: VmType[];
 		dbImages: DbImage[];
+		volumes?: ExistingVolume[];
 	};
 
 	let { data }: { data: PageData } = $props();
@@ -52,6 +55,13 @@
 		description: string;
 	};
 
+	type ExistingVolume = {
+		id: string;
+		name: string;
+		size: number;
+		associatedVmId: string | null;
+	};
+
 	const vmTypes = $derived(data.vmTypes ?? []);
 	const dbImages = $derived(data.dbImages ?? []);
 
@@ -64,12 +74,8 @@
 	let selectedSshKeyIds = $state<string[]>([]);
 	let selectedVolumeIds = $state<string[]>([]);
 
-	type MockVolume = { id: string; name: string; sizeGb: number };
-	let mockVolumes = $state<MockVolume[]>([
-		{ id: 'vol-1', name: 'data-vol-01', sizeGb: 50 },
-		{ id: 'vol-2', name: 'backup-vol-01', sizeGb: 100 },
-		{ id: 'vol-3', name: 'media-vol-01', sizeGb: 200 }
-	]);
+	type SelectableVolume = { id: string; name: string; sizeGb: number };
+	let availableVolumes = $state<SelectableVolume[]>([]);
 	let newVolumeName = $state('');
 	let newVolumeSize = $state('10');
 	let showCreateVolume = $state(false);
@@ -119,6 +125,22 @@
 	let imagesSearch = $state('');
 	let imageTab = $state<'os' | 'snapshots' | 'apps'>('os');
 
+	$effect(() => {
+		const incoming = (data.volumes ?? [])
+			.filter((volume) => volume.associatedVmId === null)
+			.map((volume) => ({
+				id: volume.id,
+				name: volume.name,
+				sizeGb: volume.size
+			}));
+		untrack(() => {
+			availableVolumes = incoming;
+			selectedVolumeIds = selectedVolumeIds.filter((id) =>
+				incoming.some((volume) => volume.id === id)
+			);
+		});
+	});
+
 	function filteredOfficialImages(): OfficialImage[] {
 		if (!imagesSearch.trim()) return officialImages;
 		const q = imagesSearch.toLowerCase();
@@ -160,16 +182,22 @@
 		return `${mb}MB`;
 	}
 
-	function createVolume() {
+	async function createVolume() {
 		const name = newVolumeName.trim();
 		const size = parseInt(newVolumeSize, 10);
-		if (!name || !size || size < 1) return;
-		const id = `vol-new-${Date.now()}`;
-		mockVolumes = [...mockVolumes, { id, name, sizeGb: size }];
-		selectedVolumeIds = [...selectedVolumeIds, id];
-		newVolumeName = '';
-		newVolumeSize = '10';
-		showCreateVolume = false;
+		const projectId = data.currentProject?.id;
+		if (!name || !size || size < 1 || !projectId) return;
+		try {
+			const created = await createProjectVolume({ projectId, name, size });
+			availableVolumes = [...availableVolumes, { id: created.id, name, sizeGb: size }];
+			selectedVolumeIds = [...selectedVolumeIds, created.id];
+			newVolumeName = '';
+			newVolumeSize = '10';
+			showCreateVolume = false;
+		} catch (err) {
+			createError =
+				err instanceof Error ? err.message : 'Failed to create volume. Please try again.';
+		}
 	}
 
 	function truncateFingerprint(fp: string): string {
@@ -532,9 +560,9 @@
 									</div>
 								{/if}
 
-								{#if mockVolumes.length > 0}
+								{#if availableVolumes.length > 0}
 									<div class="mt-2 flex flex-col gap-1">
-										{#each mockVolumes as vol (vol.id)}
+										{#each availableVolumes as vol (vol.id)}
 											<label
 												class="flex cursor-pointer items-center gap-3 border p-3 text-xs transition-colors {selectedVolumeIds.includes(
 													vol.id

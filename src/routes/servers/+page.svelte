@@ -6,7 +6,9 @@
 
 <div class="flex h-full flex-col items-center justify-center text-fyra-gray-500">
 	<div class="flex flex-col items-center text-center">
-		<div class="flex w-80 flex-col items-center gap-4 border border-dashed border-fyra-gray-700 p-8">
+		<div
+			class="flex w-80 flex-col items-center gap-4 border border-dashed border-fyra-gray-700 p-8"
+		>
 			<Server class="size-6 text-fyra-gray-500" />
 			<div>
 				<p class="text-sm font-medium text-fyra-gray-300">No servers deployed</p>

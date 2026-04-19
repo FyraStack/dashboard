@@ -168,15 +168,12 @@
 			selectedGroupId = groups[0].id;
 		}
 	}
-
 </script>
 
 <div class="flex flex-1 overflow-hidden">
 	<!-- Groups sidebar -->
 	<div class="flex w-64 shrink-0 flex-col border-r border-fyra-gray-800">
-		<div
-			class="flex h-10 shrink-0 items-center justify-between border-b border-fyra-gray-800 px-4"
-		>
+		<div class="flex h-10 shrink-0 items-center justify-between border-b border-fyra-gray-800 px-4">
 			<div class="flex items-center gap-2">
 				<Shield class="h-4 w-4 text-fyra-gray-400" />
 				<span class="text-sm font-semibold text-fyra-gray-100">Firewall</span>
@@ -261,23 +258,17 @@
 			<!-- Inbound rules -->
 			<div class="flex-1 overflow-auto">
 				<div class="px-5 py-3">
-					<span class="text-xs font-semibold uppercase tracking-wider text-fyra-gray-500"
+					<span class="text-xs font-semibold tracking-wider text-fyra-gray-500 uppercase"
 						>Inbound Rules</span
 					>
 				</div>
 				<table class="w-full">
 					<thead>
 						<tr class="border-y border-fyra-gray-800/50">
-							<th class="px-5 py-2 text-left text-xs font-medium text-fyra-gray-500"
-								>Protocol</th
-							>
+							<th class="px-5 py-2 text-left text-xs font-medium text-fyra-gray-500">Protocol</th>
 							<th class="px-5 py-2 text-left text-xs font-medium text-fyra-gray-500">Ports</th>
-							<th class="px-5 py-2 text-left text-xs font-medium text-fyra-gray-500"
-								>Source</th
-							>
-							<th class="px-5 py-2 text-left text-xs font-medium text-fyra-gray-500"
-								>Enabled</th
-							>
+							<th class="px-5 py-2 text-left text-xs font-medium text-fyra-gray-500">Source</th>
+							<th class="px-5 py-2 text-left text-xs font-medium text-fyra-gray-500">Enabled</th>
 							<th class="px-5 py-2 text-right text-xs font-medium text-fyra-gray-500"></th>
 						</tr>
 					</thead>
@@ -315,23 +306,18 @@
 				</table>
 
 				<div class="mt-4 px-5 py-3">
-					<span class="text-xs font-semibold uppercase tracking-wider text-fyra-gray-500"
+					<span class="text-xs font-semibold tracking-wider text-fyra-gray-500 uppercase"
 						>Outbound Rules</span
 					>
 				</div>
 				<table class="w-full">
 					<thead>
 						<tr class="border-y border-fyra-gray-800/50">
-							<th class="px-5 py-2 text-left text-xs font-medium text-fyra-gray-500"
-								>Protocol</th
-							>
+							<th class="px-5 py-2 text-left text-xs font-medium text-fyra-gray-500">Protocol</th>
 							<th class="px-5 py-2 text-left text-xs font-medium text-fyra-gray-500">Ports</th>
-							<th class="px-5 py-2 text-left text-xs font-medium text-fyra-gray-500"
-								>Destination</th
+							<th class="px-5 py-2 text-left text-xs font-medium text-fyra-gray-500">Destination</th
 							>
-							<th class="px-5 py-2 text-left text-xs font-medium text-fyra-gray-500"
-								>Enabled</th
-							>
+							<th class="px-5 py-2 text-left text-xs font-medium text-fyra-gray-500">Enabled</th>
 							<th class="px-5 py-2 text-right text-xs font-medium text-fyra-gray-500"></th>
 						</tr>
 					</thead>

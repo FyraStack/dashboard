@@ -88,15 +88,12 @@ export class ProxmoxBackend implements VmBackend {
 	}
 
 	async createVm(params: VmCreateParams): Promise<VmCreateResult> {
-		const [nodes, vmid] = await Promise.all([
-			this.client.listNodes(),
-			this.client.getNextVmId()
-		]);
+		const [nodes, vmid] = await Promise.all([this.client.listNodes(), this.client.getNextVmId()]);
 
 		// Pick the online node with the most free memory
 		const online = nodes.filter((n) => n.status === 'online');
 		if (!online.length) throw new Error('No online Proxmox nodes available');
-		const node = online.sort((a, b) => (b.maxmem - b.mem) - (a.maxmem - a.mem))[0];
+		const node = online.sort((a, b) => b.maxmem - b.mem - (a.maxmem - a.mem))[0];
 
 		const sshKeysEncoded = params.sshKeys
 			? encodeURIComponent(params.sshKeys.join('\n'))
@@ -121,9 +118,7 @@ export class ProxmoxBackend implements VmBackend {
 			ide2: 'local-lvm:cloudinit',
 			serial0: 'socket',
 			agent: '1',
-			...(sshKeysEncoded
-				? { ciuser: 'root', sshkeys: sshKeysEncoded, ipconfig0: 'ip=dhcp' }
-				: {})
+			...(sshKeysEncoded ? { ciuser: 'root', sshkeys: sshKeysEncoded, ipconfig0: 'ip=dhcp' } : {})
 		});
 
 		// Phase 2 — import cloud image as boot disk (runs in background)

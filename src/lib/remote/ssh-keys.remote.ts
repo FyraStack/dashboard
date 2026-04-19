@@ -13,7 +13,7 @@ type ListResult = {
 	description: string | null;
 }[];
 
-export const listSshKeys = query(type({}), async () => {
+export const listSshKeys = query(async () => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
 
@@ -44,9 +44,7 @@ export const createSshKey = command(createParams, async (params) => {
 	const raw = Uint8Array.from(atob(keyData), (c) => c.charCodeAt(0));
 	const hash = await crypto.subtle.digest('SHA-256', raw);
 	const fingerprint =
-		'SHA256:' +
-		btoa(String.fromCharCode(...new Uint8Array(hash)))
-			.replace(/=+$/, '');
+		'SHA256:' + btoa(String.fromCharCode(...new Uint8Array(hash))).replace(/=+$/, '');
 
 	const [inserted] = await db
 		.insert(sshKeys)

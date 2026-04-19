@@ -1,10 +1,11 @@
 import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { eq } from 'drizzle-orm';
+import { eq, and, or, sql } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
 import { projects, projectPermissions } from '$lib/server/db/schema';
-import { requireProjectAccess } from '$lib/server/rpc/context';
+import { user } from '$lib/server/db/auth.schema';
+import { requireProjectAccess } from '$lib/server/auth-context';
 
 type ListResult = {
 	id: string;
@@ -14,7 +15,7 @@ type ListResult = {
 	role: 'owner' | 'admin' | 'read_write' | 'read';
 }[];
 
-export const listProjects = query(type({}), async () => {
+export const listProjects = query(async () => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
 
@@ -47,12 +48,15 @@ export const listProjects = query(type({}), async () => {
 });
 
 const getParams = type({ projectId: 'string' });
+type MemberInfo = { userId: string; name: string; email: string; permissions: string };
 type GetResult = {
 	id: string;
 	projectName: string;
 	ownerUserId: string;
+	ownerName: string;
+	ownerEmail: string;
 	creationDate: number;
-	members: { userId: string; permissions: string }[];
+	members: MemberInfo[];
 };
 
 export const getProject = query(getParams, async (params) => {
@@ -69,15 +73,36 @@ export const getProject = query(getParams, async (params) => {
 
 	if (!project) error(404, 'Project not found');
 
+	const ownerUser = await db.query.user.findFirst({
+		where: eq(user.id, project.ownerUserId)
+	});
+
+	const memberUserIds = project.permissions.map((p: { userId: string }) => p.userId);
+	const memberUsers =
+		memberUserIds.length > 0
+			? await db.query.user.findMany({
+					where: or(...memberUserIds.map((id: string) => eq(user.id, id)))
+				})
+			: [];
+
+	const memberUserMap = new Map(memberUsers.map((u) => [u.id, u]));
+
 	return {
 		id: project.id,
 		projectName: project.projectName,
 		ownerUserId: project.ownerUserId,
+		ownerName: ownerUser?.name ?? 'Unknown',
+		ownerEmail: ownerUser?.email ?? '',
 		creationDate: project.creationDate,
-		members: project.permissions.map((p) => ({
-			userId: p.userId,
-			permissions: p.permissions
-		}))
+		members: project.permissions.map((p: { userId: string; permissions: string }) => {
+			const memberUser = memberUserMap.get(p.userId);
+			return {
+				userId: p.userId,
+				name: memberUser?.name ?? 'Unknown',
+				email: memberUser?.email ?? '',
+				permissions: p.permissions
+			};
+		})
 	};
 });
 
@@ -115,9 +140,7 @@ export const deleteProject = command(deleteParams, async (params) => {
 		error(403, 'Only the project owner can delete it');
 	}
 
-	await db
-		.delete(projectPermissions)
-		.where(eq(projectPermissions.projectId, params.projectId));
+	await db.delete(projectPermissions).where(eq(projectPermissions.projectId, params.projectId));
 	await db.delete(projects).where(eq(projects.id, params.projectId));
 });
 
@@ -156,7 +179,10 @@ export const addMember = command(addMemberParams, async (params) => {
 	await db
 		.delete(projectPermissions)
 		.where(
-			eq(projectPermissions.projectId, params.projectId)
+			and(
+				eq(projectPermissions.projectId, params.projectId),
+				eq(projectPermissions.userId, params.userId)
+			)
 		);
 
 	await db.insert(projectPermissions).values({
@@ -177,6 +203,34 @@ export const removeMember = command(removeMemberParams, async (params) => {
 	await db
 		.delete(projectPermissions)
 		.where(
-			eq(projectPermissions.projectId, params.projectId)
+			and(
+				eq(projectPermissions.projectId, params.projectId),
+				eq(projectPermissions.userId, params.userId)
+			)
 		);
+});
+
+type SearchUsersResult = { id: string; name: string; email: string }[];
+
+const searchUsersParams = type({ query: 'string', limit: 'number?' });
+export const searchUsers = query(searchUsersParams, async (params) => {
+	const event = getRequestEvent();
+	if (!event?.locals.user) error(401, 'Authentication required');
+
+	const db = initDrizzle();
+	const limit = params.limit ?? 10;
+
+	const results = await db
+		.select({
+			id: user.id,
+			name: user.name,
+			email: user.email
+		})
+		.from(user)
+		.where(
+			sql`${user.email} ILIKE ${'%' + params.query + '%'} OR ${user.name} ILIKE ${'%' + params.query + '%'}`
+		)
+		.limit(limit);
+
+	return results.filter((r) => r.id !== event.locals.user!.id) as SearchUsersResult;
 });

@@ -2,7 +2,16 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
-	import { FileText, Search, Pause, Play, Trash2, ArrowDown, ChevronRight, X } from '@lucide/svelte';
+	import {
+		FileText,
+		Search,
+		Pause,
+		Play,
+		Trash2,
+		ArrowDown,
+		ChevronRight,
+		X
+	} from '@lucide/svelte';
 
 	type Severity = 'info' | 'warn' | 'error' | 'debug';
 
@@ -80,9 +89,15 @@
 
 	function randomLog(): LogEntry {
 		const weights: Severity[] = [
-			'info', 'info', 'info', 'info', 'info',
-			'debug', 'debug',
-			'warn', 'warn',
+			'info',
+			'info',
+			'info',
+			'info',
+			'info',
+			'debug',
+			'debug',
+			'warn',
+			'warn',
 			'error'
 		];
 		const severity = weights[Math.floor(Math.random() * weights.length)];
@@ -119,9 +134,7 @@
 		if (search.trim()) {
 			const q = search.toLowerCase();
 			result = result.filter(
-				(l) =>
-					l.message.toLowerCase().includes(q) ||
-					l.source.toLowerCase().includes(q)
+				(l) => l.message.toLowerCase().includes(q) || l.source.toLowerCase().includes(q)
 			);
 		}
 		return result;
@@ -207,9 +220,7 @@
 	<!-- Log content -->
 	<div class="flex flex-1 flex-col overflow-hidden">
 		<!-- Controls bar -->
-		<div
-			class="flex h-10 shrink-0 items-center justify-between border-b border-fyra-gray-800 px-4"
-		>
+		<div class="flex h-10 shrink-0 items-center justify-between border-b border-fyra-gray-800 px-4">
 			<div class="flex items-center gap-2">
 				<span class="text-sm font-medium text-fyra-gray-200">{selectedServerId}</span>
 				{#if streaming}
@@ -222,13 +233,9 @@
 			<div class="flex items-center gap-2">
 				<div class="relative">
 					<Search
-						class="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-fyra-gray-500"
+						class="pointer-events-none absolute top-1/2 left-2.5 h-3 w-3 -translate-y-1/2 text-fyra-gray-500"
 					/>
-					<Input
-						bind:value={search}
-						placeholder="Filter logs..."
-						class="h-7 w-44 pl-8 text-xs"
-					/>
+					<Input bind:value={search} placeholder="Filter logs..." class="h-7 w-44 pl-8 text-xs" />
 				</div>
 				<div class="flex items-center border border-fyra-gray-700">
 					{#each filterOptions as opt (opt.value)}
@@ -261,12 +268,7 @@
 						<Play class="h-3 w-3" />
 					{/if}
 				</Button>
-				<Button
-					variant="ghost"
-					size="sm"
-					class="h-7 w-7 p-0 text-fyra-red-400"
-					onclick={clearLogs}
-				>
+				<Button variant="ghost" size="sm" class="h-7 w-7 p-0 text-fyra-red-400" onclick={clearLogs}>
 					<Trash2 class="h-3 w-3" />
 				</Button>
 			</div>
@@ -280,10 +282,8 @@
 			{#if serverList.find((s) => s.id === selectedServerId)?.status === 'stopped'}
 				<div class="flex flex-col items-center justify-center py-20 text-fyra-gray-500">
 					<FileText class="mb-3 h-8 w-8" />
-					<p class="text-sm font-sans">Server is offline</p>
-					<p class="mt-1 text-xs font-sans text-fyra-gray-600">
-						Start the server to view logs.
-					</p>
+					<p class="font-sans text-sm">Server is offline</p>
+					<p class="mt-1 font-sans text-xs text-fyra-gray-600">Start the server to view logs.</p>
 				</div>
 			{:else}
 				{#each filtered() as entry (entry.id)}
@@ -294,23 +294,28 @@
 						<button onclick={() => (filter = filter === entry.severity ? 'all' : entry.severity)}>
 							<Badge
 								variant="outline"
-								class="shrink-0 cursor-pointer text-[9px] {severityColors[entry.severity]} {filter === entry.severity ? 'ring-1 ring-fyra-gray-500' : ''}"
+								class="shrink-0 cursor-pointer text-[9px] {severityColors[
+									entry.severity
+								]} {filter === entry.severity ? 'ring-1 ring-fyra-gray-500' : ''}"
 							>
 								{entry.severity.toUpperCase()}
 							</Badge>
 						</button>
 						<button
-							class="w-16 shrink-0 text-left text-fyra-gray-500 hover:text-fyra-gray-300 {sourceFilter === entry.source ? 'text-fyra-gray-200 underline' : ''}"
+							class="w-16 shrink-0 text-left text-fyra-gray-500 hover:text-fyra-gray-300 {sourceFilter ===
+							entry.source
+								? 'text-fyra-gray-200 underline'
+								: ''}"
 							onclick={() => (sourceFilter = sourceFilter === entry.source ? null : entry.source)}
 						>
 							{entry.source}
 						</button>
 						<span
-							class="{entry.severity === 'error'
+							class={entry.severity === 'error'
 								? 'text-red-400'
 								: entry.severity === 'warn'
 									? 'text-amber-400/80'
-									: 'text-fyra-gray-300'}"
+									: 'text-fyra-gray-300'}
 						>
 							{entry.message}
 						</span>
@@ -318,11 +323,9 @@
 				{/each}
 
 				{#if filtered().length === 0 && currentLogs.length > 0}
-					<div
-						class="flex flex-col items-center justify-center py-20 text-fyra-gray-500"
-					>
+					<div class="flex flex-col items-center justify-center py-20 text-fyra-gray-500">
 						<Search class="mb-3 h-8 w-8" />
-						<p class="text-sm font-sans">No logs match your filter</p>
+						<p class="font-sans text-sm">No logs match your filter</p>
 					</div>
 				{/if}
 			{/if}

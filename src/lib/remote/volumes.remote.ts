@@ -4,7 +4,7 @@ import { type } from 'arktype';
 import { eq } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
 import { volumes, vms } from '$lib/server/db/schema';
-import { requireProjectAccess } from '$lib/server/rpc/context';
+import { requireProjectAccess } from '$lib/server/auth-context';
 
 type ListParams = { projectId: string };
 type ListResult = {
@@ -137,8 +137,5 @@ export const detachVolume = command(detachParams, async (params) => {
 
 	await requireProjectAccess(db, event.locals.user.id, vol.ownerProjectId, 'read_write');
 
-	await db
-		.update(volumes)
-		.set({ associatedVmId: null })
-		.where(eq(volumes.id, params.volumeId));
+	await db.update(volumes).set({ associatedVmId: null }).where(eq(volumes.id, params.volumeId));
 });

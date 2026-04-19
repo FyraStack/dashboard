@@ -83,7 +83,10 @@ export function toServerInfo(vm: VmSummary): ServerInfo {
 		vcpu: vm.live?.cores ?? vm.vmType?.cores ?? 0,
 		ram: formatBytes(vm.live?.memory ?? (vm.vmType?.ramCapacity ?? 0) * 1024 * 1024),
 		disk: formatBytes(vm.live?.disk ?? (vm.vmType?.storageAmount ?? 0) * 1024 * 1024 * 1024),
-		ip: getFirstIp(vm.live?.networkInterfaces, (address) => !address.startsWith('127.') && !address.includes(':')),
+		ip: getFirstIp(
+			vm.live?.networkInterfaces,
+			(address) => !address.startsWith('127.') && !address.includes(':')
+		),
 		ipv6: getFirstIp(vm.live?.networkInterfaces, (address) => address.includes(':')),
 		status:
 			vm.status === 'provisioning'

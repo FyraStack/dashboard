@@ -4,7 +4,33 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import {
+		attachVolume as attachProjectVolume,
+		createVolume as createProjectVolume,
+		deleteVolume as deleteProjectVolume,
+		detachVolume as detachProjectVolume
+	} from '$lib/remote/volumes.remote';
+	import { untrack } from 'svelte';
 	import { Plus, Trash2, Link, Unlink, HardDrive } from '@lucide/svelte';
+
+	type PageData = {
+		currentProject: { id: string } | null;
+		volumes?: LoadedVolume[];
+		vms?: LoadedVm[];
+	};
+
+	type LoadedVolume = {
+		id: string;
+		name: string;
+		size: number;
+		associatedVmId: string | null;
+	};
+
+	type LoadedVm = {
+		id: string;
+		active: boolean;
+		live: { disk?: number | null } | null;
+	};
 
 	type Volume = {
 		id: string;
@@ -17,48 +43,8 @@
 		status: 'attached' | 'available' | 'deleting';
 	};
 
-	let volumes = $state<Volume[]>([
-		{
-			id: 'vol-a1b2c3',
-			name: 'postgres-data',
-			size: 50,
-			used: 38,
-			usageHistory: [12, 18, 22, 28, 32, 35, 38],
-			server: 'vps-747762',
-			region: 'Chicago',
-			status: 'attached'
-		},
-		{
-			id: 'vol-d4e5f6',
-			name: 'redis-backup',
-			size: 20,
-			used: 0,
-			usageHistory: [0, 0, 0, 0, 0, 0, 0],
-			server: null,
-			region: 'Chicago',
-			status: 'available'
-		},
-		{
-			id: 'vol-g7h8i9',
-			name: 'media-storage',
-			size: 100,
-			used: 72,
-			usageHistory: [45, 52, 58, 62, 68, 70, 72],
-			server: 'vps-742736',
-			region: 'Chicago',
-			status: 'attached'
-		},
-		{
-			id: 'vol-j1k2l3',
-			name: 'logs-archive',
-			size: 200,
-			used: 0,
-			usageHistory: [0, 0, 0, 0, 0, 0, 0],
-			server: null,
-			region: 'Chicago',
-			status: 'available'
-		}
-	]);
+	let { data }: { data: PageData } = $props();
+	let volumes = $state<Volume[]>([]);
 
 	function getPath(history: number[], max: number, width = 72, height = 20): string {
 		if (history.length === 0) return '';
@@ -84,7 +70,7 @@
 		return '#fb7185';
 	}
 
-	const serverOptions = ['vps-747762', 'vps-742736', 'vps-711980'];
+	const serverOptions = $derived((data.vms ?? []).filter((vm) => vm.active).map((vm) => vm.id));
 
 	let createOpen = $state(false);
 	let newName = $state('');
@@ -92,42 +78,100 @@
 
 	let attachOpen = $state(false);
 	let attachTarget = $state<Volume | null>(null);
-	let attachServer = $state(serverOptions[0]);
+	let attachServer = $state('');
+	let actionError = $state('');
 
-	let counter = $state(0);
+	function buildUsageHistory(size: number, used: number) {
+		const safeUsed = Math.max(0, Math.min(size, used));
+		const steps = [0.25, 0.45, 0.6, 0.72, 0.82, 0.92, 1];
+		return steps.map((step) => Math.round(safeUsed * step));
+	}
 
-	function createVolume() {
-		if (!newName.trim()) return;
-		counter++;
-		volumes.push({
-			id: `vol-new${counter}`,
-			name: newName.trim(),
-			size: newSize,
-			used: 0,
-			usageHistory: [0, 0, 0, 0, 0, 0, 0],
-			server: null,
-			region: 'Chicago',
-			status: 'available'
+	$effect(() => {
+		const vmMap = new Map((data.vms ?? []).map((vm) => [vm.id, vm]));
+		const incoming = (data.volumes ?? []).map((volume) => {
+			const vm = volume.associatedVmId ? vmMap.get(volume.associatedVmId) : null;
+			const diskGb = Math.round((vm?.live?.disk ?? 0) / (1024 * 1024 * 1024));
+			const used = volume.associatedVmId
+				? Math.min(volume.size, diskGb || Math.round(volume.size * 0.7))
+				: 0;
+			return {
+				id: volume.id,
+				name: volume.name,
+				size: volume.size,
+				used,
+				usageHistory: buildUsageHistory(volume.size, used),
+				server: volume.associatedVmId,
+				region: 'Chicago',
+				status: volume.associatedVmId ? 'attached' : 'available'
+			} satisfies Volume;
 		});
-		newName = '';
-		newSize = 25;
-		createOpen = false;
+		untrack(() => {
+			volumes = incoming;
+			if (!serverOptions.includes(attachServer)) {
+				attachServer = serverOptions[0] ?? '';
+			}
+		});
+	});
+
+	async function createVolume() {
+		const projectId = data.currentProject?.id;
+		if (!projectId || !newName.trim()) return;
+		actionError = '';
+		try {
+			const created = await createProjectVolume({
+				projectId,
+				name: newName.trim(),
+				size: newSize
+			});
+			volumes = [
+				...volumes,
+				{
+					id: created.id,
+					name: newName.trim(),
+					size: newSize,
+					used: 0,
+					usageHistory: buildUsageHistory(newSize, 0),
+					server: null,
+					region: 'Chicago',
+					status: 'available'
+				}
+			];
+			newName = '';
+			newSize = 25;
+			createOpen = false;
+		} catch (err) {
+			actionError = err instanceof Error ? err.message : 'Failed to create volume.';
+		}
 	}
 
-	function deleteVolume(id: string) {
+	async function deleteVolume(id: string) {
 		const idx = volumes.findIndex((v) => v.id === id);
 		if (idx === -1) return;
+		actionError = '';
 		volumes[idx].status = 'deleting';
-		setTimeout(() => {
+		try {
+			await deleteProjectVolume({ volumeId: id });
 			volumes = volumes.filter((v) => v.id !== id);
-		}, 800);
+		} catch (err) {
+			volumes[idx].status = volumes[idx].server ? 'attached' : 'available';
+			actionError = err instanceof Error ? err.message : 'Failed to delete volume.';
+		}
 	}
 
-	function detach(id: string) {
+	async function detach(id: string) {
 		const idx = volumes.findIndex((v) => v.id === id);
 		if (idx === -1) return;
-		volumes[idx].server = null;
-		volumes[idx].status = 'available';
+		actionError = '';
+		try {
+			await detachProjectVolume({ volumeId: id });
+			volumes[idx].server = null;
+			volumes[idx].used = 0;
+			volumes[idx].usageHistory = buildUsageHistory(volumes[idx].size, 0);
+			volumes[idx].status = 'available';
+		} catch (err) {
+			actionError = err instanceof Error ? err.message : 'Failed to detach volume.';
+		}
 	}
 
 	function openAttach(vol: Volume) {
@@ -136,14 +180,22 @@
 		attachOpen = true;
 	}
 
-	function confirmAttach() {
-		if (!attachTarget) return;
+	async function confirmAttach() {
+		if (!attachTarget || !attachServer) return;
 		const idx = volumes.findIndex((v) => v.id === attachTarget!.id);
 		if (idx === -1) return;
-		volumes[idx].server = attachServer;
-		volumes[idx].status = 'attached';
-		attachOpen = false;
-		attachTarget = null;
+		actionError = '';
+		try {
+			await attachProjectVolume({ volumeId: attachTarget.id, vmId: attachServer });
+			volumes[idx].server = attachServer;
+			volumes[idx].used = Math.round(volumes[idx].size * 0.7);
+			volumes[idx].usageHistory = buildUsageHistory(volumes[idx].size, volumes[idx].used);
+			volumes[idx].status = 'attached';
+			attachOpen = false;
+			attachTarget = null;
+		} catch (err) {
+			actionError = err instanceof Error ? err.message : 'Failed to attach volume.';
+		}
 	}
 </script>
 
@@ -165,6 +217,13 @@
 			Create Volume
 		</Button>
 	</div>
+	{#if actionError}
+		<div
+			class="border-fyra-red-900/40 border-b bg-fyra-red-950/20 px-5 py-2 text-xs text-fyra-red-400"
+		>
+			{actionError}
+		</div>
+	{/if}
 
 	<!-- Volume List -->
 	<div class="flex-1 overflow-auto">

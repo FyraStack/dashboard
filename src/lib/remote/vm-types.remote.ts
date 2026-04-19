@@ -4,7 +4,7 @@ import { type } from 'arktype';
 import { eq } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
 import { vmTypes } from '$lib/server/db/schema';
-import { requireAdmin } from '$lib/server/rpc/context';
+import { requireAdmin } from '$lib/server/auth-context';
 
 type VmTypeRow = {
 	id: string;
@@ -17,12 +17,22 @@ type VmTypeRow = {
 	cap: string;
 };
 
-export const listVmTypes = query(type({}), async () => {
+export const listVmTypes = query(async () => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
 
 	const db = initDrizzle();
-	return db.query.vmTypes.findMany();
+	const rows = await db.query.vmTypes.findMany();
+	return rows.map((row) => ({
+		id: row.id,
+		name: row.name,
+		isa: row.isa,
+		cores: row.cores,
+		ramCapacity: row.ramCapacity,
+		storageAmount: row.storageAmount,
+		rate: row.rate,
+		cap: row.cap
+	}));
 });
 
 const createParams = type({
@@ -31,7 +41,8 @@ const createParams = type({
 	cores: 'number',
 	ramCapacity: 'number',
 	storageAmount: 'number',
-	price: 'string'
+	rate: 'string',
+	cap: 'string'
 });
 export const createVmType = command(createParams, async (params) => {
 	const event = getRequestEvent();
@@ -48,8 +59,8 @@ export const createVmType = command(createParams, async (params) => {
 			cores: params.cores,
 			ramCapacity: params.ramCapacity,
 			storageAmount: params.storageAmount,
-			rate: params.price,
-			cap: ''
+			rate: params.rate,
+			cap: params.cap
 		})
 		.returning();
 
@@ -59,10 +70,12 @@ export const createVmType = command(createParams, async (params) => {
 const updateParams = type({
 	vmTypeId: 'string',
 	name: 'string?',
+	isa: "'x86' | 'arm' | 'risc-v'?",
 	cores: 'number?',
 	ramCapacity: 'number?',
 	storageAmount: 'number?',
-	price: 'string?'
+	rate: 'string?',
+	cap: 'string?'
 });
 export const updateVmType = command(updateParams, async (params) => {
 	const event = getRequestEvent();
@@ -76,15 +89,9 @@ export const updateVmType = command(updateParams, async (params) => {
 	});
 	if (!existing) error(404, 'VM type not found');
 
-	const updates: Record<string, unknown> = {};
-	if (params.name !== undefined) updates.name = params.name;
-	if (params.cores !== undefined) updates.cores = params.cores;
-	if (params.ramCapacity !== undefined) updates.ramCapacity = params.ramCapacity;
-	if (params.storageAmount !== undefined) updates.storageAmount = params.storageAmount;
-	if (params.price !== undefined) updates.rate = params.price;
-
-	const keys = Object.keys(updates);
-	if (keys.length === 0) return;
+	const { vmTypeId, ...fields } = params;
+	const updates = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+	if (Object.keys(updates).length === 0) return;
 
 	await db.update(vmTypes).set(updates).where(eq(vmTypes.id, params.vmTypeId));
 });

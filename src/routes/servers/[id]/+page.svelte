@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import { getContext } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
@@ -16,6 +14,7 @@
 	} from '$lib/data/images';
 	import { deleteVm, startVm, stopVm, rebootVm } from '$lib/remote/vms.remote';
 	import { untrack } from 'svelte';
+	import type { ServerInfo } from '../lib/server-summary';
 	import {
 		Play,
 		Square,
@@ -52,41 +51,22 @@
 	} from '@lucide/svelte';
 
 	let { data } = $props();
+	let servers = $state<ServerInfo[]>([]);
+	let selectedServer = $derived(data.server ?? null);
+	let serverId = $derived(selectedServer?.id ?? '');
+	let selectedServerIdx = $derived(servers.findIndex((s) => s.id === serverId));
 
-	type ServerInfo = {
-		id: string;
-		name: string;
-		vcpu: number;
-		ram: string;
-		disk: string;
-		ip: string;
-		ipv6: string;
-		status: 'running' | 'stopped' | 'restarting' | 'provisioning';
-		agentConnected: boolean;
-		os: string;
-		region: string;
-		created: string;
-		uptime: string;
-		plan: string;
-		backups: boolean;
-	};
-
-	const SERVER_CONTEXT_KEY = Symbol('servers');
-
-	const serversFromContext = getContext<ServerInfo[]>(SERVER_CONTEXT_KEY);
-	const servers = serversFromContext ?? [];
-
-	const serverId = $derived(page.params.id ?? '');
-	const selectedServer = $derived(servers.find((s) => s.id === serverId) ?? servers[0]);
-	const selectedServerIdx = $derived(servers.findIndex((s) => s.id === serverId));
-
-	function formatUptime(seconds: number): string {
-		if (!seconds) return '—';
-		const d = Math.floor(seconds / 86400);
-		const h = Math.floor((seconds % 86400) / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		return `${d}d ${h}h ${m}m`;
-	}
+	$effect(() => {
+		const incoming = data.servers ?? [];
+		const selected = data.server;
+		untrack(() => {
+			servers = selected
+				? incoming.some((server) => server.id === selected.id)
+					? incoming
+					: [...incoming, selected]
+				: incoming;
+		});
+	});
 
 	type Tab =
 		| 'overview'

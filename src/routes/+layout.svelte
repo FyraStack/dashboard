@@ -50,17 +50,25 @@
 	type Project = { id: string; projectName: string; role: string };
 	let projects = $state<Project[]>([]);
 	let selectedProjectId = $state('');
+	let currentProject = $derived(
+		projects.find((project) => project.id === selectedProjectId) ??
+			(data.currentProject
+				? {
+						id: data.currentProject.id,
+						projectName: data.currentProject.projectName,
+						role: data.currentProject.role
+					}
+				: null)
+	);
 
 	$effect(() => {
 		const incoming = data.projects ?? [];
-		const currentProjectId = data.currentProject?.id ?? '';
+		const currentProjectId = data.currentProject?.id ?? incoming[0]?.id ?? '';
 		untrack(() => {
 			projects = incoming;
-			selectedProjectId =
-				incoming.find((project) => project.id === currentProjectId)?.id ?? incoming[0]?.id ?? '';
+			selectedProjectId = currentProjectId;
 		});
 	});
-	let selectedProject = $derived(projects.find((p) => p.id === selectedProjectId) ?? projects[0]);
 
 	let createProjectOpen = $state(false);
 	let newProjectName = $state('');
@@ -119,7 +127,7 @@
 
 	async function saveProjectName() {
 		if (projectSheetSaving || !selectedProjectId) return;
-		const originalName = selectedProject?.projectName;
+		const originalName = currentProject?.projectName ?? '';
 		projectSheetSaving = true;
 		projectSheetSaved = false;
 		try {
@@ -143,7 +151,7 @@
 
 	async function deleteProjectConfirm() {
 		if (projectDeleting || !selectedProjectId) return;
-		if (projectDeleteConfirm.trim() !== selectedProject?.projectName) return;
+		if (projectDeleteConfirm.trim() !== currentProject?.projectName) return;
 		projectDeleting = true;
 		try {
 			await deleteProjectRpc({ projectId: selectedProjectId });
@@ -517,7 +525,7 @@
 					<DropdownMenu.Trigger
 						class="flex items-center gap-1 px-1.5 py-0.5 text-sm font-medium text-fyra-gray-200 transition-colors hover:bg-fyra-gray-800 hover:text-fyra-gray-50"
 					>
-						{selectedProject?.projectName ?? 'Select Project'}
+						{currentProject?.projectName ?? 'Select Project'}
 						<ChevronDown class="h-3 w-3 text-fyra-gray-500" />
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content align="start" class="w-52 border-fyra-gray-800 bg-fyra-gray-900">
@@ -1165,14 +1173,14 @@
 						<div class="flex flex-col gap-3">
 							<Input
 								bind:value={projectDeleteConfirm}
-								placeholder={selectedProject?.projectName ?? 'project name'}
+								placeholder={currentProject?.projectName ?? 'project name'}
 								class="border-fyra-red-900/50"
 							/>
 							<Button
 								variant="destructive"
 								size="sm"
 								onclick={deleteProjectConfirm}
-								disabled={projectDeleteConfirm.trim() !== selectedProject?.projectName ||
+								disabled={projectDeleteConfirm.trim() !== currentProject?.projectName ||
 									projectDeleting}
 								class="w-fit"
 							>

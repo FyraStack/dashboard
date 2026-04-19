@@ -2,13 +2,11 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ parent }) => {
-	const { currentProject } = await parent();
+	const { projectId, servers } = await parent();
 
-	if (!currentProject) {
+	if (!projectId) {
 		return { hasServers: false };
 	}
-
-	const { servers } = await parent();
 
 	if (servers.length > 0) {
 		throw redirect(303, `/servers/${servers[0].id}`);

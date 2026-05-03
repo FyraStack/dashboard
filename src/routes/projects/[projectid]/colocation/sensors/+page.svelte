@@ -602,208 +602,108 @@
 
 			<!-- Tab content -->
 			<div class="flex flex-1 flex-col overflow-hidden">
-				<div class="flex min-h-0 flex-1 flex-col overflow-auto">
-					<!-- Charts (full width) -->
-					<div class="shrink-0">
-						<!-- Charts -->
-						<div
-							class="grid shrink-0 grid-cols-4 divide-x divide-gray-800 border-b border-gray-800"
-						>
-							{#each charts as chart (chart.label)}
-								<div class="relative flex flex-col">
-									<div class="flex items-baseline justify-between px-4 pt-3 pb-1">
-										<span class="relative z-10 text-xs font-medium text-gray-400"
-											>{chart.label}</span
-										>
-										<span class="relative z-10 text-xs font-semibold text-gray-200"
-											>{chart.value}</span
-										>
-									</div>
-									<div>
-										<svg viewBox="0 0 240 80" class="block h-28 w-full" preserveAspectRatio="none">
-											<polygon
-												points="{chart.points} 240,80 0,80"
-												fill={chart.color}
-												opacity="0.08"
-											/>
-											<polyline
-												points={chart.points}
-												fill="none"
-												stroke={chart.color}
-												stroke-width="2"
-												stroke-linejoin="round"
-												stroke-linecap="round"
-												vector-effect="non-scaling-stroke"
-											/>
-										</svg>
-									</div>
-								</div>
-							{/each}
-						</div>
-					</div>
-
-					<div class="border-b border-gray-800/50 px-5 py-3">
-						<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
-							>Hardware Details</span
-						>
-					</div>
-
-					<!-- Details + Rack side by side -->
-					<div class="flex min-h-0 flex-1">
-						<!-- Details -->
-						<div class="min-w-0 flex-1">
-							<div class="flex items-center justify-between px-5 py-2">
-								<span class="text-xs text-gray-500">Rack Size</span>
-								<span class="text-xs font-medium text-gray-200">{selectedUnit.rackSize}</span>
-							</div>
-							<div class="flex items-center justify-between px-5 py-2">
-								<span class="text-xs text-gray-500">Location</span>
-								<span class="text-xs font-medium text-gray-200"
-									>Chicago, IL — {selectedUnit.location}</span
+				<div class="flex-1 overflow-auto">
+					{#if sensorData()}
+						{@const s = sensorData()!}
+						<div class="divide-y divide-gray-800/50">
+							<div class="px-5 py-3">
+								<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+									>Temperatures</span
 								>
 							</div>
-							<div class="divide-y divide-gray-800/50 border-t border-gray-800/50">
-								{#each [['Created', selectedUnit.created], ['Power Draw', selectedUnit.powerDraw], ['Power Budget', selectedUnit.powerBudget], ['Uplink', '1 Gbps fair-use'], ['Primary IP', selectedUnit.ip]] as [label, value]}
-									<div class="flex items-center justify-between px-5 py-2">
-										<span class="text-xs text-gray-500">{label}</span>
-										<span class="text-xs font-medium text-gray-200">{value}</span>
-									</div>
-								{/each}
-								<div class="px-5 py-3">
-									<div class="flex items-center justify-between">
-										<span class="text-xs text-gray-500">Power Usage</span>
-										<span class="text-xs text-gray-400"
-											>{selectedUnit.powerDraw} / {selectedUnit.powerBudget}</span
-										>
-									</div>
-									<div class="mt-2 h-1.5 w-full bg-gray-800">
+							{#each [['CPU Package', `${s.cpuTemp}°C`, s.cpuTemp > 70 ? 'text-red-400' : s.cpuTemp > 55 ? 'text-amber-400' : 'text-gray-200', 85], ['Inlet Ambient', `${s.inletTemp}°C`, 'text-gray-200', 40], ['Exhaust', `${s.exhaustTemp}°C`, s.exhaustTemp > 45 ? 'text-amber-400' : 'text-gray-200', 55], ['Disk 0 (sda)', `${s.disk1Temp}°C`, s.disk1Temp > 45 ? 'text-amber-400' : 'text-gray-200', 60], ['Disk 1 (sdb)', `${s.disk2Temp}°C`, s.disk2Temp > 45 ? 'text-amber-400' : 'text-gray-200', 60]] as [name, val, color, max]}
+								<div class="flex items-center gap-4 px-5 py-2">
+									<Thermometer class="h-3 w-3 shrink-0 text-gray-600" />
+									<span class="w-28 shrink-0 text-xs text-gray-400">{name}</span>
+									<div class="h-1 flex-1 bg-gray-800">
 										<div
-											class="h-full transition-all duration-500 {powerPct() > 80
-												? 'bg-red-500'
-												: powerPct() > 50
-													? 'bg-amber-500'
-													: 'bg-emerald-500'}"
-											style="width: {powerPct()}%"
+											class="h-full bg-gray-600 transition-all"
+											style="width: {(parseInt(String(val)) / Number(max)) * 100}%"
 										></div>
 									</div>
+									<span class="w-12 shrink-0 text-right text-xs font-medium {color}">{val}</span>
+								</div>
+							{/each}
+
+							<div class="px-5 py-3">
+								<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+									>Fan Speeds</span
+								>
+							</div>
+							{#each [['Fan 1', s.fan1], ['Fan 2', s.fan2], ['Fan 3', s.fan3], ['Fan 4', s.fan4]] as [name, rpm]}
+								<div class="flex items-center gap-4 px-5 py-2">
+									<Fan class="h-3 w-3 shrink-0 text-gray-600" />
+									<span class="w-28 shrink-0 text-xs text-gray-400">{name}</span>
+									<div class="h-1 flex-1 bg-gray-800">
+										<div
+											class="h-full bg-gray-600 transition-all"
+											style="width: {(Number(rpm) / 10000) * 100}%"
+										></div>
+									</div>
+									<span class="w-16 shrink-0 text-right text-xs font-medium text-gray-200"
+										>{rpm} RPM</span
+									>
+								</div>
+							{/each}
+
+							<div class="px-5 py-3">
+								<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+									>Voltages</span
+								>
+							</div>
+							{#each [['Vcore', `${s.vCore}V`, 0.9, 1.4], ['+3.3V', `${s.v33}V`, 3.1, 3.5], ['+5V', `${s.v5}V`, 4.7, 5.3], ['+12V', `${s.v12}V`, 11.5, 12.5]] as [name, val, lo, hi]}
+								<div class="flex items-center gap-4 px-5 py-2">
+									<Cpu class="h-3 w-3 shrink-0 text-gray-600" />
+									<span class="w-28 shrink-0 text-xs text-gray-400">{name}</span>
+									<span class="text-xs text-gray-600">{lo}V</span>
+									<div class="h-1 flex-1 bg-gray-800">
+										<div
+											class="h-full bg-emerald-600 transition-all"
+											style="width: {((parseFloat(String(val)) - Number(lo)) /
+												(Number(hi) - Number(lo))) *
+												100}%"
+										></div>
+									</div>
+									<span class="text-xs text-gray-600">{hi}V</span>
+									<span class="w-16 shrink-0 text-right font-mono text-xs font-medium text-gray-200"
+										>{val}</span
+									>
+								</div>
+							{/each}
+
+							<div class="px-5 py-3">
+								<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+									>Power</span
+								>
+							</div>
+							<div class="flex items-center justify-between px-5 py-2.5">
+								<span class="text-xs text-gray-400">Current Draw</span>
+								<span class="text-xs font-medium text-gray-200">{selectedUnit.powerDraw}</span>
+							</div>
+							<div class="flex items-center justify-between px-5 py-2.5">
+								<span class="text-xs text-gray-400">Budget</span>
+								<span class="text-xs font-medium text-gray-200">{selectedUnit.powerBudget}</span>
+							</div>
+							<div class="px-5 py-3">
+								<div class="h-1.5 w-full bg-gray-800">
+									<div
+										class="h-full transition-all duration-500 {powerPct() > 80
+											? 'bg-red-500'
+											: powerPct() > 50
+												? 'bg-amber-500'
+												: 'bg-emerald-500'}"
+										style="width: {powerPct()}%"
+									></div>
 								</div>
 							</div>
 						</div>
-
-						<!-- Rack diagram -->
-						<div class="relative w-32 shrink-0 p-2">
-							<div class="absolute top-[2.25rem] bottom-0 left-0 border-l border-gray-800/50"></div>
-							<svg
-								viewBox="0 0 120 {totalRackSlots * 8 + 16}"
-								class="w-full"
-								xmlns="http://www.w3.org/2000/svg"
-							>
-								<!-- Rails -->
-								<rect
-									x="0"
-									y="0"
-									width="7"
-									height={totalRackSlots * 8 + 16}
-									fill="var(--gray-800)"
-								/>
-								<rect
-									x="113"
-									y="0"
-									width="7"
-									height={totalRackSlots * 8 + 16}
-									fill="var(--gray-800)"
-								/>
-								<rect x="0" y="0" width="120" height="3" fill="var(--gray-700)" />
-								<rect
-									x="0"
-									y={totalRackSlots * 8 + 13}
-									width="120"
-									height="3"
-									fill="var(--gray-700)"
-								/>
-								<!-- Screw holes -->
-								{#each Array(totalRackSlots) as _, i}
-									<circle cx="3.5" cy={i * 8 + 8} r="1" fill="var(--gray-600)" />
-									<circle cx="116.5" cy={i * 8 + 8} r="1" fill="var(--gray-600)" />
-								{/each}
-								<!-- Slots -->
-								{#each Array(totalRackSlots) as _, i}
-									{@const slotNum = totalRackSlots - i}
-									{@const y = i * 8 + 4}
-									<rect
-										x="9"
-										{y}
-										width="102"
-										height="7"
-										fill="var(--gray-950)"
-										stroke="var(--gray-800)"
-										stroke-width="0.5"
-									/>
-									{#if slotNum % 5 === 0}
-										<text
-											x="13"
-											y={y + 5.5}
-											font-size="4"
-											fill="var(--gray-600)"
-											font-family="monospace">{slotNum}</text
-										>
-									{/if}
-								{/each}
-								<!-- Occupied -->
-								{#each rackInfo().occupied as unit}
-									{@const startY = (totalRackSlots - unit.end) * 8 + 4}
-									{@const h = (unit.end - unit.start + 1) * 8 - 1}
-									{#if true}
-										<rect
-											x="9"
-											y={startY}
-											width="102"
-											height={h}
-											fill={unit.isCurrent
-												? unit.status === 'online'
-													? 'var(--red-500)'
-													: 'var(--gray-600)'
-												: 'var(--gray-700)'}
-											opacity={unit.isCurrent ? 0.25 : 0.12}
-											stroke={unit.isCurrent ? 'var(--red-500)' : 'var(--gray-600)'}
-											stroke-width={unit.isCurrent ? 1.5 : 0.5}
-										/>
-										{@const midY = startY + h / 2}
-										{#each Array(Math.min(Math.floor(h / 4), 5)) as _, vi}
-											<rect
-												x={26 + vi * 10}
-												y={midY - 2}
-												width="7"
-												height="4"
-												fill="none"
-												stroke={unit.isCurrent ? 'var(--red-400)' : 'var(--gray-500)'}
-												stroke-width="0.4"
-												opacity="0.4"
-											/>
-										{/each}
-										<circle
-											cx="15"
-											cy={midY}
-											r="1.5"
-											fill={unit.status === 'online'
-												? '#4ade80'
-												: unit.status === 'offline'
-													? 'var(--gray-600)'
-													: '#fbbf24'}
-										/>
-										<text
-											x="108"
-											y={midY + 1.5}
-											font-size="4"
-											fill={unit.isCurrent ? 'var(--gray-200)' : 'var(--gray-500)'}
-											font-family="monospace"
-											text-anchor="end">{unit.name}</text
-										>
-									{/if}
-								{/each}
-							</svg>
+					{:else}
+						<div class="flex flex-col items-center justify-center py-20 text-gray-500">
+							<Activity class="mb-3 h-8 w-8" />
+							<p class="text-sm">Server is powered off</p>
+							<p class="mt-1 text-xs text-gray-600">Power on via IPMI to view sensor data.</p>
 						</div>
-					</div>
+					{/if}
 				</div>
 			</div>
 		</div>

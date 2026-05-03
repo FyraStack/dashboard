@@ -36,7 +36,7 @@
 
 	type ImageTab = 'os' | 'snapshots' | 'apps';
 	let { data }: { data: PageData } = $props();
-	const imageTab = 'os' as ImageTab;
+	const imageTab = 'snapshots' as ImageTab;
 
 	type VmType = {
 		id: string;

@@ -602,206 +602,150 @@
 
 			<!-- Tab content -->
 			<div class="flex flex-1 flex-col overflow-hidden">
-				<div class="flex min-h-0 flex-1 flex-col overflow-auto">
-					<!-- Charts (full width) -->
-					<div class="shrink-0">
-						<!-- Charts -->
-						<div
-							class="grid shrink-0 grid-cols-4 divide-x divide-gray-800 border-b border-gray-800"
-						>
-							{#each charts as chart (chart.label)}
-								<div class="relative flex flex-col">
-									<div class="flex items-baseline justify-between px-4 pt-3 pb-1">
-										<span class="relative z-10 text-xs font-medium text-gray-400"
-											>{chart.label}</span
-										>
-										<span class="relative z-10 text-xs font-semibold text-gray-200"
-											>{chart.value}</span
-										>
-									</div>
-									<div>
-										<svg viewBox="0 0 240 80" class="block h-28 w-full" preserveAspectRatio="none">
-											<polygon
-												points="{chart.points} 240,80 0,80"
-												fill={chart.color}
-												opacity="0.08"
-											/>
-											<polyline
-												points={chart.points}
-												fill="none"
-												stroke={chart.color}
-												stroke-width="2"
-												stroke-linejoin="round"
-												stroke-linecap="round"
-												vector-effect="non-scaling-stroke"
-											/>
-										</svg>
-									</div>
-								</div>
-							{/each}
-						</div>
-					</div>
-
-					<div class="border-b border-gray-800/50 px-5 py-3">
-						<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
-							>Hardware Details</span
-						>
-					</div>
-
-					<!-- Details + Rack side by side -->
-					<div class="flex min-h-0 flex-1">
-						<!-- Details -->
-						<div class="min-w-0 flex-1">
-							<div class="flex items-center justify-between px-5 py-2">
-								<span class="text-xs text-gray-500">Rack Size</span>
-								<span class="text-xs font-medium text-gray-200">{selectedUnit.rackSize}</span>
-							</div>
-							<div class="flex items-center justify-between px-5 py-2">
-								<span class="text-xs text-gray-500">Location</span>
-								<span class="text-xs font-medium text-gray-200"
-									>Chicago, IL — {selectedUnit.location}</span
-								>
-							</div>
-							<div class="divide-y divide-gray-800/50 border-t border-gray-800/50">
-								{#each [['Created', selectedUnit.created], ['Power Draw', selectedUnit.powerDraw], ['Power Budget', selectedUnit.powerBudget], ['Uplink', '1 Gbps fair-use'], ['Primary IP', selectedUnit.ip]] as [label, value]}
-									<div class="flex items-center justify-between px-5 py-2">
-										<span class="text-xs text-gray-500">{label}</span>
-										<span class="text-xs font-medium text-gray-200">{value}</span>
-									</div>
-								{/each}
-								<div class="px-5 py-3">
-									<div class="flex items-center justify-between">
-										<span class="text-xs text-gray-500">Power Usage</span>
-										<span class="text-xs text-gray-400"
-											>{selectedUnit.powerDraw} / {selectedUnit.powerBudget}</span
-										>
-									</div>
-									<div class="mt-2 h-1.5 w-full bg-gray-800">
-										<div
-											class="h-full transition-all duration-500 {powerPct() > 80
-												? 'bg-red-500'
-												: powerPct() > 50
-													? 'bg-amber-500'
-													: 'bg-emerald-500'}"
-											style="width: {powerPct()}%"
-										></div>
-									</div>
-								</div>
-							</div>
-						</div>
-
-						<!-- Rack diagram -->
-						<div class="relative w-32 shrink-0 p-2">
-							<div class="absolute top-[2.25rem] bottom-0 left-0 border-l border-gray-800/50"></div>
-							<svg
-								viewBox="0 0 120 {totalRackSlots * 8 + 16}"
-								class="w-full"
-								xmlns="http://www.w3.org/2000/svg"
+				<div class="flex-1 overflow-auto">
+					<div class="divide-y divide-gray-800/50">
+						<div class="px-5 py-3">
+							<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+								>IPMI Credentials</span
 							>
-								<!-- Rails -->
-								<rect
-									x="0"
-									y="0"
-									width="7"
-									height={totalRackSlots * 8 + 16}
-									fill="var(--gray-800)"
-								/>
-								<rect
-									x="113"
-									y="0"
-									width="7"
-									height={totalRackSlots * 8 + 16}
-									fill="var(--gray-800)"
-								/>
-								<rect x="0" y="0" width="120" height="3" fill="var(--gray-700)" />
-								<rect
-									x="0"
-									y={totalRackSlots * 8 + 13}
-									width="120"
-									height="3"
-									fill="var(--gray-700)"
-								/>
-								<!-- Screw holes -->
-								{#each Array(totalRackSlots) as _, i}
-									<circle cx="3.5" cy={i * 8 + 8} r="1" fill="var(--gray-600)" />
-									<circle cx="116.5" cy={i * 8 + 8} r="1" fill="var(--gray-600)" />
-								{/each}
-								<!-- Slots -->
-								{#each Array(totalRackSlots) as _, i}
-									{@const slotNum = totalRackSlots - i}
-									{@const y = i * 8 + 4}
-									<rect
-										x="9"
-										{y}
-										width="102"
-										height="7"
-										fill="var(--gray-950)"
-										stroke="var(--gray-800)"
-										stroke-width="0.5"
-									/>
-									{#if slotNum % 5 === 0}
-										<text
-											x="13"
-											y={y + 5.5}
-											font-size="4"
-											fill="var(--gray-600)"
-											font-family="monospace">{slotNum}</text
-										>
-									{/if}
-								{/each}
-								<!-- Occupied -->
-								{#each rackInfo().occupied as unit}
-									{@const startY = (totalRackSlots - unit.end) * 8 + 4}
-									{@const h = (unit.end - unit.start + 1) * 8 - 1}
-									{#if true}
-										<rect
-											x="9"
-											y={startY}
-											width="102"
-											height={h}
-											fill={unit.isCurrent
-												? unit.status === 'online'
-													? 'var(--red-500)'
-													: 'var(--gray-600)'
-												: 'var(--gray-700)'}
-											opacity={unit.isCurrent ? 0.25 : 0.12}
-											stroke={unit.isCurrent ? 'var(--red-500)' : 'var(--gray-600)'}
-											stroke-width={unit.isCurrent ? 1.5 : 0.5}
-										/>
-										{@const midY = startY + h / 2}
-										{#each Array(Math.min(Math.floor(h / 4), 5)) as _, vi}
-											<rect
-												x={26 + vi * 10}
-												y={midY - 2}
-												width="7"
-												height="4"
-												fill="none"
-												stroke={unit.isCurrent ? 'var(--red-400)' : 'var(--gray-500)'}
-												stroke-width="0.4"
-												opacity="0.4"
-											/>
-										{/each}
-										<circle
-											cx="15"
-											cy={midY}
-											r="1.5"
-											fill={unit.status === 'online'
-												? '#4ade80'
-												: unit.status === 'offline'
-													? 'var(--gray-600)'
-													: '#fbbf24'}
-										/>
-										<text
-											x="108"
-											y={midY + 1.5}
-											font-size="4"
-											fill={unit.isCurrent ? 'var(--gray-200)' : 'var(--gray-500)'}
-											font-family="monospace"
-											text-anchor="end">{unit.name}</text
-										>
-									{/if}
-								{/each}
-							</svg>
+						</div>
+						{#if showIpmi}
+							<div class="px-5 py-3">
+								<div class="flex flex-col gap-2.5">
+									<div class="flex items-center justify-between">
+										<span class="text-xs text-gray-500">IPMI Address</span>
+										<div class="flex items-center gap-1.5">
+											<span class="font-mono text-xs text-gray-200"
+												>ipmi-{selectedUnit.id}.stack.sh</span
+											>
+											<button
+												class="text-gray-500 hover:text-gray-300"
+												onclick={() => copyText(`ipmi-${selectedUnit.id}.stack.sh`, 'ipmi-host')}
+											>
+												{#if copied === 'ipmi-host'}<Check
+														class="h-3 w-3 text-emerald-500"
+													/>{:else}<Copy class="h-3 w-3" />{/if}
+											</button>
+										</div>
+									</div>
+									<div class="flex items-center justify-between">
+										<span class="text-xs text-gray-500">Username</span>
+										<span class="font-mono text-xs text-gray-200">admin</span>
+									</div>
+									<div class="flex items-center justify-between">
+										<span class="text-xs text-gray-500">Password</span>
+										<div class="flex items-center gap-1.5">
+											<code class="bg-gray-800 px-2 py-0.5 font-mono text-xs text-gray-100"
+												>{ipmiPassword}</code
+											>
+											<button
+												class="text-gray-500 hover:text-gray-300"
+												onclick={() => copyText(ipmiPassword, 'ipmi-pw')}
+											>
+												{#if copied === 'ipmi-pw'}<Check
+														class="h-3 w-3 text-emerald-500"
+													/>{:else}<Copy class="h-3 w-3" />{/if}
+											</button>
+										</div>
+									</div>
+									<Button
+										variant="outline"
+										size="sm"
+										class="w-fit gap-1.5 text-xs"
+										onclick={generateIpmiPassword}
+									>
+										Regenerate Password
+									</Button>
+								</div>
+							</div>
+						{:else}
+							<div class="px-5 py-3">
+								<Button
+									variant="outline"
+									size="sm"
+									class="gap-1.5 text-xs"
+									onclick={generateIpmiPassword}
+								>
+									<Power class="h-3 w-3" />
+									Generate IPMI Credentials
+								</Button>
+							</div>
+						{/if}
+
+						<div class="px-5 py-3">
+							<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+								>Power Control</span
+							>
+						</div>
+						<div class="px-5 py-3">
+							<div class="grid grid-cols-2 gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									class="h-9 gap-1.5 text-xs"
+									disabled={ipmiAction !== '' || selectedUnit.status === 'online'}
+									onclick={() => ipmiCommand('power-on')}
+								>
+									<Power class="h-3 w-3" />
+									{ipmiAction === 'power-on' ? 'Powering on...' : 'Power On'}
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									class="h-9 gap-1.5 border-red-700 text-xs text-red-400 hover:bg-red-950"
+									disabled={ipmiAction !== '' || selectedUnit.status === 'offline'}
+									onclick={() => ipmiCommand('power-off')}
+								>
+									<PowerOff class="h-3 w-3" />
+									{ipmiAction === 'power-off' ? 'Powering off...' : 'Power Off'}
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									class="h-9 gap-1.5 text-xs"
+									disabled={ipmiAction !== '' || selectedUnit.status === 'offline'}
+									onclick={() => ipmiCommand('reset')}
+								>
+									<RotateCw class="h-3 w-3 {ipmiAction === 'reset' ? 'animate-spin' : ''}" />
+									{ipmiAction === 'reset' ? 'Resetting...' : 'Reset'}
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									class="h-9 gap-1.5 text-xs"
+									disabled={ipmiAction !== ''}
+									onclick={() => ipmiCommand('power-cycle')}
+								>
+									<RotateCw class="h-3 w-3 {ipmiAction === 'power-cycle' ? 'animate-spin' : ''}" />
+									{ipmiAction === 'power-cycle' ? 'Cycling...' : 'Power Cycle'}
+								</Button>
+							</div>
+						</div>
+
+						<div class="px-5 py-3">
+							<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+								>Boot Options</span
+							>
+						</div>
+						<div class="px-5 py-3">
+							<div class="flex flex-col gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									class="w-fit gap-1.5 text-xs"
+									onclick={() => ipmiCommand('bios-setup')}
+								>
+									Enter BIOS Setup on Next Boot
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									class="w-fit gap-1.5 text-xs"
+									onclick={() => ipmiCommand('pxe-boot')}
+								>
+									PXE Boot on Next Restart
+								</Button>
+							</div>
 						</div>
 					</div>
 				</div>

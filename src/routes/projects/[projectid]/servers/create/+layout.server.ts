@@ -1,11 +1,11 @@
-import type { PageServerLoad } from './$types';
+import type { LayoutServerLoad } from './$types';
 import { listVmTypes } from '$lib/remote/vm-types.remote';
 import { listImages } from '$lib/remote/images.remote';
 import { listVolumes } from '$lib/remote/volumes.remote';
 import { listSshKeys } from '$lib/remote/ssh-keys.remote';
 import { error } from '@sveltejs/kit';
 
-export const load: PageServerLoad = async ({ params, parent, depends }) => {
+export const load: LayoutServerLoad = async ({ params, parent, depends }) => {
 	depends('project:create-server');
 	await parent();
 	if (!params.projectid) {

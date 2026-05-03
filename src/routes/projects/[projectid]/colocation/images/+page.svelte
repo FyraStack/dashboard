@@ -602,207 +602,224 @@
 
 			<!-- Tab content -->
 			<div class="flex flex-1 flex-col overflow-hidden">
-				<div class="flex min-h-0 flex-1 flex-col overflow-auto">
-					<!-- Charts (full width) -->
-					<div class="shrink-0">
-						<!-- Charts -->
+				<div class="flex flex-1 flex-col overflow-hidden">
+					<!-- Mounted image banner -->
+					{#if mountedColoImage}
 						<div
-							class="grid shrink-0 grid-cols-4 divide-x divide-gray-800 border-b border-gray-800"
+							class="flex items-center justify-between border-b border-gray-800 bg-gray-800/20 px-5 py-2.5"
 						>
-							{#each charts as chart (chart.label)}
-								<div class="relative flex flex-col">
-									<div class="flex items-baseline justify-between px-4 pt-3 pb-1">
-										<span class="relative z-10 text-xs font-medium text-gray-400"
-											>{chart.label}</span
-										>
-										<span class="relative z-10 text-xs font-semibold text-gray-200"
-											>{chart.value}</span
-										>
-									</div>
-									<div>
-										<svg viewBox="0 0 240 80" class="block h-28 w-full" preserveAspectRatio="none">
-											<polygon
-												points="{chart.points} 240,80 0,80"
-												fill={chart.color}
-												opacity="0.08"
-											/>
-											<polyline
-												points={chart.points}
-												fill="none"
-												stroke={chart.color}
-												stroke-width="2"
-												stroke-linejoin="round"
-												stroke-linecap="round"
-												vector-effect="non-scaling-stroke"
-											/>
-										</svg>
-									</div>
-								</div>
-							{/each}
-						</div>
-					</div>
-
-					<div class="border-b border-gray-800/50 px-5 py-3">
-						<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
-							>Hardware Details</span
-						>
-					</div>
-
-					<!-- Details + Rack side by side -->
-					<div class="flex min-h-0 flex-1">
-						<!-- Details -->
-						<div class="min-w-0 flex-1">
-							<div class="flex items-center justify-between px-5 py-2">
-								<span class="text-xs text-gray-500">Rack Size</span>
-								<span class="text-xs font-medium text-gray-200">{selectedUnit.rackSize}</span>
+							<div class="flex items-center gap-2">
+								<Disc class="h-3 w-3 text-red-400" />
+								<span class="text-xs font-medium text-gray-200">Mounted: {mountedColoImage}</span>
 							</div>
-							<div class="flex items-center justify-between px-5 py-2">
-								<span class="text-xs text-gray-500">Location</span>
-								<span class="text-xs font-medium text-gray-200"
-									>Chicago, IL — {selectedUnit.location}</span
+							<div class="flex items-center gap-1.5">
+								<Button
+									variant="outline"
+									size="sm"
+									class="h-7 gap-1.5 px-3 text-xs"
+									disabled={bootingFromImage || selectedUnit.status === 'provisioning'}
+									onclick={bootFromMountedImage}
+								>
+									<Power class="h-3 w-3" />
+									{#if bootingFromImage}Booting...{:else}Boot from Image{/if}
+								</Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									class="h-7 px-2 text-xs"
+									onclick={unmountColoImage}>Unmount</Button
 								>
 							</div>
-							<div class="divide-y divide-gray-800/50 border-t border-gray-800/50">
-								{#each [['Created', selectedUnit.created], ['Power Draw', selectedUnit.powerDraw], ['Power Budget', selectedUnit.powerBudget], ['Uplink', '1 Gbps fair-use'], ['Primary IP', selectedUnit.ip]] as [label, value]}
-									<div class="flex items-center justify-between px-5 py-2">
-										<span class="text-xs text-gray-500">{label}</span>
-										<span class="text-xs font-medium text-gray-200">{value}</span>
-									</div>
-								{/each}
-								<div class="px-5 py-3">
-									<div class="flex items-center justify-between">
-										<span class="text-xs text-gray-500">Power Usage</span>
-										<span class="text-xs text-gray-400"
-											>{selectedUnit.powerDraw} / {selectedUnit.powerBudget}</span
-										>
-									</div>
-									<div class="mt-2 h-1.5 w-full bg-gray-800">
-										<div
-											class="h-full transition-all duration-500 {powerPct() > 80
-												? 'bg-red-500'
-												: powerPct() > 50
-													? 'bg-amber-500'
-													: 'bg-emerald-500'}"
-											style="width: {powerPct()}%"
-										></div>
-									</div>
+						</div>
+					{:else}
+						<div class="border-b border-gray-800 px-5 py-2.5 text-xs text-gray-500">
+							No image mounted. Select an image below to mount via IPMI virtual media.
+						</div>
+					{/if}
+
+					<!-- Search + Upload -->
+					<div class="flex items-center justify-between border-b border-gray-800 px-5 py-2.5">
+						<div class="relative">
+							<Search
+								class="pointer-events-none absolute top-1/2 left-2.5 h-3 w-3 -translate-y-1/2 text-gray-500"
+							/>
+							<input
+								bind:value={coloImgSearch}
+								placeholder="Search images..."
+								class="h-7 w-44 border border-gray-700 bg-gray-800 pr-2 pl-7 text-xs text-gray-100 placeholder:text-gray-600 focus:border-gray-500 focus:outline-none"
+							/>
+						</div>
+						<Button
+							variant="outline"
+							size="sm"
+							class="h-7 gap-1.5 px-3 text-xs"
+							onclick={() => {
+								coloImgUploadOpen = true;
+								coloImgUploadMethod = 'file';
+								coloImgUploadFile = '';
+								coloImgUploadUrl = '';
+								coloImgUploadName = '';
+								coloImgUploadDetectedType = null;
+							}}
+						>
+							<Upload class="h-3 w-3" /> Upload Image
+						</Button>
+					</div>
+
+					<div class="flex-1 overflow-auto">
+						<!-- Official Images -->
+						<div class="flex items-center justify-between border-b border-gray-800 px-5 py-2.5">
+							<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+								>Official Images</span
+							>
+							{#if coloImgTotalPages > 1}
+								<div class="flex items-center gap-1.5">
+									<button
+										class="flex h-6 w-6 items-center justify-center text-gray-500 hover:text-gray-300 disabled:opacity-30"
+										disabled={coloImgPage === 0}
+										onclick={() => coloImgPage--}
+									>
+										<ChevronLeft class="h-3.5 w-3.5" />
+									</button>
+									<span class="text-[10px] text-gray-500"
+										>{coloImgPage + 1}/{coloImgTotalPages}</span
+									>
+									<button
+										class="flex h-6 w-6 items-center justify-center text-gray-500 hover:text-gray-300 disabled:opacity-30"
+										disabled={coloImgPage >= coloImgTotalPages - 1}
+										onclick={() => coloImgPage++}
+									>
+										<ChevronRight class="h-3.5 w-3.5" />
+									</button>
 								</div>
-							</div>
+							{/if}
 						</div>
 
-						<!-- Rack diagram -->
-						<div class="relative w-32 shrink-0 p-2">
-							<div class="absolute top-[2.25rem] bottom-0 left-0 border-l border-gray-800/50"></div>
-							<svg
-								viewBox="0 0 120 {totalRackSlots * 8 + 16}"
-								class="w-full"
-								xmlns="http://www.w3.org/2000/svg"
-							>
-								<!-- Rails -->
-								<rect
-									x="0"
-									y="0"
-									width="7"
-									height={totalRackSlots * 8 + 16}
-									fill="var(--gray-800)"
-								/>
-								<rect
-									x="113"
-									y="0"
-									width="7"
-									height={totalRackSlots * 8 + 16}
-									fill="var(--gray-800)"
-								/>
-								<rect x="0" y="0" width="120" height="3" fill="var(--gray-700)" />
-								<rect
-									x="0"
-									y={totalRackSlots * 8 + 13}
-									width="120"
-									height="3"
-									fill="var(--gray-700)"
-								/>
-								<!-- Screw holes -->
-								{#each Array(totalRackSlots) as _, i}
-									<circle cx="3.5" cy={i * 8 + 8} r="1" fill="var(--gray-600)" />
-									<circle cx="116.5" cy={i * 8 + 8} r="1" fill="var(--gray-600)" />
+						<div class="border-b border-gray-800">
+							<div class="grid grid-cols-2 gap-px bg-gray-900">
+								{#each pagedColoOfficialImages() as img (img.id)}
+									<button
+										class="relative flex gap-3 overflow-hidden bg-gray-900 p-4 text-left transition-colors hover:bg-gray-800/40"
+										onclick={() => openColoImageDetail(img)}
+									>
+										<div
+											class="pointer-events-none absolute inset-0 opacity-[0.05]"
+											style="background: linear-gradient(135deg, {img.iconColor} 0%, transparent 60%)"
+										></div>
+										<div class="relative shrink-0">
+											{#if img.icon}
+												<Icon name={img.icon} class="h-10 w-10 text-gray-300" />
+											{:else}
+												<span
+													class="flex h-10 w-10 items-center justify-center text-lg font-bold text-gray-300"
+													>{img.shortName}</span
+												>
+											{/if}
+										</div>
+										<div class="relative flex min-w-0 flex-1 flex-col">
+											<div class="flex items-center gap-1.5">
+												<span class="text-sm font-semibold text-gray-50">{img.name}</span>
+												{#if img.paid}
+													<Badge
+														variant="outline"
+														class="border-red-700 bg-red-950/40 text-[8px] text-red-400"
+													>
+														<DollarSign class="mr-0.5 h-2 w-2" />
+														{img.price}
+													</Badge>
+												{/if}
+											</div>
+											<p class="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-gray-500">
+												{img.description}
+											</p>
+											<p class="mt-auto pt-1.5 text-[10px] leading-none text-gray-600">
+												{img.versions[0].archs.join('  ')} | {img.versions.length} version{img
+													.versions.length > 1
+													? 's'
+													: ''}
+											</p>
+										</div>
+									</button>
 								{/each}
-								<!-- Slots -->
-								{#each Array(totalRackSlots) as _, i}
-									{@const slotNum = totalRackSlots - i}
-									{@const y = i * 8 + 4}
-									<rect
-										x="9"
-										{y}
-										width="102"
-										height="7"
-										fill="var(--gray-950)"
-										stroke="var(--gray-800)"
-										stroke-width="0.5"
-									/>
-									{#if slotNum % 5 === 0}
-										<text
-											x="13"
-											y={y + 5.5}
-											font-size="4"
-											fill="var(--gray-600)"
-											font-family="monospace">{slotNum}</text
-										>
-									{/if}
-								{/each}
-								<!-- Occupied -->
-								{#each rackInfo().occupied as unit}
-									{@const startY = (totalRackSlots - unit.end) * 8 + 4}
-									{@const h = (unit.end - unit.start + 1) * 8 - 1}
-									{#if true}
-										<rect
-											x="9"
-											y={startY}
-											width="102"
-											height={h}
-											fill={unit.isCurrent
-												? unit.status === 'online'
-													? 'var(--red-500)'
-													: 'var(--gray-600)'
-												: 'var(--gray-700)'}
-											opacity={unit.isCurrent ? 0.25 : 0.12}
-											stroke={unit.isCurrent ? 'var(--red-500)' : 'var(--gray-600)'}
-											stroke-width={unit.isCurrent ? 1.5 : 0.5}
-										/>
-										{@const midY = startY + h / 2}
-										{#each Array(Math.min(Math.floor(h / 4), 5)) as _, vi}
-											<rect
-												x={26 + vi * 10}
-												y={midY - 2}
-												width="7"
-												height="4"
-												fill="none"
-												stroke={unit.isCurrent ? 'var(--red-400)' : 'var(--gray-500)'}
-												stroke-width="0.4"
-												opacity="0.4"
-											/>
-										{/each}
-										<circle
-											cx="15"
-											cy={midY}
-											r="1.5"
-											fill={unit.status === 'online'
-												? '#4ade80'
-												: unit.status === 'offline'
-													? 'var(--gray-600)'
-													: '#fbbf24'}
-										/>
-										<text
-											x="108"
-											y={midY + 1.5}
-											font-size="4"
-											fill={unit.isCurrent ? 'var(--gray-200)' : 'var(--gray-500)'}
-											font-family="monospace"
-											text-anchor="end">{unit.name}</text
-										>
-									{/if}
-								{/each}
-							</svg>
+							</div>
+							{#if filteredColoOfficialImages().length === 0 && coloImgSearch.trim()}
+								<div class="px-5 py-6 text-center text-xs text-gray-500">
+									No official images match "{coloImgSearch}"
+								</div>
+							{/if}
 						</div>
+
+						<!-- User Images -->
+						<div class="flex items-center justify-between border-b border-gray-800 px-5 py-2.5">
+							<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+								>Your Images ({coloUserImages.length})</span
+							>
+						</div>
+						{#if filteredColoUserImages().length > 0}
+							<div class="divide-y divide-gray-800/20">
+								{#each filteredColoUserImages() as img (img.id)}
+									<div
+										class="flex items-center justify-between px-5 py-3 transition-colors hover:bg-gray-800/20"
+									>
+										<div class="flex items-center gap-2">
+											<Disc class="h-2.5 w-2.5 shrink-0 text-gray-600" />
+											<span class="text-xs text-gray-200">{img.name}</span>
+											<Badge variant="outline" class="text-[7px] {imageTypeColors[img.type]}"
+												>.{img.type}</Badge
+											>
+											<span class="text-[10px] text-gray-600">{img.size}</span>
+										</div>
+										<div class="flex items-center gap-1.5">
+											{#if img.status === 'ready'}
+												{#if mountedColoImage === img.name}
+													<Badge
+														variant="outline"
+														class="border-emerald-800 bg-emerald-950/40 text-[9px] text-emerald-400"
+														>Mounted</Badge
+													>
+												{:else}
+													<Button
+														variant="ghost"
+														size="sm"
+														class="h-6 px-2 text-[10px]"
+														onclick={() => mountColoUserImage(img.name)}>Mount</Button
+													>
+												{/if}
+												<span class="text-[10px] text-gray-600">{img.uploaded}</span>
+											{:else if img.status === 'uploading'}
+												<div class="flex items-center gap-1">
+													<div class="h-0.5 w-12 bg-gray-800">
+														<div
+															class="h-full bg-red-500 transition-all"
+															style="width: {img.progress}%"
+														></div>
+													</div>
+													<span class="text-[9px] text-gray-500">{img.progress}%</span>
+												</div>
+											{:else}
+												<span class="text-[9px] text-amber-500">Processing</span>
+											{/if}
+											<Button
+												variant="ghost"
+												size="sm"
+												class="h-5 w-5 p-0 text-gray-600 hover:text-red-400"
+												onclick={() => deleteColoImage(img.id)}
+												disabled={img.status !== 'ready'}
+											>
+												<Trash2 class="h-2.5 w-2.5" />
+											</Button>
+										</div>
+									</div>
+								{/each}
+							</div>
+						{:else if coloImgSearch.trim()}
+							<div class="px-5 py-3 text-center text-[10px] text-gray-600">No matches</div>
+						{:else}
+							<div class="flex items-center justify-center gap-1.5 py-3 text-gray-600">
+								<Upload class="h-3 w-3" />
+								<p class="text-[10px]">No uploaded images</p>
+							</div>
+						{/if}
 					</div>
 				</div>
 			</div>

@@ -1,10 +1,11 @@
 <script lang="ts">
+	import type { PageProps } from './$types';
 	import { getServerWithFallback } from '$lib/state/servers.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 
-	let { data } = $props();
+	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
 	let rebuildOs = $state('Ultramarine Linux 40');
 	const osOptions = [
@@ -24,14 +25,16 @@
 		</p>
 	</div>
 	<div class="space-y-2">
-		<Label>Operating System</Label><select
+		<Label for="rebuild-os-select">Operating System</Label><select
+			id="rebuild-os-select"
 			bind:value={rebuildOs}
 			class="h-9 w-full border border-gray-700 bg-gray-900 px-3 text-sm text-gray-100"
-			>{#each osOptions as os}<option>{os}</option>{/each}</select
+			>{#each osOptions as os (os)}<option>{os}</option>{/each}</select
 		>
 	</div>
 	<div class="space-y-2">
-		<Label>Type server ID to confirm</Label><Input
+		<Label for="rebuild-confirm-input">Type server ID to confirm</Label><Input
+			id="rebuild-confirm-input"
 			placeholder={selectedServer.id}
 			class="font-mono"
 		/>

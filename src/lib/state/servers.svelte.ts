@@ -54,7 +54,7 @@ export function upsertServer(server: ServerInfo): void {
 	}
 
 	serversState.servers[index] = {
-		...server,
-		...serversState.servers[index]
+		...serversState.servers[index],
+		...server
 	};
 }

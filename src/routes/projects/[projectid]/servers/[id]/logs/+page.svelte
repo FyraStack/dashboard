@@ -1,10 +1,11 @@
 <script lang="ts">
+	import type { PageProps } from './$types';
 	import { getServerWithFallback } from '$lib/state/servers.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { AlertTriangle, Pause, Play, Search, Trash2, X } from '@lucide/svelte';
 
-	let { data } = $props();
+	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
 	let logStreaming = $state(true);
 	let logSearch = $state('');
@@ -46,7 +47,7 @@
 			message: selectedServer.agentConnected ? 'control plane connected' : 'guest agent unreachable'
 		}
 	]);
-	let filteredLogs = $derived(() => {
+	let filteredLogs = $derived.by(() => {
 		let result = currentLogs;
 		if (logSevFilter) result = result.filter((log) => log.severity === logSevFilter);
 		if (logSourceFilter) result = result.filter((log) => log.source === logSourceFilter);
@@ -73,15 +74,19 @@
 	<div class="flex items-center gap-2">
 		<span class="text-xs font-medium text-gray-300">{selectedServer.name}</span>
 		{#if hasLogFilters}
-			<span class="text-[9px] text-gray-500">{filteredLogs().length}/{currentLogs.length}</span>
-			{#if logSevFilter}<button onclick={() => (logSevFilter = null)}
+			<span class="text-[9px] text-gray-500">{filteredLogs.length}/{currentLogs.length}</span>
+			{#if logSevFilter}<button
+					aria-label="Clear severity filter"
+					onclick={() => (logSevFilter = null)}
 					><Badge
 						variant="outline"
 						class="cursor-pointer gap-1 text-[8px] {sevColors[logSevFilter]}"
 						>{logSevFilter.toUpperCase()}<X class="h-2 w-2" /></Badge
 					></button
 				>{/if}
-			{#if logSourceFilter}<button onclick={() => (logSourceFilter = null)}
+			{#if logSourceFilter}<button
+					aria-label="Clear source filter"
+					onclick={() => (logSourceFilter = null)}
 					><Badge variant="secondary" class="cursor-pointer gap-1 text-[8px]"
 						>{logSourceFilter}<X class="h-2 w-2" /></Badge
 					></button
@@ -93,6 +98,7 @@
 			<Search
 				class="pointer-events-none absolute top-1/2 left-2 h-2.5 w-2.5 -translate-y-1/2 text-gray-500"
 			/><input
+				aria-label="Search logs"
 				bind:value={logSearch}
 				placeholder="Search..."
 				class="h-6 w-36 border border-gray-700 bg-gray-800 pr-2 pl-6 text-[11px] text-gray-100 placeholder:text-gray-600 focus:border-gray-500 focus:outline-none"
@@ -103,6 +109,7 @@
 				onclick={clearLogFilters}>Clear</button
 			>{/if}
 		<Button
+			aria-label={logStreaming ? 'Pause log streaming' : 'Resume log streaming'}
 			variant="ghost"
 			size="sm"
 			class="h-6 w-6 p-0"
@@ -111,8 +118,12 @@
 					class="h-2.5 w-2.5"
 				/>{/if}</Button
 		>
-		<Button variant="ghost" size="sm" class="h-6 w-6 p-0 text-red-400" disabled
-			><Trash2 class="h-2.5 w-2.5" /></Button
+		<Button
+			aria-label="Clear logs"
+			variant="ghost"
+			size="sm"
+			class="h-6 w-6 p-0 text-red-400"
+			disabled><Trash2 class="h-2.5 w-2.5" /></Button
 		>
 	</div>
 </div>
@@ -138,7 +149,7 @@
 			</div>
 		</div>
 	{:else}
-		{#each filteredLogs() as entry (entry.id)}<div
+		{#each filteredLogs as entry (entry.id)}<div
 				class="flex items-baseline gap-0 px-4 py-px leading-[1.6] hover:bg-gray-800/20"
 			>
 				<span class="w-[148px] shrink-0 text-gray-600">{entry.timestamp}</span><button

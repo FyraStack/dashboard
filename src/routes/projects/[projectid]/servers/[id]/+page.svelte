@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { PageProps } from './$types';
 	import { Button } from '$lib/components/ui/button';
 	import {
 		AlertTriangle,
@@ -12,7 +13,7 @@
 	} from '@lucide/svelte';
 	import { getServerWithFallback, serversState } from '$lib/state/servers.svelte';
 
-	let { data } = $props();
+	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
 	let copied = $state('');
 	let logStreaming = $state(true);
@@ -206,7 +207,7 @@
 		<div class="px-5 py-3 text-xs font-semibold tracking-wider text-gray-500 uppercase">
 			Server Details
 		</div>
-		{#each [['Plan', selectedServer.plan], ['OS', selectedServer.os], ['Region', selectedServer.region], ['vCPU', `${selectedServer.vcpu} cores`], ['RAM', selectedServer.ram], ['Disk', selectedServer.disk], ['Created', selectedServer.created], ['Uptime', selectedServer.uptime]] as [label, value]}
+		{#each [['Plan', selectedServer.plan], ['OS', selectedServer.os], ['Region', selectedServer.region], ['vCPU', `${selectedServer.vcpu} cores`], ['RAM', selectedServer.ram], ['Disk', selectedServer.disk], ['Created', selectedServer.created], ['Uptime', selectedServer.uptime]] as [label, value] (label)}
 			<div class="flex items-center justify-between px-5 py-2">
 				<span class="text-xs text-gray-500">{label}</span>
 				{#if !liveLoaded && isLiveDetail(label)}
@@ -263,7 +264,7 @@
 			class="min-h-[180px] flex-1 bg-gray-950 p-4 font-mono text-sm leading-relaxed text-gray-300"
 		>
 			{#if selectedServer.status === 'running'}
-				{#each terminalLines as line}
+				{#each terminalLines as line (line.type + line.text)}
 					{#if line.type === 'prompt'}
 						<div>
 							<span class="text-gray-500">user@{selectedServer.name}~:</span>

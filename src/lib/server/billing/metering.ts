@@ -5,17 +5,15 @@ import {
 	billingMeters,
 	billingUsageEvents,
 	vms,
-	volumes,
 	type billingResourceTypeEnum
 } from '$lib/server/db/schema';
 import { getRuntimeEnv } from '$lib/server/env';
 import {
 	requireVmFeatureId,
 	usageIdempotencyKey,
-	usageQuantity,
-	VOLUME_GIB_HOURS_FEATURE_ID
+	usageQuantity
 } from './features';
-import { ensureProjectCustomer, formatAutumnError } from './autumn';
+import { ensureProjectCustomer, ensureProjectServerEntity, formatAutumnError } from './autumn';
 
 type BillingResourceType = (typeof billingResourceTypeEnum.enumValues)[number];
 type BillingMeter = typeof billingMeters.$inferSelect;
@@ -124,28 +122,6 @@ export async function reconcileMissingMeters(now = Date.now(), limit = 100, proj
 		}
 	}
 
-	const projectVolumes = await db.query.volumes.findMany({
-		...(projectId ? { where: eq(volumes.ownerProjectId, projectId) } : {}),
-		limit
-	});
-
-	for (const volume of projectVolumes) {
-		const existing = await db.query.billingMeters.findFirst({
-			where: and(eq(billingMeters.resourceType, 'volume'), eq(billingMeters.resourceId, volume.id))
-		});
-		if (existing) continue;
-
-		await createBillingMeter({
-			projectId: volume.ownerProjectId,
-			resourceType: 'volume',
-			resourceId: volume.id,
-			featureId: VOLUME_GIB_HOURS_FEATURE_ID,
-			units: volume.size,
-			now: volume.createdAt
-		});
-		created += 1;
-	}
-
 	return { created };
 }
 
@@ -171,9 +147,9 @@ export async function meterResourceThrough(
 		.set({ active: false, endedAt: now })
 		.where(eq(billingMeters.id, meter.id));
 
-	if (event) await syncUsageEvent(event.id);
+	const syncStatus = event ? await syncUsageEvent(event.id) : null;
 
-	return event;
+	return { event, syncStatus };
 }
 
 export async function meterActiveResources(now = Date.now(), limit = 100) {
@@ -183,7 +159,13 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 	const meters = await db
 		.select()
 		.from(billingMeters)
-		.where(and(eq(billingMeters.active, true), lt(billingMeters.lastMeteredAt, now)))
+		.where(
+			and(
+				eq(billingMeters.resourceType, 'vm'),
+				eq(billingMeters.active, true),
+				lt(billingMeters.lastMeteredAt, now)
+			)
+		)
 		.orderBy(asc(billingMeters.lastMeteredAt))
 		.limit(limit);
 
@@ -213,6 +195,7 @@ export async function meterProjectActiveResources(
 		.from(billingMeters)
 		.where(
 			and(
+				eq(billingMeters.resourceType, 'vm'),
 				eq(billingMeters.projectId, projectId),
 				eq(billingMeters.active, true),
 				lt(billingMeters.lastMeteredAt, now)
@@ -240,34 +223,48 @@ export async function syncUsageEvent(id: string) {
 		where: eq(billingUsageEvents.id, id)
 	});
 
-	if (!event || event.syncStatus === 'synced') return;
+	if (!event) return null;
+	if (event.syncStatus === 'synced') return 'synced' as const;
 
 	try {
 		await ensureProjectCustomer(event.projectId);
-		await autumnClient().track(
-			{
-				customerId: event.projectId,
-				featureId: event.featureId,
-				value: Number(event.quantity),
-				properties: {
-					resourceType: event.resourceType,
-					resourceId: event.resourceId,
-					periodStart: event.periodStart,
-					periodEnd: event.periodEnd
-				}
-			},
-			{ headers: { 'Idempotency-Key': event.idempotencyKey } }
-		);
+		if (event.resourceType === 'vm') {
+			const vm = await db.query.vms.findFirst({
+				where: eq(vms.id, event.resourceId),
+				columns: { name: true }
+			});
+			await ensureProjectServerEntity({
+				projectId: event.projectId,
+				serverId: event.resourceId,
+				name: vm?.name
+			});
+		}
+		const payload = {
+			customerId: event.projectId,
+			featureId: event.featureId,
+			value: Number(event.quantity),
+			...(event.resourceType === 'vm' ? { entityId: event.resourceId } : {}),
+			properties: {
+				resourceType: event.resourceType,
+				resourceId: event.resourceId,
+				periodStart: event.periodStart,
+				periodEnd: event.periodEnd
+			}
+		};
+
+		await autumnClient().track(payload, { headers: { 'Idempotency-Key': event.idempotencyKey } });
 
 		await db
 			.update(billingUsageEvents)
 			.set({ syncStatus: 'synced', syncError: null, syncedAt: Date.now() })
 			.where(eq(billingUsageEvents.id, event.id));
+		return 'synced' as const;
 	} catch (err) {
 		await db
 			.update(billingUsageEvents)
 			.set({ syncStatus: 'failed', syncError: formatAutumnError(err) })
 			.where(eq(billingUsageEvents.id, event.id));
+		return 'failed' as const;
 	}
 }
 
@@ -280,11 +277,15 @@ export async function syncPendingUsage(limit = 100) {
 		.orderBy(asc(billingUsageEvents.createdAt))
 		.limit(limit);
 
+	let synced = 0;
+	let failed = 0;
 	for (const event of events) {
-		await syncUsageEvent(event.id);
+		const status = await syncUsageEvent(event.id);
+		if (status === 'synced') synced += 1;
+		if (status === 'failed') failed += 1;
 	}
 
-	return { events: events.length };
+	return { attempted: events.length, synced, failed };
 }
 
 export async function syncProjectUsage(projectId: string, limit = 100) {
@@ -301,9 +302,13 @@ export async function syncProjectUsage(projectId: string, limit = 100) {
 		.orderBy(asc(billingUsageEvents.createdAt))
 		.limit(limit);
 
+	let synced = 0;
+	let failed = 0;
 	for (const event of events) {
-		await syncUsageEvent(event.id);
+		const status = await syncUsageEvent(event.id);
+		if (status === 'synced') synced += 1;
+		if (status === 'failed') failed += 1;
 	}
 
-	return { events: events.length };
+	return { attempted: events.length, synced, failed };
 }

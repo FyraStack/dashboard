@@ -31,6 +31,10 @@
 		newProjectName = '';
 		createOpen = false;
 		await authClient.organization.setActive({ organizationId: res.id });
+		if (res.billingSetupUrl) {
+			window.location.href = res.billingSetupUrl;
+			return;
+		}
 		await goto(`/projects/${res.id}/servers`);
 	}
 

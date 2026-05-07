@@ -19,6 +19,8 @@ declare global {
 				ORIGIN: string;
 				BETTER_AUTH_SECRET: string;
 				AUTUMN_SECRET: string;
+				AUTUMN_DEFAULT_PLAN_ID?: string;
+				AUTUMN_SERVER_ENTITY_FEATURE_ID?: string;
 				HYPERDRIVE: {
 					connectionString: string;
 				};

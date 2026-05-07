@@ -6,6 +6,7 @@ import { initDrizzle } from '$lib/server/db';
 import { vms, vmTypes, sshKeys, baseImages } from '$lib/server/db/schema';
 import { getBackend, type VmInfo } from '$lib/server/backends';
 import { requireProjectAccess } from '$lib/server/auth-context';
+import { deleteProjectServerEntity, ensureProjectServerEntity } from '$lib/server/billing/autumn';
 import { createBillingMeter, meterResourceThrough } from '$lib/server/billing/metering';
 import { getCachedProxmoxVms, refreshProxmoxVmCache } from '$lib/server/vm-live-cache';
 
@@ -299,6 +300,7 @@ export const createVm = command(createParams, async (params) => {
 	const vmId = inserted.id;
 	let result;
 	try {
+		await ensureProjectServerEntity({ projectId: params.projectId, serverId: vmId, name: params.name });
 		const backend = getBackend('proxmox');
 		result = await backend.createVm({
 			id: vmId,
@@ -321,6 +323,7 @@ export const createVm = command(createParams, async (params) => {
 			}
 		});
 	} catch (err) {
+		await deleteProjectServerEntity(params.projectId, vmId).catch(() => {});
 		await db.delete(vms).where(eq(vms.id, inserted.id));
 		throw err;
 	}
@@ -361,7 +364,12 @@ export const deleteVm = command(deleteParams, async (params) => {
 		console.warn(`Failed to delete backend VM ${row.id}; marking inactive`, err);
 	}
 
-	await meterResourceThrough('vm', row.id);
+	const metered = await meterResourceThrough('vm', row.id);
+	if (row.ownerProjectId && (!metered?.event || metered.syncStatus === 'synced')) {
+		await deleteProjectServerEntity(row.ownerProjectId, row.id).catch((err) => {
+			console.warn(`Failed to delete Autumn entity for VM ${row.id}`, err);
+		});
+	}
 	await db.update(vms).set({ active: false }).where(eq(vms.id, params.vmId));
 	refreshProxmoxVmCache().catch(() => {});
 });

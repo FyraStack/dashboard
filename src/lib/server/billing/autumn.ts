@@ -15,6 +15,23 @@ function errorMessage(err: unknown) {
 	return err instanceof Error ? err.message : String(err);
 }
 
+function autumnStatus(err: unknown) {
+	return typeof err === 'object' && err !== null && 'statusCode' in err
+		? Number(err.statusCode)
+		: null;
+}
+
+function serverEntityFeatureId() {
+	const featureId = getRuntimeEnv().AUTUMN_SERVER_ENTITY_FEATURE_ID;
+	if (!featureId) throw new Error('AUTUMN_SERVER_ENTITY_FEATURE_ID is not set');
+
+	return featureId;
+}
+
+function defaultPlanId() {
+	return getRuntimeEnv().AUTUMN_DEFAULT_PLAN_ID;
+}
+
 async function getProjectCustomerData(projectId: string) {
 	const db = initDrizzle();
 	const project = await db.query.organization.findFirst({
@@ -108,6 +125,33 @@ export async function updateProjectCustomer(projectId: string) {
 	}
 }
 
+export async function attachDefaultProjectPlan(projectId: string, successUrl?: string) {
+	const planId = defaultPlanId();
+	if (!planId) return null;
+
+	await ensureProjectCustomer(projectId);
+
+	try {
+		const response = await createAutumnClient().billing.attach({
+			customerId: projectId,
+			planId,
+			redirectMode: 'if_required',
+			...(successUrl ? { successUrl } : {})
+		});
+
+		return response.paymentUrl;
+	} catch (err) {
+		if (autumnStatus(err) === 409) return null;
+
+		const db = initDrizzle();
+		await db
+			.update(projectBillingCustomers)
+			.set({ syncStatus: 'failed', syncError: errorMessage(err), updatedAt: Date.now() })
+			.where(eq(projectBillingCustomers.projectId, projectId));
+		throw err;
+	}
+}
+
 export async function openProjectBillingPortal(projectId: string, returnUrl: string) {
 	await ensureProjectCustomer(projectId);
 
@@ -117,6 +161,41 @@ export async function openProjectBillingPortal(projectId: string, returnUrl: str
 	});
 
 	return portal.url;
+}
+
+export async function ensureProjectServerEntity(input: {
+	projectId: string;
+	serverId: string;
+	name?: string | null;
+}) {
+	await ensureProjectCustomer(input.projectId);
+	const client = createAutumnClient();
+
+	try {
+		await client.entities.get({ customerId: input.projectId, entityId: input.serverId });
+		return;
+	} catch (err) {
+		if (autumnStatus(err) !== 404) throw err;
+	}
+
+	try {
+		await client.entities.create({
+			customerId: input.projectId,
+			entityId: input.serverId,
+			featureId: serverEntityFeatureId(),
+			name: input.name ?? input.serverId
+		});
+	} catch (err) {
+		if (autumnStatus(err) !== 409) throw err;
+	}
+}
+
+export async function deleteProjectServerEntity(projectId: string, serverId: string) {
+	try {
+		await createAutumnClient().entities.delete({ customerId: projectId, entityId: serverId });
+	} catch (err) {
+		if (autumnStatus(err) !== 404) throw err;
+	}
 }
 
 export async function deleteLocalProjectBillingCustomer(projectId: string) {

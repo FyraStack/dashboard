@@ -17,7 +17,9 @@ import {
 import { requireProjectAccess } from '$lib/server/auth-context';
 import { initAuth } from '$lib/server/auth';
 import {
+	attachDefaultProjectPlan,
 	deleteLocalProjectBillingCustomer,
+	deleteProjectServerEntity,
 	ensureLocalProjectBillingCustomer,
 	ensureProjectCustomer,
 	updateProjectCustomer
@@ -143,8 +145,15 @@ export const createProject = command(createParams, async (params) => {
 	ensureProjectCustomer(org.id).catch((err) => {
 		console.warn(`Failed to sync Autumn customer for project ${org.id}`, err);
 	});
+	const billingSetupUrl = await attachDefaultProjectPlan(
+		org.id,
+		`${event.url.origin}/projects/${org.id}/billing`
+	).catch((err) => {
+		console.warn(`Failed to attach default Autumn plan for project ${org.id}`, err);
+		return null;
+	});
 
-	return { id: org.id };
+	return { id: org.id, billingSetupUrl };
 });
 
 const deleteParams = type({ projectId: 'string' });
@@ -166,10 +175,12 @@ export const deleteProject = command(deleteParams, async (params) => {
 	});
 
 	for (const vm of projectVms.filter((item) => item.active)) {
-		await meterResourceThrough('vm', vm.id);
-	}
-	for (const volume of projectVolumes) {
-		await meterResourceThrough('volume', volume.id);
+		const metered = await meterResourceThrough('vm', vm.id);
+		if (!metered?.event || metered.syncStatus === 'synced') {
+			await deleteProjectServerEntity(params.projectId, vm.id).catch((err) => {
+				console.warn(`Failed to delete Autumn entity for VM ${vm.id}`, err);
+			});
+		}
 	}
 	await syncProjectUsage(params.projectId);
 

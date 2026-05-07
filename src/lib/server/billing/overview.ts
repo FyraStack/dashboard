@@ -4,10 +4,6 @@ import { meterProjectActiveResources, syncProjectUsage } from './metering';
 import { initDrizzle } from '$lib/server/db';
 import { billingMeters, projectBillingCustomers } from '$lib/server/db/schema';
 
-function resourceUnit(resourceType: 'vm' | 'volume') {
-	return resourceType === 'volume' ? 'GiB' : 'active';
-}
-
 export async function refreshProjectBilling(projectId: string) {
 	await ensureProjectCustomer(projectId).catch((err) => {
 		console.warn(`Failed to refresh Autumn customer for project ${projectId}`, err);
@@ -30,7 +26,13 @@ export async function getProjectBillingOverview(projectId: string) {
 			units: billingMeters.units
 		})
 		.from(billingMeters)
-		.where(and(eq(billingMeters.projectId, projectId), eq(billingMeters.active, true)));
+		.where(
+			and(
+				eq(billingMeters.projectId, projectId),
+				eq(billingMeters.resourceType, 'vm'),
+				eq(billingMeters.active, true)
+			)
+		);
 
 	return {
 		customer: customer ? { autumnCustomerId: customer.autumnCustomerId } : null,
@@ -43,7 +45,7 @@ export async function getProjectBillingOverview(projectId: string) {
 			label: item.featureId,
 			resourceType: item.resourceType,
 			quantity: Number(item.units),
-			unit: resourceUnit(item.resourceType)
+			unit: 'active'
 		}))
 	};
 }

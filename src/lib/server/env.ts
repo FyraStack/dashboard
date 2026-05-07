@@ -6,12 +6,14 @@ import { env as privateEnv } from '$env/dynamic/private';
 export type RuntimeEnv = {
 	ORIGIN: string;
 	BETTER_AUTH_SECRET: string;
+	AUTUMN_SECRET: string;
 	DATABASE_URL?: string;
 	HYPERDRIVE?: {
 		connectionString: string;
 	};
 	FEATURE_FLAGS?: KVNamespace;
 	PROXMOX_CACHE?: KVNamespace;
+	BILLING_METER_SECRET?: string;
 	// OAuth (optional — social providers are conditionally enabled)
 	GITHUB_CLIENT_ID?: string;
 	GITHUB_CLIENT_SECRET?: string;
@@ -32,9 +34,11 @@ export function getRuntimeEnv(): RuntimeEnv {
 		return {
 			ORIGIN: required('ORIGIN', platformEnv.ORIGIN),
 			BETTER_AUTH_SECRET: required('BETTER_AUTH_SECRET', platformEnv.BETTER_AUTH_SECRET),
+			AUTUMN_SECRET: required('AUTUMN_SECRET', platformEnv.AUTUMN_SECRET),
 			HYPERDRIVE: platformEnv.HYPERDRIVE,
 			FEATURE_FLAGS: platformEnv.FEATURE_FLAGS,
 			PROXMOX_CACHE: platformEnv.PROXMOX_CACHE,
+			BILLING_METER_SECRET: platformEnv.BILLING_METER_SECRET,
 			GITHUB_CLIENT_ID: platformEnv.GITHUB_CLIENT_ID,
 			GITHUB_CLIENT_SECRET: platformEnv.GITHUB_CLIENT_SECRET,
 			GOOGLE_CLIENT_ID: platformEnv.GOOGLE_CLIENT_ID,
@@ -49,7 +53,9 @@ export function getRuntimeEnv(): RuntimeEnv {
 	return {
 		ORIGIN: required('ORIGIN', privateEnv.ORIGIN),
 		BETTER_AUTH_SECRET: required('BETTER_AUTH_SECRET', privateEnv.BETTER_AUTH_SECRET),
+		AUTUMN_SECRET: required('AUTUMN_SECRET', privateEnv.AUTUMN_SECRET),
 		DATABASE_URL: required('DATABASE_URL', privateEnv.DATABASE_URL),
+		BILLING_METER_SECRET: privateEnv.BILLING_METER_SECRET,
 		GITHUB_CLIENT_ID: privateEnv.GITHUB_CLIENT_ID,
 		GITHUB_CLIENT_SECRET: privateEnv.GITHUB_CLIENT_SECRET,
 		GOOGLE_CLIENT_ID: privateEnv.GOOGLE_CLIENT_ID,

@@ -266,6 +266,7 @@
 		if (featureFlags.firewall)
 			items.push({ icon: Shield, label: 'Firewall', href: `${prefix}/firewall` });
 		if (featureFlags.images) items.push({ icon: Disc, label: 'Images', href: `${prefix}/images` });
+		items.push({ icon: CreditCard, label: 'Billing', href: `${prefix}/billing` });
 		items.push({ icon: Settings, label: 'Settings', href: `${prefix}/settings` });
 		return items;
 	});

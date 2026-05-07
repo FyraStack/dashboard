@@ -6,6 +6,7 @@ import { initDrizzle } from '$lib/server/db';
 import { vms, vmTypes, sshKeys, baseImages } from '$lib/server/db/schema';
 import { getBackend, type VmInfo } from '$lib/server/backends';
 import { requireProjectAccess } from '$lib/server/auth-context';
+import { createBillingMeter, meterResourceThrough } from '$lib/server/billing/metering';
 import { getCachedProxmoxVms, refreshProxmoxVmCache } from '$lib/server/vm-live-cache';
 
 type VmRow = {
@@ -16,6 +17,7 @@ type VmRow = {
 	ownerProjectId: string | null;
 	vmTypeId: string;
 	creationDate: string;
+	createdAt: number;
 	backend: 'proxmox';
 	status: 'provisioning' | 'ready' | 'error';
 	lastKnownIpv4: string | null;
@@ -103,6 +105,7 @@ export const listVms = query(listParams, async (params) => {
 			${vms.ownerProjectId} as "ownerProjectId",
 			${vms.vmTypeId} as "vmTypeId",
 			${vms.creationDate} as "creationDate",
+			${vms.createdAt} as "createdAt",
 			${vms.backend} as backend,
 			${vms.status} as status,
 			${vms.lastKnownIpv4} as "lastKnownIpv4",
@@ -138,6 +141,7 @@ export const getVm = query(getParams, async (params) => {
 			${vms.ownerProjectId} as "ownerProjectId",
 			${vms.vmTypeId} as "vmTypeId",
 			${vms.creationDate} as "creationDate",
+			${vms.createdAt} as "createdAt",
 			${vms.backend} as backend,
 			${vms.status} as status,
 			${vms.lastKnownIpv4} as "lastKnownIpv4",
@@ -189,6 +193,7 @@ export const listVmStatuses = query(statusParams, async (params) => {
 			${vms.ownerProjectId} as "ownerProjectId",
 			${vms.vmTypeId} as "vmTypeId",
 			${vms.creationDate} as "creationDate",
+			${vms.createdAt} as "createdAt",
 			${vms.backend} as backend,
 			${vms.status} as status,
 			${vms.lastKnownIpv4} as "lastKnownIpv4",
@@ -255,6 +260,9 @@ export const createVm = command(createParams, async (params) => {
 		where: eq(vmTypes.id, params.vmTypeId)
 	});
 	if (!vmType) error(400, `VM type "${params.vmTypeId}" not found`);
+	if (!vmType.autumnFeatureId)
+		error(400, `VM type "${vmType.name}" is missing an Autumn feature ID`);
+	const featureId = vmType.autumnFeatureId;
 
 	const baseImage = params.imageId
 		? await db.query.baseImages.findFirst({
@@ -271,6 +279,7 @@ export const createVm = command(createParams, async (params) => {
 		publicKeys = keys.filter((k) => params.sshKeyIds!.includes(k.id)).map((k) => k.publicKey);
 	}
 
+	const now = Date.now();
 	const [inserted] = await db
 		.insert(vms)
 		.values({
@@ -280,6 +289,7 @@ export const createVm = command(createParams, async (params) => {
 			ownerProjectId: params.projectId,
 			vmTypeId: params.vmTypeId,
 			creationDate: new Date().toISOString().split('T')[0],
+			createdAt: now,
 			backend: 'proxmox',
 			status: 'provisioning'
 		})
@@ -317,6 +327,14 @@ export const createVm = command(createParams, async (params) => {
 		.update(vms)
 		.set({ proxmoxId: result.proxmoxId ?? null })
 		.where(eq(vms.id, vmId));
+	await createBillingMeter({
+		projectId: params.projectId,
+		resourceType: 'vm',
+		resourceId: vmId,
+		featureId,
+		units: 1,
+		now
+	});
 	refreshProxmoxVmCache().catch(() => {});
 
 	return { id: inserted.id, taskId: result.taskId };
@@ -330,6 +348,7 @@ export const deleteVm = command(deleteParams, async (params) => {
 	const db = initDrizzle();
 	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
 	if (!row) error(404, `VM "${params.vmId}" not found`);
+	if (!row.active) return;
 	if (row.ownerProjectId) {
 		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'admin');
 	}
@@ -340,6 +359,7 @@ export const deleteVm = command(deleteParams, async (params) => {
 		console.warn(`Failed to delete backend VM ${row.id}; marking inactive`, err);
 	}
 
+	await meterResourceThrough('vm', row.id);
 	await db.update(vms).set({ active: false }).where(eq(vms.id, params.vmId));
 	refreshProxmoxVmCache().catch(() => {});
 });

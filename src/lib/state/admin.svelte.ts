@@ -21,6 +21,7 @@ export type VmType = {
 	storageAmount: number;
 	rate: string;
 	cap: string;
+	autumnFeatureId: string | null;
 };
 
 export type BaseImage = {
@@ -92,6 +93,7 @@ export class AdminState {
 	vtStorage = $state(10);
 	vtRate = $state('0.00');
 	vtCap = $state('5.00');
+	vtAutumnFeatureId = $state('');
 	pveIsos = $state<PveIso[]>([]);
 	isoLoading = $state(false);
 	isoError = $state('');
@@ -152,6 +154,7 @@ export class AdminState {
 		this.vtStorage = 10;
 		this.vtRate = '0.00';
 		this.vtCap = '5.00';
+		this.vtAutumnFeatureId = '';
 		this.vtError = '';
 		this.vtDialogOpen = true;
 	}
@@ -165,6 +168,7 @@ export class AdminState {
 		this.vtStorage = vt.storageAmount;
 		this.vtRate = vt.rate;
 		this.vtCap = vt.cap;
+		this.vtAutumnFeatureId = vt.autumnFeatureId ?? '';
 		this.vtError = '';
 		this.vtDialogOpen = true;
 	}
@@ -181,7 +185,8 @@ export class AdminState {
 				ramCapacity: this.vtRam,
 				storageAmount: this.vtStorage,
 				rate: this.vtRate,
-				cap: this.vtCap
+				cap: this.vtCap,
+				autumnFeatureId: this.vtAutumnFeatureId.trim()
 			};
 
 			if (this.vtEditing) {

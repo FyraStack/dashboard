@@ -15,6 +15,7 @@ type VmTypeRow = {
 	storageAmount: number;
 	rate: string;
 	cap: string;
+	autumnFeatureId: string | null;
 };
 
 export const listVmTypes = query(async () => {
@@ -31,7 +32,8 @@ export const listVmTypes = query(async () => {
 		ramCapacity: row.ramCapacity,
 		storageAmount: row.storageAmount,
 		rate: row.rate,
-		cap: row.cap
+		cap: row.cap,
+		autumnFeatureId: row.autumnFeatureId
 	}));
 });
 
@@ -42,7 +44,8 @@ const createParams = type({
 	ramCapacity: 'number',
 	storageAmount: 'number',
 	rate: 'string',
-	cap: 'string'
+	cap: 'string',
+	autumnFeatureId: 'string'
 });
 export const createVmType = command(createParams, async (params) => {
 	const event = getRequestEvent();
@@ -60,7 +63,8 @@ export const createVmType = command(createParams, async (params) => {
 			ramCapacity: params.ramCapacity,
 			storageAmount: params.storageAmount,
 			rate: params.rate,
-			cap: params.cap
+			cap: params.cap,
+			autumnFeatureId: params.autumnFeatureId.trim() || null
 		})
 		.returning();
 
@@ -75,7 +79,8 @@ const updateParams = type({
 	ramCapacity: 'number?',
 	storageAmount: 'number?',
 	rate: 'string?',
-	cap: 'string?'
+	cap: 'string?',
+	autumnFeatureId: 'string?'
 });
 export const updateVmType = command(updateParams, async (params) => {
 	const event = getRequestEvent();
@@ -90,7 +95,14 @@ export const updateVmType = command(updateParams, async (params) => {
 	if (!existing) error(404, 'VM type not found');
 
 	const { vmTypeId, ...fields } = params;
-	const updates = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+	const updates = Object.fromEntries(
+		Object.entries(fields)
+			.filter(([, v]) => v !== undefined)
+			.map(([key, value]) => [
+				key,
+				key === 'autumnFeatureId' ? String(value).trim() || null : value
+			])
+	);
 	if (Object.keys(updates).length === 0) return;
 
 	await db.update(vmTypes).set(updates).where(eq(vmTypes.id, params.vmTypeId));

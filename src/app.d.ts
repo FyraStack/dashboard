@@ -18,11 +18,13 @@ declare global {
 			env: {
 				ORIGIN: string;
 				BETTER_AUTH_SECRET: string;
+				AUTUMN_SECRET: string;
 				HYPERDRIVE: {
 					connectionString: string;
 				};
 				FEATURE_FLAGS?: KVNamespace;
 				PROXMOX_CACHE?: KVNamespace;
+				BILLING_METER_SECRET?: string;
 				// OAuth (set as Cloudflare Worker secrets)
 				GITHUB_CLIENT_ID?: string;
 				GITHUB_CLIENT_SECRET?: string;

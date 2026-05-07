@@ -8,10 +8,11 @@ import {
 	numeric,
 	date,
 	index,
+	uniqueIndex,
 	inet,
 	cidr
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { organization } from './auth.schema';
 import { ulid } from '$lib/server/id';
 
@@ -26,6 +27,10 @@ export const vmBackendEnum = pgEnum('vm_backend', ['proxmox']);
 
 export const vmStatusEnum = pgEnum('vm_status', ['provisioning', 'ready', 'error']);
 
+export const billingSyncStatusEnum = pgEnum('billing_sync_status', ['pending', 'synced', 'failed']);
+
+export const billingResourceTypeEnum = pgEnum('billing_resource_type', ['vm', 'volume']);
+
 // VM Types
 
 export const vmTypes = pgTable('vm_types', {
@@ -36,7 +41,8 @@ export const vmTypes = pgTable('vm_types', {
 	ramCapacity: integer('ram_capacity').notNull(),
 	storageAmount: integer('storage_amount').notNull(),
 	rate: numeric('rate').notNull(),
-	cap: numeric('cap').notNull()
+	cap: numeric('cap').notNull(),
+	autumnFeatureId: text('autumn_feature_id')
 });
 
 export const vmTypesRelations = relations(vmTypes, ({ many }) => ({
@@ -62,6 +68,9 @@ export const vms = pgTable(
 			.notNull()
 			.references(() => vmTypes.id),
 		creationDate: date('creation_date').notNull(),
+		createdAt: bigint('created_at', { mode: 'number' })
+			.notNull()
+			.default(sql`(extract(epoch from now()) * 1000)::bigint`),
 		backend: vmBackendEnum('backend').notNull(),
 		status: vmStatusEnum('status').notNull().default('provisioning'),
 		statusError: text('status_error')
@@ -98,7 +107,10 @@ export const volumes = pgTable(
 		ownerProjectId: ulidFk('owner_project_id')
 			.notNull()
 			.references(() => organization.id),
-		associatedVmId: ulidFk('associated_vm_id').references(() => vms.id)
+		associatedVmId: ulidFk('associated_vm_id').references(() => vms.id),
+		createdAt: bigint('created_at', { mode: 'number' })
+			.notNull()
+			.default(sql`(extract(epoch from now()) * 1000)::bigint`)
 	},
 	(table) => [
 		index('volumes_owner_project_id_index').on(table.ownerProjectId),
@@ -144,6 +156,71 @@ export const paymentPeriodsRelations = relations(paymentPeriods, ({ one }) => ({
 		references: [vms.id]
 	})
 }));
+
+export const projectBillingCustomers = pgTable(
+	'project_billing_customers',
+	{
+		projectId: text('project_id').primaryKey(),
+		autumnCustomerId: text('autumn_customer_id').notNull(),
+		syncStatus: billingSyncStatusEnum('sync_status').notNull().default('pending'),
+		syncError: text('sync_error'),
+		lastSyncedAt: bigint('last_synced_at', { mode: 'number' }),
+		createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+		updatedAt: bigint('updated_at', { mode: 'number' }).notNull()
+	},
+	(table) => [
+		uniqueIndex('project_billing_customers_autumn_customer_id_index').on(table.autumnCustomerId)
+	]
+);
+
+export const billingMeters = pgTable(
+	'billing_meters',
+	{
+		id: ulidPk(),
+		projectId: text('project_id').notNull(),
+		resourceType: billingResourceTypeEnum('resource_type').notNull(),
+		resourceId: text('resource_id').notNull(),
+		featureId: text('feature_id').notNull(),
+		units: numeric('units').notNull(),
+		lastMeteredAt: bigint('last_metered_at', { mode: 'number' }).notNull(),
+		active: boolean('active').notNull().default(true),
+		createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+		endedAt: bigint('ended_at', { mode: 'number' })
+	},
+	(table) => [
+		uniqueIndex('billing_meters_resource_index').on(table.resourceType, table.resourceId),
+		index('billing_meters_active_last_metered_at_index').on(table.active, table.lastMeteredAt),
+		index('billing_meters_project_active_index').on(table.projectId, table.active)
+	]
+);
+
+export const billingUsageEvents = pgTable(
+	'billing_usage_events',
+	{
+		id: ulidPk(),
+		projectId: text('project_id').notNull(),
+		resourceType: billingResourceTypeEnum('resource_type').notNull(),
+		resourceId: text('resource_id').notNull(),
+		featureId: text('feature_id').notNull(),
+		quantity: numeric('quantity').notNull(),
+		periodStart: bigint('period_start', { mode: 'number' }).notNull(),
+		periodEnd: bigint('period_end', { mode: 'number' }).notNull(),
+		idempotencyKey: text('idempotency_key').notNull(),
+		syncStatus: billingSyncStatusEnum('sync_status').notNull().default('pending'),
+		syncError: text('sync_error'),
+		syncedAt: bigint('synced_at', { mode: 'number' }),
+		createdAt: bigint('created_at', { mode: 'number' }).notNull()
+	},
+	(table) => [
+		uniqueIndex('billing_usage_events_idempotency_key_index').on(table.idempotencyKey),
+		index('billing_usage_events_project_created_at_index').on(table.projectId, table.createdAt),
+		index('billing_usage_events_sync_status_created_at_index').on(
+			table.syncStatus,
+			table.createdAt
+		),
+		index('billing_usage_events_resource_index').on(table.resourceType, table.resourceId)
+	]
+);
 
 // IP Blocks
 

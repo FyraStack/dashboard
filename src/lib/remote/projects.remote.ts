@@ -16,6 +16,13 @@ import {
 } from '$lib/server/db/schema';
 import { requireProjectAccess } from '$lib/server/auth-context';
 import { initAuth } from '$lib/server/auth';
+import {
+	deleteLocalProjectBillingCustomer,
+	ensureLocalProjectBillingCustomer,
+	ensureProjectCustomer,
+	updateProjectCustomer
+} from '$lib/server/billing/autumn';
+import { meterResourceThrough, syncProjectUsage } from '$lib/server/billing/metering';
 
 type ListResult = {
 	id: string;
@@ -132,6 +139,11 @@ export const createProject = command(createParams, async (params) => {
 		}
 	});
 
+	await ensureLocalProjectBillingCustomer(org.id);
+	ensureProjectCustomer(org.id).catch((err) => {
+		console.warn(`Failed to sync Autumn customer for project ${org.id}`, err);
+	});
+
 	return { id: org.id };
 });
 
@@ -145,9 +157,21 @@ export const deleteProject = command(deleteParams, async (params) => {
 
 	const projectVms = await db.query.vms.findMany({
 		where: eq(vms.ownerProjectId, params.projectId),
-		columns: { id: true }
+		columns: { id: true, active: true }
 	});
 	const vmIds = projectVms.map((vm) => vm.id);
+	const projectVolumes = await db.query.volumes.findMany({
+		where: eq(volumes.ownerProjectId, params.projectId),
+		columns: { id: true }
+	});
+
+	for (const vm of projectVms.filter((item) => item.active)) {
+		await meterResourceThrough('vm', vm.id);
+	}
+	for (const volume of projectVolumes) {
+		await meterResourceThrough('volume', volume.id);
+	}
+	await syncProjectUsage(params.projectId);
 
 	await db.delete(volumes).where(eq(volumes.ownerProjectId, params.projectId));
 	if (vmIds.length > 0) {
@@ -157,6 +181,7 @@ export const deleteProject = command(deleteParams, async (params) => {
 	await db.delete(vms).where(eq(vms.ownerProjectId, params.projectId));
 	await db.delete(invitation).where(eq(invitation.organizationId, params.projectId));
 	await db.delete(member).where(eq(member.organizationId, params.projectId));
+	await deleteLocalProjectBillingCustomer(params.projectId);
 	await db.delete(organization).where(eq(organization.id, params.projectId));
 });
 
@@ -172,6 +197,10 @@ export const updateProject = command(updateParams, async (params) => {
 		.update(organization)
 		.set({ name: toProjectName(params.name) })
 		.where(eq(organization.id, params.projectId));
+
+	updateProjectCustomer(params.projectId).catch((err) => {
+		console.warn(`Failed to sync Autumn customer update for project ${params.projectId}`, err);
+	});
 });
 
 const addMemberParams = type({

@@ -182,6 +182,7 @@
 							<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Storage</th>
 							<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Rate</th>
 							<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Cap</th>
+							<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Autumn feature</th>
 							<th class="px-5 py-3 text-right text-xs font-medium text-gray-500">Actions</th>
 						</tr></thead
 					>
@@ -197,6 +198,9 @@
 								<td class="px-5 py-3 text-sm text-gray-300">{vt.storageAmount} GB</td>
 								<td class="px-5 py-3 text-sm text-gray-300">${vt.rate}/hr</td>
 								<td class="px-5 py-3 text-sm text-gray-300">${vt.cap}/mo</td>
+								<td class="max-w-xs truncate px-5 py-3 font-mono text-xs text-gray-500">
+									{vt.autumnFeatureId ?? 'Not configured'}
+								</td>
 								<td class="px-5 py-3 text-right">
 									<div class="flex items-center justify-end gap-1">
 										<Button
@@ -348,6 +352,10 @@
 				<div class="flex flex-col gap-2">
 					<Label>Cap ($/mo)</Label><Input bind:value={admin.vtCap} placeholder="5.00" />
 				</div>
+			</div>
+			<div class="flex flex-col gap-2">
+				<Label>Autumn feature ID</Label>
+				<Input bind:value={admin.vtAutumnFeatureId} placeholder="vm_shared_1vcpu_1gb_hours" />
 			</div>
 		</div>
 		<Dialog.Footer>

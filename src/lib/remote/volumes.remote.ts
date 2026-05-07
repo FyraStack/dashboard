@@ -5,6 +5,8 @@ import { eq } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
 import { volumes, vms } from '$lib/server/db/schema';
 import { requireProjectAccess } from '$lib/server/auth-context';
+import { VOLUME_GIB_HOURS_FEATURE_ID } from '$lib/server/billing/features';
+import { createBillingMeter, meterResourceThrough } from '$lib/server/billing/metering';
 
 type ListParams = { projectId: string };
 type ListResult = {
@@ -68,9 +70,18 @@ export const createVolume = command(createParams, async (params) => {
 		.values({
 			name: params.name,
 			size: params.size,
-			ownerProjectId: params.projectId
+			ownerProjectId: params.projectId,
+			createdAt: Date.now()
 		})
 		.returning();
+
+	await createBillingMeter({
+		projectId: params.projectId,
+		resourceType: 'volume',
+		resourceId: inserted.id,
+		featureId: VOLUME_GIB_HOURS_FEATURE_ID,
+		units: params.size
+	});
 
 	return { id: inserted.id };
 });
@@ -92,6 +103,7 @@ export const deleteVolume = command(deleteParams, async (params) => {
 		error(409, 'Detach the volume from its VM before deleting');
 	}
 
+	await meterResourceThrough('volume', vol.id);
 	await db.delete(volumes).where(eq(volumes.id, params.volumeId));
 });
 

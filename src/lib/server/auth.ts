@@ -3,6 +3,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { organization, twoFactor } from 'better-auth/plugins';
 import { passkey } from '@better-auth/passkey';
+import { autumn } from 'autumn-js/better-auth';
 import { getRequestEvent } from '$app/server';
 import { ac, organizationRoles } from '$lib/auth/organization-permissions';
 import { initDrizzle } from '$lib/server/db';
@@ -66,6 +67,7 @@ export function initAuth() {
 					console.log(`[auth] Invite ${email} to ${organization.name}: ${url}`);
 				}
 			}),
+			autumn({ customerScope: 'organization', secretKey: env.AUTUMN_SECRET }),
 			sveltekitCookies(getRequestEvent)
 		]
 	});

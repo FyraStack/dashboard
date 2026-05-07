@@ -1,6 +1,6 @@
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { requireFeatureFlag } from '$lib/server/feature-flags';
 
-export const load: PageServerLoad = async () => {
-	await requireFeatureFlag('colocation');
+export const load: PageServerLoad = async ({ params }) => {
+	redirect(302, `/projects/${params.projectid}/colocation/colo-001`);
 };

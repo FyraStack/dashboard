@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import * as Tabs from '$lib/components/ui/tabs';
+	import type { FeatureFlags } from '$lib/feature-flags';
 	import { createVolume as createProjectVolume } from '$lib/remote/volumes.remote';
 	import { createVm } from '$lib/remote/vms.remote';
-	import { onMount, untrack } from 'svelte';
+	import { onMount } from 'svelte';
 	import {
 		ArrowLeft,
 		HardDrive,
@@ -34,6 +36,7 @@
 		vmTypes?: VmType[];
 		dbImages?: DbImage[];
 		volumes?: ExistingVolume[];
+		featureFlags?: FeatureFlags;
 	};
 
 	type ImageTab = 'os' | 'snapshots' | 'apps';
@@ -75,6 +78,7 @@
 	const dbImages = $derived(data.dbImages ?? []);
 	const officialDbImages = $derived(dbImages.filter((image) => image.isOfficial));
 	const customDbImages = $derived(dbImages.filter((image) => !image.isOfficial));
+	const volumesEnabled = $derived(!!data.featureFlags?.volumes);
 
 	let serverName = $state('');
 	let selectedImageId = $state<string | null>(null);
@@ -88,7 +92,7 @@
 	let selectedVolumeIds = $state<string[]>([]);
 
 	type SelectableVolume = { id: string; name: string; sizeGb: number };
-	let availableVolumes = $state<SelectableVolume[]>([]);
+	let createdVolumes = $state<SelectableVolume[]>([]);
 	let newVolumeName = $state('');
 	let newVolumeSize = $state('10');
 	let showCreateVolume = $state(false);
@@ -99,6 +103,25 @@
 	let selectedImage = $derived(dbImages.find((i) => i.id === selectedImageId) ?? null);
 	let selectedPlan = $derived(vmTypes.find((t) => t.id === selectedPlanId) ?? null);
 	let usePasswordAuthentication = $derived(selectedSshKeyIds.length === 0);
+	let availableVolumes = $derived(
+		volumesEnabled
+			? [
+					...(data.volumes ?? [])
+						.filter((volume) => volume.associatedVmId === null)
+						.map((volume) => ({
+							id: volume.id,
+							name: volume.name,
+							sizeGb: volume.size
+						})),
+					...createdVolumes
+				]
+			: []
+	);
+	let selectedVolumeCount = $derived(
+		volumesEnabled
+			? selectedVolumeIds.filter((id) => availableVolumes.some((volume) => volume.id === id)).length
+			: 0
+	);
 
 	type Section = {
 		id: string;
@@ -116,12 +139,16 @@
 			isComplete: selectedImageId !== null && selectedImageVersion !== null
 		},
 		{ id: 'plan', label: 'Plan', icon: Server, isComplete: selectedPlanId !== null },
-		{
-			id: 'storage',
-			label: 'Storage',
-			icon: HardDriveUpload,
-			isComplete: selectedPlanId !== null
-		},
+		...(volumesEnabled
+			? [
+					{
+						id: 'storage',
+						label: 'Storage',
+						icon: HardDriveUpload,
+						isComplete: selectedPlanId !== null
+					}
+				]
+			: []),
 		{ id: 'networking', label: 'Networking', icon: Globe, isComplete: true },
 		{ id: 'ssh', label: 'Authentication', icon: Key, isComplete: true }
 	]);
@@ -137,22 +164,6 @@
 			imageTab = value;
 		}
 	}
-
-	$effect(() => {
-		const incoming = (data.volumes ?? [])
-			.filter((volume) => volume.associatedVmId === null)
-			.map((volume) => ({
-				id: volume.id,
-				name: volume.name,
-				sizeGb: volume.size
-			}));
-		untrack(() => {
-			availableVolumes = incoming;
-			selectedVolumeIds = selectedVolumeIds.filter((id) =>
-				incoming.some((volume) => volume.id === id)
-			);
-		});
-	});
 
 	onMount(() => {
 		serverPassword = generatePassword();
@@ -213,13 +224,15 @@
 	}
 
 	async function createVolume() {
+		if (!volumesEnabled) return;
+
 		const name = newVolumeName.trim();
 		const size = parseInt(newVolumeSize, 10);
 		const projectId = page.params.projectid;
 		if (!name || !size || size < 1 || !projectId) return;
 		try {
 			const created = await createProjectVolume({ projectId, name, size });
-			availableVolumes = [...availableVolumes, { id: created.id, name, sizeGb: size }];
+			createdVolumes = [...createdVolumes, { id: created.id, name, sizeGb: size }];
 			selectedVolumeIds = [...selectedVolumeIds, created.id];
 			newVolumeName = '';
 			newVolumeSize = '10';
@@ -245,7 +258,11 @@
 	}
 
 	async function handleCreate() {
-		if (!serverName.trim() || !selectedPlanId || (usePasswordAuthentication && !serverPassword.trim())) {
+		if (
+			!serverName.trim() ||
+			!selectedPlanId ||
+			(usePasswordAuthentication && !serverPassword.trim())
+		) {
 			return;
 		}
 
@@ -270,7 +287,7 @@
 				...(usePasswordAuthentication ? { password: serverPassword.trim() } : {})
 			};
 			await createVm(payload);
-			goto(`/projects/${page.params.projectid}/servers`);
+			goto(resolve(`/projects/${page.params.projectid}/servers`));
 		} catch (err) {
 			createError =
 				err instanceof Error ? err.message : 'Failed to create server. Please try again.';
@@ -291,7 +308,7 @@
 				variant="ghost"
 				size="sm"
 				class="h-7 gap-1.5 px-2 text-xs text-gray-400 hover:text-gray-200"
-				onclick={() => goto(`/projects/${page.params.projectid}/servers`)}
+				onclick={() => goto(resolve(`/projects/${page.params.projectid}/servers`))}
 			>
 				<ArrowLeft class="h-3 w-3" />
 				Back
@@ -495,126 +512,128 @@
 						</div>
 					</div>
 
-					<div id="section-storage" class="scroll-mt-4">
-						<div class="flex items-center gap-2 border-b border-gray-800 pb-2">
-							<HardDriveUpload class="h-3.5 w-3.5 text-red-400" />
-							<span class="text-xs font-semibold tracking-wider text-gray-400 uppercase"
-								>Storage</span
-							>
-						</div>
-						<div class="mt-3">
-							{#if selectedPlan}
-								<div class="flex items-center gap-2 text-xs text-gray-300">
-									<span class="text-gray-500">Included disk:</span>
-									<span class="font-medium">{selectedPlan.storageAmount}GB</span>
-								</div>
-							{:else}
-								<p class="text-xs text-gray-500">Select a plan to see included disk size.</p>
-							{/if}
-
-							<div class="mt-4">
-								<div class="flex items-center justify-between">
-									<span class="text-[10px] font-semibold tracking-wider text-gray-500 uppercase"
-										>Attach Volumes</span
-									>
-									<button
-										type="button"
-										class="flex items-center gap-1 text-[10px] font-medium text-red-400 transition-colors hover:text-red-300"
-										onclick={() => (showCreateVolume = !showCreateVolume)}
-									>
-										{#if showCreateVolume}
-											<X class="h-3 w-3" />
-											Cancel
-										{:else}
-											<Plus class="h-3 w-3" />
-											Create Volume
-										{/if}
-									</button>
-								</div>
-
-								{#if showCreateVolume}
-									<div class="mt-2 flex gap-2 border border-gray-700 bg-gray-800/40 p-3">
-										<div class="flex-1">
-											<label for="new-vol-name" class="mb-1 block text-[10px] text-gray-500"
-												>Name</label
-											>
-											<input
-												id="new-vol-name"
-												name="newVolumeName"
-												bind:value={newVolumeName}
-												placeholder="volume-name"
-												class="h-7 w-full border border-gray-700 bg-gray-900 px-2 text-xs text-gray-100 placeholder:text-gray-600 focus:border-gray-500 focus:outline-none"
-											/>
-										</div>
-										<div class="w-24">
-											<label for="new-vol-size" class="mb-1 block text-[10px] text-gray-500"
-												>Size (GB)</label
-											>
-											<input
-												id="new-vol-size"
-												name="newVolumeSize"
-												type="number"
-												min="1"
-												bind:value={newVolumeSize}
-												class="h-7 w-full border border-gray-700 bg-gray-900 px-2 text-xs text-gray-100 tabular-nums focus:border-gray-500 focus:outline-none"
-											/>
-										</div>
-										<div class="flex items-end">
-											<Button
-												type="button"
-												size="sm"
-												class="h-7 px-3 text-xs"
-												disabled={!newVolumeName.trim() ||
-													!parseInt(newVolumeSize, 10) ||
-													parseInt(newVolumeSize, 10) < 1}
-												onclick={createVolume}
-											>
-												Create
-											</Button>
-										</div>
-									</div>
-								{/if}
-
-								{#if availableVolumes.length > 0}
-									<div class="mt-2 flex flex-col gap-1">
-										{#each availableVolumes as vol (vol.id)}
-											<label
-												class="flex cursor-pointer items-center gap-3 border p-3 text-xs transition-colors {selectedVolumeIds.includes(
-													vol.id
-												)
-													? 'border-red-500 bg-red-950/20'
-													: 'border-gray-700 hover:border-gray-600'}"
-											>
-												<input
-													type="checkbox"
-													checked={selectedVolumeIds.includes(vol.id)}
-													onchange={() => {
-														if (selectedVolumeIds.includes(vol.id)) {
-															selectedVolumeIds = selectedVolumeIds.filter((id) => id !== vol.id);
-														} else {
-															selectedVolumeIds = [...selectedVolumeIds, vol.id];
-														}
-													}}
-													class="accent-red-500"
-												/>
-												<span class="font-medium text-gray-200">{vol.name}</span>
-												<span class="ml-auto text-[11px] text-gray-500 tabular-nums"
-													>{vol.sizeGb}GB</span
-												>
-											</label>
-										{/each}
+					{#if volumesEnabled}
+						<div id="section-storage" class="scroll-mt-4">
+							<div class="flex items-center gap-2 border-b border-gray-800 pb-2">
+								<HardDriveUpload class="h-3.5 w-3.5 text-red-400" />
+								<span class="text-xs font-semibold tracking-wider text-gray-400 uppercase"
+									>Storage</span
+								>
+							</div>
+							<div class="mt-3">
+								{#if selectedPlan}
+									<div class="flex items-center gap-2 text-xs text-gray-300">
+										<span class="text-gray-500">Included disk:</span>
+										<span class="font-medium">{selectedPlan.storageAmount}GB</span>
 									</div>
 								{:else}
-									<div class="mt-2 border border-gray-800/50 bg-gray-900/50 p-3 text-center">
-										<p class="text-xs text-gray-500">No volumes available.</p>
-										<p class="mt-1 text-[11px] text-gray-600">
-											Create a volume to attach it to this server.
-										</p>
-									</div>
+									<p class="text-xs text-gray-500">Select a plan to see included disk size.</p>
 								{/if}
+
+								<div class="mt-4">
+									<div class="flex items-center justify-between">
+										<span class="text-[10px] font-semibold tracking-wider text-gray-500 uppercase"
+											>Attach Volumes</span
+										>
+										<button
+											type="button"
+											class="flex items-center gap-1 text-[10px] font-medium text-red-400 transition-colors hover:text-red-300"
+											onclick={() => (showCreateVolume = !showCreateVolume)}
+										>
+											{#if showCreateVolume}
+												<X class="h-3 w-3" />
+												Cancel
+											{:else}
+												<Plus class="h-3 w-3" />
+												Create Volume
+											{/if}
+										</button>
+									</div>
+
+									{#if showCreateVolume}
+										<div class="mt-2 flex gap-2 border border-gray-700 bg-gray-800/40 p-3">
+											<div class="flex-1">
+												<label for="new-vol-name" class="mb-1 block text-[10px] text-gray-500"
+													>Name</label
+												>
+												<input
+													id="new-vol-name"
+													name="newVolumeName"
+													bind:value={newVolumeName}
+													placeholder="volume-name"
+													class="h-7 w-full border border-gray-700 bg-gray-900 px-2 text-xs text-gray-100 placeholder:text-gray-600 focus:border-gray-500 focus:outline-none"
+												/>
+											</div>
+											<div class="w-24">
+												<label for="new-vol-size" class="mb-1 block text-[10px] text-gray-500"
+													>Size (GB)</label
+												>
+												<input
+													id="new-vol-size"
+													name="newVolumeSize"
+													type="number"
+													min="1"
+													bind:value={newVolumeSize}
+													class="h-7 w-full border border-gray-700 bg-gray-900 px-2 text-xs text-gray-100 tabular-nums focus:border-gray-500 focus:outline-none"
+												/>
+											</div>
+											<div class="flex items-end">
+												<Button
+													type="button"
+													size="sm"
+													class="h-7 px-3 text-xs"
+													disabled={!newVolumeName.trim() ||
+														!parseInt(newVolumeSize, 10) ||
+														parseInt(newVolumeSize, 10) < 1}
+													onclick={createVolume}
+												>
+													Create
+												</Button>
+											</div>
+										</div>
+									{/if}
+
+									{#if availableVolumes.length > 0}
+										<div class="mt-2 flex flex-col gap-1">
+											{#each availableVolumes as vol (vol.id)}
+												<label
+													class="flex cursor-pointer items-center gap-3 border p-3 text-xs transition-colors {selectedVolumeIds.includes(
+														vol.id
+													)
+														? 'border-red-500 bg-red-950/20'
+														: 'border-gray-700 hover:border-gray-600'}"
+												>
+													<input
+														type="checkbox"
+														checked={selectedVolumeIds.includes(vol.id)}
+														onchange={() => {
+															if (selectedVolumeIds.includes(vol.id)) {
+																selectedVolumeIds = selectedVolumeIds.filter((id) => id !== vol.id);
+															} else {
+																selectedVolumeIds = [...selectedVolumeIds, vol.id];
+															}
+														}}
+														class="accent-red-500"
+													/>
+													<span class="font-medium text-gray-200">{vol.name}</span>
+													<span class="ml-auto text-[11px] text-gray-500 tabular-nums"
+														>{vol.sizeGb}GB</span
+													>
+												</label>
+											{/each}
+										</div>
+									{:else}
+										<div class="mt-2 border border-gray-800/50 bg-gray-900/50 p-3 text-center">
+											<p class="text-xs text-gray-500">No volumes available.</p>
+											<p class="mt-1 text-[11px] text-gray-600">
+												Create a volume to attach it to this server.
+											</p>
+										</div>
+									{/if}
+								</div>
 							</div>
 						</div>
-					</div>
+					{/if}
 
 					<div id="section-networking" class="scroll-mt-4">
 						<div class="flex items-center gap-2 border-b border-gray-800 pb-2">
@@ -698,7 +717,9 @@
 							{/if}
 							{#if usePasswordAuthentication}
 								<div class="mt-3">
-									<label for="server-password" class="mb-1.5 block text-[10px] font-semibold tracking-wider text-gray-500 uppercase"
+									<label
+										for="server-password"
+										class="mb-1.5 block text-[10px] font-semibold tracking-wider text-gray-500 uppercase"
 										>Root Password</label
 									>
 									<div class="flex">
@@ -796,8 +817,8 @@
 								<div class="flex items-center justify-between text-xs">
 									<span class="text-gray-500">Disk</span>
 									<span class="text-gray-200 tabular-nums"
-										>{selectedPlan.storageAmount}GB{#if selectedVolumeIds.length > 0}
-											+ {selectedVolumeIds.length} vol{/if}</span
+										>{selectedPlan.storageAmount}GB{#if selectedVolumeCount > 0}
+											+ {selectedVolumeCount} vol{/if}</span
 									>
 								</div>
 							{/if}
@@ -816,7 +837,11 @@
 							{#if selectedSshKeyIds.length > 0}
 								<div class="flex items-center justify-between text-xs">
 									<span class="text-gray-500">Authentication</span>
-									<span class="text-gray-200">{selectedSshKeyIds.length} SSH key{selectedSshKeyIds.length === 1 ? '' : 's'}</span>
+									<span class="text-gray-200"
+										>{selectedSshKeyIds.length} SSH key{selectedSshKeyIds.length === 1
+											? ''
+											: 's'}</span
+									>
 								</div>
 							{:else}
 								<div class="flex items-center justify-between text-xs">

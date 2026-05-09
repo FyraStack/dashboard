@@ -7,7 +7,7 @@ import { error } from '@sveltejs/kit';
 
 export const load: LayoutServerLoad = async ({ params, parent, depends }) => {
 	depends('project:create-server');
-	await parent();
+	const { featureFlags } = await parent();
 	if (!params.projectid) {
 		error(404, 'Project not found');
 	}
@@ -15,7 +15,7 @@ export const load: LayoutServerLoad = async ({ params, parent, depends }) => {
 	const [vmTypes, dbImages, volumes, sshKeys] = await Promise.all([
 		listVmTypes(),
 		listImages(),
-		listVolumes({ projectId: params.projectid }),
+		featureFlags?.volumes ? listVolumes({ projectId: params.projectid }) : [],
 		listSshKeys()
 	]);
 

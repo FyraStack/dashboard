@@ -1,5 +1,7 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { createAuthMiddleware, APIError } from 'better-auth/api';
+import { deleteSessionCookie, expireCookie } from 'better-auth/cookies';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
 import { passkey } from '@better-auth/passkey';
@@ -12,6 +14,14 @@ import { initDrizzle } from '$lib/server/db';
 import { user as userTable } from '$lib/server/db/schema';
 import { getRuntimeEnv } from '$lib/server/env';
 import { ulid } from '$lib/server/id';
+
+const PENDING_PASSKEY_COOKIE = 'pending_passkey_2fa';
+const PENDING_PASSKEY_HINT_COOKIE = 'pending_passkey_2fa_hint';
+const PENDING_PASSKEY_MAX_AGE = 600;
+
+type PasskeyRecord = {
+	userId: string;
+};
 
 export function initAuth() {
 	const env = getRuntimeEnv();
@@ -95,8 +105,94 @@ export function initAuth() {
 
 		plugins: [
 			admin({ defaultRole: 'user' }),
+			{
+				id: 'passkey-second-factor',
+				hooks: {
+					after: [
+						{
+							matcher: (context) => context.path === '/sign-in/email',
+							handler: createAuthMiddleware(async (ctx) => {
+								const data = ctx.context.newSession;
+								if (!data) return;
+
+								const userPasskeys = await ctx.context.adapter.findMany({
+									model: 'passkey',
+									where: [{ field: 'userId', value: data.user.id }]
+								});
+
+								if (userPasskeys.length === 0) return;
+
+								deleteSessionCookie(ctx, true);
+								await ctx.context.internalAdapter.deleteSession(data.session.token);
+
+								const pendingPasskeyCookie = ctx.context.createAuthCookie(PENDING_PASSKEY_COOKIE, {
+									maxAge: PENDING_PASSKEY_MAX_AGE
+								});
+
+								await ctx.setSignedCookie(
+									pendingPasskeyCookie.name,
+									data.user.id,
+									ctx.context.secret,
+									pendingPasskeyCookie.attributes
+								);
+								ctx.setCookie(
+									PENDING_PASSKEY_HINT_COOKIE,
+									data.user.twoFactorEnabled ? 'totp' : 'passkey',
+									{
+										httpOnly: true,
+										maxAge: PENDING_PASSKEY_MAX_AGE,
+										path: '/',
+										sameSite: 'lax',
+										secure: !dev
+									}
+								);
+
+								return ctx.json({
+									twoFactorRedirect: true,
+									twoFactorMethods: data.user.twoFactorEnabled ? ['passkey', 'totp'] : ['passkey']
+								});
+							})
+						}
+					]
+				}
+			},
 			twoFactor(),
-			passkey(),
+			passkey({
+				authentication: {
+					afterVerification: async ({ ctx, clientData }) => {
+						const pendingPasskeyCookie = ctx.context.createAuthCookie(PENDING_PASSKEY_COOKIE, {
+							maxAge: PENDING_PASSKEY_MAX_AGE
+						});
+						const pendingUserId = await ctx.getSignedCookie(
+							pendingPasskeyCookie.name,
+							ctx.context.secret
+						);
+
+						if (!pendingUserId) return;
+
+						const verifiedPasskey = (await ctx.context.adapter.findOne({
+							model: 'passkey',
+							where: [{ field: 'credentialID', value: clientData.id }]
+						})) as PasskeyRecord | null;
+
+						if (!verifiedPasskey || verifiedPasskey.userId !== pendingUserId) {
+							throw APIError.from('UNAUTHORIZED', {
+								code: 'INVALID_PASSKEY_SECOND_FACTOR',
+								message: 'Use a passkey registered to this account.'
+							});
+						}
+
+						expireCookie(ctx, pendingPasskeyCookie);
+						ctx.setCookie(PENDING_PASSKEY_HINT_COOKIE, '', {
+							httpOnly: true,
+							maxAge: 0,
+							path: '/',
+							sameSite: 'lax',
+							secure: !dev
+						});
+					}
+				}
+			}),
 			organization({
 				ac,
 				roles: organizationRoles,

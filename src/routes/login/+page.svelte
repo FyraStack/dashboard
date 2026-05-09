@@ -3,9 +3,13 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { authClient } from '$lib/auth-client';
-	import { Eye, EyeOff, AlertCircle, Loader2 } from '@lucide/svelte';
+	import { Eye, EyeOff, AlertCircle, Loader2, Fingerprint } from '@lucide/svelte';
 	import { LogoGithub } from 'carbon-icons-svelte';
 	import type { PageData } from './$types';
+	type SignInDataWithTwoFactor = {
+		twoFactorRedirect?: boolean;
+		twoFactorMethods?: string[] | null;
+	};
 
 	let { data }: { data: PageData } = $props();
 	const redirectTo = $derived(data.redirectTo ?? '/');
@@ -18,6 +22,12 @@
 	let showPassword = $state(false);
 	let error = $state('');
 	let loading = $state(false);
+	let passkeyLoading = $state(false);
+
+	function twoFactorHref(method: 'passkey' | 'totp') {
+		const path = `/login/two-factor/${method}`;
+		return redirectTo === '/' ? path : `${path}?redirectTo=${encodeURIComponent(redirectTo)}`;
+	}
 
 	async function handleLogin() {
 		if (!email || !password) return;
@@ -29,6 +39,38 @@
 		if (res.error) {
 			error = res.error.message ?? 'Invalid credentials';
 			loading = false;
+			return;
+		}
+
+		const loginData = res.data as SignInDataWithTwoFactor | null | undefined;
+
+		if (loginData?.twoFactorRedirect) {
+			const methods = loginData.twoFactorMethods;
+
+			if (!methods || methods.includes('passkey')) {
+				goto(twoFactorHref('passkey'));
+				return;
+			}
+
+			if (methods.includes('totp')) {
+				goto(twoFactorHref('totp'));
+				return;
+			}
+		}
+
+		goto(redirectTo);
+	}
+
+	async function handlePasskeySignIn() {
+		error = '';
+		passkeyLoading = true;
+
+		const { error: err } = await authClient.signIn.passkey({ autoFill: false });
+
+		passkeyLoading = false;
+
+		if (err) {
+			error = err.message ?? 'Unable to sign in with passkey.';
 			return;
 		}
 
@@ -117,6 +159,21 @@
 					Google
 				</Button>
 			</div>
+
+			<Button
+				variant="outline"
+				size="sm"
+				class="w-full gap-1.5"
+				disabled={passkeyLoading}
+				onclick={handlePasskeySignIn}
+			>
+				{#if passkeyLoading}
+					<Loader2 class="h-3.5 w-3.5 animate-spin" />
+				{:else}
+					<Fingerprint class="h-3.5 w-3.5" />
+					Sign in with passkey
+				{/if}
+			</Button>
 
 			<p class="text-center text-xs text-gray-500">
 				No account? <a href={registerHref} class="text-red-400 hover:text-red-300">Create one</a>

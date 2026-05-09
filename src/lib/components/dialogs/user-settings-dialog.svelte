@@ -9,6 +9,8 @@
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { authClient } from '$lib/auth-client';
+	import TotpOnboardingDialog from './totp-onboarding-dialog.svelte';
+	import PasskeyOnboardingDialog from './passkey-onboarding-dialog.svelte';
 	import {
 		createSshKey as createSshKeyRpc,
 		deleteSshKey,
@@ -94,6 +96,64 @@
 		}, 1200);
 	}
 
+	// ── Two-Factor ──
+	let twoFactorEnabled = $state(false);
+	let passkeys = $state<{ id: string; name: string; createdAt?: string }[]>([]);
+	let totpDialogOpen = $state(false);
+	let passkeyDialogOpen = $state(false);
+	let totpDisableDialogOpen = $state(false);
+	let totpDisablePassword = $state('');
+	let disablingTotp = $state(false);
+	let totpDisableError = $state('');
+	let removingPasskey = $state<string | null>(null);
+
+	async function loadTwoFactorStatus() {
+		const { data: session } = await authClient.getSession();
+		if (session?.user) {
+			twoFactorEnabled = session.user.twoFactorEnabled ?? false;
+		}
+		try {
+			const { data } = await authClient.passkey.listUserPasskeys();
+			passkeys = (Array.isArray(data) ? data : []) as unknown as { id: string; name: string; createdAt?: string }[];
+		} catch {
+			passkeys = [];
+		}
+	}
+
+	async function disableTotp() {
+		if (!totpDisablePassword) {
+			totpDisableError = 'Enter your current password to disable authenticator app 2FA.';
+			return;
+		}
+
+		totpDisableError = '';
+		disablingTotp = true;
+		try {
+			const { error } = await authClient.twoFactor.disable({ password: totpDisablePassword });
+
+			if (error) {
+				totpDisableError = error.message ?? 'Failed to disable authenticator app 2FA.';
+				return;
+			}
+
+			twoFactorEnabled = false;
+			totpDisableDialogOpen = false;
+			totpDisablePassword = '';
+			totpDisableError = '';
+			currentPassword = '';
+		} catch {
+			totpDisableError = 'Failed to disable authenticator app 2FA.';
+		} finally {
+			disablingTotp = false;
+		}
+	}
+
+	async function removePasskey(id: string) {
+		removingPasskey = id;
+		await authClient.passkey.deletePasskey({ id });
+		passkeys = passkeys.filter((p) => p.id !== id);
+		removingPasskey = null;
+	}
 
 	// ── SSH Keys ──
 	let sshKeys = $state<{ id: string; name: string; fingerprint: string }[]>([]);
@@ -379,6 +439,103 @@
 						</div>
 					</div>
 
+					<!-- Two-Factor Authentication -->
+					<div class="rounded-xs border border-gray-800/60 p-4">
+						<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
+							<ShieldCheck class="h-3.5 w-3.5 text-red-400" />
+							<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">Two-Factor Authentication</p>
+						</div>
+
+						<!-- TOTP -->
+						<div class="flex items-center justify-between py-2.5">
+							<div class="flex items-center gap-2.5">
+								<ShieldCheck class="h-4 w-4 text-gray-500" />
+								<div>
+									<p class="text-sm font-medium text-gray-100">Authenticator App</p>
+									<p class="text-xs text-gray-500">
+										{twoFactorEnabled ? 'Enabled' : 'Not configured'}
+									</p>
+								</div>
+							</div>
+							{#if twoFactorEnabled}
+								<Button
+									variant="destructive"
+									size="sm"
+									class="h-7 w-20 gap-1.5 text-xs"
+									onclick={() => {
+										totpDisableError = '';
+										totpDisablePassword = '';
+										totpDisableDialogOpen = true;
+									}}
+								>
+									<Minus class="h-3 w-3" />
+									Disable
+								</Button>
+							{:else}
+								<Button
+									variant="outline"
+									size="sm"
+									class="h-7 gap-1.5 text-xs"
+									onclick={() => (totpDialogOpen = true)}
+								>
+									<Plus class="h-3 w-3" />
+									Set Up
+								</Button>
+							{/if}
+						</div>
+						<div class="border-t border-gray-800/50"></div>
+
+						<!-- Passkeys -->
+						<div class="py-2.5">
+							<div class="flex items-center justify-between">
+								<div class="flex items-center gap-2.5">
+									<Fingerprint class="h-4 w-4 text-gray-500" />
+									<div>
+										<p class="text-sm font-medium text-gray-100">Passkeys</p>
+										<p class="text-xs text-gray-500">
+											{passkeys.length > 0 ? `${passkeys.length} registered` : 'Not configured'}
+										</p>
+									</div>
+								</div>
+								<Button
+									variant="outline"
+									size="sm"
+									class="h-7 w-20 gap-1.5 text-xs"
+									onclick={() => (passkeyDialogOpen = true)}
+								>
+									<Plus class="h-3 w-3" />
+									Add
+								</Button>
+							</div>
+
+							{#if passkeys.length > 0}
+								<div class="mt-2 flex flex-col gap-2">
+									{#each passkeys as pk (pk.id)}
+										<div class="flex items-center gap-2.5 rounded-xs border border-gray-800/60 bg-gray-900 px-3 py-2">
+											<Fingerprint class="size-4 shrink-0 text-gray-500" />
+											<div class="min-w-0">
+												<p class="truncate text-sm text-gray-100">{pk.name || 'Unnamed'}</p>
+												{#if pk.createdAt}
+													<p class="text-xs text-gray-500">
+														Added {new Date(pk.createdAt).toISOString().slice(0, 10)}
+													</p>
+												{/if}
+											</div>
+											<Button
+												variant="ghost"
+												size="sm"
+												class="ml-auto h-7 w-7 shrink-0 p-0 text-red-400 hover:text-red-300"
+												onclick={() => removePasskey(pk.id)}
+												disabled={removingPasskey === pk.id}
+											>
+												<Trash2 class="h-3 w-3" />
+											</Button>
+										</div>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
 
 					<div class="rounded-xs border border-red-500/20 bg-red-500/5 p-4">
 						<div class="mb-3 flex items-center gap-2 border-b border-red-500/10 pb-2">

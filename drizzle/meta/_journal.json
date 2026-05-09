@@ -64,6 +64,20 @@
       "when": 1778136023104,
       "tag": "0008_hard_quicksilver",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778160307778,
+      "tag": "0009_brainy_enchantress",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778204416522,
+      "tag": "0010_grey_starjammers",
+      "breakpoints": true
     }
   ]
 }

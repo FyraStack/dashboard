@@ -1,32 +1,69 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
-import { organization, twoFactor } from 'better-auth/plugins';
+import { admin, organization, twoFactor } from 'better-auth/plugins';
 import { passkey } from '@better-auth/passkey';
 import { autumn } from 'autumn-js/better-auth';
+import { count } from 'drizzle-orm';
+import { dev } from '$app/environment';
 import { getRequestEvent } from '$app/server';
 import { ac, organizationRoles } from '$lib/auth/organization-permissions';
 import { initDrizzle } from '$lib/server/db';
+import { user as userTable } from '$lib/server/db/schema';
 import { getRuntimeEnv } from '$lib/server/env';
 import { ulid } from '$lib/server/id';
 
 export function initAuth() {
 	const env = getRuntimeEnv();
+	const db = initDrizzle();
+	const requestOrigin = getRequestEvent().url.origin;
 
 	return betterAuth({
 		appName: 'Stack',
-		baseURL: env.ORIGIN,
+		baseURL: dev ? requestOrigin : env.ORIGIN,
 		secret: env.BETTER_AUTH_SECRET,
-		database: drizzleAdapter(initDrizzle(), { provider: 'pg' }),
+		database: drizzleAdapter(db, { provider: 'pg' }),
 		advanced: {
 			database: {
 				generateId: () => ulid()
+			}
+		},
+		user: {
+			additionalFields: {
+				isAdmin: {
+					type: 'boolean',
+					input: false,
+					required: true,
+					defaultValue: false
+				}
+			}
+		},
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (newUser) => {
+						const [row] = await db.select({ count: count() }).from(userTable);
+						const isFirstUser = row.count === 0;
+						return {
+							data: { ...newUser, role: isFirstUser ? 'admin' : 'user', isAdmin: isFirstUser }
+						};
+					}
+				}
 			}
 		},
 
 		emailAndPassword: {
 			enabled: true,
 			requireEmailVerification: true,
+			customSyntheticUser: ({ coreFields, additionalFields, id }) => ({
+				...coreFields,
+				role: 'user',
+				banned: false,
+				banReason: null,
+				banExpires: null,
+				...additionalFields,
+				id
+			}),
 			sendResetPassword: async ({ user, url }) => {
 				// TODO: replace with real email provider
 				console.log(`[auth] Password reset for ${user.email}: ${url}`);
@@ -57,6 +94,7 @@ export function initAuth() {
 		},
 
 		plugins: [
+			admin({ defaultRole: 'user' }),
 			twoFactor(),
 			passkey(),
 			organization({

@@ -40,6 +40,7 @@ declare global {
 		}
 
 		interface PageData {
+			isAdmin?: boolean;
 			featureFlags?: {
 				colocation: boolean;
 				firewall: boolean;

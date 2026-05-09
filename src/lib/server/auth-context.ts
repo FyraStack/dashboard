@@ -1,19 +1,23 @@
 import { error } from '@sveltejs/kit';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { hasProjectRole, type PermissionLevel } from '$lib/auth/organization-permissions';
-import { member, organization } from '$lib/server/db/schema';
+import { member, organization, user } from '$lib/server/db/schema';
 
-type AdminRole = 'owner' | 'admin';
+export function hasAdminRole(role: string | null | undefined): boolean {
+	return role?.split(',').includes('admin') ?? false;
+}
 
 export async function requireAdmin(db: any, userId: string): Promise<void> {
-	const adminMember = await db.query.member.findFirst({
-		where: and(
-			eq(member.userId, userId),
-			inArray(member.role, ['owner', 'admin'] satisfies AdminRole[])
-		)
+	const currentUser = await db.query.user.findFirst({
+		where: eq(user.id, userId)
 	});
 
-	if (adminMember) return;
+	if (hasAdminRole(currentUser?.role)) return;
+
+	if (currentUser?.isAdmin) {
+		await db.update(user).set({ role: 'admin' }).where(eq(user.id, userId));
+		return;
+	}
 
 	error(403, 'Admin permission required');
 }

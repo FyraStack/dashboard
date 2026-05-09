@@ -534,13 +534,15 @@
 			</div>
 
 			<div class="flex flex-1 items-center justify-end gap-3">
-				<a
-					href={resolve('/admin')}
-					class="flex h-8 items-center gap-1.5 border border-gray-800 bg-gray-800/30 px-2.5 text-xs font-medium text-gray-400 transition-colors hover:border-gray-700 hover:text-gray-100"
-				>
-					<Settings class="h-3.5 w-3.5" />
-					Admin
-				</a>
+				{#if data.isAdmin}
+					<a
+						href={resolve('/admin')}
+						class="flex h-8 items-center gap-1.5 border border-gray-800 bg-gray-800/30 px-2.5 text-xs font-medium text-gray-400 transition-colors hover:border-gray-700 hover:text-gray-100"
+					>
+						<Settings class="h-3.5 w-3.5" />
+						Admin
+					</a>
+				{/if}
 
 				<!-- Search trigger -->
 				<button

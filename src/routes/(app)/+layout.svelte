@@ -1,12 +1,17 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import UserSettingsDialog from '$lib/components/dialogs/user-settings-dialog.svelte';
+	import {
+		clearUserSettingsHref,
+		UserSettingsState,
+		type UserSettingsTab
+	} from '$lib/state/user-settings.svelte';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
 	import * as Command from '$lib/components/ui/command';
-	import { goto } from '$app/navigation';
+	import { goto, replaceState } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { untrack } from 'svelte';
 	import { listVms } from '$lib/remote/vms.remote';
@@ -120,7 +125,7 @@
 		await goto(resolve(`/projects/${projectId}/servers`));
 	}
 
-	let userSettingsOpen = $state(false);
+	const userSettings = new UserSettingsState();
 	let profileName = $state('');
 
 	$effect(() => {
@@ -132,9 +137,19 @@
 		});
 	});
 
-	function openUserSettings() {
-		userSettingsOpen = true;
+	function openUserSettings(tab: UserSettingsTab = 'profile') {
+		userSettings.show(tab);
 	}
+
+	$effect(() => {
+		userSettings.syncFromUrl(page.url);
+	});
+
+	$effect(() => {
+		if (!userSettings.open && userSettings.urlHasSettingsTab(page.url)) {
+			replaceState(resolve(clearUserSettingsHref(page.url) as any), page.state);
+		}
+	});
 
 	// Command palette
 	let commandOpen = $state(false);
@@ -186,10 +201,10 @@
 		return commands;
 	});
 	const accountCommands: CommandEntry[] = [
-		{ icon: User, label: 'Profile', action: openUserSettings },
-		{ icon: Key, label: 'SSH Keys', action: openUserSettings },
-		{ icon: KeyRound, label: 'API Tokens', action: openUserSettings },
-		{ icon: KeyRound, label: 'Change Password', action: openUserSettings }
+		{ icon: User, label: 'Profile', action: () => openUserSettings('profile') },
+		{ icon: Key, label: 'SSH Keys', action: () => openUserSettings('keys') },
+		{ icon: KeyRound, label: 'API Tokens', action: () => openUserSettings('api') },
+		{ icon: KeyRound, label: 'Change Password', action: () => openUserSettings('security') }
 	];
 	const filteredNavigateCommands = $derived.by(() =>
 		navigateCommands.filter((command) => matchesCommandSearch([command.label]))
@@ -390,7 +405,7 @@
 				<!-- Avatar button — opens user settings -->
 				<button
 					class="flex items-center gap-2.5 rounded-xs px-2 py-1 transition-colors hover:bg-gray-800"
-					onclick={openUserSettings}
+					onclick={() => openUserSettings()}
 				>
 					<div class="text-right">
 						<p class="text-sm leading-tight font-medium text-gray-100">{profileName}</p>
@@ -448,7 +463,12 @@
 		{/if}
 	</div>
 
-	<UserSettingsDialog bind:open={userSettingsOpen} bind:profileName user={data.user} />
+	<UserSettingsDialog
+		bind:open={userSettings.open}
+		bind:activeTab={userSettings.tab}
+		bind:profileName
+		user={data.user}
+	/>
 
 	<!-- Command Palette -->
 	<Command.Dialog
@@ -491,7 +511,7 @@
 							value={`${server.name} ${server.plan} ${server.status} ${server.detail}`}
 							onSelect={() =>
 								runCommand(() =>
-									goto(resolve(`/projects/${selectedProjectId}/servers/${server.id}`) as any)
+									goto(resolve(`/projects/${selectedProjectId}/servers/${server.id}` as any))
 								)}
 							class="gap-2"
 						>
@@ -528,7 +548,7 @@
 				<Command.Group heading="Account">
 					{#each filteredAccountCommands as command (command.label)}
 						<Command.Item
-							onSelect={() => runCommand(command.action ?? openUserSettings)}
+							onSelect={() => runCommand(command.action ?? (() => openUserSettings()))}
 							class="gap-2"
 						>
 							<command.icon class="h-3.5 w-3.5 text-gray-500" />

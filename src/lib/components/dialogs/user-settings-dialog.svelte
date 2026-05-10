@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { untrack } from 'svelte';
+	import type { UserSettingsTab } from '$lib/state/user-settings.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -38,13 +39,17 @@
 
 	type Props = {
 		open?: boolean;
+		activeTab?: UserSettingsTab;
 		profileName?: string;
 		user: { name?: string | null; email?: string | null };
 	};
 
-	let { open = $bindable(false), profileName = $bindable(''), user }: Props = $props();
-
-	let activeTab = $state('profile');
+	let {
+		open = $bindable(false),
+		activeTab = $bindable<UserSettingsTab>('profile'),
+		profileName = $bindable(''),
+		user
+	}: Props = $props();
 
 	// ── Profile ──
 	let profileSaving = $state(false);
@@ -114,7 +119,11 @@
 		}
 		try {
 			const { data } = await authClient.passkey.listUserPasskeys();
-			passkeys = (Array.isArray(data) ? data : []) as unknown as { id: string; name: string; createdAt?: string }[];
+			passkeys = (Array.isArray(data) ? data : []) as unknown as {
+				id: string;
+				name: string;
+				createdAt?: string;
+			}[];
 		} catch {
 			passkeys = [];
 		}
@@ -290,7 +299,7 @@
 		<Tabs.Root
 			bind:value={activeTab}
 			orientation="vertical"
-			class="flex flex-1 flex-col gap-0 min-h-0 sm:flex-row"
+			class="flex min-h-0 flex-1 flex-col gap-0 sm:flex-row"
 		>
 			<!-- Sidebar -->
 			<div class="flex w-full flex-col border-b border-gray-800 sm:w-52 sm:border-r sm:border-b-0">
@@ -348,360 +357,361 @@
 			</div>
 
 			<!-- Right content -->
-			<div class="relative flex flex-1 flex-col min-h-0">
+			<div class="relative flex min-h-0 flex-1 flex-col">
 				<!-- bump sidebar below close button -->
 				<div class="h-4 shrink-0"></div>
-				<div
-					class="settings-scroll relative flex flex-1 flex-col overflow-y-auto min-h-0"
-				>
-				<!-- Profile -->
-				<Tabs.Content value="profile" class="mt-0 px-6 py-6">
-					<div class="rounded-xs border border-gray-800/60 p-4">
-						<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
-							<User class="h-3.5 w-3.5 text-red-400" />
-							<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">Profile</p>
-						</div>
-						<div class="flex flex-col gap-3">
-							<div class="flex flex-col gap-1.5">
-								<Label>Full Name</Label>
-								<Input bind:value={profileName} />
+				<div class="settings-scroll relative flex min-h-0 flex-1 flex-col overflow-y-auto">
+					<!-- Profile -->
+					<Tabs.Content value="profile" class="mt-0 px-6 py-6">
+						<div class="rounded-xs border border-gray-800/60 p-4">
+							<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
+								<User class="h-3.5 w-3.5 text-red-400" />
+								<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">Profile</p>
 							</div>
-							<div class="flex flex-col gap-1.5">
-								<Label>Email Address</Label>
-								<Input value={profileEmail} type="email" disabled />
-							</div>
-							<Button size="sm" onclick={saveProfile} disabled={profileSaving} class="w-fit">
-								{#if profileSaving}
-									Saving...
-								{:else if profileSaved}
-									<Check class="h-3 w-3" /> Saved
-								{:else}
-									Save Profile
-								{/if}
-							</Button>
-						</div>
-					</div>
-				</Tabs.Content>
-
-				<!-- Security -->
-				<Tabs.Content value="security" class="mt-0 space-y-4 px-6 py-6">
-					<!-- Password -->
-					<div class="rounded-xs border border-gray-800/60 p-4">
-						<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
-							<Lock class="h-3.5 w-3.5 text-red-400" />
-							<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">Password</p>
-						</div>
-						<div class="flex flex-col gap-3">
-							<div class="flex flex-col gap-1.5">
-								<Label>Current Password</Label>
-								<div class="relative">
-									<Input
-										bind:value={currentPassword}
-										type={showPassword ? 'text' : 'password'}
-										placeholder="********"
-									/>
-									<button
-										type="button"
-										class="absolute top-1/2 right-2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
-										onclick={() => (showPassword = !showPassword)}
-									>
-										{#if showPassword}
-											<EyeOff class="h-3.5 w-3.5" />
-										{:else}
-											<Eye class="h-3.5 w-3.5" />
-										{/if}
-									</button>
+							<div class="flex flex-col gap-3">
+								<div class="flex flex-col gap-1.5">
+									<Label>Full Name</Label>
+									<Input bind:value={profileName} />
 								</div>
-							</div>
-							<div class="flex flex-col gap-1.5">
-								<Label>New Password</Label>
-								<Input bind:value={newPassword} type="password" placeholder="********" />
-							</div>
-							<div class="flex flex-col gap-1.5">
-								<Label>Confirm New Password</Label>
-								<Input bind:value={confirmPassword} type="password" placeholder="********" />
-								{#if confirmPassword && newPassword !== confirmPassword}
-									<p class="text-xs text-red-400">Passwords do not match.</p>
-								{/if}
-							</div>
-							<Button
-								size="sm"
-								onclick={savePassword}
-								disabled={!currentPassword || !newPassword || newPassword !== confirmPassword}
-								class="w-fit"
-							>
-								{#if passwordSaved}
-									<Check class="h-3 w-3" /> Updated
-								{:else}
-									Update Password
-								{/if}
-							</Button>
-						</div>
-					</div>
-
-					<!-- Two-Factor Authentication -->
-					<div class="rounded-xs border border-gray-800/60 p-4">
-						<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
-							<ShieldCheck class="h-3.5 w-3.5 text-red-400" />
-							<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">Two-Factor Authentication</p>
-						</div>
-
-						<!-- TOTP -->
-						<div class="flex items-center justify-between py-2.5">
-							<div class="flex items-center gap-2.5">
-								<ShieldCheck class="h-4 w-4 text-gray-500" />
-								<div>
-									<p class="text-sm font-medium text-gray-100">Authenticator App</p>
-									<p class="text-xs text-gray-500">
-										{twoFactorEnabled ? 'Enabled' : 'Not configured'}
-									</p>
+								<div class="flex flex-col gap-1.5">
+									<Label>Email Address</Label>
+									<Input value={profileEmail} type="email" disabled />
 								</div>
+								<Button size="sm" onclick={saveProfile} disabled={profileSaving} class="w-fit">
+									{#if profileSaving}
+										Saving...
+									{:else if profileSaved}
+										<Check class="h-3 w-3" /> Saved
+									{:else}
+										Save Profile
+									{/if}
+								</Button>
 							</div>
-							{#if twoFactorEnabled}
-								<Button
-									variant="destructive"
-									size="sm"
-									class="h-7 w-20 gap-1.5 text-xs"
-									onclick={() => {
-										totpDisableError = '';
-										totpDisablePassword = '';
-										totpDisableDialogOpen = true;
-									}}
-								>
-									<Minus class="h-3 w-3" />
-									Disable
-								</Button>
-							{:else}
-								<Button
-									variant="outline"
-									size="sm"
-									class="h-7 gap-1.5 text-xs"
-									onclick={() => (totpDialogOpen = true)}
-								>
-									<Plus class="h-3 w-3" />
-									Set Up
-								</Button>
-							{/if}
 						</div>
-						<div class="border-t border-gray-800/50"></div>
+					</Tabs.Content>
 
-						<!-- Passkeys -->
-						<div class="py-2.5">
-							<div class="flex items-center justify-between">
+					<!-- Security -->
+					<Tabs.Content value="security" class="mt-0 space-y-4 px-6 py-6">
+						<!-- Password -->
+						<div class="rounded-xs border border-gray-800/60 p-4">
+							<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
+								<Lock class="h-3.5 w-3.5 text-red-400" />
+								<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">Password</p>
+							</div>
+							<div class="flex flex-col gap-3">
+								<div class="flex flex-col gap-1.5">
+									<Label>Current Password</Label>
+									<div class="relative">
+										<Input
+											bind:value={currentPassword}
+											type={showPassword ? 'text' : 'password'}
+											placeholder="********"
+										/>
+										<button
+											type="button"
+											class="absolute top-1/2 right-2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+											onclick={() => (showPassword = !showPassword)}
+										>
+											{#if showPassword}
+												<EyeOff class="h-3.5 w-3.5" />
+											{:else}
+												<Eye class="h-3.5 w-3.5" />
+											{/if}
+										</button>
+									</div>
+								</div>
+								<div class="flex flex-col gap-1.5">
+									<Label>New Password</Label>
+									<Input bind:value={newPassword} type="password" placeholder="********" />
+								</div>
+								<div class="flex flex-col gap-1.5">
+									<Label>Confirm New Password</Label>
+									<Input bind:value={confirmPassword} type="password" placeholder="********" />
+									{#if confirmPassword && newPassword !== confirmPassword}
+										<p class="text-xs text-red-400">Passwords do not match.</p>
+									{/if}
+								</div>
+								<Button
+									size="sm"
+									onclick={savePassword}
+									disabled={!currentPassword || !newPassword || newPassword !== confirmPassword}
+									class="w-fit"
+								>
+									{#if passwordSaved}
+										<Check class="h-3 w-3" /> Updated
+									{:else}
+										Update Password
+									{/if}
+								</Button>
+							</div>
+						</div>
+
+						<!-- Two-Factor Authentication -->
+						<div class="rounded-xs border border-gray-800/60 p-4">
+							<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
+								<ShieldCheck class="h-3.5 w-3.5 text-red-400" />
+								<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">
+									Two-Factor Authentication
+								</p>
+							</div>
+
+							<!-- TOTP -->
+							<div class="flex items-center justify-between py-2.5">
 								<div class="flex items-center gap-2.5">
-									<Fingerprint class="h-4 w-4 text-gray-500" />
+									<ShieldCheck class="h-4 w-4 text-gray-500" />
 									<div>
-										<p class="text-sm font-medium text-gray-100">Passkeys</p>
+										<p class="text-sm font-medium text-gray-100">Authenticator App</p>
 										<p class="text-xs text-gray-500">
-											{passkeys.length > 0 ? `${passkeys.length} registered` : 'Not configured'}
+											{twoFactorEnabled ? 'Enabled' : 'Not configured'}
 										</p>
 									</div>
 								</div>
+								{#if twoFactorEnabled}
+									<Button
+										variant="destructive"
+										size="sm"
+										class="h-7 w-20 gap-1.5 text-xs"
+										onclick={() => {
+											totpDisableError = '';
+											totpDisablePassword = '';
+											totpDisableDialogOpen = true;
+										}}
+									>
+										<Minus class="h-3 w-3" />
+										Disable
+									</Button>
+								{:else}
+									<Button
+										variant="outline"
+										size="sm"
+										class="h-7 gap-1.5 text-xs"
+										onclick={() => (totpDialogOpen = true)}
+									>
+										<Plus class="h-3 w-3" />
+										Set Up
+									</Button>
+								{/if}
+							</div>
+							<div class="border-t border-gray-800/50"></div>
+
+							<!-- Passkeys -->
+							<div class="py-2.5">
+								<div class="flex items-center justify-between">
+									<div class="flex items-center gap-2.5">
+										<Fingerprint class="h-4 w-4 text-gray-500" />
+										<div>
+											<p class="text-sm font-medium text-gray-100">Passkeys</p>
+											<p class="text-xs text-gray-500">
+												{passkeys.length > 0 ? `${passkeys.length} registered` : 'Not configured'}
+											</p>
+										</div>
+									</div>
+									<Button
+										variant="outline"
+										size="sm"
+										class="h-7 w-20 gap-1.5 text-xs"
+										onclick={() => (passkeyDialogOpen = true)}
+									>
+										<Plus class="h-3 w-3" />
+										Add
+									</Button>
+								</div>
+
+								{#if passkeys.length > 0}
+									<div class="mt-2 flex flex-col gap-2">
+										{#each passkeys as pk (pk.id)}
+											<div
+												class="flex items-center gap-2.5 rounded-xs border border-gray-800/60 bg-gray-900 px-3 py-2"
+											>
+												<Fingerprint class="size-4 shrink-0 text-gray-500" />
+												<div class="min-w-0">
+													<p class="truncate text-sm text-gray-100">{pk.name || 'Unnamed'}</p>
+													{#if pk.createdAt}
+														<p class="text-xs text-gray-500">
+															Added {new Date(pk.createdAt).toISOString().slice(0, 10)}
+														</p>
+													{/if}
+												</div>
+												<Button
+													variant="ghost"
+													size="sm"
+													class="ml-auto h-7 w-7 shrink-0 p-0 text-red-400 hover:text-red-300"
+													onclick={() => removePasskey(pk.id)}
+													disabled={removingPasskey === pk.id}
+												>
+													<Trash2 class="h-3 w-3" />
+												</Button>
+											</div>
+										{/each}
+									</div>
+								{/if}
+							</div>
+						</div>
+
+						<div class="rounded-xs border border-red-500/20 bg-red-500/5 p-4">
+							<div class="mb-3 flex items-center gap-2 border-b border-red-500/10 pb-2">
+								<LogOut class="h-3.5 w-3.5 text-red-400" />
+								<p class="text-xs font-semibold tracking-wider text-red-400/80 uppercase">
+									Session
+								</p>
+							</div>
+							<button
+								type="button"
+								class="flex w-full items-center justify-center gap-2 rounded-xs border border-red-500/20 bg-transparent px-4 py-2.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10"
+								onclick={signOut}
+							>
+								<LogOut class="h-3.5 w-3.5" />
+								Sign Out
+							</button>
+						</div>
+					</Tabs.Content>
+
+					<!-- Keys -->
+					<Tabs.Content value="keys" class="mt-0 space-y-4 px-6 py-6">
+						<div class="rounded-xs border border-gray-800/60 p-4">
+							<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
+								<KeyRound class="h-3.5 w-3.5 text-red-400" />
+								<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">SSH Keys</p>
+							</div>
+
+							{#if sshKeys.length > 0}
+								<div class="max-h-48 overflow-y-auto">
+									<div class="divide-y divide-gray-800/50">
+										{#each sshKeys as key (key.id)}
+											<div class="flex items-center justify-between py-2.5">
+												<div class="min-w-0">
+													<p class="truncate text-sm font-medium text-gray-100">{key.name}</p>
+													<p class="mt-0.5 truncate font-mono text-[11px] text-gray-500">
+														{key.fingerprint}
+													</p>
+												</div>
+												<Button
+													variant="ghost"
+													size="sm"
+													class="h-7 w-7 shrink-0 p-0 text-red-400 hover:text-red-300"
+													onclick={() => removeSshKey(key.id)}
+												>
+													<Trash2 class="h-3 w-3" />
+												</Button>
+											</div>
+										{/each}
+									</div>
+								</div>
+							{:else}
+								<p class="py-2 text-center text-xs text-gray-500">No SSH keys added.</p>
+							{/if}
+
+							<div class="mt-3 flex flex-col gap-2 border-t border-gray-800/50 pt-3">
+								<Input bind:value={newKeyName} placeholder="Key name" class="h-8 text-xs" />
+								<textarea
+									bind:value={newKeyValue}
+									placeholder="ssh-ed25519 AAAA..."
+									rows="3"
+									class="w-full resize-none border border-gray-700 bg-gray-800 px-3 py-2 font-mono text-xs text-gray-100 placeholder:text-gray-600 focus:border-gray-500 focus:outline-none"
+								></textarea>
 								<Button
 									variant="outline"
 									size="sm"
-									class="h-7 w-20 gap-1.5 text-xs"
-									onclick={() => (passkeyDialogOpen = true)}
+									class="w-fit gap-1.5 text-xs"
+									onclick={addSshKey}
+									disabled={!newKeyName.trim() || !newKeyValue.trim()}
 								>
 									<Plus class="h-3 w-3" />
-									Add
+									Add Key
 								</Button>
 							</div>
+						</div>
+					</Tabs.Content>
 
-							{#if passkeys.length > 0}
-								<div class="mt-2 flex flex-col gap-2">
-									{#each passkeys as pk (pk.id)}
-										<div class="flex items-center gap-2.5 rounded-xs border border-gray-800/60 bg-gray-900 px-3 py-2">
-											<Fingerprint class="size-4 shrink-0 text-gray-500" />
-											<div class="min-w-0">
-												<p class="truncate text-sm text-gray-100">{pk.name || 'Unnamed'}</p>
-												{#if pk.createdAt}
-													<p class="text-xs text-gray-500">
-														Added {new Date(pk.createdAt).toISOString().slice(0, 10)}
-													</p>
-												{/if}
-											</div>
-											<Button
-												variant="ghost"
-												size="sm"
-												class="ml-auto h-7 w-7 shrink-0 p-0 text-red-400 hover:text-red-300"
-												onclick={() => removePasskey(pk.id)}
-												disabled={removingPasskey === pk.id}
-											>
-												<Trash2 class="h-3 w-3" />
-											</Button>
-										</div>
-									{/each}
+					<!-- API Tokens -->
+					<Tabs.Content value="api" class="mt-0 flex-1 overflow-y-auto px-6 py-6">
+						<div class="rounded-xs border border-gray-800/60 p-4">
+							<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
+								<KeyRound class="h-3.5 w-3.5 text-red-400" />
+								<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">
+									API Tokens
+								</p>
+							</div>
+
+							{#if generatedToken}
+								<div class="mb-3 border border-amber-800/50 bg-amber-950/20 p-3">
+									<p class="text-xs font-medium text-amber-400">
+										Copy this token now — it won't be shown again.
+									</p>
+									<div class="mt-2 flex items-center gap-2">
+										<code
+											class="flex-1 overflow-hidden bg-gray-800 px-2 py-1 font-mono text-xs text-ellipsis whitespace-nowrap text-gray-100"
+										>
+											{generatedToken}
+										</code>
+										<button
+											type="button"
+											class="shrink-0 text-gray-500 hover:text-gray-300"
+											onclick={() => copyToken('new-token', generatedToken)}
+										>
+											{#if copiedTokenId === 'new-token'}
+												<Check class="h-3.5 w-3.5 text-emerald-500" />
+											{:else}
+												<Copy class="h-3.5 w-3.5" />
+											{/if}
+										</button>
+									</div>
 								</div>
 							{/if}
-						</div>
-					</div>
 
-					<div class="rounded-xs border border-red-500/20 bg-red-500/5 p-4">
-						<div class="mb-3 flex items-center gap-2 border-b border-red-500/10 pb-2">
-							<LogOut class="h-3.5 w-3.5 text-red-400" />
-							<p class="text-xs font-semibold tracking-wider text-red-400/80 uppercase">Session</p>
-						</div>
-						<button
-							type="button"
-							class="flex w-full items-center justify-center gap-2 rounded-xs border border-red-500/20 bg-transparent px-4 py-2.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10"
-							onclick={signOut}
-						>
-							<LogOut class="h-3.5 w-3.5" />
-							Sign Out
-						</button>
-					</div>
-				</Tabs.Content>
-
-				<!-- Keys -->
-				<Tabs.Content value="keys" class="mt-0 space-y-4 px-6 py-6">
-					<div class="rounded-xs border border-gray-800/60 p-4">
-						<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
-							<KeyRound class="h-3.5 w-3.5 text-red-400" />
-							<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">SSH Keys</p>
-						</div>
-
-						{#if sshKeys.length > 0}
-							<div class="max-h-48 overflow-y-auto">
-								<div class="divide-y divide-gray-800/50">
-									{#each sshKeys as key (key.id)}
-										<div class="flex items-center justify-between py-2.5">
-											<div class="min-w-0">
-												<p class="truncate text-sm font-medium text-gray-100">{key.name}</p>
-												<p class="mt-0.5 truncate font-mono text-[11px] text-gray-500">
-													{key.fingerprint}
-												</p>
+							{#if tokens.length > 0}
+								<div class="max-h-48 overflow-y-auto">
+									<div class="divide-y divide-gray-800/50">
+										{#each tokens as token (token.id)}
+											<div class="flex items-center justify-between py-2.5">
+												<div class="min-w-0">
+													<p class="truncate text-sm font-medium text-gray-100">{token.name}</p>
+													<p class="mt-0.5 truncate font-mono text-[11px] text-gray-500">
+														sk-stack-****...****
+														<span class="ml-2 font-sans text-gray-600">Created {token.created}</span
+														>
+													</p>
+												</div>
+												<Button
+													variant="ghost"
+													size="sm"
+													class="h-7 shrink-0 px-2 text-xs text-red-400 hover:text-red-300"
+													onclick={() => revokeToken(token.id)}
+												>
+													Revoke
+												</Button>
 											</div>
-											<Button
-												variant="ghost"
-												size="sm"
-												class="h-7 w-7 shrink-0 p-0 text-red-400 hover:text-red-300"
-												onclick={() => removeSshKey(key.id)}
-											>
-												<Trash2 class="h-3 w-3" />
-											</Button>
-										</div>
-									{/each}
+										{/each}
+									</div>
 								</div>
+							{:else}
+								<p class="py-2 text-center text-xs text-gray-500">No API tokens.</p>
+							{/if}
+
+							<div class="mt-3 flex items-center gap-3 border-t border-gray-800/50 pt-3">
+								<Input bind:value={newTokenName} placeholder="Token name" class="h-8 text-xs" />
+								<Button
+									variant="outline"
+									size="sm"
+									class="shrink-0 gap-1.5 text-xs"
+									onclick={generateToken}
+									disabled={!newTokenName.trim()}
+								>
+									<Plus class="h-3 w-3" />
+									Generate
+								</Button>
 							</div>
-						{:else}
-							<p class="py-2 text-center text-xs text-gray-500">No SSH keys added.</p>
-						{/if}
-
-						<div class="mt-3 flex flex-col gap-2 border-t border-gray-800/50 pt-3">
-							<Input bind:value={newKeyName} placeholder="Key name" class="h-8 text-xs" />
-							<textarea
-								bind:value={newKeyValue}
-								placeholder="ssh-ed25519 AAAA..."
-								rows="3"
-								class="w-full resize-none border border-gray-700 bg-gray-800 px-3 py-2 font-mono text-xs text-gray-100 placeholder:text-gray-600 focus:border-gray-500 focus:outline-none"
-							></textarea>
-							<Button
-								variant="outline"
-								size="sm"
-								class="w-fit gap-1.5 text-xs"
-								onclick={addSshKey}
-								disabled={!newKeyName.trim() || !newKeyValue.trim()}
-							>
-								<Plus class="h-3 w-3" />
-								Add Key
-							</Button>
 						</div>
-					</div>
-				</Tabs.Content>
-
-				<!-- API Tokens -->
-				<Tabs.Content value="api" class="mt-0 flex-1 overflow-y-auto px-6 py-6">
-					<div class="rounded-xs border border-gray-800/60 p-4">
-						<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
-							<KeyRound class="h-3.5 w-3.5 text-red-400" />
-							<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">API Tokens</p>
-						</div>
-
-						{#if generatedToken}
-							<div class="mb-3 border border-amber-800/50 bg-amber-950/20 p-3">
-								<p class="text-xs font-medium text-amber-400">
-									Copy this token now — it won't be shown again.
-								</p>
-								<div class="mt-2 flex items-center gap-2">
-									<code
-										class="flex-1 overflow-hidden bg-gray-800 px-2 py-1 font-mono text-xs text-ellipsis whitespace-nowrap text-gray-100"
-									>
-										{generatedToken}
-									</code>
-									<button
-										type="button"
-										class="shrink-0 text-gray-500 hover:text-gray-300"
-										onclick={() => copyToken('new-token', generatedToken)}
-									>
-										{#if copiedTokenId === 'new-token'}
-											<Check class="h-3.5 w-3.5 text-emerald-500" />
-										{:else}
-											<Copy class="h-3.5 w-3.5" />
-										{/if}
-									</button>
-								</div>
-							</div>
-						{/if}
-
-						{#if tokens.length > 0}
-							<div class="max-h-48 overflow-y-auto">
-								<div class="divide-y divide-gray-800/50">
-									{#each tokens as token (token.id)}
-										<div class="flex items-center justify-between py-2.5">
-											<div class="min-w-0">
-												<p class="truncate text-sm font-medium text-gray-100">{token.name}</p>
-												<p class="mt-0.5 truncate font-mono text-[11px] text-gray-500">
-													sk-stack-****...****
-													<span class="ml-2 font-sans text-gray-600">Created {token.created}</span>
-												</p>
-											</div>
-											<Button
-												variant="ghost"
-												size="sm"
-												class="h-7 shrink-0 px-2 text-xs text-red-400 hover:text-red-300"
-												onclick={() => revokeToken(token.id)}
-											>
-												Revoke
-											</Button>
-										</div>
-									{/each}
-								</div>
-							</div>
-						{:else}
-							<p class="py-2 text-center text-xs text-gray-500">No API tokens.</p>
-						{/if}
-
-						<div class="mt-3 flex items-center gap-3 border-t border-gray-800/50 pt-3">
-							<Input bind:value={newTokenName} placeholder="Token name" class="h-8 text-xs" />
-							<Button
-								variant="outline"
-								size="sm"
-								class="shrink-0 gap-1.5 text-xs"
-								onclick={generateToken}
-								disabled={!newTokenName.trim()}
-							>
-								<Plus class="h-3 w-3" />
-								Generate
-							</Button>
-						</div>
-					</div>
-				</Tabs.Content>
+					</Tabs.Content>
 				</div>
 			</div>
 		</Tabs.Root>
 	</Dialog.Content>
 
 	{#if totpDialogOpen}
-		<TotpOnboardingDialog
-			bind:open={totpDialogOpen}
-			onComplete={loadTwoFactorStatus}
-		/>
+		<TotpOnboardingDialog bind:open={totpDialogOpen} onComplete={loadTwoFactorStatus} />
 	{/if}
-	<PasskeyOnboardingDialog
-		bind:open={passkeyDialogOpen}
-		onComplete={loadTwoFactorStatus}
-	/>
+	<PasskeyOnboardingDialog bind:open={passkeyDialogOpen} onComplete={loadTwoFactorStatus} />
 	<Dialog.Root bind:open={totpDisableDialogOpen}>
 		<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
 			<Dialog.Header>

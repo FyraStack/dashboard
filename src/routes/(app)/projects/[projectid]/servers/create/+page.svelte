@@ -6,6 +6,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import type { FeatureFlags } from '$lib/feature-flags';
+	import { userSettingsHref } from '$lib/state/user-settings.svelte';
 	import { createVolume as createProjectVolume } from '$lib/remote/volumes.remote';
 	import { createVm } from '$lib/remote/vms.remote';
 	import { onMount } from 'svelte';
@@ -713,6 +714,13 @@
 									<p class="mt-1 text-[11px] text-gray-600">
 										Password authentication will be used instead.
 									</p>
+									<a
+										href={resolve(userSettingsHref('keys', page.url) as any)}
+										data-sveltekit-noscroll
+										class="mt-2 inline-flex text-[11px] font-medium text-red-400 transition-colors hover:text-red-300"
+									>
+										Add an SSH key in user settings
+									</a>
 								</div>
 							{/if}
 							{#if usePasswordAuthentication}

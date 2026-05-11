@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -61,6 +61,7 @@
 		saved = false;
 		try {
 			await updateProjectRpc({ projectId, name: projectName.trim() });
+			await invalidate('app:projects');
 			saved = true;
 			clearSavedTimeout();
 			savedTimeout = setTimeout(() => {

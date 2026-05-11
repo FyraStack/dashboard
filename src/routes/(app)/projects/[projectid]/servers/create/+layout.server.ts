@@ -11,6 +11,7 @@ import { initDrizzle } from '$lib/server/db';
 
 export const load: LayoutServerLoad = async ({ locals, params, parent, depends, url }) => {
 	depends('project:create-server');
+	depends('app:ssh-keys');
 	const { featureFlags } = await parent();
 	if (!params.projectid) {
 		error(404, 'Project not found');

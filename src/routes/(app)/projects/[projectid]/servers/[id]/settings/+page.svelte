@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
-	import { goto } from '$app/navigation';
+	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { getServerWithFallback } from '$lib/state/servers.svelte';
@@ -24,6 +24,7 @@
 
 		try {
 			await deleteVm({ vmId: selectedServer.id });
+			await invalidate('project:vms');
 			await goto(resolve(`/projects/${page.params.projectid}/servers`));
 		} catch {
 			deleteError = 'Failed to delete server.';

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidate } from '$app/navigation';
 	import { authClient } from '$lib/auth-client';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -80,6 +80,7 @@
 		const target = deleteTarget;
 		try {
 			await deleteProjectRpc({ projectId: target.id });
+			await invalidate('app:projects');
 			projects = projects.filter((p) => p.id !== target.id);
 			deleteTarget = null;
 			deleteConfirm = '';

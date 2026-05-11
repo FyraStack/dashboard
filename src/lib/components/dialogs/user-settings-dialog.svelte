@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { untrack } from 'svelte';
 	import type { UserSettingsTab } from '$lib/state/user-settings.svelte';
@@ -281,6 +281,7 @@
 			name: newKeyName.trim(),
 			publicKey: newKeyValue.trim()
 		});
+		await invalidate('app:ssh-keys');
 		sshKeys.push({ id: res.id, name: newKeyName.trim(), fingerprint: res.fingerprint });
 		newKeyName = '';
 		newKeyValue = '';
@@ -288,6 +289,7 @@
 
 	async function removeSshKey(id: string) {
 		await deleteSshKey({ keyId: id });
+		await invalidate('app:ssh-keys');
 		sshKeys = sshKeys.filter((k) => k.id !== id);
 	}
 

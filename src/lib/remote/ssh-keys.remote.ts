@@ -51,8 +51,7 @@ export const createSshKey = command(createParams, async (params) => {
 	let fingerprint: string;
 	try {
 		const hash = await crypto.subtle.digest('SHA-256', raw as BufferSource);
-		fingerprint =
-			'SHA256:' + btoa(String.fromCharCode(...new Uint8Array(hash))).replace(/=+$/, '');
+		fingerprint = 'SHA256:' + btoa(String.fromCharCode(...new Uint8Array(hash))).replace(/=+$/, '');
 	} catch {
 		error(400, 'Invalid SSH public key: could not compute fingerprint');
 	}

@@ -166,7 +166,6 @@
 						<AlertTriangle class="h-3.5 w-3.5 shrink-0" />{admin.featureFlagError}
 					</div>
 				{/if}
-
 				<!-- Summary header -->
 				<div class="flex items-center justify-between">
 					<div class="flex items-center gap-3">

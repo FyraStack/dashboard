@@ -81,8 +81,8 @@
 							next.status === 'running'
 								? 'running'
 								: server.status === 'provisioning' || server.status === 'restarting'
-								? server.status
-								: next.status,
+									? server.status
+									: next.status,
 						agentConnected: next.liveStatus === 'running',
 						ip: ipv4,
 						ipv6,

@@ -17,7 +17,6 @@ import {
 	createVMandAssignIPs,
 	clearVMPrimaryIPs,
 	deleteIP,
-	deletePrefix,
 	deleteVM,
 	isNetboxConfigured
 } from '$lib/server/netbox';
@@ -403,8 +402,7 @@ export const createVm = command(createParams, async (params) => {
 			netboxVmInterfaceId: netboxResult?.netbox_vm_interface_id ?? null,
 			netboxMacAddressId: netboxResult?.netbox_mac_address_id ?? null,
 			netboxPrimaryIpv4Id: netboxResult?.netbox_primary_ipv4_id ?? null,
-			netboxPrimaryIpv6Id: netboxResult?.netbox_primary_ipv6_id ?? null,
-			netboxIpv6PrefixId: netboxResult?.netbox_ipv6_prefix_id ?? null
+			netboxPrimaryIpv6Id: netboxResult?.netbox_primary_ipv6_id ?? null
 		})
 		.where(eq(vms.id, vmId));
 	await createBillingMeter({
@@ -463,9 +461,6 @@ export const deleteVm = command(deleteParams, async (params) => {
 				Array.from(netboxIpAddressIds, (netboxIpAddressId) => deleteIP(netboxIpAddressId))
 			);
 			await deleteVM(row.netboxVmId!, row.netboxVmInterfaceId!, row.netboxMacAddressId!);
-			if (row.netboxIpv6PrefixId != null) {
-				await deletePrefix(row.netboxIpv6PrefixId);
-			}
 		} catch (err) {
 			console.warn(`Failed to delete NetBox VM ${row.id}`, err);
 			error(502, `Failed to remove VM "${row.name}" from NetBox`);

@@ -131,8 +131,7 @@
 			passwordCodeSent = true;
 		} catch (err) {
 			passwordCodeSent = false;
-			passwordVerificationError =
-				getErrorMessage(err, 'Failed to send verification code.');
+			passwordVerificationError = getErrorMessage(err, 'Failed to send verification code.');
 		} finally {
 			passwordCodeSending = false;
 		}

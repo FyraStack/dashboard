@@ -295,8 +295,7 @@ export class AdminState {
 			await invalidate('app:admin-users');
 		} catch (err) {
 			this.adminUsers = previousUsers;
-			this.adminUserError =
-				getErrorMessage(err, 'Failed to update two-factor status');
+			this.adminUserError = getErrorMessage(err, 'Failed to update two-factor status');
 		} finally {
 			this.stopUserSheetSave(userId);
 			this.twoFAPendingUserId = '';
@@ -370,8 +369,7 @@ export class AdminState {
 			this.orgVms = result.vms;
 			this.orgVolumes = result.volumes;
 		} catch (err) {
-			this.adminUserError =
-				getErrorMessage(err, 'Failed to load organization resources');
+			this.adminUserError = getErrorMessage(err, 'Failed to load organization resources');
 		} finally {
 			this.orgResourcesLoading = false;
 		}

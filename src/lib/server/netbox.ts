@@ -9,7 +9,6 @@ type NetboxCreateResult = {
 	netbox_ip_address_ids: number[];
 	netbox_primary_ipv4_id: number;
 	netbox_primary_ipv6_id: number;
-	netbox_ipv6_prefix_id: number;
 	primary_ipv4: string;
 	primary_ipv6: string;
 };
@@ -43,7 +42,14 @@ export class NetboxError extends Error {
 		readonly status: number,
 		readonly details: unknown
 	) {
-		super(message);
+		let details_string;
+		try {
+			details_string = JSON.stringify(details);
+		} catch {
+			details_string = 'Unable to stringify details';
+		}
+
+		super(`${message} - ${status} - ${details_string}`);
 		this.name = 'NetboxError';
 	}
 }
@@ -128,6 +134,7 @@ async function netbox<T>(route: string, method: NetboxMethod, data?: unknown): P
 
 	const body = await parseResponse(response);
 	if (!response.ok) {
+		console.error(data);
 		throw new NetboxError(`Netbox ${method} ${route} failed`, response.status, body);
 	}
 
@@ -143,23 +150,11 @@ export async function assignIPToVM(netbox_vm_interface_id: number, ip_address: s
 	});
 }
 
-async function assignExistingIPToVM(netbox_ip_address_id: number, netbox_vm_interface_id: number) {
-	return await netbox<NetboxIpAddress>(`/api/ipam/ip-addresses/${netbox_ip_address_id}/`, 'PATCH', {
-		status: 'active',
-		assigned_object_type: 'virtualization.vminterface',
-		assigned_object_id: netbox_vm_interface_id
-	});
-}
-
 export async function deleteIP(netbox_ip_address_id: number) {
 	return await netbox(`/api/ipam/ip-addresses/${netbox_ip_address_id}/`, 'DELETE');
 }
 
-export async function deletePrefix(netbox_prefix_id: number) {
-	return await netbox(`/api/ipam/prefixes/${netbox_prefix_id}/`, 'DELETE');
-}
-
-async function allocateAvailableIPv4(netbox_vm_interface_id: number) {
+async function assignAvailableIPv4(netbox_vm_interface_id: number) {
 	const allocation = getNetboxAllocationConfig();
 	if (!allocation) return null;
 
@@ -167,42 +162,41 @@ async function allocateAvailableIPv4(netbox_vm_interface_id: number) {
 		(await netbox<NetboxIpAddress[]>(
 			`/api/ipam/prefixes/${allocation.ipv4PrefixId}/available-ips/`,
 			'POST',
-			[{}]
-		)) ?? [];
-	if (!ip) throw new NetboxError('NetBox did not allocate an IPv4 address', 502, null);
-
-	return await assignExistingIPToVM(ip.id, netbox_vm_interface_id);
-}
-
-async function allocateAvailableIPv6(netbox_vm_interface_id: number, description?: string) {
-	const allocation = getNetboxAllocationConfig();
-	if (!allocation) return null;
-
-	const [availablePrefix] =
-		(await netbox<NetboxAvailablePrefix[]>(
-			`/api/ipam/prefixes/${allocation.ipv6PrefixId}/available-prefixes/`,
-			'GET'
-		)) ?? [];
-	if (!availablePrefix) throw new NetboxError('NetBox did not return an IPv6 prefix', 502, null);
-
-	const [prefix] =
-		(await netbox<NetboxPrefix[]>(
-			`/api/ipam/prefixes/${allocation.ipv6PrefixId}/available-prefixes/`,
-			'POST',
 			[
 				{
-					prefix: availablePrefix.prefix.replace(/\/\d+$/, `/${allocation.ipv6PrefixLength}`),
+					prefix_length: 32,
 					status: 'active',
-					...(description ? { description } : {})
+					assigned_object_type: 'virtualization.vminterface',
+					assigned_object_id: netbox_vm_interface_id
 				}
 			]
 		)) ?? [];
-	if (!prefix) throw new NetboxError('NetBox did not allocate an IPv6 prefix', 502, null);
+	if (!ip) throw new NetboxError('NetBox did not allocate an IPv4 address', 502, null);
 
-	const ip = await assignIPToVM(netbox_vm_interface_id, prefix.prefix);
+	return ip;
+}
+
+async function assignAvailableIPv6(netbox_vm_interface_id: number) {
+	const allocation = getNetboxAllocationConfig();
+	if (!allocation) return null;
+
+	const [ip] =
+		(await netbox<NetboxIpAddress[]>(
+			`/api/ipam/prefixes/${allocation.ipv6PrefixId}/available-ips/`,
+			'POST',
+			[
+				{
+					prefix_length: allocation.ipv6PrefixLength,
+					status: 'active',
+					assigned_object_type: 'virtualization.vminterface',
+					assigned_object_id: netbox_vm_interface_id
+				}
+			]
+		)) ?? [];
+
 	if (!ip) throw new NetboxError('NetBox did not create an IPv6 address', 502, null);
 
-	return { ip, prefix };
+	return ip;
 }
 
 async function setVMPrimaryIPs(netbox_vm_id: number, primary_ip4: number, primary_ip6: number) {
@@ -248,7 +242,6 @@ export async function createVMandAssignIPs({
 	let vm_create: NetboxVm | null = null;
 	let vm_interface_create: NetboxVmInterface | null = null;
 	let mac_address_id: number | null = null;
-	let ipv6_prefix_id: number | null = null;
 	const netbox_ip_address_ids: number[] = [];
 
 	try {
@@ -299,14 +292,13 @@ export async function createVMandAssignIPs({
 			)
 		);
 
-		const ipv4 = await allocateAvailableIPv4(vm_interface_create.id);
+		const ipv4 = await assignAvailableIPv4(vm_interface_create.id);
 		if (!ipv4) throw new NetboxError('NetBox did not allocate IPv4 networking', 502, null);
 		netbox_ip_address_ids.push(ipv4.id);
-		const ipv6 = await allocateAvailableIPv6(vm_interface_create.id, description);
+		const ipv6 = await assignAvailableIPv6(vm_interface_create.id);
 		if (!ipv6) throw new NetboxError('NetBox did not allocate IPv6 networking', 502, null);
-		netbox_ip_address_ids.push(ipv6.ip.id);
-		ipv6_prefix_id = ipv6.prefix.id;
-		await setVMPrimaryIPs(vm_create.id, ipv4.id, ipv6.ip.id);
+		netbox_ip_address_ids.push(ipv6.id);
+		await setVMPrimaryIPs(vm_create.id, ipv4.id, ipv6.id);
 
 		return {
 			netbox_vm_id: vm_create.id,
@@ -314,10 +306,9 @@ export async function createVMandAssignIPs({
 			netbox_mac_address_id: mac_address_id,
 			netbox_ip_address_ids,
 			netbox_primary_ipv4_id: ipv4.id,
-			netbox_primary_ipv6_id: ipv6.ip.id,
-			netbox_ipv6_prefix_id: ipv6.prefix.id,
+			netbox_primary_ipv6_id: ipv6.id,
 			primary_ipv4: ipv4.address,
-			primary_ipv6: ipv6.ip.address
+			primary_ipv6: ipv6.address
 		};
 	} catch (err) {
 		if (vm_create) await clearVMPrimaryIPs(vm_create.id).catch(() => {});
@@ -326,7 +317,6 @@ export async function createVMandAssignIPs({
 				deleteIP(netbox_ip_address_id).catch(() => {})
 			)
 		);
-		if (ipv6_prefix_id != null) await deletePrefix(ipv6_prefix_id).catch(() => {});
 		if (vm_interface_create) {
 			await netbox(`/api/virtualization/interfaces/${vm_interface_create.id}/`, 'PATCH', {
 				primary_mac_address: null

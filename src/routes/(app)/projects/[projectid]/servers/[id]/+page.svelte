@@ -109,7 +109,8 @@
 		const samples = [
 			...history,
 			...liveSamples,
-			...(currentSample && (!lastLiveSample || sampleKey(currentSample) !== sampleKey(lastLiveSample))
+			...(currentSample &&
+			(!lastLiveSample || sampleKey(currentSample) !== sampleKey(lastLiveSample))
 				? [currentSample]
 				: [])
 		].slice(-12);

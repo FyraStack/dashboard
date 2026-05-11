@@ -250,8 +250,7 @@
 			newVolumeSize = '10';
 			showCreateVolume = false;
 		} catch (err) {
-			createError =
-				getErrorMessage(err, 'Failed to create volume. Please try again.');
+			createError = getErrorMessage(err, 'Failed to create volume. Please try again.');
 		} finally {
 			creatingVolume = false;
 		}
@@ -307,8 +306,7 @@
 			await invalidate('project:vms');
 			goto(resolve(`/projects/${projectId}/servers/${created.id}`));
 		} catch (err) {
-			createError =
-				getErrorMessage(err, 'Failed to create server. Please try again.');
+			createError = getErrorMessage(err, 'Failed to create server. Please try again.');
 		} finally {
 			creating = false;
 		}

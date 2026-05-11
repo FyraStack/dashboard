@@ -252,8 +252,7 @@
 			totpDisableError = '';
 			currentPassword = '';
 		} catch (err) {
-			totpDisableError =
-				getErrorMessage(err, 'Failed to disable authenticator app 2FA.');
+			totpDisableError = getErrorMessage(err, 'Failed to disable authenticator app 2FA.');
 		} finally {
 			disablingTotp = false;
 		}

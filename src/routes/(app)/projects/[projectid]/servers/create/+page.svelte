@@ -670,7 +670,7 @@
 						</div>
 						<div class="mt-3">
 							<div class="flex flex-col gap-2">
-								{#each [{ value: 'both' as const, label: 'IPv4 and IPv6' }, { value: 'ipv4' as const, label: 'IPv4 only' }, { value: 'ipv6' as const, label: 'IPv6 only' }, { value: 'none' as const, label: 'No public network' }] as opt (opt.value)}
+								{#each [{ value: 'both' as const, label: '1 Public IPv4 Address and a IPv6 /64 block' }] as opt (opt.value)}
 									<label
 										class="flex cursor-pointer items-center gap-2 border p-3 text-xs transition-colors {networkingOption ===
 										opt.value
@@ -687,6 +687,7 @@
 										{opt.label}
 									</label>
 								{/each}
+								<p class="text-xs text-gray-500">Advanced Networking coming soon</p>
 							</div>
 						</div>
 					</div>

@@ -83,6 +83,14 @@ export class ProxmoxBackend implements VmBackend {
 			.includes(target);
 	}
 
+	private isActiveImportStorage(storage: { content?: string; active?: 0 | 1; enabled?: 0 | 1 }) {
+		return (
+			this.storageSupportsContent(storage.content, 'import') &&
+			storage.active !== 0 &&
+			storage.enabled !== 0
+		);
+	}
+
 	async listVms(): Promise<VmInfo[]> {
 		const resources = await this.client.getClusterResources('vm');
 		return resources.filter((r) => r.type === 'qemu').map((r) => this.resourceToInfo(r));
@@ -90,37 +98,44 @@ export class ProxmoxBackend implements VmBackend {
 
 	async listImages(): Promise<BackendImage[]> {
 		const nodes = await this.client.listNodes();
-		const results: BackendImage[] = [];
-		const seen = new Set<string>();
+		const nodeImages = await Promise.all(
+			nodes.map(async (node) => {
+				const storages = await this.client.listStorage(node.node);
+				const importStorages = storages.filter((storage) => this.isActiveImportStorage(storage));
 
-		for (const node of nodes) {
-			const storages = await this.client.listStorage(node.node);
-			const importStorages = storages.filter((storage) => {
-				return (
-					this.storageSupportsContent(storage.content, 'import') &&
-					storage.active !== 0 &&
-					storage.enabled !== 0
+				const storageImages = await Promise.all(
+					importStorages.map(async (storage) => {
+						const contents = await this.client.listStorageContent(
+							node.node,
+							storage.storage,
+							'import'
+						);
+
+						return contents.map((item) => {
+							const parts = item.volid.split('/');
+							return {
+								volid: item.volid,
+								filename: parts.at(-1) ?? item.volid,
+								size: item.size,
+								node: node.node,
+								storage: storage.storage,
+								content: 'import' as const,
+								format: item.format
+							};
+						});
+					})
 				);
-			});
 
-			for (const storage of importStorages) {
-				const contents = await this.client.listStorageContent(node.node, storage.storage, 'import');
-				for (const item of contents) {
-					if (seen.has(item.volid)) continue;
-					seen.add(item.volid);
+				return storageImages.flat();
+			})
+		);
+		const seen = new Set<string>();
+		const results: BackendImage[] = [];
 
-					const parts = item.volid.split('/');
-					results.push({
-						volid: item.volid,
-						filename: parts.at(-1) ?? item.volid,
-						size: item.size,
-						node: node.node,
-						storage: storage.storage,
-						content: 'import',
-						format: item.format
-					});
-				}
-			}
+		for (const image of nodeImages.flat()) {
+			if (seen.has(image.volid)) continue;
+			seen.add(image.volid);
+			results.push(image);
 		}
 
 		return results;
@@ -128,23 +143,17 @@ export class ProxmoxBackend implements VmBackend {
 
 	async listImageImportTargets(): Promise<BackendImageImportTarget[]> {
 		const nodes = await this.client.listNodes();
-		const results: BackendImageImportTarget[] = [];
+		const onlineNodes = nodes.filter((node) => node.status === 'online');
+		const targets = await Promise.all(
+			onlineNodes.map(async (node) => {
+				const storages = await this.client.listStorage(node.node);
+				return storages
+					.filter((storage) => this.isActiveImportStorage(storage))
+					.map((storage) => ({ node: node.node, storage: storage.storage }));
+			})
+		);
 
-		for (const node of nodes) {
-			if (node.status !== 'online') continue;
-			const storages = await this.client.listStorage(node.node);
-			for (const storage of storages) {
-				if (
-					this.storageSupportsContent(storage.content, 'import') &&
-					storage.active !== 0 &&
-					storage.enabled !== 0
-				) {
-					results.push({ node: node.node, storage: storage.storage });
-				}
-			}
-		}
-
-		return results;
+		return targets.flat();
 	}
 
 	async importImageFromUrl(params: BackendImageImportParams): Promise<string> {

@@ -75,7 +75,7 @@
 				<Input
 					bind:value={code}
 					placeholder="000000"
-					class="font-mono tracking-widest text-center"
+					class="text-center font-mono tracking-widest"
 					autocomplete="one-time-code"
 					inputmode="numeric"
 					pattern="[0-9]*"

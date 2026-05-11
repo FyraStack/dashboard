@@ -95,7 +95,9 @@
 		</div>
 
 		<div class="border-b border-gray-800/50 px-5 py-3">
-			<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase">Hardware Details</span>
+			<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+				>Hardware Details</span
+			>
 		</div>
 
 		<div class="flex min-h-0 flex-1">
@@ -106,7 +108,9 @@
 				</div>
 				<div class="flex items-center justify-between px-5 py-2">
 					<span class="text-xs text-gray-500">Location</span>
-					<span class="text-xs font-medium text-gray-200">Chicago, IL — {colo.selectedUnit.location}</span>
+					<span class="text-xs font-medium text-gray-200"
+						>Chicago, IL — {colo.selectedUnit.location}</span
+					>
 				</div>
 				<div class="divide-y divide-gray-800/50 border-t border-gray-800/50">
 					{#each [['Created', colo.selectedUnit.created], ['Power Draw', colo.selectedUnit.powerDraw], ['Power Budget', colo.selectedUnit.powerBudget], ['Uplink', '1 Gbps fair-use'], ['Primary IP', colo.selectedUnit.ip]] as [label, value] (label)}
@@ -118,7 +122,9 @@
 					<div class="px-5 py-3">
 						<div class="flex items-center justify-between">
 							<span class="text-xs text-gray-500">Power Usage</span>
-							<span class="text-xs text-gray-400">{colo.selectedUnit.powerDraw} / {colo.selectedUnit.powerBudget}</span>
+							<span class="text-xs text-gray-400"
+								>{colo.selectedUnit.powerDraw} / {colo.selectedUnit.powerBudget}</span
+							>
 						</div>
 						<div class="mt-2 h-1.5 w-full bg-gray-800">
 							<div
@@ -136,7 +142,11 @@
 
 			<div class="relative w-32 shrink-0 p-2">
 				<div class="absolute top-[2.25rem] bottom-0 left-0 border-l border-gray-800/50"></div>
-				<svg viewBox="0 0 120 {totalRackSlots * 8 + 16}" class="w-full" xmlns="http://www.w3.org/2000/svg">
+				<svg
+					viewBox="0 0 120 {totalRackSlots * 8 + 16}"
+					class="w-full"
+					xmlns="http://www.w3.org/2000/svg"
+				>
 					<rect x="0" y="0" width="7" height={totalRackSlots * 8 + 16} fill="var(--gray-800)" />
 					<rect x="113" y="0" width="7" height={totalRackSlots * 8 + 16} fill="var(--gray-800)" />
 					<rect x="0" y="0" width="120" height="3" fill="var(--gray-700)" />
@@ -148,9 +158,19 @@
 					{#each Array(totalRackSlots) as _, i (i)}
 						{@const slotNum = totalRackSlots - i}
 						{@const y = i * 8 + 4}
-						<rect x="9" {y} width="102" height="7" fill="var(--gray-950)" stroke="var(--gray-800)" stroke-width="0.5" />
+						<rect
+							x="9"
+							{y}
+							width="102"
+							height="7"
+							fill="var(--gray-950)"
+							stroke="var(--gray-800)"
+							stroke-width="0.5"
+						/>
 						{#if slotNum % 5 === 0}
-							<text x="13" y={y + 5.5} font-size="4" fill="var(--gray-600)" font-family="monospace">{slotNum}</text>
+							<text x="13" y={y + 5.5} font-size="4" fill="var(--gray-600)" font-family="monospace"
+								>{slotNum}</text
+							>
 						{/if}
 					{/each}
 					{#each rackInfo.occupied as unit (`${unit.name}-${unit.start}`)}
@@ -161,17 +181,46 @@
 							y={startY}
 							width="102"
 							height={h}
-							fill={unit.isCurrent ? (unit.status === 'online' ? 'var(--red-500)' : 'var(--gray-600)') : 'var(--gray-700)'}
+							fill={unit.isCurrent
+								? unit.status === 'online'
+									? 'var(--red-500)'
+									: 'var(--gray-600)'
+								: 'var(--gray-700)'}
 							opacity={unit.isCurrent ? 0.25 : 0.12}
 							stroke={unit.isCurrent ? 'var(--red-500)' : 'var(--gray-600)'}
 							stroke-width={unit.isCurrent ? 1.5 : 0.5}
 						/>
 						{@const midY = startY + h / 2}
 						{#each Array(Math.min(Math.floor(h / 4), 5)) as _, vi (vi)}
-							<rect x={26 + vi * 10} y={midY - 2} width="7" height="4" fill="none" stroke={unit.isCurrent ? 'var(--red-400)' : 'var(--gray-500)'} stroke-width="0.4" opacity="0.4" />
+							<rect
+								x={26 + vi * 10}
+								y={midY - 2}
+								width="7"
+								height="4"
+								fill="none"
+								stroke={unit.isCurrent ? 'var(--red-400)' : 'var(--gray-500)'}
+								stroke-width="0.4"
+								opacity="0.4"
+							/>
 						{/each}
-						<circle cx="15" cy={midY} r="1.5" fill={unit.status === 'online' ? '#4ade80' : unit.status === 'offline' ? 'var(--gray-600)' : '#fbbf24'} />
-						<text x="108" y={midY + 1.5} font-size="4" fill={unit.isCurrent ? 'var(--gray-200)' : 'var(--gray-500)'} font-family="monospace" text-anchor="end">{unit.name}</text>
+						<circle
+							cx="15"
+							cy={midY}
+							r="1.5"
+							fill={unit.status === 'online'
+								? '#4ade80'
+								: unit.status === 'offline'
+									? 'var(--gray-600)'
+									: '#fbbf24'}
+						/>
+						<text
+							x="108"
+							y={midY + 1.5}
+							font-size="4"
+							fill={unit.isCurrent ? 'var(--gray-200)' : 'var(--gray-500)'}
+							font-family="monospace"
+							text-anchor="end">{unit.name}</text
+						>
 					{/each}
 				</svg>
 			</div>

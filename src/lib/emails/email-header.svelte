@@ -8,7 +8,9 @@
 	let { label }: Props = $props();
 </script>
 
-<Section class="border-t-2 border-b border-red-500 border-b-gray-800 bg-gray-950 p-6 [border-radius:0]">
+<Section
+	class="[border-radius:0] border-t-2 border-b border-red-500 border-b-gray-800 bg-gray-950 p-6"
+>
 	<Row>
 		<Column width="40" class="align-middle">
 			<Img src="https://fyrastack.com/stack-email-logo.png" alt="" width="28" height="28" />

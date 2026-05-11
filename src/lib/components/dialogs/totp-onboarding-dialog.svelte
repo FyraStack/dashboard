@@ -144,7 +144,9 @@
 				<div class="flex flex-col gap-1.5">
 					<Label class="text-xs text-gray-400">Manual Entry Key</Label>
 					<div class="flex items-center gap-2">
-						<code class="flex-1 overflow-hidden rounded-xs border border-gray-800 bg-gray-800 px-2 py-1.5 font-mono text-xs text-gray-100 text-ellipsis whitespace-nowrap">
+						<code
+							class="flex-1 overflow-hidden rounded-xs border border-gray-800 bg-gray-800 px-2 py-1.5 font-mono text-xs text-ellipsis whitespace-nowrap text-gray-100"
+						>
 							{secretKey}
 						</code>
 						<button

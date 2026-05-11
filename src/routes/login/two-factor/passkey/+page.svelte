@@ -83,12 +83,16 @@
 
 			{#if data.canUseTotp}
 				<p class="text-center text-xs">
-					<a href={totpHref} class="text-red-400 hover:text-red-300">Use authenticator app instead</a>
+					<a href={totpHref} class="text-red-400 hover:text-red-300"
+						>Use authenticator app instead</a
+					>
 				</p>
 			{/if}
 
 			<p class="text-center text-xs text-gray-500">
-				Need another method? <a href={loginHref} class="text-red-400 hover:text-red-300">Back to sign in</a>
+				Need another method? <a href={loginHref} class="text-red-400 hover:text-red-300"
+					>Back to sign in</a
+				>
 			</p>
 		</div>
 	</div>

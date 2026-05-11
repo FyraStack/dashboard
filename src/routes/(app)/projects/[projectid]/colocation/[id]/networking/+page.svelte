@@ -69,8 +69,15 @@
 		<div class="divide-y divide-gray-800/50">
 			<div class="px-5 py-3">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase">IP Addresses</span>
-					<Button variant="outline" size="sm" class="h-7 gap-1.5 px-3 text-xs" onclick={openAddIpDialog}>
+					<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+						>IP Addresses</span
+					>
+					<Button
+						variant="outline"
+						size="sm"
+						class="h-7 gap-1.5 px-3 text-xs"
+						onclick={openAddIpDialog}
+					>
 						<Plus class="h-3 w-3" />
 						Add IP
 					</Button>
@@ -86,8 +93,18 @@
 						{#if editingRdns === idx}
 							<div class="mt-1 flex items-center gap-1.5">
 								<Input bind:value={rdnsValue} class="h-6 w-48 text-[11px]" placeholder="hostname" />
-								<Button variant="ghost" size="sm" class="h-6 w-6 p-0 text-emerald-500" onclick={() => saveRdns(idx)}><Check class="h-2.5 w-2.5" /></Button>
-								<Button variant="ghost" size="sm" class="h-6 w-6 p-0" onclick={() => (editingRdns = null)}><X class="h-2.5 w-2.5" /></Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									class="h-6 w-6 p-0 text-emerald-500"
+									onclick={() => saveRdns(idx)}><Check class="h-2.5 w-2.5" /></Button
+								>
+								<Button
+									variant="ghost"
+									size="sm"
+									class="h-6 w-6 p-0"
+									onclick={() => (editingRdns = null)}><X class="h-2.5 w-2.5" /></Button
+								>
 							</div>
 						{:else}
 							<p class="mt-0.5 font-mono text-[11px] text-gray-500">{ip.rdns || 'No rDNS'}</p>
@@ -95,8 +112,13 @@
 					</div>
 					{#if editingRdns !== idx}
 						<div class="flex items-center gap-1">
-							<button class="text-gray-500 hover:text-gray-300" onclick={() => copyText(ip.address, `colo-ip-${idx}`)}>
-								{#if copied === `colo-ip-${idx}`}<Check class="h-3 w-3 text-emerald-500" />{:else}<Copy class="h-3 w-3" />{/if}
+							<button
+								class="text-gray-500 hover:text-gray-300"
+								onclick={() => copyText(ip.address, `colo-ip-${idx}`)}
+							>
+								{#if copied === `colo-ip-${idx}`}<Check
+										class="h-3 w-3 text-emerald-500"
+									/>{:else}<Copy class="h-3 w-3" />{/if}
 							</button>
 							<Button
 								variant="ghost"
@@ -105,10 +127,15 @@
 								onclick={() => {
 									editingRdns = idx;
 									rdnsValue = ip.rdns;
-								}}
-							><Pencil class="h-3 w-3" /></Button>
+								}}><Pencil class="h-3 w-3" /></Button
+							>
 							{#if ip.type === 'Additional'}
-								<Button variant="ghost" size="sm" class="h-7 w-7 p-0 text-red-400" onclick={() => deleteIp(idx)}><X class="h-3 w-3" /></Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									class="h-7 w-7 p-0 text-red-400"
+									onclick={() => deleteIp(idx)}><X class="h-3 w-3" /></Button
+								>
 							{/if}
 						</div>
 					{/if}
@@ -132,7 +159,9 @@
 		<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
 			<Dialog.Header>
 				<Dialog.Title>Add IP Address</Dialog.Title>
-				<Dialog.Description>Request an additional IP for {colo.selectedUnit.name}.</Dialog.Description>
+				<Dialog.Description
+					>Request an additional IP for {colo.selectedUnit.name}.</Dialog.Description
+				>
 			</Dialog.Header>
 			<div class="flex flex-col gap-4 py-4">
 				<div class="flex flex-col gap-2">

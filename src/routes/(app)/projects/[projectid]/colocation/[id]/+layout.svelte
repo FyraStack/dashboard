@@ -7,7 +7,16 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { Activity, BarChart3, Disc, Globe, Plus, Power, Settings, Warehouse } from '@lucide/svelte';
+	import {
+		Activity,
+		BarChart3,
+		Disc,
+		Globe,
+		Plus,
+		Power,
+		Settings,
+		Warehouse
+	} from '@lucide/svelte';
 	import type { Snippet } from 'svelte';
 	import {
 		setColocationContext,
@@ -288,8 +297,8 @@
 			<Dialog.Header>
 				<Dialog.Title>Remove Colocation Unit</Dialog.Title>
 				<Dialog.Description>
-					This will release the rack space for <strong>{selectedUnit.name}</strong>. Type the unit ID to
-					confirm.
+					This will release the rack space for <strong>{selectedUnit.name}</strong>. Type the unit
+					ID to confirm.
 				</Dialog.Description>
 			</Dialog.Header>
 			<div class="flex flex-col gap-2 py-4">

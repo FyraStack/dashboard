@@ -1,13 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { openBillingPortal } from '$lib/remote/billing.remote';
-	import {
-		CreditCard,
-		Server,
-		HardDrive,
-		Database,
-		Cpu
-	} from '@lucide/svelte';
+	import { CreditCard, Server, HardDrive, Database, Cpu } from '@lucide/svelte';
 
 	type DateValue = Date | number | string | null | undefined;
 
@@ -149,7 +143,7 @@
 	<div class="flex-1 overflow-auto">
 		<div class="mx-auto flex max-w-6xl flex-col gap-0 md:flex-row">
 			<!-- Sidebar -->
-			<div class="shrink-0 border-b border-gray-800/60 p-6 md:w-72 md:border-b-0 md:border-r">
+			<div class="shrink-0 border-b border-gray-800/60 p-6 md:w-72 md:border-r md:border-b-0">
 				<div>
 					<h1 class="text-lg font-semibold text-gray-50">Billing</h1>
 					<p class="mt-1 text-xs text-gray-500">Project billing overview</p>
@@ -159,23 +153,31 @@
 					<div class="rounded-md border border-gray-800/60 bg-gray-900/40 p-3.5">
 						<div class="flex items-center gap-2">
 							<Cpu class="size-3.5 text-blue-400" />
-							<p class="text-[0.625rem] font-medium tracking-wide text-gray-500 uppercase">Compute units</p>
+							<p class="text-[0.625rem] font-medium tracking-wide text-gray-500 uppercase">
+								Compute units
+							</p>
 						</div>
 						<p class="mt-1 text-sm font-semibold text-gray-100 tabular-nums">{computeUnits}</p>
 					</div>
 					<div class="rounded-md border border-gray-800/60 bg-gray-900/40 p-3.5">
 						<div class="flex items-center gap-2">
 							<HardDrive class="size-3.5 text-violet-400" />
-							<p class="text-[0.625rem] font-medium tracking-wide text-gray-500 uppercase">Storage</p>
+							<p class="text-[0.625rem] font-medium tracking-wide text-gray-500 uppercase">
+								Storage
+							</p>
 						</div>
 						<p class="mt-1 text-sm font-semibold text-gray-100 tabular-nums">{storageGiB} GiB</p>
 					</div>
 					<div class="rounded-md border border-gray-800/60 bg-gray-900/40 p-3.5">
 						<div class="flex items-center gap-2">
 							<Server class="size-3.5 text-gray-500" />
-							<p class="text-[0.625rem] font-medium tracking-wide text-gray-500 uppercase">Total resources</p>
+							<p class="text-[0.625rem] font-medium tracking-wide text-gray-500 uppercase">
+								Total resources
+							</p>
 						</div>
-						<p class="mt-1 text-sm font-semibold text-gray-100 tabular-nums">{activeResourceCount}</p>
+						<p class="mt-1 text-sm font-semibold text-gray-100 tabular-nums">
+							{activeResourceCount}
+						</p>
 					</div>
 				</div>
 

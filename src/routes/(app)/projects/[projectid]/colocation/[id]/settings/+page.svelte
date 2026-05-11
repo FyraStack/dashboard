@@ -28,15 +28,30 @@
 					{#if editingName}
 						<div class="mt-2 flex items-center gap-2">
 							<Input bind:value={nameValue} class="h-7 w-48 text-xs" />
-							<Button variant="ghost" size="sm" class="h-7 w-7 p-0 text-emerald-500" onclick={saveName}><Check class="h-3 w-3" /></Button>
-							<Button variant="ghost" size="sm" class="h-7 w-7 p-0" onclick={() => (editingName = false)}><X class="h-3 w-3" /></Button>
+							<Button
+								variant="ghost"
+								size="sm"
+								class="h-7 w-7 p-0 text-emerald-500"
+								onclick={saveName}><Check class="h-3 w-3" /></Button
+							>
+							<Button
+								variant="ghost"
+								size="sm"
+								class="h-7 w-7 p-0"
+								onclick={() => (editingName = false)}><X class="h-3 w-3" /></Button
+							>
 						</div>
 					{:else}
 						<p class="mt-0.5 text-xs text-gray-400">{colo.selectedUnit.name}</p>
 					{/if}
 				</div>
 				{#if !editingName}
-					<Button variant="ghost" size="sm" class="h-7 gap-1.5 px-2 text-xs" onclick={startEditingName}>
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-7 gap-1.5 px-2 text-xs"
+						onclick={startEditingName}
+					>
 						<Pencil class="h-3 w-3" />
 						Edit
 					</Button>
@@ -50,8 +65,15 @@
 			{/each}
 			<div class="px-5 py-4">
 				<p class="text-sm font-medium text-red-400">Danger Zone</p>
-				<p class="mt-0.5 text-xs text-gray-500">Remove this colocation slot and release the rack space.</p>
-				<Button variant="outline" size="sm" class="mt-3 gap-1.5 border-red-700 px-4 text-xs text-red-400 hover:bg-red-950" onclick={colo.openDeleteUnitDialog}>
+				<p class="mt-0.5 text-xs text-gray-500">
+					Remove this colocation slot and release the rack space.
+				</p>
+				<Button
+					variant="outline"
+					size="sm"
+					class="mt-3 gap-1.5 border-red-700 px-4 text-xs text-red-400 hover:bg-red-950"
+					onclick={colo.openDeleteUnitDialog}
+				>
 					<Trash2 class="h-3 w-3" />
 					Remove Unit
 				</Button>

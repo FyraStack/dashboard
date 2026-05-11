@@ -8,11 +8,7 @@ import {
 	type billingResourceTypeEnum
 } from '$lib/server/db/schema';
 import { getRuntimeEnv } from '$lib/server/env';
-import {
-	requireVmFeatureId,
-	usageIdempotencyKey,
-	usageQuantity
-} from './features';
+import { requireVmFeatureId, usageIdempotencyKey, usageQuantity } from './features';
 import { ensureProjectCustomer, ensureProjectServerEntity, formatAutumnError } from './autumn';
 
 type BillingResourceType = (typeof billingResourceTypeEnum.enumValues)[number];

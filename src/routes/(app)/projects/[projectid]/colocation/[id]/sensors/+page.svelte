@@ -37,26 +37,41 @@
 		{#if sensorData}
 			<div class="divide-y divide-gray-800/50">
 				<div class="px-5 py-3">
-					<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase">Temperatures</span>
+					<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+						>Temperatures</span
+					>
 				</div>
 				{#each [['CPU Package', `${sensorData.cpuTemp}°C`, sensorData.cpuTemp > 70 ? 'text-red-400' : sensorData.cpuTemp > 55 ? 'text-amber-400' : 'text-gray-200', 85], ['Inlet Ambient', `${sensorData.inletTemp}°C`, 'text-gray-200', 40], ['Exhaust', `${sensorData.exhaustTemp}°C`, sensorData.exhaustTemp > 45 ? 'text-amber-400' : 'text-gray-200', 55], ['Disk 0 (sda)', `${sensorData.disk1Temp}°C`, sensorData.disk1Temp > 45 ? 'text-amber-400' : 'text-gray-200', 60], ['Disk 1 (sdb)', `${sensorData.disk2Temp}°C`, sensorData.disk2Temp > 45 ? 'text-amber-400' : 'text-gray-200', 60]] as [name, value, color, max] (name)}
 					<div class="flex items-center gap-4 px-5 py-2">
 						<Thermometer class="h-3 w-3 shrink-0 text-gray-600" />
 						<span class="w-28 shrink-0 text-xs text-gray-400">{name}</span>
-						<div class="h-1 flex-1 bg-gray-800"><div class="h-full bg-gray-600 transition-all" style:width={`${(parseInt(String(value)) / Number(max)) * 100}%`}></div></div>
+						<div class="h-1 flex-1 bg-gray-800">
+							<div
+								class="h-full bg-gray-600 transition-all"
+								style:width={`${(parseInt(String(value)) / Number(max)) * 100}%`}
+							></div>
+						</div>
 						<span class="w-12 shrink-0 text-right text-xs font-medium {color}">{value}</span>
 					</div>
 				{/each}
 
 				<div class="px-5 py-3">
-					<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase">Fan Speeds</span>
+					<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+						>Fan Speeds</span
+					>
 				</div>
 				{#each [['Fan 1', sensorData.fan1], ['Fan 2', sensorData.fan2], ['Fan 3', sensorData.fan3], ['Fan 4', sensorData.fan4]] as [name, rpm] (name)}
 					<div class="flex items-center gap-4 px-5 py-2">
 						<Fan class="h-3 w-3 shrink-0 text-gray-600" />
 						<span class="w-28 shrink-0 text-xs text-gray-400">{name}</span>
-						<div class="h-1 flex-1 bg-gray-800"><div class="h-full bg-gray-600 transition-all" style:width={`${(Number(rpm) / 10000) * 100}%`}></div></div>
-						<span class="w-16 shrink-0 text-right text-xs font-medium text-gray-200">{rpm} RPM</span>
+						<div class="h-1 flex-1 bg-gray-800">
+							<div
+								class="h-full bg-gray-600 transition-all"
+								style:width={`${(Number(rpm) / 10000) * 100}%`}
+							></div>
+						</div>
+						<span class="w-16 shrink-0 text-right text-xs font-medium text-gray-200">{rpm} RPM</span
+						>
 					</div>
 				{/each}
 
@@ -68,9 +83,16 @@
 						<Cpu class="h-3 w-3 shrink-0 text-gray-600" />
 						<span class="w-28 shrink-0 text-xs text-gray-400">{name}</span>
 						<span class="text-xs text-gray-600">{lo}V</span>
-						<div class="h-1 flex-1 bg-gray-800"><div class="h-full bg-emerald-600 transition-all" style:width={`${((parseFloat(String(value)) - Number(lo)) / (Number(hi) - Number(lo))) * 100}%`}></div></div>
+						<div class="h-1 flex-1 bg-gray-800">
+							<div
+								class="h-full bg-emerald-600 transition-all"
+								style:width={`${((parseFloat(String(value)) - Number(lo)) / (Number(hi) - Number(lo))) * 100}%`}
+							></div>
+						</div>
 						<span class="text-xs text-gray-600">{hi}V</span>
-						<span class="w-16 shrink-0 text-right font-mono text-xs font-medium text-gray-200">{value}</span>
+						<span class="w-16 shrink-0 text-right font-mono text-xs font-medium text-gray-200"
+							>{value}</span
+						>
 					</div>
 				{/each}
 
@@ -87,7 +109,14 @@
 				</div>
 				<div class="px-5 py-3">
 					<div class="h-1.5 w-full bg-gray-800">
-						<div class="h-full transition-all duration-500 {powerPct > 80 ? 'bg-red-500' : powerPct > 50 ? 'bg-amber-500' : 'bg-emerald-500'}" style:width={`${powerPct}%`}></div>
+						<div
+							class="h-full transition-all duration-500 {powerPct > 80
+								? 'bg-red-500'
+								: powerPct > 50
+									? 'bg-amber-500'
+									: 'bg-emerald-500'}"
+							style:width={`${powerPct}%`}
+						></div>
 					</div>
 				</div>
 			</div>

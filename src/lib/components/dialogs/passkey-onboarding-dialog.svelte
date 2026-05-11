@@ -64,11 +64,7 @@
 				<p class="text-xs text-red-400">{error}</p>
 			{/if}
 
-			<Button
-				onclick={registerPasskey}
-				disabled={registering}
-				class="gap-1.5"
-			>
+			<Button onclick={registerPasskey} disabled={registering} class="gap-1.5">
 				{#if registering}
 					<Loader2 class="h-3.5 w-3.5 animate-spin" />
 					Registering...

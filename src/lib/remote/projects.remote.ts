@@ -1,7 +1,7 @@
 import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { and, eq, ilike, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { projectRoles, type ProjectRole } from '$lib/auth/organization-permissions';
 import { initDrizzle } from '$lib/server/db';
 import {
@@ -10,7 +10,6 @@ import {
 	member,
 	organization,
 	paymentPeriods,
-	user,
 	vms,
 	volumes
 } from '$lib/server/db/schema';
@@ -281,22 +280,4 @@ export const removeMember = command(removeMemberParams, async (params) => {
 	if (target.role === 'owner') error(400, 'Project owner cannot be removed');
 
 	await db.delete(member).where(eq(member.id, target.id));
-});
-
-type SearchUsersResult = { id: string; name: string; email: string }[];
-
-const searchUsersParams = type({ query: 'string', limit: 'number?' });
-export const searchUsers = query(searchUsersParams, async (params): Promise<SearchUsersResult> => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
-
-	const db = initDrizzle();
-	const limit = params.limit ?? 10;
-	const search = `%${params.query}%`;
-
-	return db
-		.select({ id: user.id, name: user.name, email: user.email })
-		.from(user)
-		.where(or(ilike(user.email, search), ilike(user.name, search)))
-		.limit(limit);
 });

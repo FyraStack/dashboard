@@ -27,29 +27,6 @@ export const listVolumes = query(type({ projectId: 'string' }), async (params) =
 	});
 });
 
-const getParams = type({ volumeId: 'string' });
-type GetResult = {
-	id: string;
-	name: string;
-	size: number;
-	ownerProjectId: string;
-	associatedVmId: string | null;
-};
-
-export const getVolume = query(getParams, async (params) => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
-
-	const db = initDrizzle();
-	const vol = await db.query.volumes.findFirst({
-		where: eq(volumes.id, params.volumeId)
-	});
-
-	if (!vol) error(404, 'Volume not found');
-	await requireProjectAccess(db, event.locals.user.id, vol.ownerProjectId);
-	return vol;
-});
-
 const createParams = type({
 	projectId: 'string',
 	name: 'string',

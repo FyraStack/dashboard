@@ -100,13 +100,3 @@ export async function getCachedProxmoxVms(options: { force?: boolean } = {}): Pr
 
 	return refreshProxmoxVmCache();
 }
-
-export async function getStaleProxmoxVms(): Promise<VmInfo[]> {
-	const snapshot = await readSnapshot();
-
-	if (snapshot && Date.now() - snapshot.fetchedAt < STALE_TTL_MS) {
-		return snapshot.vms;
-	}
-
-	return [];
-}

@@ -74,10 +74,3 @@ export async function requireFeatureFlag(flag: FeatureFlagKey): Promise<void> {
 		error(404, 'Not found');
 	}
 }
-
-export function listFeatureFlags(flags: FeatureFlags) {
-	return featureFlagKeys.map((key) => ({
-		key,
-		enabled: flags[key]
-	}));
-}

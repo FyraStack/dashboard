@@ -1,77 +1,113 @@
 import { getRuntimeEnv } from '$lib/server/env';
 
-/*
-docs for how to get this working:
+type NetboxMethod = 'DELETE' | 'PATCH' | 'POST';
 
-you need to make a site and cluster in the netbox webui
-*/
+type NetboxCreateResult = {
+	netbox_vm_id: number;
+	netbox_vm_interface_id: number;
+	netbox_mac_address_id: number;
+	netbox_ip_address_ids: number[];
+};
 
-async function netbox(route: String, method: String, data?: any) {
-	const env = getRuntimeEnv();
+type NetboxVm = { id: number };
+type NetboxVmInterface = { id: number };
+type NetboxMacAddress = { id: number };
+type NetboxIpAddress = { id: number };
 
-	const apiToken = env.NETBOX_API_TOKEN;
-	const netboxAPIURL = env.NETBOX_API_URL;
-
-	const response = await fetch(`${netboxAPIURL}${route}`, {
-		headers: {
-			Authorization: `Bearer ${apiToken}`,
-			'Content-Type': 'application/json'
-		},
-		method: method as string,
-		body: JSON.stringify(data)
-	});
-
-	let res_body: any;
-	try {
-		res_body = await response.json();
-	} catch {
-		res_body = await response.text();
+export class NetboxError extends Error {
+	constructor(
+		message: string,
+		readonly status: number,
+		readonly details: unknown
+	) {
+		super(message);
+		this.name = 'NetboxError';
 	}
-
-	return res_body;
 }
 
-export async function assignIPToVM(netbox_vm_interface_id: Number, ip_address: String) {
-	return await netbox('/api/ipam/ip-addresses/', 'POST', {
+export function isNetboxConfigured() {
+	const env = getRuntimeEnv();
+	return Boolean(env.NETBOX_API_TOKEN && env.NETBOX_API_URL);
+}
+
+async function parseResponse(response: Response) {
+	const text = await response.text();
+	if (!text) return null;
+
+	try {
+		return JSON.parse(text) as unknown;
+	} catch {
+		return text;
+	}
+}
+
+function getNetboxConfig() {
+	const env = getRuntimeEnv();
+	if (!env.NETBOX_API_TOKEN || !env.NETBOX_API_URL) return null;
+
+	return {
+		apiToken: env.NETBOX_API_TOKEN,
+		apiUrl: env.NETBOX_API_URL.replace(/\/+$/, '')
+	};
+}
+
+async function netbox<T>(route: string, method: NetboxMethod, data?: unknown): Promise<T | null> {
+	const config = getNetboxConfig();
+	if (!config) return null;
+
+	const response = await fetch(`${config.apiUrl}${route}`, {
+		headers: {
+			Authorization: `Bearer ${config.apiToken}`,
+			'Content-Type': 'application/json'
+		},
+		method,
+		...(data === undefined ? {} : { body: JSON.stringify(data) })
+	});
+
+	const body = await parseResponse(response);
+	if (!response.ok) {
+		throw new NetboxError(`Netbox ${method} ${route} failed`, response.status, body);
+	}
+
+	return body as T;
+}
+
+export async function assignIPToVM(netbox_vm_interface_id: number, ip_address: string) {
+	return await netbox<NetboxIpAddress>('/api/ipam/ip-addresses/', 'POST', {
 		address: ip_address,
 		assigned_object_type: 'virtualization.vminterface',
 		assigned_object_id: netbox_vm_interface_id
 	});
 }
 
-export async function deleteIP(netbox_ip_address_id: Number) {
+export async function deleteIP(netbox_ip_address_id: number) {
 	return await netbox(`/api/ipam/ip-addresses/${netbox_ip_address_id}/`, 'DELETE');
 }
 
-async function assignMACToVM(mac_address: String, vm_interface_id: Number) {
-	let mac_address_create = await netbox('/api/dcim/mac-addresses/', 'POST', {
+async function assignMACToVM(mac_address: string, vm_interface_id: number) {
+	const mac_address_create = await netbox<NetboxMacAddress>('/api/dcim/mac-addresses/', 'POST', {
 		mac_address: mac_address,
 		assigned_object_type: 'virtualization.vminterface',
 		assigned_object_id: vm_interface_id
 	});
+	if (!mac_address_create) return null;
 
-	console.log('mac_address_create');
-	console.log(mac_address_create);
-
-	let vm_interface_patch_add_mac = await netbox('/api/virtualization/interfaces/', 'PATCH', [
+	await netbox('/api/virtualization/interfaces/', 'PATCH', [
 		{
 			id: vm_interface_id,
 			primary_mac_address: mac_address_create.id
 		}
 	]);
 
-	console.log('vm_interface_patch_add_mac');
-	console.log(vm_interface_patch_add_mac);
-
 	return mac_address_create.id;
 }
 
 export async function createVMandAssignIPs(
-	vmid: String,
-	mac_address: String,
-	ip_addresses: String[]
-) {
-	let vm_create = await netbox('/api/virtualization/virtual-machines/', 'POST', {
+	vmid: string,
+	mac_address: string,
+	ip_addresses: string[]
+): Promise<NetboxCreateResult | null> {
+	const vm_create = await netbox<NetboxVm>('/api/virtualization/virtual-machines/', 'POST', {
 		name: vmid,
 		status: 'offline',
 		site: 1,
@@ -81,19 +117,19 @@ export async function createVMandAssignIPs(
 		disk: 60,
 		description: 'should work'
 	});
+	if (!vm_create) return null;
 
-	console.log('vm_create');
-	console.log(vm_create);
+	const vm_interface_create = await netbox<NetboxVmInterface>(
+		'/api/virtualization/interfaces/',
+		'POST',
+		{
+			virtual_machine: vm_create.id,
+			name: 'interface1'
+		}
+	);
+	if (!vm_interface_create) return null;
 
-	let vm_interface_create = await netbox('/api/virtualization/interfaces/', 'POST', {
-		virtual_machine: vm_create.id,
-		name: 'interface1'
-	});
-
-	console.log('vm_interface_create');
-	console.log(vm_interface_create);
-
-	const promises = [];
+	const promises: Promise<number | NetboxIpAddress | null>[] = [];
 
 	promises.push(assignMACToVM(mac_address, vm_interface_create.id));
 
@@ -101,22 +137,27 @@ export async function createVMandAssignIPs(
 		promises.push(assignIPToVM(vm_interface_create.id, ip_address));
 	}
 
-	const ip_address_ids = await Promise.all(promises);
+	const assigned_ids = await Promise.all(promises);
 
-	const mac_address_id = ip_address_ids.shift();
+	const mac_address_id = assigned_ids.shift();
+	if (typeof mac_address_id !== 'number') {
+		throw new NetboxError('Netbox MAC assignment did not return an ID', 502, mac_address_id);
+	}
 
 	return {
 		netbox_vm_id: vm_create.id,
 		netbox_vm_interface_id: vm_interface_create.id,
 		netbox_mac_address_id: mac_address_id,
-		netbox_ip_address_ids: ip_address_ids
+		netbox_ip_address_ids: assigned_ids.flatMap((assignment) =>
+			assignment && typeof assignment === 'object' ? [assignment.id] : []
+		)
 	};
 }
 
 export async function deleteVM(
-	netbox_vm_id: Number,
-	netbox_vm_interface_id: Number,
-	netbox_mac_address_id: Number
+	netbox_vm_id: number,
+	netbox_vm_interface_id: number,
+	netbox_mac_address_id: number
 ) {
 	const promises = [];
 

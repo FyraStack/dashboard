@@ -6,8 +6,8 @@ import { env as privateEnv } from '$env/dynamic/private';
 export type RuntimeEnv = {
 	ORIGIN: string;
 	BETTER_AUTH_SECRET: string;
-	NETBOX_API_TOKEN: string;
-	NETBOX_API_URL: string;
+	NETBOX_API_TOKEN?: string;
+	NETBOX_API_URL?: string;
 	EMAIL?: SendEmail;
 	EMAIL_FROM_ADDRESS: string;
 	EMAIL_FROM_NAME: string;
@@ -45,8 +45,8 @@ export function getRuntimeEnv(): RuntimeEnv {
 		return {
 			ORIGIN: required('ORIGIN', platformEnv.ORIGIN),
 			BETTER_AUTH_SECRET: required('BETTER_AUTH_SECRET', platformEnv.BETTER_AUTH_SECRET),
-			NETBOX_API_TOKEN: required('NETBOX_API_TOKEN', platformEnv.NETBOX_API_TOKEN),
-			NETBOX_API_URL: required('NETBOX_API_URL', platformEnv.NETBOX_API_URL),
+			NETBOX_API_TOKEN: platformEnv.NETBOX_API_TOKEN,
+			NETBOX_API_URL: platformEnv.NETBOX_API_URL,
 			EMAIL: platformEnv.EMAIL,
 			EMAIL_FROM_ADDRESS: required('EMAIL_FROM_ADDRESS', platformEnv.EMAIL_FROM_ADDRESS),
 			EMAIL_FROM_NAME: required('EMAIL_FROM_NAME', platformEnv.EMAIL_FROM_NAME),
@@ -75,8 +75,8 @@ export function getRuntimeEnv(): RuntimeEnv {
 	return {
 		ORIGIN: required('ORIGIN', privateEnv.ORIGIN),
 		BETTER_AUTH_SECRET: required('BETTER_AUTH_SECRET', privateEnv.BETTER_AUTH_SECRET),
-		NETBOX_API_TOKEN: required('NETBOX_API_TOKEN', privateEnv.NETBOX_API_TOKEN),
-		NETBOX_API_URL: required('NETBOX_API_URL', privateEnv.NETBOX_API_URL),
+		NETBOX_API_TOKEN: privateEnv.NETBOX_API_TOKEN,
+		NETBOX_API_URL: privateEnv.NETBOX_API_URL,
 		EMAIL_FROM_ADDRESS: required('EMAIL_FROM_ADDRESS', privateEnv.EMAIL_FROM_ADDRESS),
 		EMAIL_FROM_NAME: required('EMAIL_FROM_NAME', privateEnv.EMAIL_FROM_NAME),
 		EMAIL_REPLY_TO: required('EMAIL_REPLY_TO', privateEnv.EMAIL_REPLY_TO),

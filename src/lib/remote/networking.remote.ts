@@ -83,6 +83,7 @@ export const testNetworking = command(testParams, async (params) => {
 		'135.17.80.89',
 		'2001:db8:109::10/64'
 	]);
+	if (!ids) return { skipped: true };
 
 	console.log('finished creating vm. deleting in 30 seconds');
 
@@ -95,4 +96,6 @@ export const testNetworking = command(testParams, async (params) => {
 	for (const ip_address_id of ids.netbox_ip_address_ids) {
 		await deleteIP(ip_address_id);
 	}
+
+	return { skipped: false };
 });

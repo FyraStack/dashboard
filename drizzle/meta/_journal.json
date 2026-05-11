@@ -85,6 +85,13 @@
       "when": 1778339446103,
       "tag": "0011_left_morlocks",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1778473588767,
+      "tag": "0012_wild_exiles",
+      "breakpoints": true
     }
   ]
 }

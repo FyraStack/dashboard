@@ -14,7 +14,7 @@
 	class="min-h-0 flex-1 overflow-auto bg-gray-950 p-5 font-mono text-sm leading-relaxed text-gray-300"
 >
 	{#if selectedServer.status === 'running'}
-		{#each terminalLines as line}
+		{#each terminalLines as line (line.type + line.text)}
 			{#if line.type === 'prompt'}
 				<div>
 					<span class="text-gray-500">user@{selectedServer.name}~:</span>

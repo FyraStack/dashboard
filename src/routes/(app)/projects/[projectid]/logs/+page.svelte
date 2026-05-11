@@ -123,7 +123,7 @@
 	let streaming = $state(true);
 	let logContainer: HTMLDivElement | undefined = $state();
 
-	let filtered = $derived(() => {
+	let filtered = $derived.by(() => {
 		let result = currentLogs;
 		if (filter !== 'all') {
 			result = result.filter((l) => l.severity === filter);
@@ -159,12 +159,17 @@
 
 	// Auto-scroll
 	$effect(() => {
-		filtered();
-		if (streaming && logContainer) {
-			requestAnimationFrame(() => {
-				logContainer!.scrollTop = logContainer!.scrollHeight;
-			});
-		}
+		const logCount = filtered.length;
+		const container = logContainer;
+		if (!streaming || !container) return;
+
+		const frame = requestAnimationFrame(() => {
+			if (logCount === filtered.length) {
+				container.scrollTop = container.scrollHeight;
+			}
+		});
+
+		return () => cancelAnimationFrame(frame);
 	});
 
 	function clearLogs() {
@@ -286,7 +291,7 @@
 					<p class="mt-1 font-sans text-xs text-gray-600">Start the server to view logs.</p>
 				</div>
 			{:else}
-				{#each filtered() as entry (entry.id)}
+				{#each filtered as entry (entry.id)}
 					<div
 						class="flex items-start gap-3 border-b border-gray-800/20 px-5 py-1.5 transition-colors duration-100 hover:bg-gray-900/50"
 					>
@@ -322,7 +327,7 @@
 					</div>
 				{/each}
 
-				{#if filtered().length === 0 && currentLogs.length > 0}
+				{#if filtered.length === 0 && currentLogs.length > 0}
 					<div class="flex flex-col items-center justify-center py-20 text-gray-500">
 						<Search class="mb-3 h-8 w-8" />
 						<p class="font-sans text-sm">No logs match your filter</p>
@@ -336,7 +341,7 @@
 			class="flex h-7 shrink-0 items-center justify-between border-t border-gray-800 bg-gray-950 px-5"
 		>
 			<span class="text-[10px] text-gray-600">
-				{filtered().length} entries
+				{filtered.length} entries
 				{#if filter !== 'all' || search.trim()}
 					(filtered from {currentLogs.length})
 				{/if}

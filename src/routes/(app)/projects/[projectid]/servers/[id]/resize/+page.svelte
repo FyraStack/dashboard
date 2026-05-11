@@ -13,7 +13,7 @@
 </script>
 
 <div class="grid gap-3 p-5 md:grid-cols-2">
-	{#each resizePlans as plan}
+	{#each resizePlans as plan (plan.name)}
 		<div class="border border-gray-800 bg-gray-900/40 p-4">
 			<div class="flex items-center justify-between">
 				<h3 class="text-sm font-semibold text-gray-100">{plan.name}</h3>

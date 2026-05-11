@@ -48,7 +48,7 @@
 		}
 	]);
 
-	function filteredOfficialImages() {
+	let filteredOfficialImages = $derived.by(() => {
 		if (!imgSearch.trim()) return officialImages;
 		const query = imgSearch.toLowerCase();
 		return officialImages.filter(
@@ -56,14 +56,14 @@
 				image.name.toLowerCase().includes(query) ||
 				image.versions.some((version) => version.version.toLowerCase().includes(query))
 		);
-	}
+	});
 
-	let imgTotalPages = $derived(Math.ceil(filteredOfficialImages().length / imgPerPage));
-	let pagedOfficialImages = $derived(() => {
-		const list = filteredOfficialImages();
+	let imgTotalPages = $derived(Math.ceil(filteredOfficialImages.length / imgPerPage));
+	let pagedOfficialImages = $derived.by(() => {
+		const list = filteredOfficialImages;
 		return list.slice(imgPage * imgPerPage, (imgPage + 1) * imgPerPage);
 	});
-	let filteredVmUserImages = $derived(() => {
+	let filteredVmUserImages = $derived.by(() => {
 		if (!imgSearch.trim()) return vmUserImages;
 		const query = imgSearch.toLowerCase();
 		return vmUserImages.filter((image) => image.name.toLowerCase().includes(query));
@@ -194,7 +194,7 @@
 
 		<div class="border-b border-gray-800">
 			<div class="grid grid-cols-2 gap-px bg-gray-900">
-				{#each pagedOfficialImages() as image (image.id)}
+				{#each pagedOfficialImages as image (image.id)}
 					{@const version = latestVersion(image)}
 					<div
 						class="relative flex gap-3 overflow-hidden bg-gray-900 p-4 text-left transition-colors hover:bg-gray-800/40"
@@ -253,7 +253,7 @@
 					</div>
 				{/each}
 			</div>
-			{#if filteredOfficialImages().length === 0 && imgSearch.trim()}
+			{#if filteredOfficialImages.length === 0 && imgSearch.trim()}
 				<div class="px-5 py-6 text-center text-xs text-gray-500">
 					No official images match "{imgSearch}"
 				</div>
@@ -265,9 +265,9 @@
 				>Your Images ({vmUserImages.length})</span
 			>
 		</div>
-		{#if filteredVmUserImages().length > 0}
+		{#if filteredVmUserImages.length > 0}
 			<div class="divide-y divide-gray-800/20">
-				{#each filteredVmUserImages() as image (image.id)}
+				{#each filteredVmUserImages as image (image.id)}
 					<div
 						class="flex items-center justify-between px-5 py-3 transition-colors hover:bg-gray-800/20"
 					>

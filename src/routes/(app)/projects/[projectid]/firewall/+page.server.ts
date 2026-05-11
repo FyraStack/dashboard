@@ -1,6 +1,10 @@
 import type { PageServerLoad } from './$types';
-import { requireFeatureFlag } from '$lib/server/feature-flags';
+import { error } from '@sveltejs/kit';
 
-export const load: PageServerLoad = async () => {
-	await requireFeatureFlag('firewall');
+export const load: PageServerLoad = async ({ parent }) => {
+	const { featureFlags } = await parent();
+
+	if (!featureFlags.firewall) {
+		error(404, 'Not found');
+	}
 };

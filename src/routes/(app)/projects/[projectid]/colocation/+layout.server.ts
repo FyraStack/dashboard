@@ -1,6 +1,10 @@
-import { requireFeatureFlag } from '$lib/server/feature-flags';
+import { error } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = async () => {
-	await requireFeatureFlag('colocation');
+export const load: LayoutServerLoad = async ({ parent }) => {
+	const { featureFlags } = await parent();
+
+	if (!featureFlags.colocation) {
+		error(404, 'Not found');
+	}
 };

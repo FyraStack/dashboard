@@ -528,7 +528,7 @@
 												<span>{plan.storageAmount}GB</span>
 											</div>
 											{#if plan.rate}
-												<span class="text-xs font-medium text-gray-300">{plan.rate}</span>
+												<span class="text-xs font-medium text-gray-300">${plan.cap}/month</span>
 											{/if}
 										</button>
 									{/each}
@@ -885,7 +885,7 @@
 							{#if selectedPlan?.rate}
 								<div class="flex items-center justify-between text-xs">
 									<span class="text-gray-500">Estimated</span>
-									<span class="font-medium text-gray-100">{selectedPlan.rate}</span>
+									<span class="font-medium text-gray-100">${selectedPlan.cap}/month</span>
 								</div>
 							{/if}
 						</div>

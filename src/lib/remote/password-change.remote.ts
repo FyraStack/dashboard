@@ -8,6 +8,7 @@ import { initDrizzle } from '$lib/server/db';
 import { verification } from '$lib/server/db/schema';
 import { sendRenderedEmail } from '$lib/server/email';
 import { ulid } from '$lib/server/id';
+import { account } from '$lib/server/db/auth.schema';
 
 const CODE_LENGTH = 6;
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -34,6 +35,19 @@ async function hashCode(userId: string, code: string) {
 
 function normalizeCode(code: string) {
 	return code.replace(/\D/g, '');
+}
+
+async function changePasswordOauth(newPassword: string) {
+	const event = getRequestEvent();
+	const auth = initAuth();
+
+	await auth.api.setPassword({
+		headers: event.request.headers,
+		body: { newPassword }
+	});
+	await auth.api.revokeOtherSessions({
+		headers: event.request.headers,
+	});
 }
 
 async function changePassword(currentPassword: string, newPassword: string) {
@@ -70,6 +84,20 @@ export const sendPasswordChangeCode = command(async () => {
 
 const emailParams = type({ currentPassword: 'string', newPassword: 'string', code: 'string' });
 
+export const hasPassword = command(async () => {
+	const db = initDrizzle();
+	const event = getRequestEvent();
+	const user = event.locals.user;
+	if (!user) error(401, 'Authentication required');
+	const [credentialAccount] = await db
+		.select({ id: account.id })
+		.from(account)
+		.where(and(eq(account.userId, user.id), eq(account.providerId, 'credential')))
+		.limit(1);
+
+	return !!credentialAccount;
+});
+
 export const confirmPasswordChangeWithEmail = command(emailParams, async (params) => {
 	const event = getRequestEvent();
 	const user = event.locals.user;
@@ -95,7 +123,11 @@ export const confirmPasswordChangeWithEmail = command(emailParams, async (params
 
 	if (!record) error(400, 'Invalid or expired verification code.');
 
-	await changePassword(params.currentPassword, params.newPassword);
+	if (await hasPassword()) {
+		await changePassword(params.currentPassword, params.newPassword);
+	} else {
+		await changePasswordOauth(params.newPassword);
+	}
 	await db.delete(verification).where(eq(verification.id, record.id));
 });
 
@@ -115,7 +147,11 @@ export const confirmPasswordChangeWithTotp = command(totpParams, async (params) 
 		body: { code, trustDevice: false }
 	});
 
-	await changePassword(params.currentPassword, params.newPassword);
+	if (await hasPassword()) {
+		await changePassword(params.currentPassword, params.newPassword);
+	} else {
+		await changePasswordOauth(params.newPassword);
+	}
 });
 
 const passkeyParams = type({ currentPassword: 'string', newPassword: 'string' });
@@ -135,6 +171,10 @@ export const confirmPasswordChangeWithPasskey = command(passkeyParams, async (pa
 
 	if (!record) error(400, 'Verify with your passkey before changing your password.');
 
-	await changePassword(params.currentPassword, params.newPassword);
+	if (await hasPassword()) {
+		await changePassword(params.currentPassword, params.newPassword);
+	} else {
+		await changePasswordOauth(params.newPassword);
+	}
 	await db.delete(verification).where(eq(verification.id, record.id));
 });

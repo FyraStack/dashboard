@@ -18,6 +18,7 @@
 
 	type Props = {
 		open?: boolean;
+		hasPassword?: boolean;
 		hasPasskey?: boolean;
 		twoFactorEnabled: boolean;
 		currentPassword: string;
@@ -27,6 +28,7 @@
 
 	let {
 		open = $bindable(false),
+		hasPassword = true,
 		hasPasskey = false,
 		twoFactorEnabled,
 		currentPassword,
@@ -118,7 +120,12 @@
 	}
 
 	async function sendPasswordCode() {
-		if (passwordCodeSending || verificationMethod !== 'email' || !currentPassword || !newPassword) {
+		if (
+			passwordCodeSending ||
+			verificationMethod !== 'email' ||
+			(hasPassword && !currentPassword) ||
+			!newPassword
+		) {
 			return;
 		}
 

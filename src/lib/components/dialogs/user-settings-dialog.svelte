@@ -21,6 +21,7 @@
 	import { listApiTokens, createApiToken, revokeApiToken } from '$lib/remote/api-tokens.remote';
 	import { getPendingEmailChange, requestEmailChange } from '$lib/remote/email-change.remote';
 	import { disableTwoFactorWithVerification } from '$lib/remote/two-factor.remote';
+	import { hasPassword } from '$lib/remote/password-change.remote';
 	import { toast } from 'svelte-sonner';
 	import { getErrorMessage } from '$lib/utils';
 
@@ -148,12 +149,22 @@
 	let passwordError = $state('');
 	let passwordVerificationOpen = $state(false);
 	let passwordVerificationPreparing = $state(false);
+	let userHasPassword = $state<boolean | null>(null);
+
+	$effect(() => {
+		if (!open) return;
+		untrack(() => {
+			hasPassword()
+				.then((result) => (userHasPassword = result))
+				.catch(() => (userHasPassword = null));
+		});
+	});
 
 	async function beginPasswordChange() {
 		if (
 			passwordVerificationOpen ||
 			passwordVerificationPreparing ||
-			!currentPassword ||
+			(userHasPassword && !currentPassword) ||
 			!newPassword ||
 			newPassword !== confirmPassword
 		) {
@@ -549,27 +560,29 @@
 								<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">Password</p>
 							</div>
 							<div class="flex flex-col gap-3">
-								<div class="flex flex-col gap-1.5">
-									<Label>Current Password</Label>
-									<div class="relative">
-										<Input
-											bind:value={currentPassword}
-											type={showPassword ? 'text' : 'password'}
-											placeholder="********"
-										/>
-										<button
-											type="button"
-											class="absolute top-1/2 right-2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
-											onclick={() => (showPassword = !showPassword)}
-										>
-											{#if showPassword}
-												<EyeOff class="h-3.5 w-3.5" />
-											{:else}
-												<Eye class="h-3.5 w-3.5" />
-											{/if}
-										</button>
+								{#if userHasPassword}
+									<div class="flex flex-col gap-1.5">
+										<Label>Current Password</Label>
+										<div class="relative">
+											<Input
+												bind:value={currentPassword}
+												type={showPassword ? 'text' : 'password'}
+												placeholder="********"
+											/>
+											<button
+												type="button"
+												class="absolute top-1/2 right-2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+												onclick={() => (showPassword = !showPassword)}
+											>
+												{#if showPassword}
+													<EyeOff class="h-3.5 w-3.5" />
+												{:else}
+													<Eye class="h-3.5 w-3.5" />
+												{/if}
+											</button>
+										</div>
 									</div>
-								</div>
+								{/if}
 								<div class="flex flex-col gap-1.5">
 									<Label>New Password</Label>
 									<Input bind:value={newPassword} type="password" placeholder="********" />
@@ -589,7 +602,7 @@
 									onclick={beginPasswordChange}
 									disabled={passwordVerificationOpen ||
 										passwordVerificationPreparing ||
-										!currentPassword ||
+										(userHasPassword && !currentPassword) ||
 										!newPassword ||
 										newPassword !== confirmPassword}
 									class="w-fit"
@@ -881,6 +894,7 @@
 	<PasskeyOnboardingDialog bind:open={passkeyDialogOpen} onComplete={loadTwoFactorStatus} />
 	<PasswordVerificationDialog
 		bind:open={passwordVerificationOpen}
+		hasPassword={userHasPassword ?? false}
 		{hasPasskey}
 		{twoFactorEnabled}
 		{currentPassword}

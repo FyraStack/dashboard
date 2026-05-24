@@ -278,6 +278,12 @@
 	let newKeyName = $state('');
 	let newKeyValue = $state('');
 
+	$effect(() => {
+		if (newKeyValue != '' && newKeyName == '') {
+			newKeyName = newKeyValue.split(' ')[2];
+		}
+	});
+
 	async function loadSshKeys() {
 		if (sshKeysLoaded) return;
 		try {

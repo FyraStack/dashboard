@@ -74,10 +74,17 @@ async function createVMToIPMapping({
 	macAddress,
 	ipAddresses
 }: CreateVMIPMappingParams) {
-  // todo: hit dhcp server to set static lease
-
-  const res = await opnsenseRequest()
-
-  
+  const res = await opnsenseRequest(
+    "https://localhost:10443/api/kea/dhcpv4/add_reservation/",
+    "POST",
+    {
+      reservation: {
+        subnet: '3d03f1af-47b0-4e66-9b4b-feac33351ce0',
+        ip_address: '192.168.0.51',
+        hw_address: 'AA:BB:CC:DD:EE:F1',
+        hostname: '',
+        description: ''
+      }
+    }
+  )
 }
-

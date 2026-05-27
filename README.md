@@ -32,3 +32,38 @@
 ## Usage (dev)
 
 `bun run dev`
+
+
+
+
+## dev instance setup
+
+To test external connections you need to setup several other services.
+This is instructions to setup optional services.
+
+### netbox
+
+https://github.com/netbox-community/netbox-docker/wiki/Getting-Started
+
+```
+git clone -b release https://github.com/netbox-community/netbox-docker.git
+cd netbox-docker
+# Copy the example override file
+cp docker-compose.override.yml.example docker-compose.override.yml
+# Read and edit the file to your liking
+podman compose pull
+podman compose up
+```
+
+### opnsense
+
+```
+sudo podman run --rm -it \
+    --device /dev/kvm \
+    --cap-add NET_ADMIN \
+    -p 10443:443 \
+    docker.io/koichirok/docker-opnsense:24.1.3
+```
+
+username: root
+password: opnsense

@@ -4,7 +4,7 @@ type OpnsenseMethod = 'GET' | 'POST';
 
 type CreateVMIPMappingParams = {
 	macAddress: string;
-	ipAddresses: string[];
+	ipAddress: string;
 };
 
 export class OpnsenseError extends Error {
@@ -70,21 +70,101 @@ async function opnsenseRequest<T>(route: string, method: OpnsenseMethod, data?: 
 	return body as T;
 }
 
+/*
+example call:
+
+createVMToIPMapping("AA:BB:CC:DD:EE:FF", "203.0.113.20")
+*/
+
 async function createVMToIPMapping({
 	macAddress,
-	ipAddresses
+	ipAddress
 }: CreateVMIPMappingParams) {
-  const res = await opnsenseRequest(
-    "https://localhost:10443/api/kea/dhcpv4/add_reservation/",
+  // todo: determine way to automatically determine local IP assignment
+  let localIP = '192.168.0.51'
+
+  await opnsenseRequest(
+    "/api/kea/dhcpv4/add_reservation/",
     "POST",
     {
       reservation: {
-        subnet: '3d03f1af-47b0-4e66-9b4b-feac33351ce0',
-        ip_address: '192.168.0.51',
-        hw_address: 'AA:BB:CC:DD:EE:F1',
+        subnet: 'a04e9b27-d84e-43c1-bfca-31a1268d1eb2',
+        ip_address: localIP,
+        hw_address: macAddress,
         hostname: '',
         description: ''
       }
     }
+  )
+
+  // this seems to be required to apply changes
+  // the webui also runs /api/kea/dhcpv4/set, but I am not sure what that actually does.
+  await opnsenseRequest(
+    "/api/kea/service/reconfigure",
+    "POST",
+    {}
+  )
+
+  await opnsenseRequest(
+    "/api/interfaces/vip_settings/add_item/",
+    "POST",
+    {
+      "vip": {
+        "mode": "ipalias",
+        "interface": "wan",
+        "network": ipAddress+"/32",
+      }
+    }
+  )
+
+  await opnsenseRequest(
+    "/api/interfaces/vip_settings/reconfigure",
+    "POST",
+    {}
+  )
+
+  await opnsenseRequest(
+    "/api/firewall/one_to_one/add_rule/",
+    "POST",
+    {
+      "rule":
+      {
+        "enabled": "1",
+        "sequence": "100",
+        "categories": "",
+        "description": "",
+        "interface": "wan",
+        "type": "binat",
+        "external": ipAddress,
+        "source_not": "0",
+        "source_net": localIP,
+        "destination_not": "0",
+        "destination_net": "any",
+        "log": "0",
+        "natreflection": ""
+      }
+    }
+  )
+
+  await opnsenseRequest(
+    "/api/firewall/one_to_one/apply",
+    "POST",
+    {}
+  )
+
+
+
+  await opnsenseRequest(
+    "/api/firewall/filter/add_rule/",
+    "POST",
+    {"rule":{"enabled":"1","sequence":"100","categories":"","nosync":"0","description":"","interfacenot":"0","interface":"","quick":"1","action":"pass","allowopts":"0","direction":"in","ipprotocol":"inet","protocol":"any","icmptype":"","icmp6type":"","source_not":"0","source_net":"any","source_port":"","destination_not":"0","destination_net":ipAddress,"destination_port":"","log":"0","tcpflags1":"","tcpflags2":"","tcpflags_any":"0","sched":"","divert-to":"","statetype":"keep","state-policy":"","nopfsync":"0","statetimeout":"","udp-first":"","udp-single":"","udp-multiple":"","adaptivestart":"","adaptiveend":"","max":"","max-src-nodes":"","max-src-states":"","max-src-conn":"","max-src-conn-rate":"","max-src-conn-rates":"","overload":"","shaper1":"","shaper2":"","gateway":"","disablereplyto":"0","replyto":"","prio":"","set-prio":"","set-prio-low":"","tos":"","tag":"","tagged":""}}
+  )
+
+
+
+  await opnsenseRequest(
+    "/api/firewall/filter/apply",
+    "POST",
+    {}
   )
 }

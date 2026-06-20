@@ -61,8 +61,6 @@ function cloudInitVendorConfig() {
 		runcmd: ['sysctl --system']
 	})}`;
 
-	console.log(`finished cloud-init vendor config file:\n${yamlContents}`);
-
 	return yamlContents;
 }
 
@@ -105,8 +103,6 @@ function cloudInitNetworkConfig(params: VmCreateParams, macAddress: string) {
 			}
 		}
 	});
-
-	console.log(`finished cloud-init network-config file:\n${yamlContents}`);
 
 	return yamlContents;
 }

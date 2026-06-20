@@ -360,7 +360,9 @@ export const createVm = command(createParams, async (params) => {
 		);
 		const firewallIpSet = [
 			...(ipv4NetworkAllocation?.address ? [`${ipv4NetworkAllocation.address}/32`] : []),
-			...(ipv6TransitNetworkAllocation?.address ? [`${ipv6TransitNetworkAllocation.address}/128`] : []),
+			...(ipv6TransitNetworkAllocation?.address
+				? [`${ipv6TransitNetworkAllocation.address}/128`]
+				: []),
 			...(ipv6PrefixNetworkAllocation?.prefix ? [ipv6PrefixNetworkAllocation.prefix] : [])
 		];
 		const backend = getBackend('proxmox');

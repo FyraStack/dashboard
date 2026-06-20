@@ -395,7 +395,8 @@ function usedIpv4AddressIndexes(allocations: Pick<IpamAllocation, 'address'>[]) 
 function usedIpv6AllocationIndexes(allocations: Pick<IpamAllocation, 'address' | 'prefix'>[]) {
 	return new Set(
 		allocations.flatMap((allocation) => {
-			if (allocation.prefix) return [new Address6(allocation.prefix).startAddress().bigInt().toString()];
+			if (allocation.prefix)
+				return [new Address6(allocation.prefix).startAddress().bigInt().toString()];
 			if (allocation.address) return [parseAddress('ipv6', allocation.address).toString()];
 			return [];
 		})
@@ -571,7 +572,9 @@ async function createRandomKindAllocation(
 			columns: { address: true, prefix: true }
 		});
 		const used =
-			kind === 'ipv4' ? usedIpv4AddressIndexes(allocations) : usedIpv6AllocationIndexes(allocations);
+			kind === 'ipv4'
+				? usedIpv4AddressIndexes(allocations)
+				: usedIpv6AllocationIndexes(allocations);
 		const next =
 			kind === 'ipv4'
 				? { address: randomIpv4Address(selected.prefix, used), prefix: null }
@@ -604,7 +607,9 @@ async function createSequentialKindAllocation(
 		});
 
 		const used =
-			kind === 'ipv4' ? usedIpv4AddressIndexes(allocations) : usedIpv6AllocationIndexes(allocations);
+			kind === 'ipv4'
+				? usedIpv4AddressIndexes(allocations)
+				: usedIpv6AllocationIndexes(allocations);
 		const next =
 			kind === 'ipv4'
 				? { address: nextIpv4Address(prefix, used), prefix: null }

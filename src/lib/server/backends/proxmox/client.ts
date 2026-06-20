@@ -221,7 +221,9 @@ export class ProxmoxClient {
 				.json<PveResponse<null>>();
 		} catch (error) {
 			if (error instanceof HTTPError && error.response.status === 400) return;
-			await this.logHttpError(`createQemuFirewallIpset(${node}, ${vmid}, ${name})`, error, { name });
+			await this.logHttpError(`createQemuFirewallIpset(${node}, ${vmid}, ${name})`, error, {
+				name
+			});
 			throw error;
 		}
 	}
@@ -234,9 +236,12 @@ export class ProxmoxClient {
 		comment?: string
 	): Promise<void> {
 		await this.api
-			.post(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/ipset/${encodeURIComponent(name)}`, {
-				body: this.toForm({ cidr, comment })
-			})
+			.post(
+				`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/ipset/${encodeURIComponent(name)}`,
+				{
+					body: this.toForm({ cidr, comment })
+				}
+			)
 			.json<PveResponse<null>>();
 	}
 

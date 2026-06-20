@@ -408,7 +408,9 @@ export const createVm = command(createParams, async (params) => {
 					.where(and(eq(vms.id, vmId), eq(vms.active, true)))
 					.then(() => console.log(`VM ${vmId} provision ${ok ? 'succeeded' : 'failed'}`))
 					.catch((err) => console.error(`VM ${vmId} status update failed:`, err));
-			}
+			},
+			userId: event.locals.user.id,
+			projectId: params.projectId
 		});
 
 		if (!result.macAddress) error(502, 'Proxmox did not return a MAC address');
@@ -422,7 +424,10 @@ export const createVm = command(createParams, async (params) => {
 		}
 		await releaseVmNetworking(db, vmId).catch(() => {});
 		await deleteProjectServerEntity(params.projectId, vmId).catch(() => {});
-		await db.delete(vms).where(eq(vms.id, inserted.id));
+		await db
+			.delete(vms)
+			.where(eq(vms.id, inserted.id))
+			.catch(() => {});
 		throw err;
 	}
 

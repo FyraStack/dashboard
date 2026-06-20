@@ -175,7 +175,7 @@ export function normalizeIpamPrefixInput(input: IpamPrefixInput) {
 		}
 		gatewayAddress = formatAddress('ipv4', gatewayValue);
 	} else {
-		gatewayAddress = null
+		gatewayAddress = null;
 	}
 
 	let whitelistStart = input.whitelistStart?.trim() || null;

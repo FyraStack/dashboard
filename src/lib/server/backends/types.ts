@@ -80,6 +80,8 @@ export interface VmCreateParams {
 	password?: string;
 	/** Called when async provisioning (e.g. image import) finishes or fails. */
 	onProvisionSettled?: (result: { ok: boolean; error?: string }) => void;
+	projectId: string;
+	userId: string;
 }
 
 export interface VmCreateResult {

@@ -450,11 +450,12 @@ export class ProxmoxBackend implements VmBackend {
 			efidisk0: `${pvePool}:0,efitype=4m,pre-enrolled-keys=1`,
 			scsihw: 'virtio-scsi-single',
 			...(params.imageSource ? {} : { virtio0: `${pvePool}:${params.diskGb}` }),
-			net0: `virtio=${macAddress},bridge=vmbr0,tag=1040,firewall=1`,
+			net0: `virtio=${macAddress},bridge=public,firewall=1`,
 			pool: `stack-tenants`,
 			boot: `order=${bootDisk}`,
 			serial0: 'socket',
-			agent: '1'
+			agent: '1',
+			tags: `vmid-${params.id};projectid-${params.projectId};userid-${params.userId}`
 		});
 
 		await this.client.updateQemuFirewallOptions(node.node, vmid, {

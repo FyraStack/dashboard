@@ -448,7 +448,7 @@ export class ProxmoxBackend implements VmBackend {
 			cores: params.cores,
 			sockets: 1,
 			memory: params.memoryMb,
-			cpu: 'x86-64-v3',
+			cpu: 'x86-64-v4',
 			ostype: 'l26',
 			bios: 'ovmf',
 			machine: 'q35',
@@ -456,6 +456,7 @@ export class ProxmoxBackend implements VmBackend {
 			scsihw: 'virtio-scsi-single',
 			...(params.imageSource ? {} : { virtio0: `${pvePool}:${params.diskGb}` }),
 			net0: `virtio=${macAddress},bridge=vmbr0,tag=1040,firewall=1`,
+			pool: `stack-tenants`,
 			boot: `order=${bootDisk}`,
 			serial0: 'socket',
 			agent: '1'

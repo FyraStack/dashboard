@@ -164,9 +164,7 @@ export const deleteProject = command(deleteParams, async (params) => {
 			name: true,
 			proxmoxId: true,
 			active: true,
-			backend: true,
-			lastKnownIpv4: true,
-			lastKnownIpv6: true
+			backend: true
 		}
 	});
 	const vmIds = projectVms.map((vm) => vm.id);

@@ -46,7 +46,8 @@ export class ProxmoxClient {
 			prefix: `${baseUrl.replace(/\/+$/, '')}/api2/json`,
 			headers: {
 				Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}`,
-				Accept: 'application/json'
+				Accept: 'application/json',
+				...(insecureFetch ? { 'Accept-Encoding': 'identity' } : {})
 			},
 			timeout: 30_000,
 			...(insecureFetch ? { fetch: insecureFetch } : {})
@@ -187,6 +188,67 @@ export class ProxmoxClient {
 		await this.api
 			.put(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/resize`, {
 				body: this.toForm({ disk, size })
+			})
+			.json<PveResponse<null>>();
+	}
+
+	async updateQemuFirewallOptions(
+		node: string,
+		vmid: number,
+		params: {
+			enable?: 0 | 1;
+			ipfilter?: 0 | 1;
+			macfilter?: 0 | 1;
+			ndp?: 0 | 1;
+			dhcp?: 0 | 1;
+			policy_in?: 'ACCEPT' | 'DROP' | 'REJECT';
+			policy_out?: 'ACCEPT' | 'DROP' | 'REJECT';
+		}
+	): Promise<void> {
+		await this.api
+			.put(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/options`, {
+				body: this.toForm(params)
+			})
+			.json<PveResponse<null>>();
+	}
+
+	async createQemuFirewallIpset(node: string, vmid: number, name: string): Promise<void> {
+		try {
+			await this.api
+				.post(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/ipset`, {
+					body: this.toForm({ name })
+				})
+				.json<PveResponse<null>>();
+		} catch (error) {
+			if (error instanceof HTTPError && error.response.status === 400) return;
+			await this.logHttpError(`createQemuFirewallIpset(${node}, ${vmid}, ${name})`, error, {
+				name
+			});
+			throw error;
+		}
+	}
+
+	async addQemuFirewallIpsetEntry(
+		node: string,
+		vmid: number,
+		name: string,
+		cidr: string,
+		comment?: string
+	): Promise<void> {
+		await this.api
+			.post(
+				`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/ipset/${encodeURIComponent(name)}`,
+				{
+					body: this.toForm({ cidr, comment })
+				}
+			)
+			.json<PveResponse<null>>();
+	}
+
+	async addQemuFirewallSecurityGroupRule(node: string, vmid: number, group: string): Promise<void> {
+		await this.api
+			.post(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/rules`, {
+				body: this.toForm({ type: 'group', action: group, enable: 1 })
 			})
 			.json<PveResponse<null>>();
 	}

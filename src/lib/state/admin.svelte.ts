@@ -81,6 +81,22 @@ export type PveImageImportTarget = {
 	storage: string;
 };
 
+export type IpamPrefix = {
+	id: string;
+	name: string;
+	cidr: string;
+	family: 'ipv4' | 'ipv6';
+	disabled: boolean;
+	ipv6UseTransitAddress: boolean;
+	whitelistStart: string | null;
+	whitelistEnd: string | null;
+	gatewayAddress: string | null;
+	allocated: number;
+	capacity: string;
+	available: string;
+	hasCapacity: boolean;
+};
+
 type ImportChecksumAlgorithm = '' | 'md5' | 'sha1' | 'sha224' | 'sha256' | 'sha384' | 'sha512';
 type ImportTask = {
 	node: string;
@@ -95,6 +111,7 @@ export type AdminPageData = {
 	images?: BaseImage[];
 	featureFlags?: FeatureFlags;
 	adminUsers?: AdminUser[];
+	ipamPrefixes?: IpamPrefix[];
 };
 
 export const colorOptions = [
@@ -115,6 +132,7 @@ export const colorOptions = [
 export class AdminState {
 	vmTypes = $state<VmType[]>([]);
 	images = $state<BaseImage[]>([]);
+	ipamPrefixes = $state<IpamPrefix[]>([]);
 	adminUsers = $state<AdminUser[]>([]);
 	adminUserSaving = $state<Record<string, boolean>>({});
 	adminUserError = $state('');
@@ -192,6 +210,7 @@ export class AdminState {
 	sync(data: AdminPageData) {
 		this.vmTypes = [...(data.vmTypes ?? [])];
 		this.images = [...(data.images ?? [])];
+		this.ipamPrefixes = [...(data.ipamPrefixes ?? [])];
 		this.adminUsers = [...(data.adminUsers ?? [])];
 		const incoming = data.featureFlags ?? { ...defaultFeatureFlags };
 		this.featureFlags = untrack(() =>

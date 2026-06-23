@@ -18,9 +18,9 @@ declare global {
 			env: {
 				ORIGIN: string;
 				BETTER_AUTH_SECRET: string;
-				OPNSENSE_API_KEY?: string;
-				OPNSENSE_API_SECRET?: string;
-				OPNSENSE_API_URL?: string;
+				VYOS_API_URL?: string;
+				VYOS_API_KEY?: string;
+				VYOS_VERIFY_SSL?: string;
 				EMAIL?: SendEmail;
 				EMAIL_FROM_ADDRESS: string;
 				EMAIL_FROM_NAME: string;
@@ -46,6 +46,12 @@ declare global {
 				PROXMOX_API_URL?: string;
 				PROXMOX_TOKEN_ID?: string;
 				PROXMOX_TOKEN_SECRET?: string;
+				PROXMOX_SNIPPETS_ENDPOINT_URL?: string;
+				PROXMOX_SNIPPETS_ENDPOINT_USERNAME?: string;
+				PROXMOX_SNIPPETS_ENDPOINT_PASSWORD?: string;
+				PROXMOX_SNIPPETS_ENDPOINT_VERIFY_SSL?: string;
+				PROXMOX_SNIPPETS_STORAGE?: string;
+				PROXMOX_VM_FIREWALL_SECURITY_GROUP?: string;
 			};
 		}
 

@@ -31,6 +31,8 @@ export const billingSyncStatusEnum = pgEnum('billing_sync_status', ['pending', '
 
 export const billingResourceTypeEnum = pgEnum('billing_resource_type', ['vm', 'volume']);
 
+export const ipFamilyEnum = pgEnum('ip_family', ['ipv4', 'ipv6']);
+
 // VM Types
 
 export const vmTypes = pgTable('vm_types', {
@@ -93,7 +95,8 @@ export const vmsRelations = relations(vms, ({ one, many }) => ({
 	}),
 	volumes: many(volumes),
 	paymentPeriods: many(paymentPeriods),
-	ipAssignments: many(ipAssignments)
+	ipAssignments: many(ipAssignments),
+	ipamAllocations: many(ipamAllocations)
 }));
 
 // Volumes
@@ -257,6 +260,71 @@ export const ipAssignmentsRelations = relations(ipAssignments, ({ one }) => ({
 	}),
 	vm: one(vms, {
 		fields: [ipAssignments.associatedVmId],
+		references: [vms.id]
+	})
+}));
+
+export const ipamPrefixes = pgTable(
+	'ipam_prefixes',
+	{
+		id: ulidPk(),
+		name: text('name').notNull(),
+		cidr: cidr('cidr').notNull(),
+		family: ipFamilyEnum('family').notNull(),
+		disabled: boolean('disabled').notNull().default(false),
+		ipv6UseTransitAddress: boolean('ipv6_use_transit_address').notNull().default(false),
+		whitelistStart: inet('whitelist_start'),
+		whitelistEnd: inet('whitelist_end'),
+		gatewayAddress: inet('gateway_address'),
+		createdAt: bigint('created_at', { mode: 'number' })
+			.notNull()
+			.default(sql`(extract(epoch from now()) * 1000)::bigint`)
+	},
+	(table) => [
+		uniqueIndex('ipam_prefixes_cidr_index').on(table.cidr),
+		index('ipam_prefixes_family_disabled_index').on(table.family, table.disabled)
+	]
+);
+
+export const ipamPrefixesRelations = relations(ipamPrefixes, ({ many }) => ({
+	allocations: many(ipamAllocations)
+}));
+
+export const ipamAllocations = pgTable(
+	'ipam_allocations',
+	{
+		id: ulidPk(),
+		ipamPrefixId: ulidFk('ipam_prefix_id')
+			.notNull()
+			.references(() => ipamPrefixes.id),
+		associatedVmId: ulidFk('associated_vm_id')
+			.notNull()
+			.references(() => vms.id),
+		family: ipFamilyEnum('family').notNull(),
+		address: inet('address'),
+		prefix: cidr('prefix'),
+		prefixLength: integer('prefix_length').notNull(),
+		macAddress: text('mac_address').notNull(),
+		createdAt: bigint('created_at', { mode: 'number' })
+			.notNull()
+			.default(sql`(extract(epoch from now()) * 1000)::bigint`)
+	},
+	(table) => [
+		index('ipam_allocations_ipam_prefix_id_index').on(table.ipamPrefixId),
+		index('ipam_allocations_associated_vm_id_index').on(table.associatedVmId),
+		index('ipam_allocations_vm_family_index').on(table.associatedVmId, table.family),
+		uniqueIndex('ipam_allocations_address_index').on(table.address),
+		uniqueIndex('ipam_allocations_prefix_index').on(table.prefix)
+	]
+);
+
+export const ipamAllocationsRelations = relations(ipamAllocations, ({ one }) => ({
+	ipamPrefix: one(ipamPrefixes, {
+		fields: [ipamAllocations.ipamPrefixId],
+		references: [ipamPrefixes.id]
+	}),
+	vm: one(vms, {
+		fields: [ipamAllocations.associatedVmId],
 		references: [vms.id]
 	})
 }));

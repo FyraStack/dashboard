@@ -31,6 +31,7 @@ import {
 import { meterResourceThrough, syncProjectUsage } from '$lib/server/billing/metering';
 import { sendRenderedEmail } from '$lib/server/email';
 import { ulid } from '$lib/server/id';
+import { releaseVmNetworking } from '$lib/server/ipam';
 
 const CODE_LENGTH = 6;
 const USER_DELETE_CODE_TTL_MS = 10 * 60 * 1000;
@@ -253,7 +254,13 @@ async function deleteOrganizationResources(
 ) {
 	const projectVms = await db.query.vms.findMany({
 		where: eq(vms.ownerProjectId, organizationId),
-		columns: { id: true, name: true, proxmoxId: true, active: true, backend: true }
+		columns: {
+			id: true,
+			name: true,
+			proxmoxId: true,
+			active: true,
+			backend: true
+		}
 	});
 	const vmIds = projectVms.map((vm) => vm.id);
 
@@ -277,6 +284,9 @@ async function deleteOrganizationResources(
 	await syncProjectUsage(organizationId);
 
 	await db.delete(volumes).where(eq(volumes.ownerProjectId, organizationId));
+	for (const vm of projectVms) {
+		await releaseVmNetworking(db, vm.id);
+	}
 	if (vmIds.length > 0) {
 		await db.delete(ipAssignments).where(inArray(ipAssignments.associatedVmId, vmIds));
 		await db.delete(paymentPeriods).where(inArray(paymentPeriods.vmId, vmIds));

@@ -24,6 +24,7 @@ import {
 	updateProjectCustomer
 } from '$lib/server/billing/autumn';
 import { meterResourceThrough, syncProjectUsage } from '$lib/server/billing/metering';
+import { releaseVmNetworking } from '$lib/server/ipam';
 
 type ListResult = {
 	id: string;
@@ -158,7 +159,13 @@ export const deleteProject = command(deleteParams, async (params) => {
 
 	const projectVms = await db.query.vms.findMany({
 		where: eq(vms.ownerProjectId, params.projectId),
-		columns: { id: true, name: true, proxmoxId: true, active: true, backend: true }
+		columns: {
+			id: true,
+			name: true,
+			proxmoxId: true,
+			active: true,
+			backend: true
+		}
 	});
 	const vmIds = projectVms.map((vm) => vm.id);
 	const projectVolumes = await db.query.volumes.findMany({
@@ -186,6 +193,9 @@ export const deleteProject = command(deleteParams, async (params) => {
 	await syncProjectUsage(params.projectId);
 
 	await db.delete(volumes).where(eq(volumes.ownerProjectId, params.projectId));
+	for (const vm of projectVms) {
+		await releaseVmNetworking(db, vm.id);
+	}
 	if (vmIds.length > 0) {
 		await db.delete(ipAssignments).where(inArray(ipAssignments.associatedVmId, vmIds));
 		await db.delete(paymentPeriods).where(inArray(paymentPeriods.vmId, vmIds));

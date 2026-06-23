@@ -21,7 +21,8 @@
 		Loader2,
 		AlertTriangle,
 		RefreshCw,
-		UserCog
+		UserCog,
+		Network
 	} from '@lucide/svelte';
 	import { AdminState, colorOptions, type AdminPageData } from '$lib/state/admin.svelte';
 
@@ -32,7 +33,7 @@
 		volumes: HardDrive
 	};
 
-	type AdminTab = 'features' | 'vmTypes' | 'images' | 'users';
+	type AdminTab = 'features' | 'vmTypes' | 'images' | 'ipam' | 'users';
 	let { data }: { data: AdminPageData } = $props();
 	const activeTab = 'vmTypes' as AdminTab;
 	const admin = new AdminState();
@@ -86,6 +87,17 @@
 			<Badge variant="secondary" class="text-[10px]">
 				{featureFlagKeys.filter((key) => admin.featureFlags[key]).length}
 			</Badge>
+		</a>
+		<a
+			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
+			'ipam'
+				? 'border-red-500 text-gray-100'
+				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+			href={resolve('/admin/ipam')}
+		>
+			<Network class="h-3.5 w-3.5 shrink-0" />
+			IPAM
+			<Badge variant="secondary" class="text-[10px]">{admin.ipamPrefixes.length}</Badge>
 		</a>
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===

@@ -154,9 +154,13 @@
 	$effect(() => {
 		if (!open) return;
 		untrack(() => {
-			hasPassword()
-				.then((result) => (userHasPassword = result))
-				.catch(() => (userHasPassword = null));
+			void (async () => {
+				try {
+					userHasPassword = await await hasPassword();
+				} catch {
+					userHasPassword = null;
+				}
+			})();
 		});
 	});
 

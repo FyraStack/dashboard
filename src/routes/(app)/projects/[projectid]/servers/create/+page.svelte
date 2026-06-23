@@ -41,6 +41,10 @@
 		volumes?: ExistingVolume[];
 		featureFlags?: FeatureFlags;
 		billing?: { status?: string; setupRequired?: boolean } | null;
+		ipamAvailability?: {
+			ipv4: { available: boolean; availableCount: string };
+			ipv6: { available: boolean; availableCount: string };
+		};
 		canManageBilling?: boolean;
 	};
 
@@ -87,17 +91,24 @@
 	const projectId = $derived(data.currentProject?.id ?? page.params.projectid ?? '');
 	const billingReady = $derived(data.billing?.status === 'active');
 	const canManageBilling = $derived(Boolean(data.canManageBilling));
+	const ipv4Available = $derived(Boolean(data.ipamAvailability?.ipv4.available));
+	const ipv6Available = $derived(Boolean(data.ipamAvailability?.ipv6.available));
+	const bothNetworksAvailable = $derived(ipv4Available && ipv6Available);
 
 	let serverName = $state('');
 	let selectedImageId = $state<string | null>(null);
 	let selectedImageVersion = $state<string | null>(null);
 	let selectedPlanId = $state<string | null>(null);
-	let networkingOption = $state<'both' | 'ipv4' | 'ipv6' | 'none'>('both');
+	let networkingOption = $state<'both' | 'ipv6'>('both');
 	let selectedSshKeyIds = $state<string[]>([]);
 	let serverPassword = $state('');
 	let showServerPassword = $state(false);
 	let passwordCopied = $state(false);
 	let selectedVolumeIds = $state<string[]>([]);
+	const networkingReady = $derived(
+		(networkingOption === 'both' && bothNetworksAvailable) ||
+			(networkingOption === 'ipv6' && ipv6Available)
+	);
 
 	type SelectableVolume = { id: string; name: string; sizeGb: number };
 	let createdVolumes = $state<SelectableVolume[]>([]);
@@ -178,6 +189,10 @@
 	onMount(() => {
 		serverPassword = generatePassword();
 		if (!billingReady) billingSetupOpen = true;
+	});
+
+	$effect(() => {
+		if (!bothNetworksAvailable && ipv6Available) networkingOption = 'ipv6';
 	});
 
 	function randomIndex(max: number): number {
@@ -274,6 +289,7 @@
 		if (
 			!serverName.trim() ||
 			!selectedPlanId ||
+			!networkingReady ||
 			(usePasswordAuthentication && !serverPassword.trim())
 		) {
 			return;
@@ -294,10 +310,12 @@
 		const imageId = selectedImageId ?? undefined;
 
 		try {
+			const networkingMode: 'both' | 'ipv6' = networkingOption === 'ipv6' ? 'ipv6' : 'both';
 			const payload = {
 				projectId,
 				vmTypeId: selectedPlanId,
 				name: serverName.trim(),
+				networkingMode,
 				...(imageId ? { imageId } : {}),
 				...(selectedSshKeyIds.length > 0 ? { sshKeyIds: selectedSshKeyIds } : {}),
 				...(usePasswordAuthentication ? { password: serverPassword.trim() } : {})
@@ -670,24 +688,31 @@
 						</div>
 						<div class="mt-3">
 							<div class="flex flex-col gap-2">
-								{#each [{ value: 'both' as const, label: '1 Public IPv4 Address and a IPv6 /64 block' }] as opt (opt.value)}
+								{#each [{ value: 'both' as const, label: '1 Public IPv4 Address and an IPv6 block', disabled: !bothNetworksAvailable }, { value: 'ipv6' as const, label: 'IPv6 block only', disabled: !ipv6Available }] as opt (opt.value)}
 									<label
-										class="flex cursor-pointer items-center gap-2 border p-3 text-xs transition-colors {networkingOption ===
-										opt.value
-											? 'border-red-500 bg-red-950/20 text-gray-100'
-											: 'border-gray-700 text-gray-400 hover:border-gray-600'}"
+										class="flex items-center gap-2 border p-3 text-xs transition-colors {opt.disabled
+											? 'cursor-not-allowed border-gray-800 text-gray-600'
+											: networkingOption === opt.value
+												? 'cursor-pointer border-red-500 bg-red-950/20 text-gray-100'
+												: 'cursor-pointer border-gray-700 text-gray-400 hover:border-gray-600'}"
 									>
 										<input
 											type="radio"
 											name="networking"
 											value={opt.value}
 											bind:group={networkingOption}
+											disabled={opt.disabled}
 											class="accent-red-500"
 										/>
 										{opt.label}
+										{#if opt.disabled}
+											<span class="ml-auto text-[11px] text-gray-600">Exhausted</span>
+										{/if}
 									</label>
 								{/each}
-								<p class="text-xs text-gray-500">Advanced Networking coming soon</p>
+								{#if !ipv6Available}
+									<p class="text-xs text-red-400">No IPv6 capacity is currently available.</p>
+								{/if}
 							</div>
 						</div>
 					</div>
@@ -859,13 +884,7 @@
 							<div class="flex items-center justify-between text-xs">
 								<span class="text-gray-500">Network</span>
 								<span class="text-gray-200">
-									{networkingOption === 'both'
-										? 'IPv4 + IPv6'
-										: networkingOption === 'ipv4'
-											? 'IPv4 only'
-											: networkingOption === 'ipv6'
-												? 'IPv6 only'
-												: 'None'}
+									{networkingOption === 'both' ? 'IPv4 + IPv6' : 'IPv6 only'}
 								</span>
 							</div>
 							{#if selectedSshKeyIds.length > 0}
@@ -910,6 +929,7 @@
 						disabled={!serverName.trim() ||
 							!selectedPlanId ||
 							(usePasswordAuthentication && !serverPassword.trim()) ||
+							!networkingReady ||
 							creating}
 						onclick={handleCreate}
 					>

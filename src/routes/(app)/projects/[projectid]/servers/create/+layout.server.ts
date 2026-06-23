@@ -8,10 +8,12 @@ import { getProjectMemberRole } from '$lib/server/auth-context';
 import { attachDefaultProjectPlan } from '$lib/server/billing/autumn';
 import { getProjectBillingOverview, refreshProjectBilling } from '$lib/server/billing/overview';
 import { initDrizzle } from '$lib/server/db';
+import { getIpamAvailability } from '$lib/server/ipam';
 
 export const load: LayoutServerLoad = async ({ locals, params, parent, depends, url }) => {
 	depends('project:create-server');
 	depends('app:ssh-keys');
+	depends('app:ipam-prefixes');
 	const { featureFlags } = await parent();
 	if (!params.projectid) {
 		error(404, 'Project not found');
@@ -38,12 +40,13 @@ export const load: LayoutServerLoad = async ({ locals, params, parent, depends, 
 	}
 
 	void refreshProjectBilling(params.projectid);
-	const [vmTypes, dbImages, volumes, sshKeys, billing] = await Promise.all([
+	const [vmTypes, dbImages, volumes, sshKeys, billing, ipamAvailability] = await Promise.all([
 		listVmTypes(),
 		listImages(),
 		featureFlags?.volumes ? listVolumes({ projectId: params.projectid }) : [],
 		listSshKeys(),
-		getProjectBillingOverview(params.projectid)
+		getProjectBillingOverview(params.projectid),
+		getIpamAvailability(db)
 	]);
 
 	return {
@@ -52,6 +55,7 @@ export const load: LayoutServerLoad = async ({ locals, params, parent, depends, 
 		volumes,
 		sshKeys,
 		billing,
+		ipamAvailability,
 		canManageBilling: role === 'owner'
 	};
 };

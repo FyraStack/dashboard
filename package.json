@@ -68,8 +68,10 @@
 		"@better-svelte-email/server": "^2.0.0",
 		"arktype": "^2.2.0",
 		"autumn-js": "^1.2.18",
+		"ip-address": "^10.2.0",
 		"ky": "^2.0.0",
 		"qrcode-svg": "^1.1.0",
-		"ulid": "^3.0.2"
+		"ulid": "^3.0.2",
+		"yaml": "^2.9.0"
 	}
 }

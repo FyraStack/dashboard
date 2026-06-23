@@ -41,6 +41,7 @@ export interface PveQemuConfig {
 	ide2?: string;
 	scsi0?: string;
 	net0?: string;
+	cicustom?: string;
 	ipconfig0?: string;
 	ciuser?: string;
 	sshkeys?: string;
@@ -127,6 +128,7 @@ export interface PveCreateQemuParams {
 	scsi0?: string;
 	ide2?: string;
 	net0?: string;
+	cicustom?: string;
 	boot?: string;
 	serial0?: string;
 	agent?: string;

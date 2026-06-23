@@ -58,6 +58,13 @@ export interface BackendImageImportParams {
 	verifyCertificates?: boolean;
 }
 
+export interface VmNetworkConfig {
+	ipv4?: { address: string; prefixLength: number; gateway: string };
+	ipv6?: { address: string; prefixLength: number };
+	ipv6Prefix?: string;
+	firewallIpSet?: string[];
+}
+
 export interface VmCreateParams {
 	id: string;
 	name: string;
@@ -67,10 +74,14 @@ export interface VmCreateParams {
 	diskGb: number;
 	imageId?: string;
 	imageSource?: string;
+	macAddress?: string;
+	networkConfig?: VmNetworkConfig;
 	sshKeys?: string[];
 	password?: string;
 	/** Called when async provisioning (e.g. image import) finishes or fails. */
 	onProvisionSettled?: (result: { ok: boolean; error?: string }) => void;
+	projectId: string;
+	userId: string;
 }
 
 export interface VmCreateResult {

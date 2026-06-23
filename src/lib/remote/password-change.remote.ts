@@ -46,7 +46,7 @@ async function changePasswordOauth(newPassword: string) {
 		body: { newPassword }
 	});
 	await auth.api.revokeOtherSessions({
-		headers: event.request.headers,
+		headers: event.request.headers
 	});
 }
 

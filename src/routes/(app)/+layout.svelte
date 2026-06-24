@@ -384,7 +384,7 @@
 				{/if}
 			</div>
 
-			<div class="flex flex-1 items-center justify-end gap-3">
+			<div class="flex min-w-0 flex-1 items-center justify-end gap-3">
 				{#if data.isAdmin}
 					<a
 						href={resolve('/admin')}
@@ -397,29 +397,30 @@
 
 				<!-- Search trigger -->
 				<button
-					class="flex items-center gap-2 border border-gray-800 bg-gray-800/30 px-3 py-1.5 text-xs text-gray-500 transition-colors hover:border-gray-700 hover:text-gray-400"
+					class="flex shrink-0 items-center gap-2 border border-gray-800 bg-gray-800/30 px-3 py-1.5 text-xs text-gray-500 transition-colors hover:border-gray-700 hover:text-gray-400"
+					aria-label="Search"
 					onclick={openCommandPalette}
 				>
 					<Search class="h-3 w-3" />
-					<span>Search...</span>
+					<span class="hidden sm:inline">Search...</span>
 					<kbd
-						class="ml-2 border border-gray-700 bg-gray-800 px-1.5 py-0.5 text-[10px] text-gray-500"
+						class="ml-2 hidden border border-gray-700 bg-gray-800 px-1.5 py-0.5 text-[10px] text-gray-500 sm:inline-block"
 						>⌘K</kbd
 					>
 				</button>
 
 				<!-- Avatar button — opens user settings -->
 				<button
-					class="flex items-center gap-2.5 rounded-xs px-2 py-1 transition-colors hover:bg-gray-800"
+					class="flex min-w-0 items-center gap-2.5 rounded-xs px-2 py-1 transition-colors hover:bg-gray-800"
 					aria-label={`Account settings for ${profileName || data.user?.email}`}
 					aria-haspopup="dialog"
 					onclick={() => openUserSettings()}
 				>
-					<div class="text-right">
-						<p class="text-sm leading-tight font-medium text-gray-100">{profileName}</p>
-						<p class="text-xs leading-tight text-gray-500">{data.user?.email}</p>
+					<div class="hidden min-w-0 text-right sm:block">
+						<p class="truncate text-sm leading-tight font-medium text-gray-100">{profileName}</p>
+						<p class="truncate text-xs leading-tight text-gray-500">{data.user?.email}</p>
 					</div>
-					<Avatar.Root class="h-8 w-8 rounded-xs border border-gray-700">
+					<Avatar.Root class="h-8 w-8 shrink-0 rounded-xs border border-gray-700">
 						<Avatar.Fallback class="rounded-xs bg-gray-800 text-xs text-gray-400"
 							>{(data.user?.name ?? '??')
 								.split(' ')

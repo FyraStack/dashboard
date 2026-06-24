@@ -400,7 +400,7 @@
 										class="h-8 w-full border border-gray-700 bg-gray-800 px-3 text-xs text-gray-100 placeholder:text-gray-500 focus:border-gray-500 focus:outline-none"
 									/>
 								</div>
-								<div class="mt-3 grid grid-cols-2 gap-px bg-gray-900">
+								<div class="mt-3 grid grid-cols-1 gap-px bg-gray-900 sm:grid-cols-2">
 									{#each filteredOfficialImages() as img (img.id)}
 										{@const isSelected = selectedImageId === img.id}
 										<div class="contents">
@@ -527,7 +527,7 @@
 									</p>
 								</div>
 							{:else}
-								<div class="grid grid-cols-2 gap-2">
+								<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
 									{#each vmTypes as plan (plan.id)}
 										<button
 											class="flex flex-col gap-1 border p-3 text-left transition-colors {selectedPlanId ===

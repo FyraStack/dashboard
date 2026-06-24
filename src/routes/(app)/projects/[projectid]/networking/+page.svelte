@@ -124,7 +124,7 @@
 					>IP Addresses</span
 				>
 			</div>
-			<table class="w-full">
+			<table class="w-full whitespace-nowrap">
 				<thead>
 					<tr class="border-y border-gray-800/50">
 						<th class="px-5 py-2.5 text-left text-xs font-medium text-gray-500">Address</th>
@@ -205,7 +205,7 @@
 					Create Network
 				</Button>
 			</div>
-			<table class="w-full">
+			<table class="w-full whitespace-nowrap">
 				<thead>
 					<tr class="border-y border-gray-800/50">
 						<th class="px-5 py-2.5 text-left text-xs font-medium text-gray-500">Name</th>

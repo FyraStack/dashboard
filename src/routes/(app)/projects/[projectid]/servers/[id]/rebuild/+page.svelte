@@ -24,6 +24,9 @@
 			Reinstall {selectedServer.name} with a fresh operating system.
 		</p>
 	</div>
+	<p class="border border-gray-800 bg-gray-900/40 px-3 py-2 text-xs text-gray-500">
+		Rebuilding isn't available yet.
+	</p>
 	<div class="space-y-2">
 		<Label for="rebuild-os-select">Operating System</Label><select
 			id="rebuild-os-select"
@@ -39,7 +42,7 @@
 			class="font-mono"
 		/>
 	</div>
-	<Button variant="outline" class="border-red-700 text-red-400 hover:bg-red-950"
+	<Button variant="outline" disabled class="border-red-700 text-red-400 hover:bg-red-950"
 		>Rebuild Server</Button
 	>
 </div>

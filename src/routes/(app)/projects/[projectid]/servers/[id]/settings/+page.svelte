@@ -7,6 +7,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import ComingSoon from '$lib/components/coming-soon.svelte';
 	import { deleteVm } from '$lib/remote/vms.remote';
 
 	let { data }: PageProps = $props();
@@ -42,6 +43,7 @@
 		<Label for="server-name-input">Server Name</Label><Input
 			id="server-name-input"
 			bind:value={nameValue}
+			disabled
 		/>
 	</div>
 	<div class="space-y-2">
@@ -55,8 +57,12 @@
 	{#if deleteError}
 		<p class="text-xs text-red-400">{deleteError}</p>
 	{/if}
-	<div class="flex gap-2">
-		<Button size="sm">Save Changes</Button><Button
+	<div class="flex items-center gap-2">
+		<Button size="sm" disabled>Save Changes</Button>
+		<ComingSoon />
+	</div>
+	<div class="border-t border-gray-800 pt-4">
+		<Button
 			variant="outline"
 			size="sm"
 			disabled={deleting}

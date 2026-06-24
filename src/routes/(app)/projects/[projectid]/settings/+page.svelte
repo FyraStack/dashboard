@@ -105,14 +105,17 @@
 	async function addMember() {
 		if (!projectId || addingMember || !memberInviteEmail.trim()) return;
 		addingMember = true;
+		const email = memberInviteEmail.trim();
 		try {
 			await addMemberRpc({
 				projectId,
-				email: memberInviteEmail.trim(),
+				email,
 				permissions: selectedMemberRole
 			});
 			memberInviteEmail = '';
 			addMemberOpen = false;
+			toast.success(`Invitation sent to ${email}`);
+			await invalidate('app:projects');
 		} catch (e) {
 			toast.error(getErrorMessage(e, 'Failed to add member'));
 		} finally {

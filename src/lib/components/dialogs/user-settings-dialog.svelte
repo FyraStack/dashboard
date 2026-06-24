@@ -302,7 +302,7 @@
 
 	$effect(() => {
 		if (newKeyValue != '' && newKeyName == '') {
-			newKeyName = newKeyValue.split(' ')[2];
+			newKeyName = newKeyValue.split(' ')[2] ?? '';
 		}
 	});
 
@@ -430,8 +430,8 @@
 	}
 
 	function copyToken(tokenId: string, showFullToken: string | null) {
-		const text = showFullToken || `sk-stack-****************************`;
-		navigator.clipboard.writeText(text);
+		if (!showFullToken) return;
+		navigator.clipboard.writeText(showFullToken);
 		copiedTokenId = tokenId;
 		setTimeout(() => (copiedTokenId = null), 1500);
 	}

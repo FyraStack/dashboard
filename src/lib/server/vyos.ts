@@ -1,6 +1,6 @@
 import { getRuntimeEnv } from '$lib/server/env';
+import { createVpcFetch, insecureDirectFetch } from '$lib/server/vpc';
 import ky, { type KyInstance } from 'ky';
-import { Agent } from 'undici';
 
 type VyosApiResponse<T = unknown> = {
 	success: boolean;
@@ -53,10 +53,14 @@ function getVyosConfig() {
 	const env = getRuntimeEnv();
 	if (!env.VYOS_API_URL || !env.VYOS_API_KEY) return null;
 
+	const routersInFailoverOrder =
+		env.VYOS_USE_VPC === 'false' ? [] : [env.VYOS_VPC_01, env.VYOS_VPC_02];
+
 	return {
 		apiUrl: env.VYOS_API_URL.replace(/\/+$/, ''),
 		apiKey: env.VYOS_API_KEY,
-		verifySsl: env.VYOS_VERIFY_SSL !== 'false'
+		verifySsl: env.VYOS_VERIFY_SSL !== 'false',
+		routersInFailoverOrder
 	};
 }
 
@@ -74,17 +78,7 @@ export class VyosClient {
 
 		this.apiKey = config.apiKey;
 
-		const insecureAgent = config.verifySsl
-			? undefined
-			: new Agent({ connect: { rejectUnauthorized: false } });
-		const insecureFetch = insecureAgent
-			? (input: RequestInfo | URL, init?: RequestInit) =>
-					fetch(input, {
-						...init,
-						// @ts-expect-error -- Node/undici dispatcher extension
-						dispatcher: insecureAgent
-					})
-			: undefined;
+		const directFetch = config.verifySsl ? globalThis.fetch : insecureDirectFetch;
 
 		this.api = ky.create({
 			prefix: `${config.apiUrl}`,
@@ -92,7 +86,9 @@ export class VyosClient {
 				Accept: 'application/json'
 			},
 			timeout: 30_000,
-			...(insecureFetch ? { fetch: insecureFetch } : {})
+			// Handle non-2xx ourselves so the router/proxy error body is readable.
+			throwHttpErrors: false,
+			fetch: createVpcFetch(config.routersInFailoverOrder, directFetch)
 		});
 	}
 
@@ -108,17 +104,27 @@ export class VyosClient {
 	}
 
 	private async post<T = unknown>(endpoint: string, data: Record<string, unknown>) {
-		const response = await this.api
-			.post(endpoint, {
-				body: this.toForm(data)
-			})
-			.json<VyosApiResponse<T>>();
+		const response = await this.api.post(endpoint, {
+			body: this.toForm(data)
+		});
+		const raw = await response.text();
 
-		if (!response.success) {
-			throw new VyosError(`VyOS ${endpoint} request failed`, 500, response.error ?? response);
+		let parsed: VyosApiResponse<T>;
+		try {
+			parsed = JSON.parse(raw) as VyosApiResponse<T>;
+		} catch {
+			throw new VyosError(
+				`VyOS ${endpoint} returned a non-JSON response (router proxy unreachable?)`,
+				response.status,
+				raw.slice(0, 500)
+			);
 		}
 
-		return response;
+		if (!response.ok || !parsed.success) {
+			throw new VyosError(`VyOS ${endpoint} request failed`, response.status, parsed.error ?? parsed);
+		}
+
+		return parsed;
 	}
 
 	private static routeHasNextHop(route: VyosStaticIpv6Route | undefined, gateway: string): boolean {

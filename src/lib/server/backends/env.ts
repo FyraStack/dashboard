@@ -1,11 +1,16 @@
+import type { Fetcher } from '@cloudflare/workers-types';
 import { getRequestEvent } from '$app/server';
 import { dev } from '$app/environment';
 import { env as privateEnv } from '$env/dynamic/private';
 
 export interface BackendEnv {
+	PROXMOX_VPC?: Fetcher;
+	PROXMOX_USE_VPC?: string;
 	PROXMOX_API_URL?: string;
 	PROXMOX_TOKEN_ID?: string;
 	PROXMOX_TOKEN_SECRET?: string;
+	SNIPPETS?: Fetcher;
+	PROXMOX_SNIPPETS_USE_VPC?: string;
 	PROXMOX_SNIPPETS_ENDPOINT_URL?: string;
 	PROXMOX_SNIPPETS_ENDPOINT_USERNAME?: string;
 	PROXMOX_SNIPPETS_ENDPOINT_PASSWORD?: string;
@@ -16,14 +21,18 @@ export interface BackendEnv {
 
 export function getBackendEnv(): BackendEnv {
 	const platformEnv = getRequestEvent().platform?.env as
-		| (Record<string, string | undefined> & BackendEnv)
+		| (App.Platform['env'] & { PROXMOX_API_SECRET?: string })
 		| undefined;
 
 	if (platformEnv?.PROXMOX_API_URL) {
 		return {
+			PROXMOX_VPC: platformEnv.PROXMOX_VPC,
+			PROXMOX_USE_VPC: platformEnv.PROXMOX_USE_VPC,
 			PROXMOX_API_URL: platformEnv.PROXMOX_API_URL,
 			PROXMOX_TOKEN_ID: platformEnv.PROXMOX_TOKEN_ID,
 			PROXMOX_TOKEN_SECRET: platformEnv.PROXMOX_TOKEN_SECRET ?? platformEnv.PROXMOX_API_SECRET,
+			SNIPPETS: platformEnv.SNIPPETS,
+			PROXMOX_SNIPPETS_USE_VPC: platformEnv.PROXMOX_SNIPPETS_USE_VPC,
 			PROXMOX_SNIPPETS_ENDPOINT_URL: platformEnv.PROXMOX_SNIPPETS_ENDPOINT_URL,
 			PROXMOX_SNIPPETS_ENDPOINT_USERNAME: platformEnv.PROXMOX_SNIPPETS_ENDPOINT_USERNAME,
 			PROXMOX_SNIPPETS_ENDPOINT_PASSWORD: platformEnv.PROXMOX_SNIPPETS_ENDPOINT_PASSWORD,
@@ -38,9 +47,11 @@ export function getBackendEnv(): BackendEnv {
 	}
 
 	return {
+		PROXMOX_USE_VPC: privateEnv.PROXMOX_USE_VPC,
 		PROXMOX_API_URL: privateEnv.PROXMOX_API_URL,
 		PROXMOX_TOKEN_ID: privateEnv.PROXMOX_TOKEN_ID,
 		PROXMOX_TOKEN_SECRET: privateEnv.PROXMOX_TOKEN_SECRET ?? privateEnv.PROXMOX_API_SECRET,
+		PROXMOX_SNIPPETS_USE_VPC: privateEnv.PROXMOX_SNIPPETS_USE_VPC,
 		PROXMOX_SNIPPETS_ENDPOINT_URL: privateEnv.PROXMOX_SNIPPETS_ENDPOINT_URL,
 		PROXMOX_SNIPPETS_ENDPOINT_USERNAME: privateEnv.PROXMOX_SNIPPETS_ENDPOINT_USERNAME,
 		PROXMOX_SNIPPETS_ENDPOINT_PASSWORD: privateEnv.PROXMOX_SNIPPETS_ENDPOINT_PASSWORD,

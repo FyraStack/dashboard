@@ -42,10 +42,12 @@ function createProxmox(): ProxmoxBackend {
 		baseUrl: env.PROXMOX_API_URL,
 		tokenId: env.PROXMOX_TOKEN_ID,
 		tokenSecret: env.PROXMOX_TOKEN_SECRET,
-		verifySsl: !dev
+		verifySsl: !dev,
+		vpc: env.PROXMOX_USE_VPC === 'false' ? undefined : env.PROXMOX_VPC
 	});
 
 	return new ProxmoxBackend(client, {
+		snippetsVpc: env.PROXMOX_SNIPPETS_USE_VPC === 'false' ? undefined : env.SNIPPETS,
 		snippetsEndpointUrl: env.PROXMOX_SNIPPETS_ENDPOINT_URL,
 		snippetsEndpointUsername: env.PROXMOX_SNIPPETS_ENDPOINT_USERNAME,
 		snippetsEndpointPassword: env.PROXMOX_SNIPPETS_ENDPOINT_PASSWORD,

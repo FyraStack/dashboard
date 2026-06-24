@@ -1,8 +1,9 @@
 import ky, { HTTPError } from 'ky';
 import { stringify as stringifyYaml } from 'yaml';
 import { Address6 } from 'ip-address';
-import { Agent } from 'undici';
+import type { Fetcher } from '@cloudflare/workers-types';
 
+import { createVpcFetch, insecureDirectFetch } from '$lib/server/vpc';
 import { ProxmoxClient } from './client';
 import type { PveClusterResource } from './types';
 import type {
@@ -24,6 +25,7 @@ interface ResolvedVm {
 }
 
 type ProxmoxBackendOptions = {
+	snippetsVpc?: Fetcher;
 	snippetsEndpointUrl?: string;
 	snippetsEndpointUsername?: string;
 	snippetsEndpointPassword?: string;
@@ -231,18 +233,12 @@ export class ProxmoxBackend implements VmBackend {
 			);
 		}
 
-		const insecureAgent =
-			this.options.snippetsEndpointVerifySsl === false
-				? new Agent({ connect: { rejectUnauthorized: false } })
-				: undefined;
-		const insecureFetch = insecureAgent
-			? (input: RequestInfo | URL, init?: RequestInit) =>
-					fetch(input, {
-						...init,
-						// @ts-expect-error -- Node/undici dispatcher extension
-						dispatcher: insecureAgent
-					})
-			: undefined;
+		const directFetch =
+			this.options.snippetsEndpointVerifySsl === false ? insecureDirectFetch : globalThis.fetch;
+		const snippetFetch = createVpcFetch(
+			this.options.snippetsVpc ? [this.options.snippetsVpc] : [],
+			directFetch
+		);
 
 		try {
 			await ky.put(`${endpointUrl}/${encodeURIComponent(filename)}`, {
@@ -252,7 +248,7 @@ export class ProxmoxBackend implements VmBackend {
 				},
 				body: content,
 				timeout: 60_000,
-				...(insecureFetch ? { fetch: insecureFetch } : {})
+				fetch: snippetFetch
 			});
 		} catch (err) {
 			if (err instanceof HTTPError) {

@@ -1,5 +1,6 @@
 import ky, { HTTPError, type KyInstance } from 'ky';
-import { Agent } from 'undici';
+import type { Fetcher } from '@cloudflare/workers-types';
+import { createVpcFetch, insecureDirectFetch } from '$lib/server/vpc';
 import type {
 	PveResponse,
 	PveNode,
@@ -21,36 +22,27 @@ export interface ProxmoxClientConfig {
 	tokenId: string;
 	tokenSecret: string;
 	verifySsl?: boolean;
+	vpc?: Fetcher;
 }
 
 export class ProxmoxClient {
 	private api: KyInstance;
 
 	constructor(config: ProxmoxClientConfig) {
-		const { baseUrl, tokenId, tokenSecret, verifySsl = true } = config;
+		const { baseUrl, tokenId, tokenSecret, verifySsl = true, vpc } = config;
 
-		// Build a custom fetch that skips TLS verification for self-signed certs
-		const insecureAgent = !verifySsl
-			? new Agent({ connect: { rejectUnauthorized: false } })
-			: undefined;
-		const insecureFetch = !verifySsl
-			? (input: RequestInfo | URL, init?: RequestInit) =>
-					fetch(input, {
-						...init,
-						// @ts-expect-error -- Node/undici dispatcher extension
-						dispatcher: insecureAgent
-					})
-			: undefined;
+		const usingInsecureDirectFetch = !vpc && !verifySsl;
+		const directFetch = usingInsecureDirectFetch ? insecureDirectFetch : globalThis.fetch;
 
 		this.api = ky.create({
 			prefix: `${baseUrl.replace(/\/+$/, '')}/api2/json`,
 			headers: {
 				Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}`,
 				Accept: 'application/json',
-				...(insecureFetch ? { 'Accept-Encoding': 'identity' } : {})
+				...(usingInsecureDirectFetch ? { 'Accept-Encoding': 'identity' } : {})
 			},
 			timeout: 30_000,
-			...(insecureFetch ? { fetch: insecureFetch } : {})
+			fetch: createVpcFetch(vpc ? [vpc] : [], directFetch)
 		});
 	}
 

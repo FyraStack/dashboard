@@ -1,5 +1,5 @@
 import type { User, Session } from 'better-auth';
-import type { KVNamespace, SendEmail } from '@cloudflare/workers-types';
+import type { Fetcher, KVNamespace, SendEmail } from '@cloudflare/workers-types';
 
 type AppSession = Session & {
 	activeOrganizationId?: string | null;
@@ -21,6 +21,9 @@ declare global {
 				VYOS_API_URL?: string;
 				VYOS_API_KEY?: string;
 				VYOS_VERIFY_SSL?: string;
+				VYOS_USE_VPC?: string;
+				VYOS_VPC_01?: Fetcher;
+				VYOS_VPC_02?: Fetcher;
 				EMAIL?: SendEmail;
 				EMAIL_FROM_ADDRESS: string;
 				EMAIL_FROM_NAME: string;
@@ -43,9 +46,13 @@ declare global {
 				GOOGLE_CLIENT_ID?: string;
 				GOOGLE_CLIENT_SECRET?: string;
 				// Proxmox VE backend
+				PROXMOX_VPC?: Fetcher;
+				PROXMOX_USE_VPC?: string;
 				PROXMOX_API_URL?: string;
 				PROXMOX_TOKEN_ID?: string;
 				PROXMOX_TOKEN_SECRET?: string;
+				SNIPPETS?: Fetcher;
+				PROXMOX_SNIPPETS_USE_VPC?: string;
 				PROXMOX_SNIPPETS_ENDPOINT_URL?: string;
 				PROXMOX_SNIPPETS_ENDPOINT_USERNAME?: string;
 				PROXMOX_SNIPPETS_ENDPOINT_PASSWORD?: string;

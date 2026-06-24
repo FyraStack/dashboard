@@ -25,6 +25,28 @@
 			"name": "EMAIL"
 		}
 	],
+	"vpc_services": [
+		{
+			"binding": "PROXMOX_VPC",
+			"service_id": "019ef71d-5e77-7403-bb9f-ef920ac4f21c",
+			"remote": true
+		},
+		{
+			"binding": "VYOS_VPC_01",
+			"service_id": "019ef71e-251e-7390-9263-5d4130418986",
+			"remote": true
+		},
+		{
+			"binding": "VYOS_VPC_02",
+			"service_id": "019ef71e-cf22-7112-86a0-5bdae1148965",
+			"remote": true
+		},
+		{
+			"binding": "SNIPPETS",
+			"service_id": "019ef777-604a-7a52-8fc2-e7827c6abd78",
+			"remote": true
+		}
+	],
 	"observability": {
 		"enabled": true
 	}

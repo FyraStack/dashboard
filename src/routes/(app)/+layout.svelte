@@ -411,6 +411,8 @@
 				<!-- Avatar button — opens user settings -->
 				<button
 					class="flex items-center gap-2.5 rounded-xs px-2 py-1 transition-colors hover:bg-gray-800"
+					aria-label={`Account settings for ${profileName || data.user?.email}`}
+					aria-haspopup="dialog"
 					onclick={() => openUserSettings()}
 				>
 					<div class="text-right">
@@ -443,16 +445,21 @@
 					{#each navItems as item (item.label)}
 						<Tooltip.Root>
 							<Tooltip.Trigger>
-								<a
-									href={resolve(withProjectContext(item.href) as any)}
-									class="flex h-8 w-8 items-center justify-center transition-colors duration-100 {isActive(
-										item.href
-									)
-										? 'border border-red-500 text-gray-50'
-										: 'text-gray-500 hover:bg-gray-800/50 hover:text-gray-200'}"
-								>
-									<item.icon class="h-4 w-4" />
-								</a>
+								{#snippet child({ props })}
+									<a
+										{...props}
+										href={resolve(withProjectContext(item.href) as any)}
+										aria-label={item.label}
+										aria-current={isActive(item.href) ? 'page' : undefined}
+										class="flex h-8 w-8 items-center justify-center transition-colors duration-100 {isActive(
+											item.href
+										)
+											? 'border border-red-500 text-gray-50'
+											: 'text-gray-500 hover:bg-gray-800/50 hover:text-gray-200'}"
+									>
+										<item.icon class="h-4 w-4" />
+									</a>
+								{/snippet}
 							</Tooltip.Trigger>
 							<Tooltip.Content side="right">
 								<p>{item.label}</p>

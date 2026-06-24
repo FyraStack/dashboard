@@ -3,11 +3,10 @@
 	import { getServerWithFallback } from '$lib/state/servers.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import { AlertTriangle, Pause, Play, Search, Trash2, X } from '@lucide/svelte';
+	import { AlertTriangle, Search, Trash2, X } from '@lucide/svelte';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
-	let logStreaming = $state(true);
 	let logSearch = $state('');
 	let logSevFilter = $state<string | null>(null);
 	let logSourceFilter = $state<string | null>(null);
@@ -109,16 +108,6 @@
 				onclick={clearLogFilters}>Clear</button
 			>{/if}
 		<Button
-			aria-label={logStreaming ? 'Pause log streaming' : 'Resume log streaming'}
-			variant="ghost"
-			size="sm"
-			class="h-6 w-6 p-0"
-			onclick={() => (logStreaming = !logStreaming)}
-			>{#if logStreaming}<Pause class="h-2.5 w-2.5" />{:else}<Play
-					class="h-2.5 w-2.5"
-				/>{/if}</Button
-		>
-		<Button
 			aria-label="Clear logs"
 			variant="ghost"
 			size="sm"
@@ -126,6 +115,9 @@
 			disabled><Trash2 class="h-2.5 w-2.5" /></Button
 		>
 	</div>
+</div>
+<div class="shrink-0 border-b border-gray-800 bg-gray-900/40 px-4 py-1 text-[10px] text-gray-500">
+	Sample log data — live log streaming isn't available yet.
 </div>
 <div class="min-h-0 flex-1 overflow-auto bg-gray-950 font-mono text-[11px] leading-relaxed">
 	{#if selectedServer.status !== 'running'}

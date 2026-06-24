@@ -1,22 +1,12 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
 	import { Button } from '$lib/components/ui/button';
-	import {
-		AlertTriangle,
-		Check,
-		Copy,
-		FileText,
-		Pause,
-		Play,
-		Terminal,
-		Trash2
-	} from '@lucide/svelte';
+	import { AlertTriangle, Check, Copy, FileText, Terminal, Trash2 } from '@lucide/svelte';
 	import { getServerWithFallback, serversState } from '$lib/state/servers.svelte';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
 	let copied = $state('');
-	let logStreaming = $state(true);
 	let liveLoaded = $derived(selectedServer.liveLoaded || serversState.firstStatusRefreshComplete);
 
 	type ChartSample = {
@@ -338,15 +328,6 @@
 		</div>
 		{#if data.featureFlags.vpsLogs}
 			<div class="flex items-center gap-1">
-				<Button
-					variant="ghost"
-					size="sm"
-					class="h-6 w-6 p-0"
-					aria-label={logStreaming ? 'Pause log streaming' : 'Resume log streaming'}
-					onclick={() => (logStreaming = !logStreaming)}
-				>
-					{#if logStreaming}<Pause class="h-2.5 w-2.5" />{:else}<Play class="h-2.5 w-2.5" />{/if}
-				</Button>
 				<Button
 					variant="ghost"
 					size="sm"

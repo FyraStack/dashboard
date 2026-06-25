@@ -249,7 +249,7 @@
 				</Button>
 			</div>
 		{:else}
-			<table class="w-full">
+			<table class="w-full whitespace-nowrap">
 				<thead>
 					<tr class="border-b border-gray-800">
 						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Name</th>

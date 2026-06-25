@@ -12,6 +12,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
 	import * as Command from '$lib/components/ui/command';
+	import * as Sheet from '$lib/components/ui/sheet';
 	import { toast } from 'svelte-sonner';
 	import { getErrorMessage } from '$lib/utils';
 	import { goto, replaceState } from '$app/navigation';
@@ -35,10 +36,12 @@
 		CreditCard,
 		Check,
 		ChevronDown,
-		FolderOpen
+		FolderOpen,
+		Menu
 	} from '@lucide/svelte';
 
 	let { children, data } = $props();
+	let mobileNavOpen = $state(false);
 	const featureFlags = $derived((data.featureFlags ?? {}) as FeatureFlags);
 
 	// Projects — from server
@@ -342,8 +345,17 @@
 	<div class="flex h-screen flex-col overflow-hidden bg-gray-900">
 		<!-- Top bar -->
 		<header class="flex h-12 shrink-0 items-center justify-between border-b border-gray-800 px-4">
-			<div class="flex items-center gap-2">
-				<a href={resolve('/')} class="flex items-center gap-2">
+			<div class="flex min-w-0 items-center gap-2">
+				{#if navItems.length > 0}
+					<button
+						class="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center text-gray-400 hover:text-gray-100 lg:hidden"
+						aria-label="Open navigation menu"
+						onclick={() => (mobileNavOpen = true)}
+					>
+						<Menu class="h-4 w-4" />
+					</button>
+				{/if}
+				<a href={resolve('/')} class="flex shrink-0 items-center gap-2">
 					<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
 					<span class="text-sm font-semibold tracking-tight text-gray-50">Stack</span>
 				</a>
@@ -351,10 +363,10 @@
 					<span class="text-sm text-gray-500">/</span>
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger
-							class="flex items-center gap-1 px-1.5 py-0.5 text-sm font-medium text-gray-200 transition-colors hover:bg-gray-800 hover:text-gray-50"
+							class="flex min-w-0 items-center gap-1 px-1.5 py-0.5 text-sm font-medium text-gray-200 transition-colors hover:bg-gray-800 hover:text-gray-50"
 						>
-							{currentProject?.projectName ?? 'Select Project'}
-							<ChevronDown class="h-3 w-3 text-gray-500" />
+							<span class="truncate">{currentProject?.projectName ?? 'Select Project'}</span>
+							<ChevronDown class="h-3 w-3 shrink-0 text-gray-500" />
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content align="start" class="w-52 border-gray-800 bg-gray-900">
 							<DropdownMenu.Label class="text-[10px] tracking-wider text-gray-500 uppercase"
@@ -442,7 +454,9 @@
 		{:else}
 			<div class="flex flex-1 overflow-hidden">
 				<!-- Icon sidebar -->
-				<aside class="flex w-12 shrink-0 flex-col items-center gap-1 border-r border-gray-800 py-3">
+				<aside
+					class="hidden w-12 shrink-0 flex-col items-center gap-1 border-r border-gray-800 py-3 lg:flex"
+				>
 					{#each navItems as item (item.label)}
 						<Tooltip.Root>
 							<Tooltip.Trigger>
@@ -476,6 +490,34 @@
 			</div>
 		{/if}
 	</div>
+
+	<!-- Mobile navigation drawer -->
+	<Sheet.Root bind:open={mobileNavOpen}>
+		<Sheet.Content side="left" class="w-64 border-gray-800 bg-gray-900 p-0">
+			<Sheet.Header class="border-b border-gray-800 px-4 py-3 text-left">
+				<Sheet.Title class="text-sm text-gray-100"
+					>{currentProject?.projectName ?? 'Menu'}</Sheet.Title
+				>
+			</Sheet.Header>
+			<nav class="flex flex-col p-2">
+				{#each navItems as item (item.label)}
+					<a
+						href={resolve(withProjectContext(item.href) as any)}
+						aria-current={isActive(item.href) ? 'page' : undefined}
+						onclick={() => (mobileNavOpen = false)}
+						class="flex items-center gap-3 px-3 py-2.5 text-sm transition-colors {isActive(
+							item.href
+						)
+							? 'bg-gray-800 text-gray-50'
+							: 'text-gray-400 hover:bg-gray-800/50 hover:text-gray-200'}"
+					>
+						<item.icon class="h-4 w-4 shrink-0" />
+						{item.label}
+					</a>
+				{/each}
+			</nav>
+		</Sheet.Content>
+	</Sheet.Root>
 
 	<UserSettingsDialog
 		bind:open={userSettings.open}

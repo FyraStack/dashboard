@@ -185,8 +185,10 @@
 	setColocationContext(context);
 </script>
 
-<div class="flex flex-1 overflow-hidden">
-	<div class="flex w-64 shrink-0 flex-col border-r border-gray-800">
+<div class="flex flex-1 flex-col overflow-hidden lg:flex-row">
+	<div
+		class="flex max-h-[38vh] w-full shrink-0 flex-col border-b border-gray-800 lg:max-h-none lg:w-64 lg:border-r lg:border-b-0"
+	>
 		<div class="flex h-10 shrink-0 items-center justify-between border-b border-gray-800 px-4">
 			<div class="flex items-center gap-2">
 				<Warehouse class="h-4 w-4 text-gray-400" />

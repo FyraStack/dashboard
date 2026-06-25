@@ -192,9 +192,11 @@
 	];
 </script>
 
-<div class="flex flex-1 overflow-hidden">
+<div class="flex flex-1 flex-col overflow-hidden lg:flex-row">
 	<!-- Server selector panel -->
-	<div class="flex w-56 shrink-0 flex-col border-r border-gray-800">
+	<div
+		class="flex max-h-[38vh] w-full shrink-0 flex-col border-b border-gray-800 lg:max-h-none lg:w-56 lg:border-r lg:border-b-0"
+	>
 		<div class="flex h-10 shrink-0 items-center gap-2 border-b border-gray-800 px-4">
 			<FileText class="h-4 w-4 text-gray-400" />
 			<span class="text-sm font-semibold text-gray-100">Logs</span>

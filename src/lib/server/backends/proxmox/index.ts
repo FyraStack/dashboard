@@ -55,6 +55,7 @@ function firstIpv6AddressInPrefix(prefix: string) {
 
 const defaultIpv6Gateway = 'fe80::1040:ffff';
 const defaultNameservers = ['1.1.1.1', '1.0.0.1', '2606:4700:4700::1111', '2606:4700:4700::1001'];
+const privilegedFirewallRuleComment = "Managed by Dashboard Admin" // all firewall rules that can't be controlled by users include this comment.
 
 function cloudInitVendorConfig(params: CloudInitVendorConfigParams) {
 	const yamlContents = `#cloud-config\n${stringifyYaml({
@@ -617,9 +618,7 @@ export class ProxmoxBackend implements VmBackend {
 		const { node, vmid } = await this.resolve(id, proxmoxId);
 		const rules = await this.client.getQemuFirewallRules(node, vmid);
 
-		// todo: don't display the public vm tennant group
-
-		return rules.map((rule) => this.mapFirewallRule(rule));
+		return rules.filter((rule) => rule.comment != privilegedFirewallRuleComment).map((rule) => this.mapFirewallRule(rule));
 	}
 
 	async createFirewallRule(params: FirewallRule, id: string, proxmoxId?: number): Promise<void> {
@@ -660,5 +659,10 @@ export class ProxmoxBackend implements VmBackend {
 	async deleteFirewallRule(pos: number, id: string, proxmoxId?: number): Promise<void> {
 		const { node, vmid } = await this.resolve(id, proxmoxId);
 		await this.client.deleteQemuFirewallRule(node, vmid, pos);
-	}
+  }
+
+  async moveFirewallRule(startPosition: number, endingPosition: number, id: string, proxmoxId?: number): Promise<void> {
+  		const { node, vmid } = await this.resolve(id, proxmoxId);
+		await this.client.moveQemuFirewallRule(node, vmid, startPosition, endingPosition);
+  }
 }

@@ -121,7 +121,8 @@ export interface VmBackend {
 		id: string,
 		proxmoxId?: number
 	): Promise<void>;
-	deleteFirewallRule(pos: number, id: string, proxmoxId?: number): Promise<void>;
+  deleteFirewallRule(pos: number, id: string, proxmoxId?: number): Promise<void>;
+  moveFirewallRule(startPosition: number, endingPosition: number, id: string, proxmoxId?: number): Promise<void>;
 }
 
 export interface FirewallRule {

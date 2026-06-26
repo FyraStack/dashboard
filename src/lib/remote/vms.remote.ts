@@ -602,3 +602,23 @@ export const editFirewallRule = command(editFirewallRuleParams, async (params) =
 	const { vmId, pos, ...rule } = params;
 	await backend.editFirewallRule(rule as FirewallRule, pos, row.id, row.proxmoxId ?? undefined);
 });
+
+const moveFirewallRuleParams = type({
+	vmId: 'string',
+	startPos: 'number',
+	endPos: 'number'
+});
+export const moveFirewallRule = command(moveFirewallRuleParams, async (params) => {
+	const event = getRequestEvent();
+	if (!event?.locals.user) error(401, 'Authentication required');
+
+	const db = initDrizzle();
+	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
+	if (!row) error(404, `VM "${params.vmId}" not found`);
+	if (row.ownerProjectId) {
+		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
+	}
+
+	const backend = getBackend(row.backend);
+	await backend.moveFirewallRule(params.startPos, params.endPos, row.id, row.proxmoxId ?? undefined);
+});

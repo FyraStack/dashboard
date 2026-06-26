@@ -276,6 +276,16 @@ export class ProxmoxClient {
 		await this.api
 			.delete(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/rules/${pos}`)
 			.json<PveResponse<null>>();
+  }
+
+ 	async moveQemuFirewallRule(node: string, vmid: number, startPos: number, endPos: number): Promise<void> {
+		await this.api
+			.put(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/rules/${startPos}`, {
+        body: this.toForm({
+          moveto: endPos
+				})
+			})
+			.json<PveResponse<null>>();
 	}
 
 	async editQemuFirewallRule(

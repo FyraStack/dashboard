@@ -155,6 +155,10 @@ export class ProxmoxBackend implements VmBackend {
 		return {
 			action: rule.action as 'ACCEPT' | 'DROP' | 'REJECT',
 			type: rule.type as 'in' | 'out' | 'forward',
+			// Preserve the original Proxmox position so the frontend can target the correct rule
+			// when filtering out privileged rules that users cannot modify.
+			pos: rule.pos,
+			enable: rule.enable === 1,
 			...(rule.proto !== undefined && { protocol: rule.proto }),
 			...(rule.dest !== undefined && { destinationAddresses: rule.dest }),
 			...(rule.dport !== undefined && { destinationPorts: rule.dport }),
@@ -627,13 +631,13 @@ export class ProxmoxBackend implements VmBackend {
 		await this.client.createQemuFirewallRule(node, vmid, {
 			action: params.action,
 			type: params.type,
-			dest: params.destinationAddresses,
-			dport: params.destinationPorts,
-			enable: 1,
+			...(params.destinationAddresses !== undefined && { dest: params.destinationAddresses }),
+			...(params.destinationPorts !== undefined && { dport: params.destinationPorts }),
+			enable: params.enable === false ? 0 : 1,
 			iface: 'net0',
-			proto: params.protocol,
-			source: params.sourceAddresses,
-			sport: params.sourcePorts
+			...(params.protocol !== undefined && { proto: params.protocol }),
+			...(params.sourceAddresses !== undefined && { source: params.sourceAddresses }),
+			...(params.sourcePorts !== undefined && { sport: params.sourcePorts })
 		});
 	}
 
@@ -648,11 +652,12 @@ export class ProxmoxBackend implements VmBackend {
 		await this.client.editQemuFirewallRule(node, vmid, pos, {
 			action: params.action,
 			type: params.type,
-			dest: params.destinationAddresses,
-			dport: params.destinationPorts,
-			proto: params.protocol,
-			source: params.sourceAddresses,
-			sport: params.sourcePorts
+			...(params.destinationAddresses !== undefined && { dest: params.destinationAddresses }),
+			...(params.destinationPorts !== undefined && { dport: params.destinationPorts }),
+			...(params.protocol !== undefined && { proto: params.protocol }),
+			...(params.sourceAddresses !== undefined && { source: params.sourceAddresses }),
+			...(params.sourcePorts !== undefined && { sport: params.sourcePorts }),
+			enable: params.enable === false ? 0 : 1
 		});
 	}
 

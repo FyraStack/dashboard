@@ -542,7 +542,8 @@ const createFirewallRuleParams = type({
 	destinationAddresses: 'string?',
 	destinationPorts: 'string?',
 	sourceAddresses: 'string?',
-	sourcePorts: 'string?'
+	sourcePorts: 'string?',
+	enable: 'boolean?'
 });
 export const createFirewallRule = command(createFirewallRuleParams, async (params) => {
 	const event = getRequestEvent();
@@ -585,7 +586,8 @@ const editFirewallRuleParams = type({
 	destinationAddresses: 'string?',
 	destinationPorts: 'string?',
 	sourceAddresses: 'string?',
-	sourcePorts: 'string?'
+	sourcePorts: 'string?',
+	enable: 'boolean?'
 });
 export const editFirewallRule = command(editFirewallRuleParams, async (params) => {
 	const event = getRequestEvent();

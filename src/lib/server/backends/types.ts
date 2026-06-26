@@ -133,4 +133,6 @@ export interface FirewallRule {
 	destinationPorts?: string;
 	sourceAddresses?: string;
 	sourcePorts?: string;
+	pos?: number;
+	enable?: boolean;
 }

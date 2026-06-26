@@ -192,7 +192,7 @@ export interface PveAgentNetworkInterface {
 }
 
 export interface PveCreateFirewallRuleParams {
-  action: string;
+	action: string;
 	type: 'in' | 'out' | 'forward' | 'group';
 	comment?: string;
 	dest?: string;

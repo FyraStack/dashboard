@@ -4,7 +4,12 @@ import { type } from 'arktype';
 import { and, eq, sql } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
 import { vms, vmTypes, sshKeys, baseImages } from '$lib/server/db/schema';
-import { getBackend, type VmInfo, type VmMetricsTimeframe } from '$lib/server/backends';
+import {
+	getBackend,
+	type VmInfo,
+	type VmMetricsTimeframe,
+	type FirewallRule
+} from '$lib/server/backends';
 import { requireProjectAccess } from '$lib/server/auth-context';
 import {
 	deleteProjectServerEntity,
@@ -512,3 +517,88 @@ export const startVm = command(powerParams, async (p) => powerAction(p.vmId, 'st
 export const stopVm = command(powerParams, async (p) => powerAction(p.vmId, 'stopVm'));
 export const killVm = command(powerParams, async (p) => powerAction(p.vmId, 'killVm'));
 export const rebootVm = command(powerParams, async (p) => powerAction(p.vmId, 'rebootVm'));
+
+const getFirewallRulesParams = type({ vmId: 'string' });
+export const getFirewallRules = query(getFirewallRulesParams, async (params) => {
+	const event = getRequestEvent();
+	if (!event?.locals.user) error(401, 'Authentication required');
+
+	const db = initDrizzle();
+	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
+	if (!row) error(404, `VM "${params.vmId}" not found`);
+	if (row.ownerProjectId) {
+		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId);
+	}
+
+	const backend = getBackend(row.backend);
+	return await backend.getFirewallRules(row.id, row.proxmoxId ?? undefined);
+});
+
+const createFirewallRuleParams = type({
+	vmId: 'string',
+	action: "'ACCEPT' | 'DROP' | 'REJECT'",
+	type: "'in' | 'out' | 'forward'",
+	protocol: 'string?',
+	destinationAddresses: 'string?',
+	destinationPorts: 'string?',
+	sourceAddresses: 'string?',
+	sourcePorts: 'string?'
+});
+export const createFirewallRule = command(createFirewallRuleParams, async (params) => {
+	const event = getRequestEvent();
+	if (!event?.locals.user) error(401, 'Authentication required');
+
+	const db = initDrizzle();
+	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
+	if (!row) error(404, `VM "${params.vmId}" not found`);
+	if (row.ownerProjectId) {
+		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
+	}
+
+	const backend = getBackend(row.backend);
+	const { vmId, ...rule } = params;
+	await backend.createFirewallRule(rule as FirewallRule, row.id, row.proxmoxId ?? undefined);
+});
+
+const deleteFirewallRuleParams = type({ vmId: 'string', pos: 'number' });
+export const deleteFirewallRule = command(deleteFirewallRuleParams, async (params) => {
+	const event = getRequestEvent();
+	if (!event?.locals.user) error(401, 'Authentication required');
+
+	const db = initDrizzle();
+	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
+	if (!row) error(404, `VM "${params.vmId}" not found`);
+	if (row.ownerProjectId) {
+		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
+	}
+
+	const backend = getBackend(row.backend);
+	await backend.deleteFirewallRule(params.pos, row.id, row.proxmoxId ?? undefined);
+});
+
+const editFirewallRuleParams = type({
+	vmId: 'string',
+	pos: 'number',
+	action: "'ACCEPT' | 'DROP' | 'REJECT'",
+	type: "'in' | 'out' | 'forward'",
+	protocol: 'string?',
+	destinationAddresses: 'string?',
+	destinationPorts: 'string?',
+	sourceAddresses: 'string?',
+	sourcePorts: 'string?'
+});
+export const editFirewallRule = command(editFirewallRuleParams, async (params) => {
+	const event = getRequestEvent();
+	if (!event?.locals.user) error(401, 'Authentication required');
+
+	const db = initDrizzle();
+	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
+	if (!row) error(404, `VM "${params.vmId}" not found`);
+	if (row.ownerProjectId) {
+		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
+	}
+
+	const backend = getBackend(row.backend);
+	const { vmId, pos, ...rule } = params;
+	await backend.editFirewallRule(rule as FirewallRule, pos, row.id, row.proxmoxId ?? undefined);
+});

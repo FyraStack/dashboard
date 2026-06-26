@@ -14,7 +14,8 @@ export type {
 	VmMetricsTimeframe,
 	VmCreateParams,
 	VmCreateResult,
-	VmStatus
+	VmStatus,
+	FirewallRule
 } from './types';
 
 let cached: { key: string; backend: VmBackend } | null = null;

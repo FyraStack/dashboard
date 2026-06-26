@@ -112,20 +112,24 @@ export interface VmBackend {
 	getTaskStatus(
 		node: string,
 		upid: string
-  ): Promise<{ status: 'running' | 'stopped'; exitstatus?: string }>;
-  getFirewallRules(id: string, proxmoxId?: number): Promise<FirewallRule[]>;
-  createFileWallRule(params: FirewallRule, id: string, promoxId?: number): Promise<void>;
-  editFirewallRule(params: FirewallRule, pos: number, id: string, promoxId?: number): Promise<void>;
-  deleteFirewallRule(pos: number, id: string, promoxId?: number): Promise<void>;
-
+	): Promise<{ status: 'running' | 'stopped'; exitstatus?: string }>;
+	getFirewallRules(id: string, proxmoxId?: number): Promise<FirewallRule[]>;
+	createFirewallRule(params: FirewallRule, id: string, proxmoxId?: number): Promise<void>;
+	editFirewallRule(
+		params: FirewallRule,
+		pos: number,
+		id: string,
+		proxmoxId?: number
+	): Promise<void>;
+	deleteFirewallRule(pos: number, id: string, proxmoxId?: number): Promise<void>;
 }
 
 export interface FirewallRule {
-  action: 'ACCEPT' | 'DROP' | 'REJECT';
-  type: 'in' | 'out' | 'forward';
-  protocol?: string;
+	action: 'ACCEPT' | 'DROP' | 'REJECT';
+	type: 'in' | 'out' | 'forward';
+	protocol?: string;
 	destinationAddresses?: string;
-  destinationPorts?: string;
+	destinationPorts?: string;
 	sourceAddresses?: string;
 	sourcePorts?: string;
 }

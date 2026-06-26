@@ -121,7 +121,11 @@ export class VyosClient {
 		}
 
 		if (!response.ok || !parsed.success) {
-			throw new VyosError(`VyOS ${endpoint} request failed`, response.status, parsed.error ?? parsed);
+			throw new VyosError(
+				`VyOS ${endpoint} request failed`,
+				response.status,
+				parsed.error ?? parsed
+			);
 		}
 
 		return parsed;

@@ -5,7 +5,7 @@ import type { Fetcher } from '@cloudflare/workers-types';
 
 import { createVpcFetch, insecureDirectFetch } from '$lib/server/vpc';
 import { ProxmoxClient } from './client';
-import type { PveClusterResource } from './types';
+import type { PveClusterResource, PveFirewallRule } from './types';
 import type {
 	BackendImage,
 	BackendImageImportTarget,
@@ -16,7 +16,8 @@ import type {
 	VmCreateResult,
 	VmStatus,
 	VmMetricsHistorySample,
-	VmMetricsTimeframe
+	VmMetricsTimeframe,
+  FirewallRule
 } from '../types';
 
 interface ResolvedVm {
@@ -147,6 +148,18 @@ export class ProxmoxBackend implements VmBackend {
 			default:
 				return 'unknown';
 		}
+	}
+
+	private mapFirewallRule(rule: PveFirewallRule): FirewallRule {
+		return {
+			action: rule.action as 'ACCEPT' | 'DROP' | 'REJECT',
+			type: rule.type as 'in' | 'out' | 'forward',
+			...(rule.proto !== undefined && { protocol: rule.proto }),
+			...(rule.dest !== undefined && { destinationAddresses: rule.dest }),
+			...(rule.dport !== undefined && { destinationPorts: rule.dport }),
+			...(rule.source !== undefined && { sourceAddresses: rule.source }),
+			...(rule.sport !== undefined && { sourcePorts: rule.sport })
+		};
 	}
 
 	private async resolve(id: string, proxmoxId?: number): Promise<ResolvedVm> {
@@ -486,7 +499,7 @@ export class ProxmoxBackend implements VmBackend {
 			dhcp: 0
 		});
 		if (this.options.firewallSecurityGroup) {
-			await this.client.addQemuFirewallSecurityGroupRule(
+			await this.client.createQemuFirewallSecurityGroupRule(
 				node.node,
 				vmid,
 				this.options.firewallSecurityGroup
@@ -497,7 +510,7 @@ export class ProxmoxBackend implements VmBackend {
 			await this.client.createQemuFirewallIpset(node.node, vmid, ipsetName);
 			await Promise.all(
 				firewallIpSetEntries.map((cidr) =>
-					this.client.addQemuFirewallIpsetEntry(node.node, vmid, ipsetName, cidr, 'stack-ipam')
+					this.client.createQemuFirewallIpsetEntry(node.node, vmid, ipsetName, cidr, 'stack-ipam')
 				)
 			);
 		}
@@ -598,5 +611,49 @@ export class ProxmoxBackend implements VmBackend {
 		const { node, vmid } = await this.resolve(id, proxmoxId);
 		const upid = await this.client.rebootVm(node, vmid);
 		await this.client.waitForTask(node, upid);
-	}
+  }
+
+  async getFirewallRules(id: string, proxmoxId?: number): Promise<FirewallRule[]> {
+    const { node, vmid } = await this.resolve(id, proxmoxId);
+    const rules = await this.client.getQemuFirewallRules(node, vmid);
+
+    // todo: don't display the public vm tennant group
+
+    return rules.map((rule) => this.mapFirewallRule(rule))
+  }
+
+  async createFirewallRule(params: FirewallRule, id: string, proxmoxId?: number): Promise<void> {
+    const { node, vmid } = await this.resolve(id, proxmoxId);
+
+    await this.client.createQemuFirewallRule(node, vmid, {
+      action: params.action,
+      type: params.type,
+      dest: params.destinationAddresses,
+      dport: params.destinationPorts,
+      enable: 1,
+      iface: "net0",
+      porto: params.protocol,
+      source: params.sourceAddresses,
+      sport: params.sourcePorts
+    })
+  }
+
+  async editFirewallRule(params: FirewallRule, pos: number, id: string, proxmoxId?: number): Promise<void> {
+    const { node, vmid } = await this.resolve(id, proxmoxId);
+
+    await this.client.editQemuFirewallRule(node, vmid, pos, {
+      action: params.action,
+      type: params.type,
+      dest: params.destinationAddresses,
+      dport: params.destinationPorts,
+      porto: params.protocol,
+      source: params.sourceAddresses,
+      sport: params.sourcePorts
+    })
+  }
+
+  async deleteFirewallRule(pos: number, id: string, proxmoxId?: number): Promise<void> {
+    const { node, vmid } = await this.resolve(id, proxmoxId);
+    await this.client.deleteQemuFirewallRule(node, vmid, pos)
+  }
 }

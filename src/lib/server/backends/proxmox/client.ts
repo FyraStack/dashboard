@@ -15,7 +15,8 @@ import type {
 	PveCreateQemuParams,
 	PveClusterResource,
 	PveAgentNetworkInterface,
-	PveFirewallRule
+	PveFirewallRule,
+  PveCreateFirewallRuleParams
 } from './types';
 
 export interface ProxmoxClientConfig {
@@ -183,7 +184,9 @@ export class ProxmoxClient {
 				body: this.toForm({ disk, size })
 			})
 			.json<PveResponse<null>>();
-	}
+  }
+
+  // Firewall
 
 	async updateQemuFirewallOptions(
 		node: string,
@@ -221,7 +224,7 @@ export class ProxmoxClient {
 		}
 	}
 
-	async addQemuFirewallIpsetEntry(
+	async createQemuFirewallIpsetEntry(
 		node: string,
 		vmid: number,
 		name: string,
@@ -238,7 +241,7 @@ export class ProxmoxClient {
 			.json<PveResponse<null>>();
 	}
 
-	async addQemuFirewallSecurityGroupRule(node: string, vmid: number, group: string): Promise<void> {
+	async createQemuFirewallSecurityGroupRule(node: string, vmid: number, group: string): Promise<void> {
 		await this.api
 			.post(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/rules`, {
 				body: this.toForm({ type: 'group', action: group, enable: 1 })
@@ -246,7 +249,7 @@ export class ProxmoxClient {
 			.json<PveResponse<null>>();
   }
 
-  async addQemuFirewallRule(node: string, vmid: number, options: Record<string, unknown>): Promise<void> {
+  async createQemuFirewallRule(node: string, vmid: number, options: PveCreateFirewallRuleParams): Promise<void> {
   		await this.api
 			.post(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/rules`, {
 				body: this.toForm(options)
@@ -267,7 +270,7 @@ export class ProxmoxClient {
 			.json<PveResponse<null>>();
   }
 
-  async editQemuFirewallRule(node: string, vmid: number, pos: number, options: Record<string, unknown>): Promise<void> {
+  async editQemuFirewallRule(node: string, vmid: number, pos: number, options: PveCreateFirewallRuleParams): Promise<void> {
   		await this.api
 			.put(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/rules/${pos}`, {
 				body: this.toForm(options)

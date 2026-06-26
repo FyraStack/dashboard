@@ -190,3 +190,22 @@ export interface PveAgentNetworkInterface {
 		prefix: number;
 	}[];
 }
+
+export interface PveCreateFirewallRuleParams {
+  action: string;
+	type: 'in' | 'out' | 'forward' | 'group';
+	comment?: string;
+	dest?: string;
+	digest?: string;
+	dport?: string;
+	enable?: number;
+	icmpType?: string;
+	iface?: string;
+	log?: 'emerg' | 'alert' | 'crit' | 'err' | 'warning' | 'notice' | 'info' | 'debug' | 'nolog';
+	macro?: string;
+	pos?: number;
+	proto?: string;
+	source?: string;
+	sport?: string;
+	[key: string]: unknown;
+}

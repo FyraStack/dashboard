@@ -163,6 +163,24 @@ export interface PveStorageContent {
 	ctime?: number;
 }
 
+export interface PveFirewallRule {
+	action: string;
+	comment?: string;
+	dest?: string;
+	dport?: string;
+	enable?: number;
+	'icmp-type'?: string;
+	iface?: string;
+	ipversion?: number;
+	log?: 'emerg' | 'alert' | 'crit' | 'err' | 'warning' | 'notice' | 'info' | 'debug' | 'nolog';
+	macro?: string;
+	pos: number;
+	proto?: string;
+	source?: string;
+	sport?: string;
+	type: string;
+}
+
 export interface PveAgentNetworkInterface {
 	name: string;
 	'hardware-address'?: string;

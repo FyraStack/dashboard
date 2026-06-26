@@ -14,7 +14,8 @@ import type {
 	PveNextId,
 	PveCreateQemuParams,
 	PveClusterResource,
-	PveAgentNetworkInterface
+	PveAgentNetworkInterface,
+	PveFirewallRule
 } from './types';
 
 export interface ProxmoxClientConfig {
@@ -243,7 +244,36 @@ export class ProxmoxClient {
 				body: this.toForm({ type: 'group', action: group, enable: 1 })
 			})
 			.json<PveResponse<null>>();
-	}
+  }
+
+  async addQemuFirewallRule(node: string, vmid: number, options: Record<string, unknown>): Promise<void> {
+  		await this.api
+			.post(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/rules`, {
+				body: this.toForm(options)
+			})
+			.json<PveResponse<null>>();
+  }
+
+  async getQemuFirewallRules(node: string, vmid: number): Promise<PveFirewallRule[]> {
+  		const res = await this.api
+			.get(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/rules`)
+			.json<PveResponse<PveFirewallRule[]>>();
+		return res.data;
+  }
+
+  async deleteQemuFirewallRule(node: string, vmid: number, pos: number): Promise<void> {
+  		await this.api
+			.delete(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/rules/${pos}`)
+			.json<PveResponse<null>>();
+  }
+
+  async editQemuFirewallRule(node: string, vmid: number, pos: number, options: Record<string, unknown>): Promise<void> {
+  		await this.api
+			.put(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/rules/${pos}`, {
+				body: this.toForm(options)
+			})
+			.json<PveResponse<null>>();
+  }
 
 	async deleteQemuVm(
 		node: string,

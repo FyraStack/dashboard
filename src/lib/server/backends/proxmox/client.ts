@@ -154,6 +154,21 @@ export class ProxmoxClient {
 			await this.logHttpError(`createQemuVm(${node})`, error, params as Record<string, unknown>);
 			throw error;
 		}
+  }
+
+ 	async deleteQemuVm(
+		node: string,
+		vmid: number,
+		options?: { purge?: boolean; destroyUnreferencedDisks?: boolean }
+	): Promise<string> {
+		const searchParams: Record<string, string> = {};
+		if (options?.purge) searchParams.purge = '1';
+		if (options?.destroyUnreferencedDisks) searchParams['destroy-unreferenced-disks'] = '1';
+
+		const res = await this.api
+			.delete(`nodes/${encodeURIComponent(node)}/qemu/${vmid}`, { searchParams, timeout: 120_000 })
+			.json<PveResponse<string>>();
+		return res.data;
 	}
 
 	/**
@@ -184,7 +199,7 @@ export class ProxmoxClient {
 				body: this.toForm({ disk, size })
 			})
 			.json<PveResponse<null>>();
-	}
+  }
 
 	// Firewall
 
@@ -299,21 +314,74 @@ export class ProxmoxClient {
 				body: this.toForm(options)
 			})
 			.json<PveResponse<null>>();
+  }
+
+  // Firewall Groups
+
+ 	async createFirewallGroup(
+    groupId: string
+	): Promise<void> {
+		await this.api
+			.post(`/cluster/firewall/groups`, {
+        body: this.toForm({
+          group: groupId
+				})
+			})
+			.json<PveResponse<null>>();
+    }
+
+   	async deleteFirewallGroup(
+      groupId: string
+	): Promise<void> {
+		await this.api
+			.delete(`/cluster/firewall/groups/${groupId}`)
+			.json<PveResponse<null>>();
 	}
 
-	async deleteQemuVm(
-		node: string,
-		vmid: number,
-		options?: { purge?: boolean; destroyUnreferencedDisks?: boolean }
-	): Promise<string> {
-		const searchParams: Record<string, string> = {};
-		if (options?.purge) searchParams.purge = '1';
-		if (options?.destroyUnreferencedDisks) searchParams['destroy-unreferenced-disks'] = '1';
+	async createFirewallGroupRule(
+		groupId: string,
+		options: PveCreateFirewallRuleParams
+	): Promise<void> {
+		await this.api
+			.post(`/cluster/firewall/groups/${groupId}`, {
+				body: this.toForm(options)
+			})
+			.json<PveResponse<null>>();
+	}
 
+	async getFirewallGroupRules(groupId: string): Promise<PveFirewallRule[]> {
 		const res = await this.api
-			.delete(`nodes/${encodeURIComponent(node)}/qemu/${vmid}`, { searchParams, timeout: 120_000 })
-			.json<PveResponse<string>>();
+			.get(`/cluster/firewall/groups/${groupId}`)
+			.json<PveResponse<PveFirewallRule[]>>();
 		return res.data;
+	}
+
+	async deleteFirewallGroupRule(groupId: string, pos: number): Promise<void> {
+		await this.api
+			.delete(`/cluster/firewall/groups/${groupId}/${pos}`)
+			.json<PveResponse<null>>();
+  }
+
+  async moveFirewallGroupRule(groupId: string, startPos: number, endPos: number): Promise<void> {
+		await this.api
+			.put(`/cluster/firewall/groups/${groupId}/${startPos}`, {
+        body: this.toForm({
+          moveto: endPos
+				})
+			})
+			.json<PveResponse<null>>();
+	}
+
+	async editFirewallGroupRule(
+	  groupId: string,
+		pos: number,
+		options: PveCreateFirewallRuleParams
+	): Promise<void> {
+		await this.api
+			.put(`/cluster/firewall/groups/${groupId}/${pos}`, {
+				body: this.toForm(options)
+			})
+			.json<PveResponse<null>>();
 	}
 
 	// VM power actions

@@ -113,26 +113,45 @@ export interface VmBackend {
 		node: string,
 		upid: string
 	): Promise<{ status: 'running' | 'stopped'; exitstatus?: string }>;
-	getFirewallRules(id: string, proxmoxId?: number): Promise<FirewallRule[]>;
-	createFirewallRule(params: FirewallRule, id: string, proxmoxId?: number): Promise<void>;
-	editFirewallRule(
-		params: FirewallRule,
+
+  getVMFirewallGroup(id: string, proxmoxId?: number): Promise<string>;
+  addVMToFirewallGroup(groupId: string, id: string, proxmoxId?: number): Promise<void>;
+  removeVMFromFirewallGroup(id: string, proxmoxId?: number): Promise<void>;
+
+  getGroupFirewallRules(groupId: string): Promise<FirewallRule[]>;
+ 	createGroupFirewallRule(params: FirewallRuleParams, groupId: string): Promise<void>;
+	editGroupFirewallRule(
+		params: FirewallRuleParams,
 		pos: number,
-		id: string,
-		proxmoxId?: number
+		groupId: string
 	): Promise<void>;
-  deleteFirewallRule(pos: number, id: string, proxmoxId?: number): Promise<void>;
-  moveFirewallRule(startPosition: number, endingPosition: number, id: string, proxmoxId?: number): Promise<void>;
+  deleteGroupFirewallRule(pos: number, groupId: string): Promise<void>;
+  moveGroupFirewallRule(startPosition: number, endingPosition: number, groupId: string): Promise<void>;
+
+  createFirewallGroup(groupId: string): Promise<void>;
+  deleteFirewallGroup(groupId: string): Promise<void>;
 }
 
-export interface FirewallRule {
-	action: 'ACCEPT' | 'DROP' | 'REJECT';
-	type: 'in' | 'out' | 'forward';
+// todo: I don't like reusing action as the input for group stuff. should change this later if possible.
+export interface FirewallRuleParams {
+	action: 'ACCEPT' | 'DROP' | 'REJECT' | string;
+	type: 'in' | 'out' | 'forward' | 'group';
 	protocol?: string;
 	destinationAddresses?: string;
 	destinationPorts?: string;
 	sourceAddresses?: string;
 	sourcePorts?: string;
-	pos?: number;
+	enable?: boolean;
+}
+
+export interface FirewallRule {
+	action: 'ACCEPT' | 'DROP' | 'REJECT' | string;
+	type: 'in' | 'out' | 'forward' | 'group';
+	protocol?: string;
+	destinationAddresses?: string;
+	destinationPorts?: string;
+	sourceAddresses?: string;
+	sourcePorts?: string;
+	pos: number;
 	enable?: boolean;
 }

@@ -75,7 +75,8 @@ export const vms = pgTable(
 			.default(sql`(extract(epoch from now()) * 1000)::bigint`),
 		backend: vmBackendEnum('backend').notNull(),
 		status: vmStatusEnum('status').notNull().default('provisioning'),
-		statusError: text('status_error')
+    statusError: text('status_error'),
+		firewallGroupId: ulidFk('firewall_group_id').references(() => firewallGroups.id)
 	},
 	(table) => [
 		index('vms_owner_project_id_index').on(table.ownerProjectId),
@@ -92,6 +93,10 @@ export const vmsRelations = relations(vms, ({ one, many }) => ({
 	vmType: one(vmTypes, {
 		fields: [vms.vmTypeId],
 		references: [vmTypes.id]
+  }),
+	firewallGroup: one(firewallGroups, {
+		fields: [vms.firewallGroupId],
+		references: [firewallGroups.id]
 	}),
 	volumes: many(volumes),
 	paymentPeriods: many(paymentPeriods),
@@ -375,3 +380,50 @@ export const baseImages = pgTable('base_images', {
 	imageType: text('image_type').notNull().default('qcow2'),
 	isa: vmIsaEnum('isa').notNull()
 });
+
+// Firewall
+
+export const firewallGroups = pgTable('firewall_groups', {
+  id: ulidPk(),
+ 	name: text('name').notNull(),
+  ownerProjectId: ulidFk('owner_project_id')
+			.notNull()
+			.references(() => organization.id)
+});
+
+export const firewallGroupsRelations = relations(firewallGroups, ({ one, many }) => ({
+  project: one(organization, {
+		fields: [firewallGroups.ownerProjectId],
+		references: [organization.id]
+	}),
+  vms: many(vms),
+  rules: many(firewallRules)
+}));
+
+export const firewallRuleActionEnum = pgEnum('firewall_rule_action', ['ACCEPT', 'DROP', 'REJECT']);
+export const firewallRuleTypeEnum = pgEnum('firewall_rule_type', ['in', 'out', 'forward']);
+
+export const firewallRules = pgTable('firewall_rules', {
+  id: ulidPk(),
+  groupId: ulidFk('firewall_group_id')
+			.notNull()
+			.references(() => firewallGroups.id),
+  action: firewallRuleActionEnum('action').notNull().default('DROP'),
+  type: firewallRuleTypeEnum('type').notNull().default('in'),
+  protocol: text('protocol'),
+  destinationAddresses: text('destination_addresses'),
+  destinationPorts: text('destination_ports'),
+  sourceAddresses: text('source_addresses'),
+  sourcePorts: text('source_ports'),
+  pos: integer('pos').notNull(),
+  enable: boolean('enable').notNull().default(true),
+},
+(table) => [index('firewall_group_id_index').on(table.groupId)]
+);
+
+export const firewallRulesRelations = relations(firewallRules, ({ one, many }) => ({
+  group: one(firewallGroups, {
+		fields: [firewallRules.groupId],
+		references: [firewallGroups.id]
+	})
+}));

@@ -618,38 +618,65 @@ export class ProxmoxBackend implements VmBackend {
 		await this.client.waitForTask(node, upid);
 	}
 
-	async getFirewallRules(id: string, proxmoxId?: number): Promise<FirewallRule[]> {
+	async getVMFirewallGroup(id: string, proxmoxId?: number): Promise<string> {
 		const { node, vmid } = await this.resolve(id, proxmoxId);
-		const rules = await this.client.getQemuFirewallRules(node, vmid);
+    const rules = await this.client.getQemuFirewallRules(node, vmid);
 
-		return rules.filter((rule) => rule.comment != privilegedFirewallRuleComment).map((rule) => this.mapFirewallRule(rule));
+    const potential_group_rule = rules.pop()
+
+    if (!potential_group_rule || !potential_group_rule.comment) throw Error("VM not part of a firewall group")
+    const split_comment = potential_group_rule.comment.split(":")
+    if (split_comment.length != 2 || potential_group_rule.comment.split(":")[0] != "groupid") throw Error("VM not part of a firewall group")
+
+		return split_comment[1]
 	}
 
-	async createFirewallRule(params: FirewallRule, id: string, proxmoxId?: number): Promise<void> {
+	async addVMToFirewallGroup(groupId: string, id: string, proxmoxId?: number): Promise<void> {
 		const { node, vmid } = await this.resolve(id, proxmoxId);
 
 		await this.client.createQemuFirewallRule(node, vmid, {
+			action: groupId,
+			type: "group",
+		});
+	}
+
+	async removeVMFromFirewallGroup(id: string, proxmoxId?: number): Promise<void> {
+		const { node, vmid } = await this.resolve(id, proxmoxId);
+		const rules = await this.client.getQemuFirewallRules(node, vmid);
+
+    const potential_group_rule = rules.pop()
+
+    if (!potential_group_rule || !potential_group_rule.comment) throw Error("VM not part of a firewall group")
+    const split_comment = potential_group_rule.comment.split(":")
+    if (split_comment.length != 2 || potential_group_rule.comment.split(":")[0] != "groupid") throw Error("VM not part of a firewall group")
+
+    await this.client.deleteQemuFirewallRule(node, vmid, potential_group_rule.pos)
+	}
+
+	async getGroupFirewallRules(groupId: string): Promise<FirewallRule[]> {
+		const rules = await this.client.getFirewallGroupRules(groupId);
+		return rules.map((rule) => this.mapFirewallRule(rule));
+	}
+
+	async createGroupFirewallRule(params: FirewallRule, groupId: string): Promise<void> {
+		await this.client.createFirewallGroupRule(groupId, {
 			action: params.action,
 			type: params.type,
 			...(params.destinationAddresses !== undefined && { dest: params.destinationAddresses }),
 			...(params.destinationPorts !== undefined && { dport: params.destinationPorts }),
 			enable: params.enable === false ? 0 : 1,
-			iface: 'net0',
 			...(params.protocol !== undefined && { proto: params.protocol }),
 			...(params.sourceAddresses !== undefined && { source: params.sourceAddresses }),
 			...(params.sourcePorts !== undefined && { sport: params.sourcePorts })
 		});
 	}
 
-	async editFirewallRule(
+	async editGroupFirewallRule(
 		params: FirewallRule,
 		pos: number,
-		id: string,
-		proxmoxId?: number
+		groupId: string
 	): Promise<void> {
-		const { node, vmid } = await this.resolve(id, proxmoxId);
-
-		await this.client.editQemuFirewallRule(node, vmid, pos, {
+		await this.client.editFirewallGroupRule(groupId, pos, {
 			action: params.action,
 			type: params.type,
 			...(params.destinationAddresses !== undefined && { dest: params.destinationAddresses }),
@@ -661,13 +688,19 @@ export class ProxmoxBackend implements VmBackend {
 		});
 	}
 
-	async deleteFirewallRule(pos: number, id: string, proxmoxId?: number): Promise<void> {
-		const { node, vmid } = await this.resolve(id, proxmoxId);
-		await this.client.deleteQemuFirewallRule(node, vmid, pos);
-  }
+	async deleteGroupFirewallRule(pos: number, groupId: string): Promise<void> {
+		await this.client.deleteFirewallGroupRule(groupId, pos);
+	}
 
-  async moveFirewallRule(startPosition: number, endingPosition: number, id: string, proxmoxId?: number): Promise<void> {
-  		const { node, vmid } = await this.resolve(id, proxmoxId);
-		await this.client.moveQemuFirewallRule(node, vmid, startPosition, endingPosition);
-  }
+	async moveGroupFirewallRule(startPosition: number, endingPosition: number, groupId: string): Promise<void> {
+		await this.client.moveFirewallGroupRule(groupId, startPosition, endingPosition);
+	}
+
+	async createFirewallGroup(groupId: string): Promise<void> {
+		await this.client.createFirewallGroup(groupId);
+	}
+
+	async deleteFirewallGroup(groupId: string): Promise<void> {
+		await this.client.deleteFirewallGroup(groupId);
+	}
 }

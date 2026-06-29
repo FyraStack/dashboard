@@ -16,6 +16,11 @@ export default defineConfig(({ mode }) => {
 	}
 
 	return {
-		plugins: [tailwindcss(), sveltekit()]
+		plugins: [tailwindcss(), sveltekit()],
+		build: {
+			rollupOptions: {
+				external: ['cloudflare:workers']
+			}
+		}
 	};
 });

@@ -4,7 +4,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { authClient } from '$lib/auth-client';
 	import { AlertCircle, CheckCircle2, Eye, EyeOff, Fingerprint, Loader2 } from '@lucide/svelte';
-	import { LogoGithub } from 'carbon-icons-svelte';
+	import SiGithub from '@icons-pack/svelte-simple-icons/icons/SiGithub';
 	import type { PageData } from './$types';
 	import GoogleIcon from '$lib/components/google-icon.svelte';
 	type SignInDataWithTwoFactor = {
@@ -46,15 +46,11 @@
 
 		const loginData = res.data as SignInDataWithTwoFactor | null | undefined;
 
-		// the twoFactorMethods parameter is slightly inconsistent
-		// If you see twoFactorRedirect set to true, but no methods included, this means that it is totp.
-		// this is specifically only true because we don't use otp at all.
-		// https://github.com/better-auth/better-auth/issues/4101
-
 		if (loginData?.twoFactorRedirect) {
 			const methods = loginData.twoFactorMethods;
+			const missingMethodsMeansTotp = !methods || methods.includes('totp');
 
-			if (!methods || methods.includes('totp')) {
+			if (missingMethodsMeansTotp) {
 				goto(twoFactorHref('totp'));
 				return;
 			}
@@ -164,7 +160,7 @@
 					class="flex-1 gap-1.5"
 					onclick={() => authClient.signIn.social({ provider: 'github', callbackURL: redirectTo })}
 				>
-					<LogoGithub class="h-3.5 w-3.5" />
+					<SiGithub class="h-3.5 w-3.5" color="currentColor" />
 					GitHub
 				</Button>
 				<Button

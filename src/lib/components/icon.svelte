@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Linux } from 'carbon-icons-svelte';
+	import SiLinux from '@icons-pack/svelte-simple-icons/icons/SiLinux';
 	import SiAlmalinux from '@icons-pack/svelte-simple-icons/icons/SiAlmalinux';
 	import SiAlpinelinux from '@icons-pack/svelte-simple-icons/icons/SiAlpinelinux';
 	import SiCentos from '@icons-pack/svelte-simple-icons/icons/SiCentos';
@@ -18,8 +18,8 @@
 		redhat: SiRedhat,
 		'red-hat': SiRedhat,
 		alpine: SiAlpinelinux,
-		linux: Linux,
-		ultramarine: Linux
+		linux: SiLinux,
+		ultramarine: SiLinux
 	} as const;
 
 	let {
@@ -55,5 +55,5 @@
 {:else if normalizedName === 'alpine'}
 	<SiAlpinelinux class={className} color="currentColor" {title} />
 {:else}
-	<Linux class={className} {title} />
+	<SiLinux class={className} color="currentColor" {title} />
 {/if}

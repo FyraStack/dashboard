@@ -3,7 +3,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { authClient } from '$lib/auth-client';
 	import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2 } from '@lucide/svelte';
-	import { LogoGithub } from 'carbon-icons-svelte';
+	import SiGithub from '@icons-pack/svelte-simple-icons/icons/SiGithub';
 	import type { PageData } from './$types';
 	import GoogleIcon from '$lib/components/google-icon.svelte';
 
@@ -144,7 +144,7 @@
 					class="flex-1 gap-1.5"
 					onclick={() => authClient.signIn.social({ provider: 'github', callbackURL: redirectTo })}
 				>
-					<LogoGithub class="h-3.5 w-3.5" />
+					<SiGithub class="h-3.5 w-3.5" color="currentColor" />
 					GitHub
 				</Button>
 				<Button

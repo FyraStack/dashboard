@@ -7,11 +7,18 @@ import { svelteKitHandler } from 'better-auth/svelte-kit';
 
 const publicRoutes = ['/login', '/register', '/signup', '/accept-invitation', '/api/'];
 
+let isFirstRequestOnIsolate = true;
+
 const handleBetterAuth: Handle = async ({ event, resolve }) => {
+	const coldStart = isFirstRequestOnIsolate;
+	isFirstRequestOnIsolate = false;
+
 	try {
 		const auth = initAuth();
-		const session = await instrument('auth.getSession', () =>
-			auth.api.getSession({ headers: event.request.headers })
+		const session = await instrument(
+			'auth.getSession',
+			() => auth.api.getSession({ headers: event.request.headers }),
+			{ 'worker.cold_start': coldStart }
 		);
 
 		if (session) {

@@ -39,7 +39,6 @@
 		"@types/pg": "^8.20.0",
 		"better-auth": "^1.6.0",
 		"bits-ui": "^2.17.2",
-		"carbon-icons-svelte": "^13.10.0",
 		"clsx": "^2.1.1",
 		"drizzle-kit": "^0.31.10",
 		"drizzle-orm": "^0.45.2",

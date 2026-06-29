@@ -27,9 +27,7 @@ export type RuntimeEnv = {
 		connectionString: string;
 	};
 	FEATURE_FLAGS?: KVNamespace;
-	PROXMOX_CACHE?: KVNamespace;
 	BILLING_METER_SECRET?: string;
-	// OAuth (optional — social providers are conditionally enabled)
 	GITHUB_CLIENT_ID?: string;
 	GITHUB_CLIENT_SECRET?: string;
 	GOOGLE_CLIENT_ID?: string;
@@ -67,7 +65,6 @@ export function getRuntimeEnv(): RuntimeEnv {
 			AUTUMN_SERVER_ENTITY_FEATURE_ID: platformEnv.AUTUMN_SERVER_ENTITY_FEATURE_ID,
 			HYPERDRIVE: platformEnv.HYPERDRIVE,
 			FEATURE_FLAGS: platformEnv.FEATURE_FLAGS,
-			PROXMOX_CACHE: platformEnv.PROXMOX_CACHE,
 			BILLING_METER_SECRET: platformEnv.BILLING_METER_SECRET,
 			GITHUB_CLIENT_ID: platformEnv.GITHUB_CLIENT_ID,
 			GITHUB_CLIENT_SECRET: platformEnv.GITHUB_CLIENT_SECRET,

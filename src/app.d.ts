@@ -10,7 +10,7 @@ type AppSession = Session & {
 declare global {
 	namespace App {
 		interface Locals {
-			user?: User;
+			user?: User & { role?: string | null; isAdmin?: boolean };
 			session?: AppSession;
 			activeProjectId?: string | null;
 			db?: Database;
@@ -42,7 +42,6 @@ declare global {
 					connectionString: string;
 				};
 				FEATURE_FLAGS?: KVNamespace;
-				PROXMOX_CACHE?: KVNamespace;
 				BILLING_METER_SECRET?: string;
 				GITHUB_CLIENT_ID?: string;
 				GITHUB_CLIENT_SECRET?: string;

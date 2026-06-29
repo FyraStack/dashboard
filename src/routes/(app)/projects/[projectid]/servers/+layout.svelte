@@ -37,6 +37,8 @@
 		return 'Stopped';
 	}
 
+	const REFRESH_INTERVAL_MS = 15000;
+
 	const initialServers = $derived(data.servers ?? []);
 	let projectId = $derived(data.projectId ?? null);
 	let refreshTimeout: number | null = null;
@@ -109,14 +111,39 @@
 	$effect(() => {
 		if (!projectId) return;
 
+		let interval: number | null = null;
+
+		function startPolling() {
+			if (interval !== null) return;
+			interval = window.setInterval(scheduleRefreshStatuses, REFRESH_INTERVAL_MS);
+		}
+
+		function stopPolling() {
+			if (interval === null) return;
+			window.clearInterval(interval);
+			interval = null;
+		}
+
+		function handleVisibilityChange() {
+			if (document.visibilityState === 'visible') {
+				scheduleRefreshStatuses();
+				startPolling();
+			} else {
+				stopPolling();
+				cancelScheduledRefreshStatuses();
+			}
+		}
+
 		untrack(() => {
 			refreshStatuses();
 		});
-		const interval = window.setInterval(scheduleRefreshStatuses, 5000);
+		startPolling();
+		document.addEventListener('visibilitychange', handleVisibilityChange);
 
 		return () => {
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
 			cancelScheduledRefreshStatuses();
-			window.clearInterval(interval);
+			stopPolling();
 		};
 	});
 

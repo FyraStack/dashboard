@@ -1,10 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 import { listProjects } from '$lib/remote/projects.remote';
-import { getRequestEvent } from '$app/server';
-import { eq } from 'drizzle-orm';
-import { initDrizzle } from '$lib/server/db';
-import { user } from '$lib/server/db/schema';
 import { getFeatureFlags } from '$lib/server/feature-flags';
 import { hasAdminRole } from '$lib/server/auth-context';
 
@@ -17,15 +13,7 @@ export const load: LayoutServerLoad = async ({ locals, url, depends }) => {
 		throw redirect(303, '/login');
 	}
 
-	const event = getRequestEvent();
-	if (!event?.locals.user) throw redirect(303, '/login');
-
-	const db = initDrizzle();
-	const [projects, featureFlags, currentUser] = await Promise.all([
-		listProjects(),
-		getFeatureFlags(),
-		db.query.user.findFirst({ where: eq(user.id, event.locals.user.id) })
-	]);
+	const [projects, featureFlags] = await Promise.all([listProjects(), getFeatureFlags()]);
 	const requestedProjectId = url.searchParams.get('projectId');
 	const pathMatch = pathname.match(/^\/projects\/([^/]+)/);
 	const activeProjectId = requestedProjectId ?? pathMatch?.[1] ?? locals.activeProjectId;
@@ -37,7 +25,7 @@ export const load: LayoutServerLoad = async ({ locals, url, depends }) => {
 
 	return {
 		user: locals.user,
-		isAdmin: hasAdminRole(currentUser?.role) || currentUser?.isAdmin || false,
+		isAdmin: hasAdminRole(locals.user.role) || locals.user.isAdmin || false,
 		projects,
 		currentProject,
 		featureFlags

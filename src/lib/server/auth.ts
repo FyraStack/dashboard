@@ -105,6 +105,12 @@ export function initAuth() {
 				generateId: () => ulid()
 			}
 		},
+		session: {
+			cookieCache: {
+				enabled: true,
+				maxAge: 300
+			}
+		},
 		user: {
 			changeEmail: {
 				enabled: true

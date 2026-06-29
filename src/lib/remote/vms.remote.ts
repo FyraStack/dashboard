@@ -12,7 +12,6 @@ import {
 	requireProjectBillingActive
 } from '$lib/server/billing/autumn';
 import { createBillingMeter, meterResourceThrough } from '$lib/server/billing/metering';
-import { getCachedProxmoxVms, refreshProxmoxVmCache } from '$lib/server/vm-live-cache';
 import { allocateVmNetworking, generateMacAddress, releaseVmNetworking } from '$lib/server/ipam';
 
 type VmRow = {
@@ -246,9 +245,9 @@ export const listVmStatuses = query(statusParams, async (params) => {
 
 	let liveVms: VmInfo[] = [];
 	try {
-		liveVms = await getCachedProxmoxVms();
+		liveVms = await getBackend('proxmox').listVms();
 	} catch (err) {
-		console.warn('Failed to load cached Proxmox VM statuses', err);
+		console.warn('Failed to load live Proxmox VM statuses', err);
 	}
 
 	const liveByProxmoxId = new Map(
@@ -452,7 +451,6 @@ export const createVm = command(createParams, async (params) => {
 		units: 1,
 		now
 	});
-	refreshProxmoxVmCache().catch(() => {});
 
 	return { id: inserted.id, taskId: result.taskId };
 });
@@ -488,7 +486,6 @@ export const deleteVm = command(deleteParams, async (params) => {
 	});
 
 	await db.update(vms).set({ active: false }).where(eq(vms.id, params.vmId));
-	refreshProxmoxVmCache().catch(() => {});
 });
 
 const powerParams = type({ vmId: 'string' });
@@ -505,7 +502,6 @@ async function powerAction(vmId: string, action: 'startVm' | 'stopVm' | 'killVm'
 
 	const backend = getBackend(row.backend);
 	await backend[action](row.id, row.proxmoxId ?? undefined);
-	refreshProxmoxVmCache().catch(() => {});
 }
 
 export const startVm = command(powerParams, async (p) => powerAction(p.vmId, 'startVm'));

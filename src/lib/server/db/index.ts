@@ -1,11 +1,14 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import type { RequestEvent } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import * as schema from './schema';
 import { getRequestEvent } from '$app/server';
 import { getRuntimeEnv } from '$lib/server/env';
 
 export type Database = ReturnType<typeof drizzle<typeof schema>>;
+
+let devPool: Pool | null = null;
 
 function createPool(connectionString: string) {
 	const url = new URL(connectionString);
@@ -24,11 +27,7 @@ function createPool(connectionString: string) {
 	return pool;
 }
 
-export function initDrizzle(): Database {
-	const event = getRequestEvent();
-
-	if (event.locals.dbPool) return event.locals.db!;
-
+function resolveConnectionString() {
 	const { DATABASE_URL, HYPERDRIVE } = getRuntimeEnv();
 	const connectionString = HYPERDRIVE?.connectionString ?? DATABASE_URL;
 
@@ -38,7 +37,22 @@ export function initDrizzle(): Database {
 		);
 	}
 
-	const pool = createPool(connectionString);
+	return connectionString;
+}
+
+export function initDrizzle(): Database {
+	const event = getRequestEvent();
+
+	if (event.locals.db) return event.locals.db;
+
+	if (dev) {
+		devPool ??= createPool(resolveConnectionString());
+		const db = drizzle(devPool, { schema });
+		event.locals.db = db;
+		return db;
+	}
+
+	const pool = createPool(resolveConnectionString());
 	const db = drizzle(pool, { schema });
 	event.locals.dbPool = pool;
 	event.locals.db = db;

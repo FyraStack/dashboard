@@ -10,6 +10,9 @@ import {
 import { getRuntimeEnv } from '$lib/server/env';
 
 const FEATURE_FLAGS_KEY = 'feature-flags';
+const FLAGS_CACHE_TTL_MS = 30_000;
+
+let flagsCache: { flags: FeatureFlags; expiresAt: number } | null = null;
 
 function normalizeFeatureFlags(
 	value: Partial<Record<FeatureFlagKey, unknown>> | null | undefined
@@ -34,8 +37,17 @@ export async function getFeatureFlags(): Promise<FeatureFlags> {
 		return defaultFeatureFlags;
 	}
 
+	const now = Date.now();
+	if (flagsCache && now < flagsCache.expiresAt) {
+		return flagsCache.flags;
+	}
+
 	const storedFlags = await kv.get(FEATURE_FLAGS_KEY, 'json');
-	return normalizeFeatureFlags(storedFlags as Partial<Record<FeatureFlagKey, unknown>> | null);
+	const flags = normalizeFeatureFlags(
+		storedFlags as Partial<Record<FeatureFlagKey, unknown>> | null
+	);
+	flagsCache = { flags, expiresAt: now + FLAGS_CACHE_TTL_MS };
+	return flags;
 }
 
 export async function setFeatureFlag(
@@ -56,13 +68,17 @@ export async function setFeatureFlag(
 		throw new Error('Feature flag KV binding is unavailable');
 	}
 
-	const currentFlags = await getFeatureFlags();
+	const storedFlags = await kv.get(FEATURE_FLAGS_KEY, 'json');
+	const currentFlags = normalizeFeatureFlags(
+		storedFlags as Partial<Record<FeatureFlagKey, unknown>> | null
+	);
 	const nextFlags = {
 		...currentFlags,
 		[flag]: enabled
 	};
 
 	await kv.put(FEATURE_FLAGS_KEY, JSON.stringify(nextFlags));
+	flagsCache = { flags: nextFlags, expiresAt: Date.now() + FLAGS_CACHE_TTL_MS };
 
 	return nextFlags;
 }

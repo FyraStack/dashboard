@@ -13,7 +13,7 @@ import { ac, organizationRoles } from '$lib/auth/organization-permissions';
 import OrganizationInvitationEmail from '$lib/emails/organization-invitation.svelte';
 import ResetPasswordEmail from '$lib/emails/reset-password.svelte';
 import VerifyEmail from '$lib/emails/verify-email.svelte';
-import { initDrizzle } from '$lib/server/db';
+import { initDrizzle, type Database } from '$lib/server/db';
 import { user as userTable, verification } from '$lib/server/db/schema';
 import { sendRenderedEmail } from '$lib/server/email';
 import { sendSecurityAlertEmail } from '$lib/server/email-notifications';
@@ -89,11 +89,21 @@ async function sendSignInSecurityAlert(
 	);
 }
 
-export function initAuth() {
+const lazyDb = new Proxy({} as Database, {
+	get(_target, prop) {
+		const db = initDrizzle();
+		const value = Reflect.get(db, prop, db);
+		return typeof value === 'function' ? value.bind(db) : value;
+	},
+	has(_target, prop) {
+		return prop in initDrizzle();
+	}
+});
+
+function buildAuth() {
 	const env = getRuntimeEnv();
-	const db = initDrizzle();
-	const requestOrigin = getRequestEvent().url.origin;
-	const baseURL = dev ? requestOrigin : env.ORIGIN;
+	const db = lazyDb;
+	const baseURL = dev ? getRequestEvent().url.origin : env.ORIGIN;
 
 	return betterAuth({
 		appName: 'Stack',
@@ -401,4 +411,10 @@ export function initAuth() {
 			sveltekitCookies(getRequestEvent)
 		]
 	});
+}
+
+let authInstance: ReturnType<typeof buildAuth> | null = null;
+
+export function initAuth() {
+	return (authInstance ??= buildAuth());
 }

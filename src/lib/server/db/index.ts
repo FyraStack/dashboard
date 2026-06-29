@@ -9,6 +9,7 @@ import { getRuntimeEnv } from '$lib/server/env';
 export type Database = ReturnType<typeof drizzle<typeof schema>>;
 
 let devPool: Pool | null = null;
+let devDb: Database | null = null;
 
 function createPool(connectionString: string) {
 	const url = new URL(connectionString);
@@ -46,10 +47,9 @@ export function initDrizzle(): Database {
 	if (event.locals.db) return event.locals.db;
 
 	if (dev) {
-		devPool ??= createPool(resolveConnectionString());
-		const db = drizzle(devPool, { schema });
-		event.locals.db = db;
-		return db;
+		devDb ??= drizzle((devPool ??= createPool(resolveConnectionString())), { schema });
+		event.locals.db = devDb;
+		return devDb;
 	}
 
 	const pool = createPool(resolveConnectionString());

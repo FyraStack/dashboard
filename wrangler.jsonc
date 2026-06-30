@@ -66,6 +66,7 @@
 				"EMAIL_REPLY_TO": "support@fyralabs.com",
 				"AUTUMN_DEFAULT_PLAN_ID": "stack",
 				"AUTUMN_SERVER_ENTITY_FEATURE_ID": "active_servers",
+				"VYOS_API_URL": "https://vyos-01.example",
 				"VYOS_USE_VPC": "true",
 				"PROXMOX_API_URL": "https://pxmx-01.barking-kokanue.ts.net:8006",
 				"PROXMOX_USE_VPC": "true",

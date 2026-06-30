@@ -17,6 +17,9 @@ export default defineConfig(({ mode }) => {
 
 	return {
 		plugins: [tailwindcss(), sveltekit()],
+		ssr: {
+			external: ['@better-svelte-email/server', 'postcss']
+		},
 		build: {
 			rollupOptions: {
 				external: ['cloudflare:workers']

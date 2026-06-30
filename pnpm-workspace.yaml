@@ -1,0 +1,17 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+allowBuilds:
+  '@prisma/client': false
+  better-sqlite3: true
+  esbuild: true
+  sharp: true
+  workerd: true
+minimumReleaseAgeExclude:
+  - '@turbo/darwin-64@2.10.2'
+  - '@turbo/darwin-arm64@2.10.2'
+  - '@turbo/linux-64@2.10.2'
+  - '@turbo/linux-arm64@2.10.2'
+  - '@turbo/windows-64@2.10.2'
+  - '@turbo/windows-arm64@2.10.2'
+  - turbo@2.10.2

@@ -3,8 +3,7 @@
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
-	"packageManager": "bun@1.3.14",
-	"workspaces": ["apps/*", "packages/*"],
+	"packageManager": "pnpm@11.9.0",
 	"scripts": {
 		"build": "turbo run build",
 		"dev": "turbo run dev",
@@ -13,8 +12,8 @@
 		"format": "turbo run format",
 		"deploy": "turbo run deploy",
 		"deploy:preview": "turbo run deploy:preview",
-		"dashboard": "bun run --filter stack-dashboard",
-		"cron": "bun run --filter stack-dashboard-cron"
+		"dashboard": "pnpm --filter stack-dashboard",
+		"cron": "pnpm --filter stack-dashboard-cron"
 	},
 	"devDependencies": {
 		"turbo": "^2.10.2"

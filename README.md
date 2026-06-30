@@ -2,7 +2,7 @@
 
 ## Install
 
-1. `bun install`
+1. `pnpm install`
 2. start a postgres server
 
 - `podman run -p 5432:5432 -e POSTGRES_PASSWORD=mysecretpassword -d postgres`
@@ -27,11 +27,11 @@
 
 4. setup db
 
-- `bun run db:push`
+- `pnpm --filter stack-dashboard db:push`
 
 ## Usage (dev)
 
-`bun run dev`
+`pnpm dev`
 
 ## dev instance setup
 

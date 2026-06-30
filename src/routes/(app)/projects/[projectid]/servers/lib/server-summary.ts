@@ -122,7 +122,7 @@ export function toServerInfo(vm: VmSummary): ServerInfo {
 						: 'stopped',
 		agentConnected: vm.live?.status === 'running',
 		os: vm.vmType?.name ?? 'Unknown',
-		region: 'New York',
+		region: 'Chicago',
 		created: vm.creationDate,
 		uptime: formatUptime(vm.live?.uptime ?? 0),
 		plan: vm.vmType?.name ?? 'Custom',

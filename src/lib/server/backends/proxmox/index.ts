@@ -467,7 +467,7 @@ export class ProxmoxBackend implements VmBackend {
 			scsihw: 'virtio-scsi-single',
 			...(params.imageSource ? {} : { virtio0: `${pvePool}:${params.diskGb}` }),
 			ide2: `${pvePool}:cloudinit`,
-			net0: `virtio=${macAddress},bridge=public,firewall=1`,
+			net0: `virtio=${macAddress},bridge=public,firewall=1,rate=128`,
 			pool: `stack-tenants`,
 			boot: `order=${bootDisk}`,
 			cicustom: `network=${cloudInitNetworkConfigVolid},vendor=${cloudInitVendorConfigVolid}`,

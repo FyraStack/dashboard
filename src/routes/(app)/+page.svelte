@@ -142,8 +142,7 @@
 			<div class="flex flex-col gap-8">
 				<div>
 					<div>
-						<p class="font-mono text-sm tracking-wide text-red-400 uppercase">Workspace</p>
-						<h1 class="mt-2 text-3xl font-semibold tracking-tight text-balance text-gray-50">
+						<h1 class="text-3xl font-semibold tracking-tight text-balance text-gray-50">
 							Projects
 						</h1>
 						<p class="mt-2 max-w-[60ch] text-sm text-pretty text-gray-500">
@@ -218,7 +217,7 @@
 						</span>
 						<span>
 							<span class="text-base font-medium text-gray-400">New Project</span>
-							<span class="mt-1 block text-sm text-gray-500">Create a workspace</span>
+							<span class="mt-1 block text-sm text-gray-500">Create a project</span>
 						</span>
 					</button>
 				</div>
@@ -242,7 +241,12 @@
 		</Dialog.Header>
 		<div class="flex flex-col gap-2 py-4">
 			<Label>Project Name</Label>
-			<Input bind:value={newProjectName} placeholder="my-project" disabled={creatingProject} />
+			<Input
+				bind:value={newProjectName}
+				placeholder="my-project"
+				disabled={creatingProject}
+				onkeydown={(e) => e.key === 'Enter' && handleCreateProject()}
+			/>
 		</div>
 		<Dialog.Footer>
 			<Button variant="outline" size="sm" onclick={closeCreateDialog} disabled={creatingProject}

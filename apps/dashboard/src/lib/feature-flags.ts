@@ -58,16 +58,16 @@ export const featureFlagLabels: Record<FeatureFlagKey, string> = {
 	firewall: 'Firewall',
 	images: 'Images',
 	volumes: 'Volumes',
-	vpsConsole: 'VPS Console Tab',
-	vpsLogs: 'VPS Logs Tab',
-	vpsNetworking: 'VPS Networking Tab',
-	vpsImages: 'VPS Images Tab',
-	vpsSnapshots: 'VPS Snapshots Tab',
-	vpsBackups: 'VPS Backups Tab',
-	vpsRebuild: 'VPS Rebuild Tab',
-	vpsResize: 'VPS Resize Tab',
-	vpsRescue: 'VPS Rescue Tab',
-	vpsSettings: 'VPS Settings Tab'
+	vpsConsole: 'Console Tab',
+	vpsLogs: 'Logs Tab',
+	vpsNetworking: 'Networking Tab',
+	vpsImages: 'Images Tab',
+	vpsSnapshots: 'Snapshots Tab',
+	vpsBackups: 'Backups Tab',
+	vpsRebuild: 'Rebuild Tab',
+	vpsResize: 'Resize Tab',
+	vpsRescue: 'Rescue Tab',
+	vpsSettings: 'Settings Tab'
 };
 
 export const featureFlagDescriptions: Record<FeatureFlagKey, string> = {

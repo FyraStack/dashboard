@@ -1,12 +1,17 @@
+# Dependencies
 node_modules
 
-# Output
+# Turborepo
+.turbo
+
+# Build output
+.svelte-kit
+.wrangler
 .output
 .vercel
 .netlify
-.wrangler
-/.svelte-kit
-/build
+build
+dist
 
 # OS
 .DS_Store

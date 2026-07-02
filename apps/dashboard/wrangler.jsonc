@@ -1,0 +1,147 @@
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "stack-dashboard",
+	"main": ".svelte-kit/cloudflare/_worker.js",
+	"compatibility_date": "2026-04-05",
+	"compatibility_flags": ["nodejs_compat"],
+	"minify": true,
+	"assets": {
+		"binding": "ASSETS",
+		"directory": ".svelte-kit/cloudflare",
+		"run_worker_first": [
+			"/",
+			"/_app/remote/*",
+			"/api/*",
+			"/admin/*",
+			"/projects/*",
+			"/login*",
+			"/register*",
+			"/signup*",
+			"/accept-invitation/*"
+		]
+	},
+	"hyperdrive": [
+		{
+			"binding": "HYPERDRIVE",
+			"id": "5c191e200f394f23a3856fab99593abe"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "FEATURE_FLAGS",
+			"id": "0ad17de8747747bca1975d473e66e295"
+		}
+	],
+	"send_email": [
+		{
+			"name": "EMAIL"
+		}
+	],
+	"vpc_services": [
+		{
+			"binding": "PROXMOX_VPC",
+			"service_id": "019ef71d-5e77-7403-bb9f-ef920ac4f21c",
+			"remote": true
+		},
+		{
+			"binding": "VYOS_VPC_01",
+			"service_id": "019ef71e-251e-7390-9263-5d4130418986",
+			"remote": true
+		},
+		{
+			"binding": "VYOS_VPC_02",
+			"service_id": "019ef71e-cf22-7112-86a0-5bdae1148965",
+			"remote": true
+		},
+		{
+			"binding": "SNIPPETS",
+			"service_id": "019ef777-604a-7a52-8fc2-e7827c6abd78",
+			"remote": true
+		}
+	],
+	"placement": {
+		"mode": "targeted",
+		"region": "azure:northcentralus"
+	},
+	"observability": {
+		"enabled": true,
+		"traces": {
+			"enabled": true,
+			"head_sampling_rate": 1
+		}
+	},
+	"env": {
+		"preview": {
+			"minify": true,
+			"vars": {
+				"ORIGIN": "https://stack-dashboard-preview.fyralabs.workers.dev",
+				"EMAIL_FROM_ADDRESS": "no-reply@fyrastack.com",
+				"EMAIL_FROM_NAME": "Fyra Stack",
+				"EMAIL_REPLY_TO": "support@fyralabs.com",
+				"STACK_TIMING_SPAM": "true",
+				"AUTUMN_DEFAULT_PLAN_ID": "stack",
+				"AUTUMN_SERVER_ENTITY_FEATURE_ID": "active_servers",
+				"VYOS_API_URL": "https://vyos-01.example",
+				"VYOS_USE_VPC": "true",
+				"PROXMOX_API_URL": "https://pxmx-01.barking-kokanue.ts.net:8006",
+				"PROXMOX_USE_VPC": "true",
+				"PROXMOX_VM_FIREWALL_SECURITY_GROUP": "public_vms_tenant",
+				"PROXMOX_TOKEN_ID": "addison@pve!cf-preview",
+				"PROXMOX_SNIPPETS_USE_VPC": "true",
+				"PROXMOX_SNIPPETS_ENDPOINT_URL": "https://pxmx-01.example:8005",
+				"PROXMOX_SNIPPETS_ENDPOINT_USERNAME": "pvecic",
+				"PROXMOX_SNIPPETS_STORAGE": "cephfs"
+			},
+			"hyperdrive": [
+				{
+					"binding": "HYPERDRIVE",
+					"id": "25228ed6f77e49fb8041aed12879327d"
+				}
+			],
+			"kv_namespaces": [
+				{
+					"binding": "FEATURE_FLAGS",
+					"id": "0ad17de8747747bca1975d473e66e295"
+				}
+			],
+			"send_email": [
+				{
+					"name": "EMAIL"
+				}
+			],
+			"vpc_services": [
+				{
+					"binding": "PROXMOX_VPC",
+					"service_id": "019ef71d-5e77-7403-bb9f-ef920ac4f21c",
+					"remote": true
+				},
+				{
+					"binding": "VYOS_VPC_01",
+					"service_id": "019ef71e-251e-7390-9263-5d4130418986",
+					"remote": true
+				},
+				{
+					"binding": "VYOS_VPC_02",
+					"service_id": "019ef71e-cf22-7112-86a0-5bdae1148965",
+					"remote": true
+				},
+				{
+					"binding": "SNIPPETS",
+					"service_id": "019ef777-604a-7a52-8fc2-e7827c6abd78",
+					"remote": true
+				}
+			],
+			"placement": {
+				"mode": "targeted",
+				"region": "azure:northcentralus"
+			},
+			"observability": {
+				"enabled": true,
+				"traces": {
+					"enabled": true,
+					"head_sampling_rate": 1
+				}
+			}
+		}
+	}
+}

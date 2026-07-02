@@ -1,9 +1,6 @@
 # Dependencies
 node_modules
 
-# Turborepo
-.turbo
-
 # Build output
 .svelte-kit
 .wrangler

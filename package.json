@@ -5,17 +5,14 @@
 	"type": "module",
 	"packageManager": "pnpm@11.9.0",
 	"scripts": {
-		"build": "turbo run build",
-		"dev": "turbo run dev",
-		"check": "turbo run check",
-		"lint": "turbo run lint",
-		"format": "turbo run format",
-		"deploy": "turbo run deploy",
-		"deploy:preview": "turbo run deploy:preview",
+		"build": "pnpm -r build",
+		"dev": "pnpm -r --parallel dev",
+		"check": "pnpm -r check",
+		"lint": "pnpm -r lint",
+		"format": "pnpm -r format",
+		"deploy": "pnpm -r build && pnpm --filter stack-dashboard deploy && pnpm --filter stack-dashboard-cron deploy",
+		"deploy:preview": "pnpm -r build && pnpm --filter stack-dashboard deploy:preview && pnpm --filter stack-dashboard-cron deploy:preview",
 		"dashboard": "pnpm --filter stack-dashboard",
 		"cron": "pnpm --filter stack-dashboard-cron"
-	},
-	"devDependencies": {
-		"turbo": "^2.10.2"
 	}
 }

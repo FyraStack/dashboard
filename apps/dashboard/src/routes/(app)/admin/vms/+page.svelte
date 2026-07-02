@@ -71,7 +71,7 @@
 	const typeOptions = $derived(
 		[...new Set(admin.adminVms.map((vm) => vm.vmTypeName).filter(Boolean) as string[])].sort()
 	);
-	const statusOptions = ['running', 'stopped', 'paused', 'provisioning', 'error'] as const;
+	const statusOptions = ['running', 'stopped', 'paused', 'provisioning', 'deleting', 'error'] as const;
 	const ownerFilterLabel = $derived(
 		ownerFilter === 'all'
 			? 'All'
@@ -95,6 +95,8 @@
 	function statusInfo(vm: AdminVm) {
 		if (!vm.active)
 			return { label: 'deleted', class: 'border-gray-600/20 bg-gray-700/30 text-gray-500' };
+		if (vm.status === 'deleting')
+			return { label: 'deleting', class: 'border-red-500/20 bg-red-500/10 text-red-400' };
 		if (vm.status === 'error')
 			return { label: 'error', class: 'border-red-500/20 bg-red-500/10 text-red-400' };
 		if (vm.status === 'provisioning')

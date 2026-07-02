@@ -25,7 +25,7 @@ export const vmIsaEnum = pgEnum('vm_isa', ['x86', 'arm', 'risc-v']);
 
 export const vmBackendEnum = pgEnum('vm_backend', ['proxmox']);
 
-export const vmStatusEnum = pgEnum('vm_status', ['provisioning', 'ready', 'error']);
+export const vmStatusEnum = pgEnum('vm_status', ['provisioning', 'ready', 'error', 'deleting']);
 
 export const billingSyncStatusEnum = pgEnum('billing_sync_status', ['pending', 'synced', 'failed']);
 

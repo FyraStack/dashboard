@@ -18,8 +18,9 @@ import {
 	isProjectBillingExempt,
 	requireProjectBillingActive
 } from '$lib/server/billing/autumn';
-import { createBillingMeter, meterResourceThrough } from '$lib/server/billing/metering';
+import { createBillingMeter } from '$lib/server/billing/metering';
 import { allocateVmNetworking, generateMacAddress, releaseVmNetworking } from '$lib/server/ipam';
+import { queueVmDeletion } from '$lib/server/vm-deletion';
 import { instrument, timingLog } from '$lib/server/observability';
 
 type VmRow = {
@@ -33,7 +34,7 @@ type VmRow = {
 	creationDate: string;
 	createdAt: number;
 	backend: 'proxmox';
-	status: 'provisioning' | 'ready' | 'error';
+	status: 'provisioning' | 'ready' | 'error' | 'deleting';
 	lastKnownIpv4: string | null;
 	lastKnownIpv6: string | null;
 	lastKnownStatus: VmInfo['status'] | null;
@@ -118,7 +119,8 @@ function mapVmRow(row: VmRow, live: VmInfo | null) {
 function toDashboardStatus(
 	status: VmRow['status'],
 	liveStatus: VmInfo['status'] | null | undefined
-): 'running' | 'stopped' | 'restarting' | 'provisioning' | 'unknown' {
+): 'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'unknown' {
+	if (status === 'deleting') return 'deleting';
 	if (liveStatus === 'running') return 'running';
 	if (liveStatus === 'paused') return 'restarting';
 	if (status === 'provisioning') return 'provisioning';
@@ -653,25 +655,9 @@ export const deleteVm = command(deleteParams, async (params) => {
 	if (row.ownerProjectId) {
 		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'admin');
 	}
-	try {
-		await getBackend(row.backend).deleteVm(row.id, row.proxmoxId ?? undefined);
-	} catch (err) {
-		console.warn(`Failed to delete backend VM ${row.id}`, err);
-		error(502, `Failed to deprovision VM "${row.name}" in Proxmox`);
-	}
+	if (row.status === 'deleting') return;
 
-	const metered = await meterResourceThrough('vm', row.id);
-	if (row.ownerProjectId && (!metered?.event || metered.syncStatus === 'synced')) {
-		await deleteProjectServerEntity(row.ownerProjectId, row.id).catch((err) => {
-			console.warn(`Failed to delete Autumn entity for VM ${row.id}`, err);
-		});
-	}
-
-	await releaseVmNetworking(db, row.id).catch((err) => {
-		console.warn(`Failed to release networking for VM ${row.id}`, err);
-	});
-
-	await db.update(vms).set({ active: false }).where(eq(vms.id, params.vmId));
+	await queueVmDeletion(db, row);
 });
 
 const powerParams = type({ vmId: 'string' });
@@ -682,6 +668,7 @@ async function powerAction(vmId: string, action: 'startVm' | 'stopVm' | 'killVm'
 	const db = initDrizzle();
 	const row = await db.query.vms.findFirst({ where: eq(vms.id, vmId) });
 	if (!row) error(404, `VM "${vmId}" not found`);
+	if (row.status === 'deleting') error(409, `VM "${row.name}" is being deleted`);
 	if (row.ownerProjectId) {
 		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
 		if (action === 'startVm' || action === 'rebootVm') {

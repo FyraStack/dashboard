@@ -91,21 +91,25 @@
 		<span class="truncate text-sm font-medium text-gray-200">{selectedServer.name}</span>
 		<Badge
 			variant="outline"
-			class="text-[10px] {!selectedServer.liveLoaded
-				? 'border-gray-700 bg-gray-900/40 text-gray-400'
-				: selectedServer.status === 'running'
-					? 'border-emerald-800 bg-emerald-950/40 text-emerald-400'
-					: selectedServer.status === 'provisioning'
-						? 'border-blue-800 bg-blue-950/40 text-blue-400'
-						: selectedServer.status === 'restarting'
-							? 'border-amber-800 bg-amber-950/40 text-amber-400'
-							: 'border-red-800 bg-red-950/40 text-red-400'}"
+			class="text-[10px] {selectedServer.status === 'deleting'
+				? 'border-red-800 bg-red-950/40 text-red-400'
+				: !selectedServer.liveLoaded
+					? 'border-gray-700 bg-gray-900/40 text-gray-400'
+					: selectedServer.status === 'running'
+						? 'border-emerald-800 bg-emerald-950/40 text-emerald-400'
+						: selectedServer.status === 'provisioning'
+							? 'border-blue-800 bg-blue-950/40 text-blue-400'
+							: selectedServer.status === 'restarting'
+								? 'border-amber-800 bg-amber-950/40 text-amber-400'
+								: 'border-red-800 bg-red-950/40 text-red-400'}"
 		>
-			{!selectedServer.liveLoaded
-				? 'unknown'
-				: selectedServer.status === 'provisioning'
-					? 'provisioning...'
-					: selectedServer.status}
+			{selectedServer.status === 'deleting'
+				? 'deleting...'
+				: !selectedServer.liveLoaded
+					? 'unknown'
+					: selectedServer.status === 'provisioning'
+						? 'provisioning...'
+						: selectedServer.status}
 		</Badge>
 	</div>
 	<div class="flex shrink-0 items-center gap-1.5">
@@ -117,7 +121,8 @@
 			disabled={powerLoading ||
 				selectedServer.status === 'running' ||
 				selectedServer.status === 'restarting' ||
-				selectedServer.status === 'provisioning'}
+				selectedServer.status === 'provisioning' ||
+				selectedServer.status === 'deleting'}
 			onclick={() => power('start')}
 		>
 			{#if powerAction === 'start'}
@@ -135,7 +140,8 @@
 			disabled={powerLoading ||
 				selectedServer.status === 'stopped' ||
 				selectedServer.status === 'restarting' ||
-				selectedServer.status === 'provisioning'}
+				selectedServer.status === 'provisioning' ||
+				selectedServer.status === 'deleting'}
 			onclick={() => power('restart')}
 		>
 			{#if powerAction === 'restart'}
@@ -152,7 +158,8 @@
 			aria-label="Shutdown"
 			disabled={powerLoading ||
 				selectedServer.status === 'stopped' ||
-				selectedServer.status === 'provisioning'}
+				selectedServer.status === 'provisioning' ||
+				selectedServer.status === 'deleting'}
 			onclick={() => power('shutdown')}
 		>
 			{#if powerAction === 'shutdown'}
@@ -169,7 +176,8 @@
 			aria-label="Kill"
 			disabled={powerLoading ||
 				selectedServer.status === 'stopped' ||
-				selectedServer.status === 'provisioning'}
+				selectedServer.status === 'provisioning' ||
+				selectedServer.status === 'deleting'}
 			onclick={() => power('kill')}
 		>
 			{#if powerAction === 'kill'}

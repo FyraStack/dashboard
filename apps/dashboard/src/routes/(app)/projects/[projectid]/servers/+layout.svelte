@@ -31,6 +31,7 @@
 	}
 
 	function statusLabel(s: { liveLoaded?: boolean; status: string }): string {
+		if (s.status === 'deleting') return 'Deleting';
 		if (!s.liveLoaded) return 'Unknown';
 		if (s.status === 'running') return 'Running';
 		if (s.status === 'provisioning') return 'Provisioning';
@@ -90,34 +91,38 @@
 			const byId = new Map(statuses.map((server) => [server.id, server]));
 
 			untrack(() => {
-				serversState.servers = sortServers(serversState.servers).map((server) => {
-					const next = byId.get(server.id);
-					if (!next) return server;
+				serversState.servers = sortServers(serversState.servers)
+					.filter((server) => server.status !== 'deleting' || byId.has(server.id))
+					.map((server) => {
+						const next = byId.get(server.id);
+						if (!next) return server;
 
-					const ipv4 =
-						getFirstIp(
-							next.networkInterfaces,
-							(address) => !address.startsWith('127.') && !address.includes(':')
-						) ?? server.ip;
-					const ipv6 =
-						getFirstIp(next.networkInterfaces, (address) => address.includes(':')) ?? server.ipv6;
+						const ipv4 =
+							getFirstIp(
+								next.networkInterfaces,
+								(address) => !address.startsWith('127.') && !address.includes(':')
+							) ?? server.ip;
+						const ipv6 =
+							getFirstIp(next.networkInterfaces, (address) => address.includes(':')) ?? server.ipv6;
 
-					return {
-						...server,
-						liveLoaded: true,
-						status:
-							next.status === 'running'
-								? 'running'
-								: server.status === 'provisioning' || server.status === 'restarting'
-									? server.status
-									: next.status,
-						agentConnected: next.liveStatus === 'running',
-						ip: ipv4,
-						ipv6,
-						uptime: formatUptime(next.uptime),
-						metrics: next.metrics
-					};
-				});
+						return {
+							...server,
+							liveLoaded: true,
+							status:
+								next.status === 'deleting'
+									? 'deleting'
+									: next.status === 'running'
+										? 'running'
+										: server.status === 'provisioning' || server.status === 'restarting'
+											? server.status
+											: next.status,
+							agentConnected: next.liveStatus === 'running',
+							ip: ipv4,
+							ipv6,
+							uptime: formatUptime(next.uptime),
+							metrics: next.metrics
+						};
+					});
 			});
 		} catch {
 			clientTimingLog('vm.status.refresh.error', {
@@ -270,17 +275,19 @@
 						role="img"
 						aria-label={`Status: ${statusLabel(server)}`}
 						title={statusLabel(server)}
-						class="mt-1 ml-2 h-2 w-2 shrink-0 rounded-full {server.liveLoaded
-							? server.status === 'running'
-								? 'bg-emerald-500'
-								: server.status === 'provisioning'
-									? 'animate-pulse bg-blue-500'
-									: server.status === 'restarting'
-										? 'animate-pulse bg-amber-500'
-										: server.status === 'unknown'
-											? 'bg-gray-600'
-											: 'bg-red-500'
-							: 'bg-gray-600'}"
+						class="mt-1 ml-2 h-2 w-2 shrink-0 rounded-full {server.status === 'deleting'
+							? 'animate-pulse bg-red-500'
+							: server.liveLoaded
+								? server.status === 'running'
+									? 'bg-emerald-500'
+									: server.status === 'provisioning'
+										? 'animate-pulse bg-blue-500'
+										: server.status === 'restarting'
+											? 'animate-pulse bg-amber-500'
+											: server.status === 'unknown'
+												? 'bg-gray-600'
+												: 'bg-red-500'
+								: 'bg-gray-600'}"
 					></span>
 				</a>
 			{/each}

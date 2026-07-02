@@ -7,7 +7,7 @@ export type ServerInfo = {
 	disk: string;
 	ip: string;
 	ipv6: string;
-	status: 'running' | 'stopped' | 'restarting' | 'provisioning' | 'unknown';
+	status: 'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'unknown';
 	agentConnected: boolean;
 	region: string;
 	created: string;

@@ -241,6 +241,7 @@
 	}
 
 	function formatVmStatus(status: string, liveStatus?: string | null) {
+		if (status === 'deleting') return 'Deleting';
 		if (liveStatus === 'running') return 'Running';
 		if (status === 'provisioning') return 'Provisioning';
 		if (status === 'error') return 'Error';

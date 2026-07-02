@@ -72,11 +72,11 @@
 		<Button
 			variant="outline"
 			size="sm"
-			disabled={deleting}
+			disabled={deleting || selectedServer.status === 'deleting'}
 			onclick={handleDelete}
 			class="border-red-700 text-red-400 hover:bg-red-950"
 		>
-			{deleting ? 'Deleting...' : 'Delete Server'}</Button
+			{deleting || selectedServer.status === 'deleting' ? 'Deleting...' : 'Delete Server'}</Button
 		>
 	</div>
 </div>

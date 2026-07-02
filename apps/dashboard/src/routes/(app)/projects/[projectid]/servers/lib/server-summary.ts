@@ -1,4 +1,4 @@
-type ServerStatus = 'running' | 'stopped' | 'restarting' | 'provisioning' | 'unknown';
+type ServerStatus = 'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'unknown';
 
 type VmSummary = {
 	id: string;
@@ -112,15 +112,17 @@ export function toServerInfo(vm: VmSummary): ServerInfo {
 		),
 		ipv6: getFirstIp(vm.live?.networkInterfaces, (address) => address.includes(':')),
 		status:
-			vm.live?.status === 'running'
-				? 'running'
-				: vm.live?.status === 'paused'
-					? 'restarting'
-					: vm.status === 'provisioning'
-						? 'provisioning'
-						: vm.live?.status === 'stopped'
-							? 'stopped'
-							: 'unknown',
+			vm.status === 'deleting'
+				? 'deleting'
+				: vm.live?.status === 'running'
+					? 'running'
+					: vm.live?.status === 'paused'
+						? 'restarting'
+						: vm.status === 'provisioning'
+							? 'provisioning'
+							: vm.live?.status === 'stopped'
+								? 'stopped'
+								: 'unknown',
 		agentConnected: vm.live?.status === 'running',
 		region: 'Chicago',
 		created: vm.creationDate,

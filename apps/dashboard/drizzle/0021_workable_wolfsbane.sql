@@ -1,0 +1,1 @@
+ALTER TYPE "public"."vm_status" ADD VALUE 'deleting';

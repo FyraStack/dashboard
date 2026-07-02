@@ -6,16 +6,14 @@ import { requireAdmin } from '$lib/server/auth-context';
 import { initDrizzle } from '$lib/server/db';
 import { member, organization, user, vms, vmTypes } from '$lib/server/db/schema';
 import { getBackend, type VmInfo } from '$lib/server/backends';
-import { deleteProjectServerEntity } from '$lib/server/billing/autumn';
-import { meterResourceThrough } from '$lib/server/billing/metering';
-import { releaseVmNetworking } from '$lib/server/ipam';
+import { queueVmDeletion } from '$lib/server/vm-deletion';
 
 export type AdminVm = {
 	id: string;
 	name: string;
 	proxmoxId: number | null;
 	active: boolean;
-	status: 'provisioning' | 'ready' | 'error';
+	status: 'provisioning' | 'ready' | 'error' | 'deleting';
 	statusError: string | null;
 	liveStatus: string | null;
 	uptime: number;
@@ -134,6 +132,7 @@ async function adminPowerAction(
 	const row = await db.query.vms.findFirst({ where: eq(vms.id, vmId) });
 	if (!row) error(404, `VM "${vmId}" not found`);
 	if (!row.active) error(400, `VM "${row.name}" is no longer active`);
+	if (row.status === 'deleting') error(409, `VM "${row.name}" is being deleted`);
 
 	await getBackend(row.backend)[action](row.id, row.proxmoxId ?? undefined);
 }
@@ -151,24 +150,7 @@ export const adminDeleteVm = command(powerParams, async (params) => {
 	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
 	if (!row) error(404, `VM "${params.vmId}" not found`);
 	if (!row.active) return;
+	if (row.status === 'deleting') return;
 
-	try {
-		await getBackend(row.backend).deleteVm(row.id, row.proxmoxId ?? undefined);
-	} catch (err) {
-		console.warn(`Failed to delete backend VM ${row.id}`, err);
-		error(502, `Failed to deprovision VM "${row.name}" in Proxmox`);
-	}
-
-	const metered = await meterResourceThrough('vm', row.id);
-	if (row.ownerProjectId && (!metered?.event || metered.syncStatus === 'synced')) {
-		await deleteProjectServerEntity(row.ownerProjectId, row.id).catch((err) => {
-			console.warn(`Failed to delete Autumn entity for VM ${row.id}`, err);
-		});
-	}
-
-	await releaseVmNetworking(db, row.id).catch((err) => {
-		console.warn(`Failed to release networking for VM ${row.id}`, err);
-	});
-
-	await db.update(vms).set({ active: false }).where(eq(vms.id, params.vmId));
+	await queueVmDeletion(db, row);
 });

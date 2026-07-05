@@ -724,6 +724,9 @@ export class ProxmoxBackend implements VmBackend {
 	async killVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolve(id, proxmoxId);
+		await this.client.updateHAResources(`vm:${vmid}`, {
+			state: 'disabled'
+		});
 		const upid = await this.client.stopVm(node, vmid);
 		await this.client.waitForTask(node, upid);
 	}

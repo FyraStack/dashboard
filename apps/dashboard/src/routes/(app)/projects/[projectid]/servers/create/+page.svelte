@@ -28,6 +28,7 @@
 		Plus,
 		X
 	} from '@lucide/svelte';
+	import { generateServerName } from '$lib/server/name-generator';
 
 	type PageData = {
 		currentProject?: { id: string } | null;
@@ -123,7 +124,7 @@
 	const ipv6Available = $derived(Boolean(data.ipamAvailability?.ipv6.available));
 	const bothNetworksAvailable = $derived(ipv4Available && ipv6Available);
 
-	let serverName = $state('');
+	let serverName = $state(generateServerName());
 	let selectedImageId = $state<string | null>(null);
 	let selectedImageVersion = $state<string | null>(null);
 	let selectedPlanId = $state<string | null>(null);

@@ -46,7 +46,7 @@ declare global {
 					connectionString: string;
 				};
 				FEATURE_FLAGS?: KVNamespace;
-				BILLING_METER_SECRET?: string;
+				INTERNAL_CRON_SECRET?: string;
 				GITHUB_CLIENT_ID?: string;
 				GITHUB_CLIENT_SECRET?: string;
 				PROXMOX_VPC?: Fetcher;

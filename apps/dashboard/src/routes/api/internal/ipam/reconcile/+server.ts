@@ -5,7 +5,7 @@ import { initDrizzle } from '$lib/server/db';
 import { reconcileOrphanedIpamAllocations } from '$lib/server/ipam';
 
 export const POST: RequestHandler = async ({ request }) => {
-	const secret = getRuntimeEnv().BILLING_METER_SECRET;
+	const secret = getRuntimeEnv().INTERNAL_CRON_SECRET;
 	if (!secret) error(503, 'Internal cron is not configured');
 
 	const authorization = request.headers.get('authorization');

@@ -1,5 +1,4 @@
 import { and, asc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
-import { Autumn } from 'autumn-js';
 import { initDrizzle } from '$lib/server/db';
 import {
 	billingMeters,
@@ -8,24 +7,19 @@ import {
 	vmTypes,
 	type billingResourceTypeEnum
 } from '$lib/server/db/schema';
-import { getRuntimeEnv } from '$lib/server/env';
 import { requireVmFeatureId, usageIdempotencyKey, usageQuantity } from './features';
 import {
+	createAutumnClient,
 	ensureProjectCustomer,
 	ensureProjectServerEntity,
 	formatAutumnError,
+	isBillingConfigured,
 	isProjectBillingExempt
 } from './autumn';
 
 type BillingResourceType = (typeof billingResourceTypeEnum.enumValues)[number];
 type BillingMeter = typeof billingMeters.$inferSelect;
 type BillingUsageEvent = typeof billingUsageEvents.$inferSelect;
-
-function autumnClient() {
-	const env = getRuntimeEnv();
-
-	return new Autumn({ secretKey: env.AUTUMN_SECRET, failOpen: false });
-}
 
 async function recordMeterUsage(meter: BillingMeter, now: number) {
 	const db = initDrizzle();
@@ -333,6 +327,11 @@ async function ensureEventTarget(event: BillingUsageEvent, caches: EnsureCaches)
 }
 
 async function trackUsageEvent(event: BillingUsageEvent) {
+	if (!isBillingConfigured()) {
+		await markUsageEventSynced(event.id);
+		return 'synced' as const;
+	}
+
 	const db = initDrizzle();
 	try {
 		const payload = {
@@ -348,7 +347,9 @@ async function trackUsageEvent(event: BillingUsageEvent) {
 			}
 		};
 
-		await autumnClient().track(payload, { headers: { 'Idempotency-Key': event.idempotencyKey } });
+		await createAutumnClient().track(payload, {
+			headers: { 'Idempotency-Key': event.idempotencyKey }
+		});
 
 		await db
 			.update(billingUsageEvents)

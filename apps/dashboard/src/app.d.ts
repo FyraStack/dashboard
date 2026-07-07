@@ -38,7 +38,7 @@ declare global {
 				CLOUDFLARE_ACCOUNT_ID?: string;
 				CLOUDFLARE_API_TOKEN?: string;
 				CLOUDFLARE_EMAIL_API_TOKEN?: string;
-				AUTUMN_SECRET: string;
+				AUTUMN_SECRET?: string;
 				AUTUMN_DEFAULT_PLAN_ID?: string;
 				AUTUMN_SERVER_ENTITY_FEATURE_ID?: string;
 				HYPERDRIVE: {

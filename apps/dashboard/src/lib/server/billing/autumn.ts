@@ -5,10 +5,16 @@ import { initDrizzle } from '$lib/server/db';
 import { member, organization, projectBillingCustomers, user } from '$lib/server/db/schema';
 import { getRuntimeEnv } from '$lib/server/env';
 
-function createAutumnClient() {
+export function isBillingConfigured() {
 	const env = getRuntimeEnv();
+	return env.AUTUMN_ENABLED !== 'false' && Boolean(env.AUTUMN_SECRET);
+}
 
-	return new Autumn({ secretKey: env.AUTUMN_SECRET, failOpen: false });
+export function createAutumnClient() {
+	const secretKey = getRuntimeEnv().AUTUMN_SECRET;
+	if (!secretKey) throw new Error('AUTUMN_SECRET is not set');
+
+	return new Autumn({ secretKey, failOpen: false });
 }
 
 function errorMessage(err: unknown) {
@@ -93,6 +99,8 @@ export async function ensureProjectCustomer(projectId: string) {
 	const now = Date.now();
 	await ensureLocalProjectBillingCustomer(projectId);
 
+	if (!isBillingConfigured()) return;
+
 	try {
 		const customer = await getProjectCustomerData(projectId);
 		await createAutumnClient().customers.getOrCreate({
@@ -117,6 +125,8 @@ export async function ensureProjectCustomer(projectId: string) {
 }
 
 export async function updateProjectCustomer(projectId: string) {
+	if (!isBillingConfigured()) return;
+
 	const db = initDrizzle();
 	const now = Date.now();
 	const customer = await getProjectCustomerData(projectId);
@@ -151,6 +161,7 @@ export async function attachDefaultProjectPlan(
 	if (!planId) return null;
 
 	await ensureProjectCustomer(projectId);
+	if (!isBillingConfigured()) return null;
 
 	const attachPlan = (withDiscount: boolean) =>
 		createAutumnClient().billing.attach({
@@ -183,6 +194,8 @@ export async function attachDefaultProjectPlan(
 }
 
 export async function cancelProjectBilling(projectId: string) {
+	if (!isBillingConfigured()) return true;
+
 	const planId = defaultPlanId();
 
 	try {
@@ -226,7 +239,7 @@ export async function retryOrphanedProjectBillingCancellations(limit = 100) {
 
 export async function validateProjectDiscountCode(projectId: string, discountCode: string) {
 	const planId = defaultPlanId();
-	if (!planId) return;
+	if (!planId || !isBillingConfigured()) return;
 
 	await ensureProjectCustomer(projectId);
 
@@ -245,6 +258,8 @@ export async function validateProjectDiscountCode(projectId: string, discountCod
 }
 
 export async function setupProjectPayment(projectId: string, successUrl: string) {
+	if (!isBillingConfigured()) error(501, 'Billing is not configured in this environment.');
+
 	await ensureProjectCustomer(projectId);
 
 	const response = await createAutumnClient().billing.setupPayment({
@@ -256,6 +271,15 @@ export async function setupProjectPayment(projectId: string, successUrl: string)
 }
 
 async function computeProjectBillingState(projectId: string) {
+	if (!isBillingConfigured()) {
+		return {
+			status: 'active' as const,
+			customer: null,
+			planId: defaultPlanId() ?? null,
+			syncError: null
+		};
+	}
+
 	const db = initDrizzle();
 	const localCustomer = await db.query.projectBillingCustomers.findFirst({
 		where: eq(projectBillingCustomers.projectId, projectId)
@@ -395,6 +419,8 @@ export async function requireProjectBillingActive(projectId: string) {
 }
 
 export async function openProjectBillingPortal(projectId: string, returnUrl: string) {
+	if (!isBillingConfigured()) error(501, 'Billing is not configured in this environment.');
+
 	await ensureProjectCustomer(projectId);
 
 	const portal = await createAutumnClient().billing.openCustomerPortal({
@@ -411,6 +437,8 @@ export async function ensureProjectServerEntity(input: {
 	name?: string | null;
 	customerEnsured?: boolean;
 }) {
+	if (!isBillingConfigured()) return;
+
 	if (!input.customerEnsured) {
 		await ensureProjectCustomer(input.projectId);
 	}
@@ -436,6 +464,8 @@ export async function ensureProjectServerEntity(input: {
 }
 
 export async function deleteProjectServerEntity(projectId: string, serverId: string) {
+	if (!isBillingConfigured()) return;
+
 	try {
 		await createAutumnClient().entities.delete({ customerId: projectId, entityId: serverId });
 	} catch (err) {

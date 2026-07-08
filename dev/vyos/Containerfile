@@ -1,0 +1,12 @@
+FROM docker.io/library/alpine:3 AS extract
+RUN apk add --no-cache libarchive-tools squashfs-tools
+ARG ISO
+COPY ${ISO} /tmp/vyos.iso
+RUN bsdtar -xf /tmp/vyos.iso -C /tmp live/filesystem.squashfs && \
+	unsquashfs -no-exit-code -d /rootfs /tmp/live/filesystem.squashfs
+
+FROM scratch
+COPY --from=extract /rootfs/ /
+COPY --chmod=755 vyos-postconfig-bootup.script /opt/vyatta/etc/config/scripts/vyos-postconfig-bootup.script
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]

@@ -26,6 +26,7 @@ import {
 	type UserSshKey,
 	type UserApiToken
 } from '$lib/remote/admin-users.remote';
+import { config } from '$lib/config';
 import { updateFeatureFlag } from '$lib/remote/feature-flags.remote';
 import {
 	adminDeleteVm,
@@ -205,7 +206,7 @@ export class AdminState {
 	importDialogOpen = $state(false);
 	importUrl = $state('');
 	importFilename = $state('');
-	importStorage = $state('cephfs');
+	importStorage = $state(config.admin.defaultImageImportStorage);
 	importChecksumAlgorithm = $state<ImportChecksumAlgorithm>('');
 	importChecksum = $state('');
 	importVerifyCertificates = $state(true);
@@ -623,7 +624,7 @@ export class AdminState {
 		this.importVerifyCertificates = true;
 		this.importSaving = false;
 		this.importError = '';
-		this.importStorage = 'cephfs';
+		this.importStorage = config.admin.defaultImageImportStorage;
 		this.importTasks = [];
 		this.importDialogOpen = true;
 		this.loadPveImages();

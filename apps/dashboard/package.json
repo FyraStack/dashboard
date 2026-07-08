@@ -7,7 +7,7 @@
 		"dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
-		"cf:dev": "pnpm run build && wrangler dev --local-protocol http",
+		"cf:dev": "pnpm run build && wrangler dev -c wrangler.local.jsonc --local-protocol http",
 		"cf:dev:remote": "pnpm run build && wrangler dev --remote",
 		"cf:deploy": "wrangler deploy --env=\"\"",
 		"cf:deploy:preview": "pnpm run build && wrangler deploy --env preview",

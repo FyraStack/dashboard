@@ -8,7 +8,11 @@ const config = {
 		}
 	},
 	kit: {
-		adapter: adapter(),
+		adapter: adapter({
+			platformProxy: {
+				configPath: 'wrangler.local.jsonc'
+			}
+		}),
 		experimental: {
 			remoteFunctions: true
 		}

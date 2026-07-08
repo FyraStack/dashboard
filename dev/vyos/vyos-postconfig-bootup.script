@@ -1,0 +1,10 @@
+#!/bin/vbash
+[ -f /etc/ssl/certs/ssl-cert-snakeoil.pem ] || make-ssl-cert generate-default-snakeoil
+source /opt/vyatta/etc/functions/script-template
+configure
+set service https api keys id dashboard key vyos-dev
+set service https api rest
+set interfaces dummy dum0 address 2001:db8:0:1::1/64
+commit
+save
+exit

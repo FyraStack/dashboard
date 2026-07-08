@@ -1,5 +1,6 @@
 import { dev } from '$app/environment';
 import { getRequestEvent } from '$app/server';
+import { env as privateEnv } from '$env/dynamic/private';
 
 type SpanAttributes = Record<string, string | number | boolean | undefined>;
 
@@ -18,14 +19,12 @@ function roundMs(value: number): number {
 }
 
 function timingLogsEnabled(): boolean {
-	if (dev) return true;
-
+	let value: string | undefined;
 	try {
-		const env = getRequestEvent().platform?.env as { STACK_TIMING_SPAM?: string } | undefined;
-		return env?.STACK_TIMING_SPAM === 'true';
-	} catch {
-		return false;
-	}
+		value = getRequestEvent().platform?.env?.STACK_TIMING_SPAM;
+	} catch {}
+	value ??= privateEnv.STACK_TIMING_SPAM;
+	return value === undefined ? dev : value === 'true';
 }
 
 export function timingLog(name: string, attributes?: SpanAttributes) {

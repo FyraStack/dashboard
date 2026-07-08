@@ -1,0 +1,50 @@
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "stack-dashboard",
+	"main": ".svelte-kit/cloudflare/_worker.js",
+	"compatibility_date": "2026-04-05",
+	"compatibility_flags": ["nodejs_compat"],
+	"assets": {
+		"binding": "ASSETS",
+		"directory": ".svelte-kit/cloudflare",
+		"run_worker_first": [
+			"/",
+			"/_app/remote/*",
+			"/api/*",
+			"/admin/*",
+			"/projects/*",
+			"/login*",
+			"/register*",
+			"/signup*",
+			"/accept-invitation/*"
+		]
+	},
+	"vars": {
+		"ORIGIN": "http://localhost:5173",
+		"EMAIL_FROM_ADDRESS": "no-reply@example.com",
+		"EMAIL_FROM_NAME": "Fyra Stack",
+		"EMAIL_REPLY_TO": "support@example.com",
+		"AUTUMN_DEFAULT_PLAN_ID": "stack",
+		"AUTUMN_SERVER_ENTITY_FEATURE_ID": "active_servers",
+		"VYOS_USE_VPC": "false",
+		"PROXMOX_USE_VPC": "false",
+		"PROXMOX_SNIPPETS_USE_VPC": "false"
+	},
+	"hyperdrive": [
+		{
+			"binding": "HYPERDRIVE",
+			"id": "25228ed6f77e49fb8041aed12879327d"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "FEATURE_FLAGS",
+			"id": "0ad17de8747747bca1975d473e66e295"
+		}
+	],
+	"send_email": [
+		{
+			"name": "EMAIL"
+		}
+	]
+}

@@ -120,9 +120,9 @@ function projectBillingUrl(projectId: string) {
 
 export async function sendProjectPastDueEmail(projectId: string, graceDays: number) {
 	const owner = await getProjectOwnerRecipient(projectId);
-	if (!owner) return;
+	if (!owner) return null;
 
-	return sendRenderedEmail({
+	await sendRenderedEmail({
 		component: BillingNoticeEmail,
 		props: {
 			userName: owner.name,
@@ -135,13 +135,15 @@ export async function sendProjectPastDueEmail(projectId: string, graceDays: numb
 		subject: 'Action required: overdue balance on your Stack project',
 		to: owner.email
 	});
+
+	return owner.email;
 }
 
 export async function sendProjectSuspendedEmail(projectId: string) {
 	const owner = await getProjectOwnerRecipient(projectId);
-	if (!owner) return;
+	if (!owner) return null;
 
-	return sendRenderedEmail({
+	await sendRenderedEmail({
 		component: BillingNoticeEmail,
 		props: {
 			userName: owner.name,
@@ -154,4 +156,6 @@ export async function sendProjectSuspendedEmail(projectId: string) {
 		subject: 'Your Stack servers have been suspended',
 		to: owner.email
 	});
+
+	return owner.email;
 }

@@ -42,7 +42,6 @@ function isActiveSubscription(subscription: {
 	planId?: string | null;
 	status?: string | null;
 	pastDue?: boolean | null;
-	canceledAt?: number | null;
 	expiresAt?: number | null;
 }) {
 	const now = Date.now();
@@ -50,7 +49,6 @@ function isActiveSubscription(subscription: {
 	return (
 		subscription.status === 'active' &&
 		!subscription.pastDue &&
-		!subscription.canceledAt &&
 		(!subscription.expiresAt || subscription.expiresAt > now)
 	);
 }

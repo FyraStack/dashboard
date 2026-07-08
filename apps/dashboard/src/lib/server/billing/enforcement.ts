@@ -2,7 +2,7 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
 import { projectBillingCustomers, vms } from '$lib/server/db/schema';
 import { getBackend } from '$lib/server/backends';
-import { getProjectBillingState } from './autumn';
+import { getProjectBillingState, isBillingConfigured } from './autumn';
 import { sendProjectPastDueEmail, sendProjectSuspendedEmail } from '$lib/server/email-notifications';
 
 const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
@@ -30,6 +30,8 @@ async function suspendProjectVms(projectId: string) {
 }
 
 export async function enforceProjectBillingGrace(now = Date.now()) {
+	if (!isBillingConfigured()) return { checked: 0, suspended: 0 };
+
 	const db = initDrizzle();
 	const projects = await db
 		.selectDistinct({ projectId: vms.ownerProjectId })
@@ -59,9 +61,15 @@ export async function enforceProjectBillingGrace(now = Date.now()) {
 					)
 					.returning({ projectId: projectBillingCustomers.projectId });
 				if (claimed.length > 0) {
-					await sendProjectPastDueEmail(projectId, GRACE_PERIOD_DAYS).catch((err) => {
-						console.warn(`Failed to send past-due email for project ${projectId}`, err);
-					});
+					await sendProjectPastDueEmail(projectId, GRACE_PERIOD_DAYS)
+						.then((email) => {
+							if (email) {
+								console.info(`Sent past-due email to ${email} for project ${projectId}`);
+							}
+						})
+						.catch((err) => {
+							console.warn(`Failed to send past-due email for project ${projectId}`, err);
+						});
 				}
 				continue;
 			}
@@ -79,9 +87,15 @@ export async function enforceProjectBillingGrace(now = Date.now()) {
 					)
 					.returning({ projectId: projectBillingCustomers.projectId });
 				if (claimed.length > 0) {
-					await sendProjectSuspendedEmail(projectId).catch((err) => {
-						console.warn(`Failed to send suspension email for project ${projectId}`, err);
-					});
+					await sendProjectSuspendedEmail(projectId)
+						.then((email) => {
+							if (email) {
+								console.info(`Sent suspension email to ${email} for project ${projectId}`);
+							}
+						})
+						.catch((err) => {
+							console.warn(`Failed to send suspension email for project ${projectId}`, err);
+						});
 				}
 			}
 			continue;

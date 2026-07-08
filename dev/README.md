@@ -15,15 +15,11 @@ this is needed cause the 3 proxmox nodes will make a lot of inotify instances.
 
 ## First-time setup
 
-1. `dev/vyos/build-image.sh` — builds `localhost/fyrastack/vyos:stream` from the latest VyOS Stream ISO (`rolling` for rolling)
+1. `dev/vyos/build-image.sh`: builds `localhost/fyrastack/vyos:stream` from the latest VyOS Stream ISO (`rolling` for rolling)
 2. `cd dev && podman compose up -d`
-3. `dev/pve/init-cluster.sh` — forms the cluster, provisions storage/token/SDN, prints the `PROXMOX_*` env block
-4. Copy `apps/dashboard/.env.example` to `apps/dashboard/.env` and set:
-   - `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgres://postgres:mysecretpassword@127.0.0.1:5432/postgres"`
-   - `BETTER_AUTH_SECRET` — any string in dev
-   - `VYOS_API_URL="https://127.0.0.1:8443"`, `VYOS_API_KEY="vyos-dev"`, `VYOS_USE_VPC="false"`, `VYOS_VERIFY_SSL="false"`
-   - the `PROXMOX_*` block printed by `init-cluster.sh`
-5. `pnpm --filter stack-dashboard db:push`
+3. `dev/pve/init-cluster.sh`: forms the cluster, provisions storage/token/SDN, prints the `PROXMOX_*` env block
+4. Copy `apps/dashboard/.env.example` to `apps/dashboard/.env` and set `BETTER_AUTH_SECRET` (any string in dev) and the `PROXMOX_TOKEN_SECRET` printed by `init-cluster.sh`; everything else defaults to the dev stack
+5. `pnpm --filter stack-dashboard db:migrate`
 6. `podman exec -i fyra-postgres psql -U postgres < dev/seed-ipam.sql`
 
 ## usage

@@ -3,12 +3,13 @@
 ## Usage (dev)
 
 1. `pnpm install`
-2. `dev/vyos/build-image.sh`
-3. `cd dev && podman compose up -d`
-4. `dev/pve/init-cluster.sh`
+2. `cd dev`
+2. `vyos/build-image.sh`
+3. `podman compose up -d`
+4. `pve/init-cluster.sh`
 5. Copy `apps/dashboard/.env.example` to `apps/dashboard/.env`
 6. Add secrets to `apps/dashboard/.env`
-7. Set up the database: `pnpm --filter stack-dashboard db:push`
+7. Set up the database: `pnpm --filter stack-dashboard db:migrate`
 8. Seed test IPs: `podman exec -i fyra-postgres psql -U postgres < dev/seed-ipam.sql`
 9. `pnpm --filter stack-dashboard dev`
 

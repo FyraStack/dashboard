@@ -15,6 +15,7 @@ import { requireProjectAccess } from '$lib/server/auth-context';
 import {
 	deleteProjectServerEntity,
 	ensureProjectServerEntity,
+	isBillingConfigured,
 	isProjectBillingExempt,
 	requireProjectBillingActive
 } from '$lib/server/billing/autumn';
@@ -506,7 +507,7 @@ export const createVm = command(createParams, async (params) => {
 			: []
 	]);
 	if (!vmType) error(400, `VM type "${params.vmTypeId}" not found`);
-	if (!vmType.autumnFeatureId)
+	if (isBillingConfigured() && !vmType.autumnFeatureId)
 		error(400, `VM type "${vmType.name}" is missing an Autumn feature ID`);
 	const featureId = vmType.autumnFeatureId;
 
@@ -655,14 +656,16 @@ export const createVm = command(createParams, async (params) => {
 			lastKnownIpv6: ipv6Allocation?.address ?? null
 		})
 		.where(eq(vms.id, vmId));
-	await createBillingMeter({
-		projectId: params.projectId,
-		resourceType: 'vm',
-		resourceId: vmId,
-		featureId,
-		units: 1,
-		now
-	});
+	if (featureId) {
+		await createBillingMeter({
+			projectId: params.projectId,
+			resourceType: 'vm',
+			resourceId: vmId,
+			featureId,
+			units: 1,
+			now
+		});
+	}
 
 	return { id: inserted.id, taskId: result.taskId };
 });

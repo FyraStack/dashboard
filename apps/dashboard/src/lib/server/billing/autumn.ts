@@ -6,7 +6,8 @@ import { member, organization, projectBillingCustomers, user } from '$lib/server
 import { getRuntimeEnv } from '$lib/server/env';
 
 export function isBillingConfigured() {
-	return Boolean(getRuntimeEnv().AUTUMN_SECRET);
+	const env = getRuntimeEnv();
+	return env.AUTUMN_ENABLED !== 'false' && Boolean(env.AUTUMN_SECRET);
 }
 
 export function createAutumnClient() {

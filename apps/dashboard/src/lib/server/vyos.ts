@@ -136,10 +136,18 @@ export class VyosClient {
 	}
 
 	async getStaticIpv6Routes(): Promise<VyosStaticIpv6Routes> {
-		const response = await this.post<VyosStaticIpv6Routes | null>('retrieve', {
-			op: 'showConfig',
-			path: ['protocols', 'static', 'route6']
-		});
+		let response;
+		try {
+			response = await this.post<VyosStaticIpv6Routes | null>('retrieve', {
+				op: 'showConfig',
+				path: ['protocols', 'static', 'route6']
+			});
+		} catch (err) {
+			if (err instanceof VyosError && err.status === 400 && String(err.details).includes('empty')) {
+				return {};
+			}
+			throw err;
+		}
 
 		return response.data ?? {};
 	}

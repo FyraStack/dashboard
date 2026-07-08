@@ -3,6 +3,7 @@ import { stringify as stringifyYaml } from 'yaml';
 import { Address6 } from 'ip-address';
 import type { Fetcher } from '@cloudflare/workers-types';
 
+import { config } from '$lib/server/config';
 import { createVpcFetch, insecureDirectFetch } from '$lib/server/vpc';
 import { instrument } from '$lib/server/observability';
 import { ProxmoxClient } from './client';
@@ -91,9 +92,6 @@ function firstIpv6AddressInPrefix(prefix: string) {
 	return `${Address6.fromBigInt(address.startAddress().bigInt() + 1n).correctForm()}/${address.subnetMask}`;
 }
 
-const defaultIpv6Gateway = 'fe80::1040:ffff';
-const defaultNameservers = ['1.1.1.1', '1.0.0.1', '2606:4700:4700::1111', '2606:4700:4700::1001'];
-
 function cloudInitVendorConfig(params: CloudInitVendorConfigParams) {
 	const yamlContents = `#cloud-config\n${stringifyYaml({
 		write_files: [
@@ -143,7 +141,7 @@ function cloudInitNetworkConfig(params: VmCreateParams, macAddress: string) {
 				]
 			: []),
 		...(params.networkConfig?.ipv6
-			? [{ to: '::/0', via: defaultIpv6Gateway, 'on-link': true }]
+			? [{ to: '::/0', via: config.vmNetwork.ipv6DefaultGateway, 'on-link': true }]
 			: [])
 	];
 
@@ -157,7 +155,7 @@ function cloudInitNetworkConfig(params: VmCreateParams, macAddress: string) {
 				dhcp6: false,
 				addresses,
 				routes,
-				nameservers: { addresses: defaultNameservers }
+				nameservers: { addresses: config.vmNetwork.nameservers }
 			}
 		}
 	});
@@ -523,7 +521,7 @@ export class ProxmoxBackend implements VmBackend {
 					}
 				: {};
 		const bootDisk = 'virtio0';
-		const pvePool = 'stack-volumes';
+		const pvePool = config.proxmox.vmDiskStorage;
 		const macAddress = params.macAddress ?? generateMacAddress();
 		const cloudInitNetworkConfigFilename = `stack-${vmid}-network.yaml`;
 		const cloudInitVendorConfigFilename = `stack-${vmid}-vendor.yaml`;
@@ -557,8 +555,8 @@ export class ProxmoxBackend implements VmBackend {
 			scsihw: 'virtio-scsi-single',
 			...(params.imageSource ? {} : { virtio0: `${pvePool}:${params.diskGb}` }),
 			ide2: `${pvePool}:cloudinit`,
-			net0: `virtio=${macAddress},bridge=public,firewall=1,rate=128`,
-			pool: `stack-tenants`,
+			net0: `virtio=${macAddress},bridge=${config.proxmox.vmBridge},firewall=1,rate=${config.proxmox.vmNetRateMbps}`,
+			pool: config.proxmox.tenantPool,
 			boot: `order=${bootDisk}`,
 			cicustom: `network=${cloudInitNetworkConfigVolid},vendor=${cloudInitVendorConfigVolid}`,
 			ciupgrade: 0,

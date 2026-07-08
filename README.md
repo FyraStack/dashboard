@@ -3,18 +3,17 @@
 ## Usage (dev)
 
 1. `pnpm install`
-2. Start a Postgres server: `podman run -p 5432:5432 -e POSTGRES_PASSWORD=mysecretpassword -d postgres`
-3. Copy `apps/dashboard/.env.example` to `apps/dashboard/.env`
-4. Add secrets to `apps/dashboard/.env`
-5. Set up the database: `pnpm --filter stack-dashboard db:push`
-6. `pnpm --filter stack-dashboard dev`
+2. `cd dev`
+2. `vyos/build-image.sh`
+3. `podman compose up -d`
+4. `pve/init-cluster.sh`
+5. Copy `apps/dashboard/.env.example` to `apps/dashboard/.env`
+6. Add secrets to `apps/dashboard/.env`
+7. Set up the database: `pnpm --filter stack-dashboard db:migrate`
+8. Seed test IPs: `podman exec -i fyra-postgres psql -U postgres < dev/seed-ipam.sql`
+9. `pnpm --filter stack-dashboard dev`
 
-### Postgres Setup
-
-- If you want the data to persist:
-  - `podman volume create postgres_volume`
-  - `podman run -p 5432:5432 --replace --name dashboard_postgres -e POSTGRES_PASSWORD=mysecretpassword -v postgres_volume:/var/lib/postgresql -d postgres`
-- More detailed guide: https://orm.drizzle.team/docs/guides/postgresql-local-setup
+Details, one-time machine setup, and caveats: [dev/README.md](dev/README.md)
 
 ### secrets
 
@@ -22,11 +21,11 @@
   - Generate Better Auth
   - Autumn
   - Postgres connection URL
-    - if you use the podman command(s) listed above, the connection string is `postgres://postgres:mysecretpassword@127.0.0.1:5432/postgres`
+    - with the dev compose stack: `postgres://postgres:mysecretpassword@127.0.0.1:5432/postgres`
 - Highly recommended:
-  - Proxmox
+  - Proxmox (printed by `dev/pve/init-cluster.sh`)
 - Optional:
-  - VyOS
+  - VyOS (values in [dev/README.md](dev/README.md))
   - GitHub
   - Google
   - Billing meter secret

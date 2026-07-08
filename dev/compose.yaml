@@ -1,0 +1,133 @@
+name: fyrastack-dev
+
+services:
+  postgres:
+    image: docker.io/library/postgres:17
+    container_name: fyra-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: mysecretpassword
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+
+  vyos:
+    image: localhost/fyrastack/vyos:stream
+    container_name: fyra-vyos
+    privileged: true
+    ports:
+      - "8443:443"
+    volumes:
+      - /lib/modules:/lib/modules:ro
+    networks:
+      - vyos
+
+  snippets:
+    image: docker.io/library/nginx:alpine
+    container_name: fyra-snippets
+    command: sh -c "mkdir -p /shared/stack/snippets && chmod -R 777 /shared/stack && exec nginx -g 'daemon off;'"
+    ports:
+      - "8005:80"
+    volumes:
+      - ./pve/snippets-nginx.conf:/etc/nginx/conf.d/default.conf:ro,z
+      - pve_shared:/shared
+    networks:
+      - pve
+
+  gateway:
+    image: docker.io/library/alpine:3
+    container_name: fyra-gw
+    privileged: true
+    dns: [1.1.1.1]
+    command: sh /entrypoint.sh
+    ports:
+      - "51820:51820/udp"
+    volumes:
+      - ./gateway/entrypoint.sh:/entrypoint.sh:ro,z
+      - wg_data:/data
+    networks:
+      pve:
+        ipv4_address: 172.30.10.20
+
+  pve1:
+    image: docker.io/dockurr/proxmox
+    container_name: fyra-pve1
+    hostname: pve1
+    privileged: true
+    stop_grace_period: 2m
+    dns: [1.1.1.1]
+    environment:
+      PASSWORD: fyradev
+    ports:
+      - "8006:8006"
+    volumes:
+      - pve1_data:/var/lib/vz
+      - pve1_config:/var/lib/pve-cluster
+      - pve_shared:/shared
+    networks:
+      pve:
+        ipv4_address: 172.30.10.11
+
+  pve2:
+    image: docker.io/dockurr/proxmox
+    container_name: fyra-pve2
+    hostname: pve2
+    privileged: true
+    stop_grace_period: 2m
+    dns: [1.1.1.1]
+    environment:
+      PASSWORD: fyradev
+    ports:
+      - "8007:8006"
+    volumes:
+      - pve2_data:/var/lib/vz
+      - pve2_config:/var/lib/pve-cluster
+      - pve_shared:/shared
+    networks:
+      pve:
+        ipv4_address: 172.30.10.12
+
+  pve3:
+    image: docker.io/dockurr/proxmox
+    container_name: fyra-pve3
+    hostname: pve3
+    privileged: true
+    stop_grace_period: 2m
+    dns: [1.1.1.1]
+    environment:
+      PASSWORD: fyradev
+    ports:
+      - "8008:8006"
+    volumes:
+      - pve3_data:/var/lib/vz
+      - pve3_config:/var/lib/pve-cluster
+      - pve_shared:/shared
+    networks:
+      pve:
+        ipv4_address: 172.30.10.13
+
+networks:
+  vyos:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 172.30.11.0/24
+        - subnet: fd42:f17a:57ac:11::/64
+  pve:
+    ipam:
+      config:
+        - subnet: 172.30.10.0/24
+
+volumes:
+  postgres_data:
+  wg_data:
+  pve_shared:
+  pve1_data:
+  pve1_config:
+  pve2_data:
+  pve2_config:
+  pve3_data:
+  pve3_config:

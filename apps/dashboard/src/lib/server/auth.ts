@@ -423,7 +423,7 @@ function buildAuth() {
 					);
 				}
 			}),
-			...(env.AUTUMN_SECRET
+			...(env.AUTUMN_ENABLED !== 'false' && env.AUTUMN_SECRET
 				? [autumn({ customerScope: 'organization', secretKey: env.AUTUMN_SECRET })]
 				: []),
 			sveltekitCookies(getRequestEvent)

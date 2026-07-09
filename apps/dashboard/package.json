@@ -70,6 +70,7 @@
 		"@better-auth/utils": "^0.4.0",
 		"@better-svelte-email/components": "^2.0.0",
 		"@better-svelte-email/server": "^2.0.0",
+		"@plausible-analytics/tracker": "^0.4.5",
 		"arktype": "^2.2.0",
 		"autumn-js": "^1.2.18",
 		"ip-address": "^10.2.0",

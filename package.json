@@ -10,8 +10,8 @@
 		"check": "pnpm -r check",
 		"lint": "pnpm -r lint",
 		"format": "pnpm -r format",
-		"deploy": "pnpm -r build && pnpm --filter stack-dashboard deploy && pnpm --filter stack-dashboard-cron deploy",
-		"deploy:preview": "pnpm -r build && pnpm --filter stack-dashboard deploy:preview && pnpm --filter stack-dashboard-cron deploy:preview",
+		"cf:deploy": "pnpm -r build && pnpm --filter stack-dashboard run cf:deploy && pnpm --filter stack-dashboard-cron run cf:deploy",
+		"cf:deploy:preview": "pnpm --filter stack-dashboard run cf:deploy:preview && pnpm --filter stack-dashboard-cron run cf:deploy:preview",
 		"dashboard": "pnpm --filter stack-dashboard",
 		"cron": "pnpm --filter stack-dashboard-cron"
 	}

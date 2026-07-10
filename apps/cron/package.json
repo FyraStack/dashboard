@@ -6,9 +6,9 @@
 	"scripts": {
 		"dev": "wrangler dev",
 		"check": "tsc --noEmit",
-		"deploy": "wrangler deploy --env=\"\"",
-		"deploy:preview": "wrangler deploy --env preview",
-		"cf-typegen": "wrangler types"
+		"cf:deploy": "wrangler deploy --env=\"\"",
+		"cf:deploy:preview": "wrangler deploy --env preview",
+		"cf:typegen": "wrangler types"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20260405.1",

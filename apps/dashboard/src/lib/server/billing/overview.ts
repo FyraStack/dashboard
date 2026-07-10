@@ -48,10 +48,7 @@ export async function getProjectBillingOverview(projectId: string) {
 		.select({ featureId: billingUsageEvents.featureId, hours: sum(billingUsageEvents.quantity) })
 		.from(billingUsageEvents)
 		.where(
-			and(
-				eq(billingUsageEvents.projectId, projectId),
-				eq(billingUsageEvents.resourceType, 'vm')
-			)
+			and(eq(billingUsageEvents.projectId, projectId), eq(billingUsageEvents.resourceType, 'vm'))
 		)
 		.groupBy(billingUsageEvents.featureId);
 
@@ -59,7 +56,9 @@ export async function getProjectBillingOverview(projectId: string) {
 		.select({ featureId: vmTypes.autumnFeatureId, name: vmTypes.name, rate: vmTypes.rate })
 		.from(vmTypes);
 
-	const recordedByFeature = new Map(recordedRows.map((row) => [row.featureId, Number(row.hours ?? 0)]));
+	const recordedByFeature = new Map(
+		recordedRows.map((row) => [row.featureId, Number(row.hours ?? 0)])
+	);
 	const vmTypeByFeature = new Map<string, { name: string; rate: string }>();
 	for (const row of vmTypeRows) {
 		if (row.featureId) vmTypeByFeature.set(row.featureId, { name: row.name, rate: row.rate });

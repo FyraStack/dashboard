@@ -11,7 +11,10 @@ function insecureNodeFetch(): Promise<typeof globalThis.fetch> {
 	insecureFetchPromise ??= import('undici').then(({ Agent }) => {
 		const tlsTolerantAgent = new Agent({ connect: { rejectUnauthorized: false } });
 		return ((input, init) =>
-			fetch(input, { ...init, dispatcher: tlsTolerantAgent } as RequestInit)) as typeof globalThis.fetch;
+			fetch(input, {
+				...init,
+				dispatcher: tlsTolerantAgent
+			} as RequestInit)) as typeof globalThis.fetch;
 	});
 	return insecureFetchPromise;
 }

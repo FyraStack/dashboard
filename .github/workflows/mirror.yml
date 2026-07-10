@@ -1,6 +1,9 @@
 name: mirror
 on: [push]
 
+permissions:
+  contents: read
+
 jobs:
   mirror:
     uses: FyraLabs/actions/.github/workflows/mirror.yml@main

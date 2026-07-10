@@ -3,5 +3,5 @@ on: [push]
 
 jobs:
   mirror:
-    uses: FyraStack/actions/.github/workflows/mirror.yml@main
+    uses: FyraLabs/actions/.github/workflows/mirror.yml@main
     secrets: inherit

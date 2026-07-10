@@ -24,7 +24,7 @@
 		"auth:schema": "better-auth generate --config auth.config.ts --output src/lib/server/db/auth.schema.ts --yes"
 	},
 	"devDependencies": {
-		"@better-auth/cli": "^1.4.21",
+		"@better-auth/cli": "1.5.0-beta.13",
 		"@better-svelte-email/cli": "^2.0.0",
 		"@cloudflare/workers-types": "^4.20260629.1",
 		"@fontsource-variable/geist": "^5.2.8",

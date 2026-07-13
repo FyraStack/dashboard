@@ -358,9 +358,7 @@
 						<tr
 							class="transition-colors hover:bg-gray-800/20 {imgDragIndex === index
 								? 'opacity-40'
-								: ''} {imgDropIndex === index && imgDragIndex !== index
-								? 'bg-gray-800/40'
-								: ''}"
+								: ''} {imgDropIndex === index && imgDragIndex !== index ? 'bg-gray-800/40' : ''}"
 							ondragover={(event) => imgDragOver(event, index)}
 							ondrop={(event) => imgDrop(event, index)}
 						>
@@ -678,6 +676,16 @@
 						<input type="checkbox" bind:checked={admin.imgIsOfficial} class="h-4 w-4" /> Official image
 					</label>
 				</div>
+			</div>
+
+			<div class="flex flex-col gap-2">
+				<Label>Secure Boot</Label>
+				<label
+					class="flex h-9 items-center gap-2 border border-gray-700 bg-gray-800 px-3 text-sm text-gray-300"
+				>
+					<input type="checkbox" bind:checked={admin.imgSecureBoot} class="h-4 w-4" /> Enable UEFI Secure
+					Boot for VMs using this image
+				</label>
 			</div>
 
 			<div class="flex flex-col gap-2">

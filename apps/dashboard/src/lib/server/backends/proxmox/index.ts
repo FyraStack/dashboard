@@ -72,6 +72,7 @@ type ProxmoxBackendOptions = {
 	snippetsEndpointVerifySsl?: boolean;
 	snippetsStorage?: string;
 	firewallSecurityGroup?: string;
+	vmCpuType?: string;
 };
 
 type CloudInitVendorConfigParams = {
@@ -547,7 +548,7 @@ export class ProxmoxBackend implements VmBackend {
 			cores: params.cores,
 			sockets: 1,
 			memory: params.memoryMb,
-			cpu: 'x86-64-v4',
+			cpu: this.options.vmCpuType ?? 'x86-64-v4',
 			ostype: 'l26',
 			bios: 'ovmf',
 			machine: 'q35',

@@ -110,9 +110,9 @@ function cloudInitVendorConfig(params: CloudInitVendorConfigParams) {
 				: [])
 		],
 		runcmd: [
-			'sysctl --system',
+			'sh -c "sysctl -p /etc/sysctl.d/99-ipv6-forwarding.conf || sysctl -w net.ipv6.conf.all.forwarding=1"',
 			...((params.enableSshPasswordAuth ?? false)
-				? ['systemctl restart ssh', 'systemctl restart sshd']
+				? ['sh -c "rc-service sshd restart || systemctl restart sshd || systemctl restart ssh"']
 				: [])
 		],
 		ssh_pwauth: params.enableSshPasswordAuth ?? false
@@ -130,16 +130,17 @@ function cloudInitNetworkConfig(params: VmCreateParams, macAddress: string) {
 		? firstIpv6AddressInPrefix(params.networkConfig.ipv6Prefix)
 		: null;
 	const addresses = [
-		...(params.networkConfig?.ipv4 ? [`${params.networkConfig.ipv4.address}/32`] : []),
-		...(params.networkConfig?.ipv6 ? [`${params.networkConfig.ipv6.address}/128`] : []),
+		...(params.networkConfig?.ipv4
+			? [`${params.networkConfig.ipv4.address}/${params.networkConfig.ipv4.prefixLength}`]
+			: []),
+		...(params.networkConfig?.ipv6
+			? [`${params.networkConfig.ipv6.address}/${params.networkConfig.ipv6.prefixLength}`]
+			: []),
 		...(delegatedPrefixAddress ? [delegatedPrefixAddress] : [])
 	];
 	const routes = [
-		...(params.networkConfig?.ipv4
-			? [
-					{ to: `${params.networkConfig.ipv4.gateway}/32`, scope: 'link' },
-					{ to: '0.0.0.0/0', via: params.networkConfig.ipv4.gateway, 'on-link': true }
-				]
+		...(params.networkConfig?.ipv4?.gateway
+			? [{ to: '0.0.0.0/0', via: params.networkConfig.ipv4.gateway, 'on-link': true }]
 			: []),
 		...(params.networkConfig?.ipv6
 			? [{ to: '::/0', via: config.vmNetwork.ipv6DefaultGateway, 'on-link': true }]

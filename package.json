@@ -14,10 +14,5 @@
 		"cf:deploy:preview": "pnpm --filter stack-dashboard run cf:deploy:preview && pnpm --filter stack-dashboard-cron run cf:deploy:preview",
 		"dashboard": "pnpm --filter stack-dashboard",
 		"cron": "pnpm --filter stack-dashboard-cron"
-	},
-	"pnpm": {
-		"overrides": {
-			"better-call": "1.3.7"
-		}
 	}
 }

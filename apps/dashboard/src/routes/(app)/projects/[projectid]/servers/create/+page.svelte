@@ -26,8 +26,10 @@
 		EyeOff,
 		HardDriveUpload,
 		Plus,
-		X
+		X,
+		Dices
 	} from '@lucide/svelte';
+	import { generateServerName } from '$lib/name-generator';
 
 	type PageData = {
 		currentProject?: { id: string } | null;
@@ -123,7 +125,10 @@
 	const ipv6Available = $derived(Boolean(data.ipamAvailability?.ipv6.available));
 	const bothNetworksAvailable = $derived(ipv4Available && ipv6Available);
 
-	let serverName = $state('');
+	let serverName = $state(generateServerName());
+	function regenerateServerName() {
+		serverName = generateServerName();
+	}
 	let selectedImageId = $state<string | null>(null);
 	let selectedImageVersion = $state<string | null>(null);
 	let selectedPlanId = $state<string | null>(null);
@@ -417,12 +422,15 @@
 								>Name</span
 							>
 						</div>
-						<div class="mt-3">
+						<div class="mt-3 flex">
 							<Input
 								bind:value={serverName}
 								placeholder="my-server"
 								class="h-11 text-base sm:h-9 sm:text-sm"
 							/>
+							<Button variant="outline" class="h-11 sm:h-9" onclick={regenerateServerName}>
+								<Dices />
+							</Button>
 						</div>
 					</div>
 

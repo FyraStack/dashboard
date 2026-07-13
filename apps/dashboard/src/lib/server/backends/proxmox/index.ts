@@ -228,6 +228,10 @@ export class ProxmoxBackend implements VmBackend {
 		);
 	}
 
+	async ping(): Promise<void> {
+		await this.client.listNodes();
+	}
+
 	private resourceToInfo(r: PveClusterResource): VmInfo {
 		const memoryUsage = r.mem != null && r.maxmem ? r.mem / r.maxmem : undefined;
 		const diskUsage = r.disk != null && r.maxdisk ? r.disk / r.maxdisk : undefined;

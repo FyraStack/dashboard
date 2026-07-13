@@ -123,6 +123,7 @@ export interface PveCreateQemuParams {
 	bios?: 'seabios' | 'ovmf';
 	machine?: string;
 	efidisk0?: string;
+	tpmstate0?: string;
 	virtio0?: string;
 	scsihw?: string;
 	scsi0?: string;

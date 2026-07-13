@@ -61,7 +61,8 @@ function createProxmox(): ProxmoxBackend {
 		snippetsEndpointPassword: env.PROXMOX_SNIPPETS_ENDPOINT_PASSWORD,
 		snippetsEndpointVerifySsl: env.PROXMOX_SNIPPETS_ENDPOINT_VERIFY_SSL !== 'false',
 		snippetsStorage: env.PROXMOX_SNIPPETS_STORAGE,
-		firewallSecurityGroup: env.PROXMOX_VM_FIREWALL_SECURITY_GROUP
+		firewallSecurityGroup: env.PROXMOX_VM_FIREWALL_SECURITY_GROUP,
+		vmCpuType: env.PROXMOX_VM_CPU_TYPE
 	});
 
 	timingLog('backend.proxmox.create.end', {

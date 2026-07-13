@@ -101,6 +101,7 @@ export interface VmLookupOptions {
 
 export interface VmBackend {
 	readonly name: string;
+	ping(): Promise<void>;
 	listVms(): Promise<VmInfo[]>;
 	getVm(id: string, proxmoxId?: number, options?: VmLookupOptions): Promise<VmInfo>;
 	getVmNetworkInterfaces?(

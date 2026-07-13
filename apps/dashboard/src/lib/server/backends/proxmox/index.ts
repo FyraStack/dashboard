@@ -556,7 +556,7 @@ export class ProxmoxBackend implements VmBackend {
 			ostype: 'l26',
 			bios: 'ovmf',
 			machine: 'q35',
-			efidisk0: `${pvePool}:0,efitype=4m,pre-enrolled-keys=1`,
+			efidisk0: `${pvePool}:0,efitype=4m,pre-enrolled-keys=${(params.secureBoot ?? true) ? 1 : 0}`,
 			tpmstate0: `${pvePool}:0,version=v2.0`,
 			scsihw: 'virtio-scsi-single',
 			...(params.imageSource ? {} : { virtio0: `${pvePool}:${params.diskGb}` }),

@@ -18,6 +18,7 @@ type ImageRow = {
 	logoSvg: string | null;
 	accentColor: string;
 	imageType: string;
+	secureBoot: boolean;
 	filePath: string;
 	isa: string;
 };
@@ -68,6 +69,7 @@ export const listImages = query(async () => {
 		logoSvg: row.logoSvg,
 		accentColor: row.accentColor,
 		imageType: row.imageType,
+		secureBoot: row.secureBoot,
 		isa: row.isa
 	}));
 });
@@ -81,6 +83,7 @@ const createParams = type({
 	isOfficial: 'boolean?',
 	logoSvg: 'string?',
 	accentColor: 'string?',
+	secureBoot: 'boolean?',
 	filePath: 'string',
 	isa: "'x86'"
 });
@@ -114,6 +117,7 @@ export const createImage = command(createParams, async (params) => {
 			logoSvg,
 			accentColor,
 			imageType: selectedImage.format || 'qcow2',
+			secureBoot: params.secureBoot ?? true,
 			filePath: params.filePath,
 			isa: params.isa
 		})
@@ -132,6 +136,7 @@ const updateParams = type({
 	isOfficial: 'boolean?',
 	logoSvg: 'string?',
 	accentColor: 'string?',
+	secureBoot: 'boolean?',
 	filePath: 'string?',
 	isa: "'x86'?"
 });

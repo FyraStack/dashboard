@@ -79,6 +79,7 @@ export type BaseImage = {
 	logoSvg: string | null | undefined;
 	accentColor: string;
 	imageType: string;
+	secureBoot: boolean;
 	filePath: string;
 	isa: string;
 };
@@ -225,6 +226,7 @@ export class AdminState {
 	imgIsOfficial = $state(false);
 	imgLogoSvg = $state('');
 	imgAccentColor = $state('#6b7280');
+	imgSecureBoot = $state(true);
 	imgFilePath = $state('');
 	imgIsa = $state<VmIsa>('x86');
 
@@ -707,6 +709,7 @@ export class AdminState {
 		this.imgIsOfficial = false;
 		this.imgLogoSvg = '';
 		this.imgAccentColor = '#6b7280';
+		this.imgSecureBoot = true;
 		this.imgFilePath = '';
 		this.imgIsa = 'x86';
 		this.imgError = '';
@@ -724,6 +727,7 @@ export class AdminState {
 		this.imgIsOfficial = img.isOfficial;
 		this.imgLogoSvg = img.logoSvg ?? '';
 		this.imgAccentColor = img.accentColor;
+		this.imgSecureBoot = img.secureBoot;
 		this.imgFilePath = img.filePath;
 		this.imgIsa = 'x86';
 		this.imgError = '';
@@ -746,6 +750,7 @@ export class AdminState {
 				color: this.imgColor,
 				isOfficial: this.imgIsOfficial,
 				accentColor: this.imgAccentColor.trim() || '#6b7280',
+				secureBoot: this.imgSecureBoot,
 				filePath: selectedImage.volid,
 				isa: 'x86' as const,
 				...(icon ? { icon } : {}),

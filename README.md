@@ -9,6 +9,8 @@
 4. `pve/init-cluster.sh`
 5. Copy `apps/dashboard/.env.example` to `apps/dashboard/.env`
 6. Add secrets to `apps/dashboard/.env`
+  - Update `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` and set all `VPC` stuff to false
+  - set `BETTER_AUTH_SECRET` to any value
 7. Set up the database: `pnpm --filter stack-dashboard db:migrate`
 8. Seed test IPs: `podman exec -i fyra-postgres psql -U postgres < dev/seed-ipam.sql`
 9. `pnpm --filter stack-dashboard dev`

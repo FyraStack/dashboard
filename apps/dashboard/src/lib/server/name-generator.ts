@@ -1,6 +1,6 @@
 const choices = [
-  ["kitten", "cat", "neko", "puppy", "dog", "doggy"],
-  ["box", "stack", "rack", "server", "node"],
+	['kitten', 'cat', 'neko', 'puppy', 'dog', 'doggy'],
+	['box', 'stack', 'rack', 'server', 'node']
 ];
 
 const choose = (i: number) => choices[i][Math.floor(Math.random() * choices[i].length)];

@@ -270,7 +270,8 @@
 								<div class="text-right">
 									<p class="text-sm text-gray-200 tabular-nums">{resource.count ?? 0} active</p>
 									<p class="text-xs text-gray-500 tabular-nums">
-										{formatHours(resource.hours)}{#if costLabel} · {costLabel} est.{/if}
+										{formatHours(resource.hours)}{#if costLabel}
+											· {costLabel} est.{/if}
 									</p>
 								</div>
 							</div>

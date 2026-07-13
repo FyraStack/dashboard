@@ -344,8 +344,8 @@ export const listAdminUsers = query(async (): Promise<AdminUser[]> => {
 		.from(user)
 		.orderBy(desc(user.createdAt));
 
-	const [sessions, accounts, members, sshKeysData, apiTokensData, passkeysData] =
-		await Promise.all([
+	const [sessions, accounts, members, sshKeysData, apiTokensData, passkeysData] = await Promise.all(
+		[
 			db.select({ userId: session.userId, count: count() }).from(session).groupBy(session.userId),
 			db.select({ userId: account.userId, count: count() }).from(account).groupBy(account.userId),
 			db.select({ userId: member.userId, count: count() }).from(member).groupBy(member.userId),
@@ -355,7 +355,8 @@ export const listAdminUsers = query(async (): Promise<AdminUser[]> => {
 				.from(apiTokens)
 				.groupBy(apiTokens.userId),
 			db.select({ userId: passkey.userId, count: count() }).from(passkey).groupBy(passkey.userId)
-		]);
+		]
+	);
 
 	const sessionMap = makeCountMap(sessions);
 	const accountMap = makeCountMap(accounts);

@@ -3,7 +3,10 @@ import { initDrizzle } from '$lib/server/db';
 import { projectBillingCustomers, vms } from '$lib/server/db/schema';
 import { getBackend } from '$lib/server/backends';
 import { getProjectBillingState, isBillingConfigured } from './autumn';
-import { sendProjectPastDueEmail, sendProjectSuspendedEmail } from '$lib/server/email-notifications';
+import {
+	sendProjectPastDueEmail,
+	sendProjectSuspendedEmail
+} from '$lib/server/email-notifications';
 
 const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
 const GRACE_PERIOD_DAYS = 7;

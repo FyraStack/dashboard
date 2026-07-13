@@ -72,7 +72,14 @@
 	const typeOptions = $derived(
 		[...new Set(admin.adminVms.map((vm) => vm.vmTypeName).filter(Boolean) as string[])].sort()
 	);
-	const statusOptions = ['running', 'stopped', 'paused', 'provisioning', 'deleting', 'error'] as const;
+	const statusOptions = [
+		'running',
+		'stopped',
+		'paused',
+		'provisioning',
+		'deleting',
+		'error'
+	] as const;
 	const ownerFilterLabel = $derived(
 		ownerFilter === 'all'
 			? 'All'

@@ -358,9 +358,7 @@
 						<tr
 							class="transition-colors hover:bg-gray-800/20 {imgDragIndex === index
 								? 'opacity-40'
-								: ''} {imgDropIndex === index && imgDragIndex !== index
-								? 'bg-gray-800/40'
-								: ''}"
+								: ''} {imgDropIndex === index && imgDragIndex !== index ? 'bg-gray-800/40' : ''}"
 							ondragover={(event) => imgDragOver(event, index)}
 							ondrop={(event) => imgDrop(event, index)}
 						>

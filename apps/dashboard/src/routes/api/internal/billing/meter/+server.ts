@@ -1,7 +1,10 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { meterActiveResources, syncPendingUsage } from '$lib/server/billing/metering';
-import { isBillingConfigured, retryOrphanedProjectBillingCancellations } from '$lib/server/billing/autumn';
+import {
+	isBillingConfigured,
+	retryOrphanedProjectBillingCancellations
+} from '$lib/server/billing/autumn';
 import { enforceProjectBillingGrace } from '$lib/server/billing/enforcement';
 import { getRuntimeEnv } from '$lib/server/env';
 

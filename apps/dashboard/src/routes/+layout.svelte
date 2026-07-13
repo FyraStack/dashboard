@@ -2,11 +2,11 @@
 	import './layout.css';
 	import NavigationProgress from '$lib/components/navigation-progress.svelte';
 	import { onMount } from 'svelte';
-	import { init } from '@plausible-analytics/tracker';
 
 	let { children } = $props();
 
-	onMount(() => {
+	onMount(async () => {
+		const { init } = await import('@plausible-analytics/tracker');
 		init({
 			domain: 'dash.fyrastack.com',
 			endpoint: 'https://plausible.fyralabs.com/api/event',

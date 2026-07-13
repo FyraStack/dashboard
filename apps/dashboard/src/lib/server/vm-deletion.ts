@@ -16,10 +16,7 @@ type DeletableVm = {
 };
 
 export async function queueVmDeletion(db: Database, row: DeletableVm): Promise<void> {
-	await db
-		.update(vms)
-		.set({ status: 'deleting', statusError: null })
-		.where(eq(vms.id, row.id));
+	await db.update(vms).set({ status: 'deleting', statusError: null }).where(eq(vms.id, row.id));
 	runInBackground(deleteVmResources(row), `vm-delete-${row.id}`);
 }
 
@@ -87,7 +84,9 @@ async function deleteVmResources(row: DeletableVm): Promise<void> {
 				statusError: err instanceof Error ? err.message : 'Failed to clean up VM resources'
 			})
 			.where(eq(vms.id, row.id))
-			.catch((updateErr) => console.error(`VM ${row.id} deletion status update failed:`, updateErr));
+			.catch((updateErr) =>
+				console.error(`VM ${row.id} deletion status update failed:`, updateErr)
+			);
 	} finally {
 		close();
 	}

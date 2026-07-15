@@ -51,6 +51,7 @@ services:
     networks:
       pve:
         ipv4_address: 172.30.10.20
+      wan6: {}
 
   pve1:
     image: docker.io/dockurr/proxmox
@@ -126,6 +127,11 @@ networks:
     ipam:
       config:
         - subnet: 172.30.10.0/24
+  wan6:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd42:f17a:57ac:12::/64
 
 volumes:
   postgres_data:

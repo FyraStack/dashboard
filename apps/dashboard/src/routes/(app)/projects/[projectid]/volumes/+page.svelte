@@ -230,10 +230,10 @@
 
 <div class="flex flex-1 flex-col overflow-hidden">
 	<!-- Header -->
-	<div class="flex h-10 shrink-0 items-center justify-between border-b border-gray-800 px-5">
+	<div class="flex h-10 shrink-0 items-center justify-between border-b border-border px-5">
 		<div class="flex items-center gap-2">
-			<HardDrive class="h-4 w-4 text-gray-400" />
-			<span class="text-sm font-semibold text-gray-100">Volumes</span>
+			<HardDrive class="h-4 w-4 text-muted-foreground" />
+			<span class="text-sm font-semibold text-foreground">Volumes</span>
 			<Badge variant="secondary" class="text-[10px]">{volumes.length}</Badge>
 		</div>
 		<Button
@@ -247,7 +247,9 @@
 		</Button>
 	</div>
 	{#if actionError}
-		<div class="border-b border-red-900/40 bg-red-950/20 px-5 py-2 text-xs text-red-400">
+		<div
+			class="border-b border-red-300 bg-red-100 px-5 py-2 text-xs text-red-800 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400"
+		>
 			{actionError}
 		</div>
 	{/if}
@@ -258,7 +260,7 @@
 			{@const colorClass = getUsageColor(vol.used, vol.size)}
 			{@const colorHex = getUsageColorHex(vol.used, vol.size)}
 			<div
-				class="flex items-center gap-4 border-b border-gray-800 px-5 py-3 transition-colors duration-100 hover:bg-gray-800/20 {vol.status ===
+				class="flex items-center gap-4 border-b border-border px-5 py-3 transition-colors duration-100 hover:bg-muted/20 {vol.status ===
 				'deleting'
 					? 'opacity-40'
 					: ''}"
@@ -267,22 +269,24 @@
 				<div
 					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg {vol.status ===
 					'attached'
-						? 'bg-emerald-950/30'
-						: 'bg-gray-800'}"
+						? 'bg-emerald-100 dark:bg-emerald-950/30'
+						: 'bg-muted'}"
 				>
 					<HardDrive
-						class="h-5 w-5 {vol.status === 'attached' ? 'text-emerald-400' : 'text-gray-500'}"
+						class="h-5 w-5 {vol.status === 'attached'
+							? 'text-emerald-700 dark:text-emerald-400'
+							: 'text-muted-foreground'}"
 					/>
 				</div>
 
 				<!-- Info -->
 				<div class="min-w-0 flex-1">
 					<div class="flex items-center gap-2">
-						<span class="text-sm font-medium text-gray-100">{vol.name}</span>
+						<span class="text-sm font-medium text-foreground">{vol.name}</span>
 						{#if vol.status === 'attached'}
 							<Badge
 								variant="outline"
-								class="border-emerald-800 bg-emerald-950/40 text-[10px] text-emerald-400"
+								class="border-emerald-300 bg-emerald-100 text-[10px] text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"
 								>Attached</Badge
 							>
 						{:else if vol.status === 'deleting'}
@@ -291,14 +295,14 @@
 							<Badge variant="secondary" class="text-[10px]">Available</Badge>
 						{/if}
 					</div>
-					<div class="mt-1 flex items-center gap-3 text-xs text-gray-500">
+					<div class="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
 						<span>{vol.id}</span>
-						<span class="h-1 w-1 rounded-full bg-gray-700"></span>
+						<span class="h-1 w-1 rounded-full bg-muted"></span>
 						<span>{vol.region}</span>
 					</div>
 					<!-- Storage Graph (mobile only) -->
 					<div class="mt-2 flex items-center gap-2 lg:hidden">
-						<div class="h-1.5 w-20 overflow-hidden rounded-full bg-gray-800">
+						<div class="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
 							<div
 								class="h-full rounded-full transition-all duration-500 {vol.used / vol.size > 0.8
 									? 'bg-red-500'
@@ -308,7 +312,7 @@
 								style="width: {(vol.used / vol.size) * 100}%"
 							></div>
 						</div>
-						<span class="text-[10px] text-gray-500">
+						<span class="text-[10px] text-muted-foreground">
 							{vol.used > 0 ? `${vol.used} used` : 'empty'}
 						</span>
 					</div>
@@ -349,19 +353,19 @@
 							{/if}
 						</svg>
 					</div>
-					<span class="w-14 text-right text-[10px] text-gray-400 tabular-nums">
+					<span class="w-14 text-right text-[10px] text-muted-foreground tabular-nums">
 						{vol.used}/{vol.size} GB
 					</span>
 				</div>
 
 				<!-- Size -->
 				<div class="w-20 text-right">
-					<span class="text-sm font-semibold text-gray-200">{vol.size} GB</span>
+					<span class="text-sm font-semibold text-foreground">{vol.size} GB</span>
 				</div>
 
 				<!-- Server -->
 				<div class="w-28">
-					<span class="text-xs text-gray-500">{vol.server ?? '—'}</span>
+					<span class="text-xs text-muted-foreground">{vol.server ?? '—'}</span>
 				</div>
 
 				<!-- Actions -->
@@ -405,7 +409,7 @@
 		{/each}
 
 		{#if volumes.length === 0}
-			<div class="flex flex-col items-center justify-center py-20 text-gray-500">
+			<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
 				<HardDrive class="mb-3 h-8 w-8" />
 				<p class="text-sm">No volumes yet</p>
 			</div>

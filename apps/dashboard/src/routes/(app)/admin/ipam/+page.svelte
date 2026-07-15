@@ -169,12 +169,12 @@
 </script>
 
 <div class="flex flex-1 flex-col overflow-hidden">
-	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-gray-800">
+	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-border">
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'vmTypes'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin')}
 		>
 			<Cpu class="h-3.5 w-3.5 shrink-0" />
@@ -184,8 +184,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'vms'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/vms')}
 		>
 			<Server class="h-3.5 w-3.5 shrink-0" />
@@ -197,8 +197,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'images'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/images')}
 		>
 			<Disc class="h-3.5 w-3.5 shrink-0" />
@@ -208,8 +208,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'features'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/features')}
 		>
 			<Flag class="h-3.5 w-3.5 shrink-0" />
@@ -219,8 +219,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'ipam'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/ipam')}
 		>
 			<Network class="h-3.5 w-3.5 shrink-0" />
@@ -230,8 +230,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'users'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/users')}
 		>
 			<UserCog class="h-3.5 w-3.5 shrink-0" />
@@ -241,8 +241,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'emails'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/emails')}
 		>
 			<Mail class="h-3.5 w-3.5 shrink-0" />
@@ -257,19 +257,19 @@
 	</div>
 
 	<div class="flex-1 overflow-auto">
-		<div class="flex items-center gap-4 border-b border-gray-800/60 px-5 py-3">
-			<div class="flex items-center gap-2 text-xs text-gray-400">
-				<span class="text-gray-500">IPv4</span>
-				<span class="font-medium text-gray-200">{ipv4Count}</span>
+		<div class="flex items-center gap-4 border-b border-border/60 px-5 py-3">
+			<div class="flex items-center gap-2 text-xs text-muted-foreground">
+				<span class="text-muted-foreground">IPv4</span>
+				<span class="font-medium text-foreground">{ipv4Count}</span>
 			</div>
-			<div class="flex items-center gap-2 text-xs text-gray-400">
-				<span class="text-gray-500">IPv6</span>
-				<span class="font-medium text-gray-200">{ipv6Count}</span>
+			<div class="flex items-center gap-2 text-xs text-muted-foreground">
+				<span class="text-muted-foreground">IPv6</span>
+				<span class="font-medium text-foreground">{ipv6Count}</span>
 			</div>
 		</div>
 
 		{#if admin.ipamPrefixes.length === 0}
-			<div class="flex flex-col items-center justify-center py-20 text-gray-500">
+			<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
 				<Network class="mb-3 h-6 w-6" />
 				<p class="text-xs">No IPAM prefixes configured</p>
 				<Button variant="outline" size="sm" class="mt-3 gap-1.5 text-xs" onclick={openCreate}>
@@ -279,32 +279,32 @@
 		{:else}
 			<table class="w-full whitespace-nowrap">
 				<thead>
-					<tr class="border-b border-gray-800">
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Name</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Prefix</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Family</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Gateway</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Mode</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Available</th>
-						<th class="px-5 py-3 text-right text-xs font-medium text-gray-500">Actions</th>
+					<tr class="border-b border-border">
+						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Name</th>
+						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Prefix</th>
+						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Family</th>
+						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Gateway</th>
+						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Mode</th>
+						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Available</th>
+						<th class="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th>
 					</tr>
 				</thead>
-				<tbody class="divide-y divide-gray-800/50">
+				<tbody class="divide-y divide-border/50">
 					{#each admin.ipamPrefixes as prefix (prefix.id)}
-						<tr class="transition-colors hover:bg-gray-800/20">
+						<tr class="transition-colors hover:bg-muted/20">
 							<td class="px-5 py-3">
 								<div class="flex items-center gap-2">
-									<span class="text-sm font-medium text-gray-100">{prefix.name}</span>
+									<span class="text-sm font-medium text-foreground">{prefix.name}</span>
 									{#if prefix.disabled}
 										<Badge variant="secondary" class="text-[10px]">Disabled</Badge>
 									{/if}
 								</div>
 							</td>
-							<td class="px-5 py-3 font-mono text-xs text-gray-300">{prefix.cidr}</td>
+							<td class="px-5 py-3 font-mono text-xs text-muted-foreground">{prefix.cidr}</td>
 							<td class="px-5 py-3">
 								<Badge variant="secondary" class="text-[10px]">{prefix.family}</Badge>
 							</td>
-							<td class="px-5 py-3 font-mono text-xs text-gray-300">
+							<td class="px-5 py-3 font-mono text-xs text-muted-foreground">
 								{prefix.gatewayAddress ?? '—'}
 							</td>
 							<td class="px-5 py-3">
@@ -316,9 +316,9 @@
 										: '/32 addresses'}
 								</Badge>
 							</td>
-							<td class="px-5 py-3 text-sm text-gray-300">
+							<td class="px-5 py-3 text-sm text-muted-foreground">
 								<span class="tabular-nums">{formatCount(prefix.available)}</span>
-								<span class="text-gray-500"> / {formatCount(prefix.capacity)}</span>
+								<span class="text-muted-foreground"> / {formatCount(prefix.capacity)}</span>
 							</td>
 
 							<td class="px-5 py-3 text-right">
@@ -326,7 +326,7 @@
 									<Button
 										variant="ghost"
 										size="sm"
-										class="h-7 w-7 p-0 text-gray-400 hover:text-gray-100"
+										class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
 										onclick={() => togglePrefix(prefix)}
 										aria-label={prefix.disabled ? 'Enable prefix' : 'Disable prefix'}
 									>
@@ -335,7 +335,7 @@
 									<Button
 										variant="ghost"
 										size="sm"
-										class="h-7 w-7 p-0 text-gray-400 hover:text-gray-100"
+										class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
 										onclick={() => openEdit(prefix)}
 										aria-label="Edit prefix"
 									>
@@ -361,7 +361,7 @@
 </div>
 
 <Dialog.Root bind:open={dialogOpen}>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-lg">
+	<Dialog.Content class="border-border bg-background sm:max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>{editing ? 'Edit Prefix' : 'Add Prefix'}</Dialog.Title>
 			<Dialog.Description>Global IPAM allocation source.</Dialog.Description>
@@ -399,7 +399,7 @@
 				</div>
 			</div>
 			{#if isIpv6Prefix}
-				<label class="flex items-start gap-2 text-sm text-gray-300">
+				<label class="flex items-start gap-2 text-sm text-muted-foreground">
 					<input
 						type="checkbox"
 						bind:checked={ipv6UseTransitAddress}
@@ -407,14 +407,14 @@
 					/>
 					<span>
 						Use this IPv6 block for /128 transit addresses
-						<span class="block text-xs text-gray-500"
+						<span class="block text-xs text-muted-foreground"
 							>Leave unchecked to allocate /64 prefixes.</span
 						>
 					</span>
 				</label>
 			{/if}
 
-			<label class="flex items-center gap-2 text-sm text-gray-300">
+			<label class="flex items-center gap-2 text-sm text-muted-foreground">
 				<input type="checkbox" bind:checked={disabled} class="accent-red-500" />
 				Disabled
 			</label>

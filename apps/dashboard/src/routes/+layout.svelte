@@ -2,6 +2,7 @@
 	import './layout.css';
 	import NavigationProgress from '$lib/components/navigation-progress.svelte';
 	import { onMount } from 'svelte';
+	import { ModeWatcher } from 'mode-watcher';
 
 	let { children } = $props();
 
@@ -22,6 +23,7 @@
 	<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
 </svelte:head>
 
+<ModeWatcher />
 <NavigationProgress />
 
 {@render children()}

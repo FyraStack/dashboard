@@ -183,10 +183,12 @@
 		<div class="max-w-2xl px-6 py-6">
 			<div class="flex flex-col gap-6">
 				<!-- Project Name -->
-				<div class="rounded-xs border border-gray-800/60 p-5">
-					<div class="mb-4 flex items-center gap-2 border-b border-gray-800/50 pb-3">
+				<div class="rounded-xs border border-border/60 p-5">
+					<div class="mb-4 flex items-center gap-2 border-b border-border/50 pb-3">
 						<Settings class="h-4 w-4 text-red-400" />
-						<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">Project Name</p>
+						<p class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+							Project Name
+						</p>
 					</div>
 					<div class="flex flex-col gap-3">
 						<Input bind:value={projectName} class="font-medium" disabled={!canManageMembers} />
@@ -209,11 +211,13 @@
 				</div>
 
 				<!-- Members -->
-				<div class="rounded-xs border border-gray-800/60 p-5">
-					<div class="mb-4 flex items-center justify-between border-b border-gray-800/50 pb-3">
+				<div class="rounded-xs border border-border/60 p-5">
+					<div class="mb-4 flex items-center justify-between border-b border-border/50 pb-3">
 						<div class="flex items-center gap-2">
 							<User class="h-4 w-4 text-red-400" />
-							<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">Members</p>
+							<p class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+								Members
+							</p>
 						</div>
 						{#if canManageMembers}
 							<Button
@@ -231,25 +235,25 @@
 						<!-- Owner -->
 						<div class="flex items-center justify-between py-2.5">
 							<div class="min-w-0">
-								<p class="truncate text-sm font-medium text-gray-100">{projectOwnerName}</p>
-								<p class="truncate text-xs text-gray-500">{projectOwnerEmail}</p>
+								<p class="truncate text-sm font-medium text-foreground">{projectOwnerName}</p>
+								<p class="truncate text-xs text-muted-foreground">{projectOwnerEmail}</p>
 							</div>
 							<Badge variant="secondary" class="shrink-0 text-[10px]">Owner</Badge>
 						</div>
-						<div class="border-b border-gray-800/30"></div>
+						<div class="border-b border-border/30"></div>
 						<!-- Other members -->
 						{#each members as member (member.userId)}
 							<div class="flex items-center justify-between gap-3 py-2.5">
 								<div class="min-w-0">
-									<p class="truncate text-sm font-medium text-gray-100">{member.name}</p>
-									<p class="truncate text-xs text-gray-500">{member.email}</p>
+									<p class="truncate text-sm font-medium text-foreground">{member.name}</p>
+									<p class="truncate text-xs text-muted-foreground">{member.email}</p>
 								</div>
 								<div class="flex shrink-0 items-center gap-1.5">
 									{#if canManageMembers && member.userId !== currentUserId}
 										<Button
 											variant="ghost"
 											size="sm"
-											class="h-7 w-7 p-0 text-gray-500 hover:text-red-400"
+											class="h-7 w-7 p-0 text-muted-foreground hover:text-red-400"
 											aria-label={`Remove ${member.name}`}
 											onclick={() => (memberToRemove = member)}
 											disabled={removingMemberIds.includes(member.userId) ||
@@ -265,14 +269,14 @@
 											<DropdownMenu.Trigger class="flex cursor-pointer items-center">
 												<Badge
 													variant="secondary"
-													class="text-[10px] transition-colors hover:bg-gray-700"
+													class="text-[10px] transition-colors hover:bg-muted"
 													>{roleLabels[member.permissions]}</Badge
 												>
 											</DropdownMenu.Trigger>
-											<DropdownMenu.Content align="end" class="border-gray-800 bg-gray-900">
+											<DropdownMenu.Content align="end" class="border-border bg-background">
 												{#each memberRoleOptions as option (option.value)}
 													<DropdownMenu.Item
-														class="cursor-pointer text-xs text-gray-300 focus:bg-gray-800 focus:text-gray-100"
+														class="cursor-pointer text-xs text-muted-foreground focus:bg-muted focus:text-foreground"
 														disabled={updatingMemberIds.includes(member.userId)}
 														onclick={() => updateMemberRole(member.userId, option.value)}
 														>{roleLabels[option.value]}</DropdownMenu.Item
@@ -289,21 +293,27 @@
 							</div>
 						{/each}
 						{#if members.length === 0}
-							<p class="py-2 text-center text-xs text-gray-500">No additional members.</p>
+							<p class="py-2 text-center text-xs text-muted-foreground">No additional members.</p>
 						{/if}
 					</div>
 				</div>
 
 				{#if isOwner}
 					<!-- Delete Project -->
-					<div class="rounded-xs border border-red-900/30 bg-red-950/10 p-5">
-						<div class="mb-3 flex items-center gap-2 border-b border-red-900/20 pb-2">
-							<Trash2 class="h-4 w-4 text-red-400" />
-							<p class="text-xs font-semibold tracking-wider text-red-400 uppercase">
+					<div
+						class="rounded-xs border border-red-300 bg-red-100 p-5 dark:border-red-900/30 dark:bg-red-950/10"
+					>
+						<div
+							class="mb-3 flex items-center gap-2 border-b border-red-300 pb-2 dark:border-red-900/20"
+						>
+							<Trash2 class="h-4 w-4 text-red-800 dark:text-red-400" />
+							<p
+								class="text-xs font-semibold tracking-wider text-red-800 uppercase dark:text-red-400"
+							>
 								Delete Project
 							</p>
 						</div>
-						<p class="mb-3 text-xs text-gray-400">
+						<p class="mb-3 text-xs text-muted-foreground">
 							This will permanently delete the project and all its resources. Type the project name
 							to confirm.
 						</p>
@@ -341,7 +351,7 @@
 		if (!v) memberToRemove = null;
 	}}
 >
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Remove Member</Dialog.Title>
 			<Dialog.Description>
@@ -357,7 +367,7 @@
 </Dialog.Root>
 
 <Dialog.Root bind:open={addMemberOpen}>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Invite Member</Dialog.Title>
 			<Dialog.Description>Send an email invitation to join this project.</Dialog.Description>
@@ -381,13 +391,13 @@
 							type="button"
 							class="rounded-xs border p-3 text-left transition-colors {selectedMemberRole ===
 							option.value
-								? 'border-red-400/60 bg-gray-800/60'
-								: 'border-gray-800 hover:border-gray-700'}"
+								? 'border-red-400/60 bg-muted/60'
+								: 'border-border hover:border-ring'}"
 							onclick={() => (selectedMemberRole = option.value)}
 							disabled={addingMember}
 						>
-							<p class="text-sm font-medium text-gray-100">{roleLabels[option.value]}</p>
-							<p class="mt-0.5 text-xs text-gray-500">{option.description}</p>
+							<p class="text-sm font-medium text-foreground">{roleLabels[option.value]}</p>
+							<p class="mt-0.5 text-xs text-muted-foreground">{option.description}</p>
 						</button>
 					{/each}
 				</div>

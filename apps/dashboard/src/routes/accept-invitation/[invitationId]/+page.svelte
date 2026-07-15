@@ -53,16 +53,16 @@
 	<title>Invitation / Stack</title>
 </svelte:head>
 
-<div class="flex min-h-screen items-center justify-center bg-gray-950 px-4">
+<div class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">
 		<div class="mb-10 flex items-center justify-center gap-2">
 			<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
-			<span class="text-base font-semibold tracking-tight text-gray-50">Stack</span>
+			<span class="text-base font-semibold tracking-tight text-foreground">Stack</span>
 		</div>
 
 		{#if data.error}
 			<div class="space-y-5">
-				<h1 class="text-center text-lg font-medium text-gray-50">Invitation</h1>
+				<h1 class="text-center text-lg font-medium text-foreground">Invitation</h1>
 
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
@@ -72,7 +72,9 @@
 				</div>
 
 				{#if data.wrongAccount}
-					<p class="text-center text-xs text-gray-500">You are signed in as {data.email}.</p>
+					<p class="text-center text-xs text-muted-foreground">
+						You are signed in as {data.email}.
+					</p>
 					<Button class="w-full" loading={switching} onclick={switchAccount}>
 						Sign in with a different account
 					</Button>
@@ -82,11 +84,11 @@
 			</div>
 		{:else}
 			<div class="space-y-5">
-				<h1 class="text-center text-lg font-medium text-gray-50">
+				<h1 class="text-center text-lg font-medium text-foreground">
 					Join {data.organizationName}
 				</h1>
 
-				<p class="text-center text-xs text-gray-500">
+				<p class="text-center text-xs text-muted-foreground">
 					{data.inviterEmail} invited you to join {data.organizationName}
 					{#if data.role && isProjectRole(data.role)}
 						with {projectRoleLabels[data.role]} access{/if}.
@@ -115,7 +117,7 @@
 					Decline
 				</Button>
 
-				<p class="text-center text-xs text-gray-500">Signed in as {data.email}</p>
+				<p class="text-center text-xs text-muted-foreground">Signed in as {data.email}</p>
 			</div>
 		{/if}
 	</div>

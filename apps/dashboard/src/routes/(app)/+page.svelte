@@ -114,25 +114,25 @@
 	<title>Projects / Stack</title>
 </svelte:head>
 
-<div class="flex min-h-0 flex-1 flex-col overflow-auto bg-gray-950/30">
+<div class="flex min-h-0 flex-1 flex-col overflow-auto bg-background/30">
 	<div class="mx-auto flex w-full max-w-7xl flex-1 flex-col px-6 py-8 sm:px-8 lg:px-10">
 		{#if projects.length === 0}
 			<div class="flex flex-1 flex-col items-center justify-center text-center">
 				<div
-					class="mb-5 flex size-14 items-center justify-center rounded-2xl border border-gray-800 bg-gray-900"
+					class="mb-5 flex size-14 items-center justify-center rounded-2xl border border-border bg-background"
 				>
-					<FolderOpen class="size-7 text-gray-500" />
+					<FolderOpen class="size-7 text-muted-foreground" />
 				</div>
-				<h1 class="text-xl font-semibold tracking-tight text-balance text-gray-50">
+				<h1 class="text-xl font-semibold tracking-tight text-balance text-foreground">
 					No projects yet
 				</h1>
-				<p class="mt-2 max-w-[52ch] text-sm text-pretty text-gray-500">
+				<p class="mt-2 max-w-[52ch] text-sm text-pretty text-muted-foreground">
 					Create your first project to organize servers, storage, networks, and access controls.
 				</p>
 				<Button
 					variant="outline"
 					size="sm"
-					class="mt-6 gap-1.5 border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-600 hover:bg-gray-800 hover:text-gray-100"
+					class="mt-6 gap-1.5 border-border bg-background text-muted-foreground hover:border-ring hover:bg-muted hover:text-foreground"
 					onclick={openCreateDialog}
 				>
 					<Plus class="size-3.5" />
@@ -143,57 +143,57 @@
 			<div class="flex flex-col gap-8">
 				<div>
 					<div>
-						<h1 class="text-3xl font-semibold tracking-tight text-balance text-gray-50">
+						<h1 class="text-3xl font-semibold tracking-tight text-balance text-foreground">
 							Projects
 						</h1>
 					</div>
 				</div>
 
-				<div class="overflow-hidden border border-gray-800 bg-gray-950/40">
+				<div class="overflow-hidden border border-border bg-background/40">
 					{#each projects as project (project.id)}
-						<div class="group relative border-b border-gray-800/80 last:border-b-0">
+						<div class="group relative border-b border-border/80 last:border-b-0">
 							<button
 								type="button"
-								class="grid w-full gap-4 p-4 text-left transition-colors hover:bg-gray-900/70 sm:grid-cols-[1fr_auto] sm:items-center"
+								class="grid w-full gap-4 p-4 text-left transition-colors hover:bg-background/70 sm:grid-cols-[1fr_auto] sm:items-center"
 								onclick={() => openProject(project)}
 							>
 								<div class="flex min-w-0 items-center gap-4">
 									<div
-										class="flex size-10 shrink-0 items-center justify-center border border-gray-800 bg-gray-900 font-mono text-sm font-medium text-gray-300"
+										class="flex size-10 shrink-0 items-center justify-center border border-border bg-background font-mono text-sm font-medium text-muted-foreground"
 									>
 										{project.projectName.slice(0, 2).toUpperCase()}
 									</div>
 									<div class="min-w-0">
-										<h2 class="truncate text-base font-semibold text-gray-50">
+										<h2 class="truncate text-base font-semibold text-foreground">
 											{project.projectName}
 										</h2>
-										<p class="mt-1 text-sm text-gray-500">
+										<p class="mt-1 text-sm text-muted-foreground">
 											{isProjectRole(project.role) ? projectRoleLabels[project.role] : project.role}
 										</p>
 									</div>
 								</div>
-								<div class="flex items-center gap-3 text-sm text-gray-500">
+								<div class="flex items-center gap-3 text-sm text-muted-foreground">
 									<ArrowRight
-										class="size-4 text-gray-500 transition-colors group-hover:text-red-300"
+										class="size-4 text-muted-foreground transition-colors group-hover:text-red-300"
 									/>
 								</div>
 							</button>
 							<DropdownMenu.Root>
 								<DropdownMenu.Trigger
 									aria-label={`Actions for ${project.projectName}`}
-									class="absolute top-1/2 right-4 flex size-8 -translate-y-1/2 items-center justify-center text-gray-500 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-gray-800 hover:text-gray-300"
+									class="absolute top-1/2 right-4 flex size-8 -translate-y-1/2 items-center justify-center text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground"
 								>
 									<MoreHorizontal class="size-4" />
 								</DropdownMenu.Trigger>
-								<DropdownMenu.Content align="end" class="w-44 border-gray-800 bg-gray-900">
+								<DropdownMenu.Content align="end" class="w-44 border-border bg-background">
 									<DropdownMenu.Item
-										class="gap-2 text-sm text-gray-300 focus:bg-gray-800 focus:text-gray-100"
+										class="gap-2 text-sm text-muted-foreground focus:bg-muted focus:text-foreground"
 										onclick={() => openProject(project, 'settings')}
 									>
 										<Settings class="size-3.5" />
 										Project Settings
 									</DropdownMenu.Item>
-									<DropdownMenu.Separator class="bg-gray-800" />
+									<DropdownMenu.Separator class="bg-muted" />
 									<DropdownMenu.Item
 										class="gap-2 text-sm text-red-400 focus:bg-red-950/40 focus:text-red-300"
 										onclick={() => openDeleteDialog(project)}
@@ -206,17 +206,17 @@
 						</div>
 					{/each}
 					<button
-						class="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-gray-900/70"
+						class="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-background/70"
 						onclick={openCreateDialog}
 					>
 						<span
-							class="flex size-10 shrink-0 items-center justify-center border border-dashed border-gray-800"
+							class="flex size-10 shrink-0 items-center justify-center border border-dashed border-border"
 						>
-							<Plus class="size-5 text-gray-500" />
+							<Plus class="size-5 text-muted-foreground" />
 						</span>
 						<span>
-							<span class="text-base font-medium text-gray-400">New Project</span>
-							<span class="mt-1 block text-sm text-gray-500">Create a project</span>
+							<span class="text-base font-medium text-muted-foreground">New Project</span>
+							<span class="mt-1 block text-sm text-muted-foreground">Create a project</span>
 						</span>
 					</button>
 				</div>
@@ -231,7 +231,7 @@
 		if (!v) closeCreateDialog();
 	}}
 >
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Create Project</Dialog.Title>
 			<Dialog.Description>
@@ -276,7 +276,7 @@
 		if (!v) closeDeleteDialog();
 	}}
 >
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Delete Project</Dialog.Title>
 			<Dialog.Description>

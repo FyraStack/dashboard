@@ -106,42 +106,44 @@
 
 <div class="flex flex-1 flex-col overflow-hidden">
 	<!-- Header -->
-	<div class="flex h-10 shrink-0 items-center gap-2 border-b border-gray-800 px-5">
-		<Network class="h-4 w-4 text-gray-400" />
-		<span class="text-sm font-semibold text-gray-100">Networking</span>
+	<div class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-5">
+		<Network class="h-4 w-4 text-muted-foreground" />
+		<span class="text-sm font-semibold text-foreground">Networking</span>
 	</div>
 
-	<div class="border-b border-gray-800 bg-gray-900/40 px-5 py-2 text-xs text-gray-500">
+	<div class="border-b border-border bg-background/40 px-5 py-2 text-xs text-muted-foreground">
 		Preview — networking isn't live yet. Changes here aren't saved.
 	</div>
 
 	<div class="flex-1 overflow-auto">
 		<!-- IP Addresses Section -->
-		<div class="border-b border-gray-800">
+		<div class="border-b border-border">
 			<div class="flex items-center gap-2 px-5 py-3">
-				<Globe class="h-3.5 w-3.5 text-gray-500" />
-				<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+				<Globe class="h-3.5 w-3.5 text-muted-foreground" />
+				<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
 					>IP Addresses</span
 				>
 			</div>
 			<table class="w-full whitespace-nowrap">
 				<thead>
-					<tr class="border-y border-gray-800/50">
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-gray-500">Address</th>
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-gray-500">Type</th>
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-gray-500">Server</th>
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-gray-500">Reverse DNS</th>
-						<th class="px-5 py-2.5 text-right text-xs font-medium text-gray-500"></th>
+					<tr class="border-y border-border/50">
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Address</th>
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Type</th>
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Server</th>
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground"
+							>Reverse DNS</th
+						>
+						<th class="px-5 py-2.5 text-right text-xs font-medium text-muted-foreground"></th>
 					</tr>
 				</thead>
-				<tbody class="divide-y divide-gray-800/50">
+				<tbody class="divide-y divide-border/50">
 					{#each ips as ip, idx (ip.address)}
-						<tr class="transition-colors duration-100 hover:bg-gray-800/20">
-							<td class="px-5 py-3 font-mono text-sm text-gray-100">{ip.address}</td>
+						<tr class="transition-colors duration-100 hover:bg-muted/20">
+							<td class="px-5 py-3 font-mono text-sm text-foreground">{ip.address}</td>
 							<td class="px-5 py-3">
 								<Badge variant="secondary" class="text-[10px]">{ip.type}</Badge>
 							</td>
-							<td class="px-5 py-3 text-sm text-gray-300">{ip.server}</td>
+							<td class="px-5 py-3 text-sm text-muted-foreground">{ip.server}</td>
 							<td class="px-5 py-3">
 								{#if editingIdx === idx}
 									<div class="flex items-center gap-1.5">
@@ -170,7 +172,7 @@
 										</Button>
 									</div>
 								{:else}
-									<span class="text-sm text-gray-400">
+									<span class="text-sm text-muted-foreground">
 										{ip.rdns || '—'}
 									</span>
 								{/if}
@@ -198,8 +200,8 @@
 		<div>
 			<div class="flex items-center justify-between px-5 py-3">
 				<div class="flex items-center gap-2">
-					<Network class="h-3.5 w-3.5 text-gray-500" />
-					<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+					<Network class="h-3.5 w-3.5 text-muted-foreground" />
+					<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
 						>Private Networks</span
 					>
 				</div>
@@ -215,29 +217,29 @@
 			</div>
 			<table class="w-full whitespace-nowrap">
 				<thead>
-					<tr class="border-y border-gray-800/50">
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-gray-500">Name</th>
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-gray-500">CIDR</th>
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-gray-500">Servers</th>
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-gray-500">Enabled</th>
-						<th class="px-5 py-2.5 text-right text-xs font-medium text-gray-500"></th>
+					<tr class="border-y border-border/50">
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Name</th>
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">CIDR</th>
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Servers</th>
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Enabled</th>
+						<th class="px-5 py-2.5 text-right text-xs font-medium text-muted-foreground"></th>
 					</tr>
 				</thead>
-				<tbody class="divide-y divide-gray-800/50">
+				<tbody class="divide-y divide-border/50">
 					{#each networks as net (net.id)}
-						<tr class="transition-colors duration-100 hover:bg-gray-800/20">
+						<tr class="transition-colors duration-100 hover:bg-muted/20">
 							<td class="px-5 py-3">
-								<span class="text-sm font-medium text-gray-100">{net.name}</span>
-								<span class="ml-2 text-xs text-gray-500">{net.id}</span>
+								<span class="text-sm font-medium text-foreground">{net.name}</span>
+								<span class="ml-2 text-xs text-muted-foreground">{net.id}</span>
 							</td>
-							<td class="px-5 py-3 font-mono text-sm text-gray-300">{net.cidr}</td>
+							<td class="px-5 py-3 font-mono text-sm text-muted-foreground">{net.cidr}</td>
 							<td class="px-5 py-3">
 								<div class="flex flex-wrap gap-1">
 									{#each net.servers as s (s)}
 										<Badge variant="secondary" class="text-[10px]">{s}</Badge>
 									{/each}
 									{#if net.servers.length === 0}
-										<span class="text-xs text-gray-500">None</span>
+										<span class="text-xs text-muted-foreground">None</span>
 									{/if}
 								</div>
 							</td>
@@ -261,7 +263,7 @@
 			</table>
 
 			{#if networks.length === 0}
-				<div class="flex flex-col items-center justify-center py-16 text-gray-500">
+				<div class="flex flex-col items-center justify-center py-16 text-muted-foreground">
 					<Network class="mb-3 h-8 w-8" />
 					<p class="text-sm">No private networks</p>
 				</div>

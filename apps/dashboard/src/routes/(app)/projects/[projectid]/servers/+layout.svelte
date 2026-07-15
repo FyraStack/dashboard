@@ -224,27 +224,28 @@
 
 <div class="flex h-full w-full flex-col overflow-hidden lg:flex-row">
 	<div
-		class="flex w-full shrink-0 flex-col border-b border-gray-800 lg:max-h-none lg:w-64 lg:border-r lg:border-b-0 {listOpen
+		class="flex w-full shrink-0 flex-col border-b border-border lg:max-h-none lg:w-64 lg:border-r lg:border-b-0 {listOpen
 			? 'max-h-[38dvh]'
 			: ''}"
 	>
 		<div
-			class="flex h-12 shrink-0 items-center justify-between border-b border-gray-800 px-4 lg:h-10"
+			class="flex h-12 shrink-0 items-center justify-between border-b border-border px-4 lg:h-10"
 		>
 			<div class="flex min-w-0 items-center">
-				<span class="text-base font-semibold text-gray-100 lg:text-sm">Servers</span>
+				<span class="text-base font-semibold text-foreground lg:text-sm">Servers</span>
 				<Badge variant="secondary" class="ml-2 text-xs lg:text-[10px]"
 					>{serversState.servers.length}</Badge
 				>
 				{#if serversState.statusRefreshing && serversState.servers.length > 0}
-					<span class="ml-2 h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-gray-500"></span>
+					<span class="ml-2 h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-muted-foreground"
+					></span>
 				{/if}
 			</div>
 			<div class="flex shrink-0 items-center gap-1">
 				{#if !isServersIndex}
 					<button
 						type="button"
-						class="relative flex h-8 w-8 items-center justify-center text-gray-400 transition-colors hover:text-gray-200 lg:hidden"
+						class="relative flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors hover:text-foreground lg:hidden"
 						aria-expanded={listOpen}
 						aria-label={listOpen ? 'Hide server list' : 'Show server list'}
 						onclick={() => (mobileListOpen = !mobileListOpen)}
@@ -259,7 +260,7 @@
 				<Button
 					variant="outline"
 					size="sm"
-					class="relative h-8 w-8 border-red-500/50 p-0 text-red-400 hover:border-red-500 hover:bg-red-950 hover:text-gray-100 lg:h-6 lg:w-6"
+					class="relative h-8 w-8 border-red-500/50 p-0 text-red-700 hover:border-red-500 hover:bg-red-100 hover:text-foreground lg:h-6 lg:w-6 dark:text-red-400 dark:hover:bg-red-950"
 					onclick={() => goto(`/projects/${page.params.projectid}/servers/create`)}
 				>
 					<span
@@ -272,14 +273,14 @@
 		</div>
 		<div class="flex-1 overflow-y-auto {listOpen ? '' : 'hidden'} lg:block">
 			{#if serversState.loading}
-				<div class="divide-y divide-gray-800">
+				<div class="divide-y divide-border">
 					{#each Array.from({ length: 3 }) as _, index (index)}
 						<div class="flex items-start justify-between px-4 py-3">
 							<div class="min-w-0 flex-1 space-y-2">
-								<div class="h-3 w-28 animate-pulse rounded bg-gray-800"></div>
-								<div class="h-2.5 w-36 animate-pulse rounded bg-gray-800/70"></div>
+								<div class="h-3 w-28 animate-pulse rounded bg-muted"></div>
+								<div class="h-2.5 w-36 animate-pulse rounded bg-muted/70"></div>
 							</div>
-							<div class="mt-1 ml-2 h-2 w-2 shrink-0 animate-pulse rounded-full bg-gray-800"></div>
+							<div class="mt-1 ml-2 h-2 w-2 shrink-0 animate-pulse rounded-full bg-muted"></div>
 						</div>
 					{/each}
 				</div>
@@ -287,21 +288,21 @@
 
 			{#each serversState.servers as server (server.id)}
 				<a
-					class="flex w-full items-start justify-between border-b border-gray-800 px-4 py-3 text-left transition-colors duration-100 {selectedServerId ===
+					class="flex w-full items-start justify-between border-b border-border px-4 py-3 text-left transition-colors duration-100 {selectedServerId ===
 					server.id
-						? 'bg-gray-800/60'
-						: 'hover:bg-gray-800/30'}"
+						? 'bg-muted/60'
+						: 'hover:bg-muted/30'}"
 					href={`/projects/${page.params.projectid}/servers/${server.id}`}
 					data-sveltekit-preload-data="tap"
 				>
 					<div class="min-w-0">
-						<p class="truncate text-base font-semibold text-gray-100 lg:text-sm">{server.name}</p>
-						<p class="mt-0.5 truncate text-sm text-gray-500 lg:text-xs">
+						<p class="truncate text-base font-semibold text-foreground lg:text-sm">{server.name}</p>
+						<p class="mt-0.5 truncate text-sm text-muted-foreground lg:text-xs">
 							{server.vcpu} vCPU &bull; {server.ram} &bull;
 							{#if server.liveLoaded || serversState.firstStatusRefreshComplete}
 								{server.ip}
 							{:else}
-								<span class="inline-block h-2.5 w-14 animate-pulse rounded bg-gray-800"></span>
+								<span class="inline-block h-2.5 w-14 animate-pulse rounded bg-muted"></span>
 							{/if}
 						</p>
 					</div>
@@ -319,15 +320,15 @@
 										: server.status === 'restarting'
 											? 'animate-pulse bg-amber-500'
 											: server.status === 'unknown'
-												? 'bg-gray-600'
+												? 'bg-muted-foreground'
 												: 'bg-red-500'
-								: 'bg-gray-600'}"
+								: 'bg-muted-foreground'}"
 					></span>
 				</a>
 			{/each}
 
 			{#if !serversState.loading && serversState.servers.length === 0}
-				<div class="flex flex-col items-center justify-center py-8 text-gray-500 lg:py-16">
+				<div class="flex flex-col items-center justify-center py-8 text-muted-foreground lg:py-16">
 					<HardDrive class="mb-3 h-6 w-6" />
 					<p class="text-sm lg:text-xs">No servers</p>
 				</div>

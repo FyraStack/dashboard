@@ -18,7 +18,7 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Create Firewall Group</Dialog.Title>
 			<Dialog.Description>Create a new group to organize firewall rules.</Dialog.Description>

@@ -52,14 +52,14 @@
 			aria-modal="true"
 			aria-labelledby="confirm-title"
 			aria-describedby="confirm-desc"
-			class="relative z-10 w-full max-w-md border border-gray-800 bg-gray-900 p-4 text-sm text-gray-100 ring-1 ring-foreground/10"
+			class="relative z-10 w-full max-w-md border border-border bg-background p-4 text-sm text-foreground ring-1 ring-foreground/10"
 		>
-			<h2 id="confirm-title" class="text-base font-semibold text-gray-50">{req?.title}</h2>
-			<p id="confirm-desc" class="mt-1 text-sm text-gray-400">{req?.description}</p>
+			<h2 id="confirm-title" class="text-base font-semibold text-foreground">{req?.title}</h2>
+			<p id="confirm-desc" class="mt-1 text-sm text-muted-foreground">{req?.description}</p>
 			{#if needsWord}
 				<div class="mt-4 space-y-1.5">
-					<label for="confirm-name-input" class="block text-xs text-gray-400">
-						Type <span class="font-mono text-gray-200">{req?.confirmWord}</span> to confirm
+					<label for="confirm-name-input" class="block text-xs text-muted-foreground">
+						Type <span class="font-mono text-foreground">{req?.confirmWord}</span> to confirm
 					</label>
 					<Input
 						id="confirm-name-input"

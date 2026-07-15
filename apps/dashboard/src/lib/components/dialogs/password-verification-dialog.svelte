@@ -165,7 +165,7 @@
 		if (!value) resetPasswordVerification();
 	}}
 >
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Verify password change</Dialog.Title>
 			<Dialog.Description>{passwordVerificationDescription}</Dialog.Description>
@@ -179,9 +179,9 @@
 			}}
 		>
 			{#if verificationMethod === 'passkey'}
-				<div class="flex items-center gap-3 rounded-xs border border-gray-800 bg-gray-950/40 p-3">
-					<Fingerprint class="size-5 shrink-0 text-gray-500" />
-					<p class="text-sm text-gray-300">
+				<div class="flex items-center gap-3 rounded-xs border border-border bg-background/40 p-3">
+					<Fingerprint class="size-5 shrink-0 text-muted-foreground" />
+					<p class="text-sm text-muted-foreground">
 						Your browser will ask you to authenticate with your registered passkey.
 					</p>
 				</div>
@@ -199,7 +199,7 @@
 						autocomplete="one-time-code"
 					/>
 					{#if verificationMethod === 'email' && passwordCodeSent}
-						<p class="text-xs text-gray-500">We sent a code to your email address.</p>
+						<p class="text-xs text-muted-foreground">We sent a code to your email address.</p>
 					{/if}
 					{#if passwordVerificationError}
 						<p class="text-xs text-red-400">{passwordVerificationError}</p>

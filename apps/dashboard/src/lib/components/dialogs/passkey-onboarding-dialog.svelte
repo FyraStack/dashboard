@@ -42,7 +42,7 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-sm">
+	<Dialog.Content class="border-border bg-background sm:max-w-sm">
 		<Dialog.Header>
 			<Dialog.Title>Add Passkey</Dialog.Title>
 			<Dialog.Description>

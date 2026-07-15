@@ -18,7 +18,7 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Create Private Network</Dialog.Title>
 			<Dialog.Description>Create an isolated network for your servers.</Dialog.Description>
@@ -31,7 +31,9 @@
 			<div class="flex flex-col gap-2">
 				<Label>CIDR Block</Label>
 				<Input bind:value={cidr} placeholder="10.0.0.0/16" />
-				<p class="text-xs text-gray-500">Private IPv4 range. Must not overlap existing networks.</p>
+				<p class="text-xs text-muted-foreground">
+					Private IPv4 range. Must not overlap existing networks.
+				</p>
 			</div>
 		</div>
 		<Dialog.Footer>

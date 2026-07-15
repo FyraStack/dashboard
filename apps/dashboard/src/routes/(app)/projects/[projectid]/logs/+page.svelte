@@ -177,10 +177,11 @@
 	}
 
 	const severityColors: Record<Severity, string> = {
-		info: 'border-blue-800 bg-blue-950/40 text-blue-400',
-		warn: 'border-amber-800 bg-amber-950/40 text-amber-400',
-		error: 'border-red-800 bg-red-950/40 text-red-400',
-		debug: 'border-gray-700 bg-gray-800/40 text-gray-400'
+		info: 'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-400',
+		warn: 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400',
+		error:
+			'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400',
+		debug: 'border-border bg-muted/40 text-muted-foreground'
 	};
 
 	const filterOptions: { value: Severity | 'all'; label: string }[] = [
@@ -195,19 +196,19 @@
 <div class="flex flex-1 flex-col overflow-hidden lg:flex-row">
 	<!-- Server selector panel -->
 	<div
-		class="flex max-h-[38vh] w-full shrink-0 flex-col border-b border-gray-800 lg:max-h-none lg:w-56 lg:border-r lg:border-b-0"
+		class="flex max-h-[38vh] w-full shrink-0 flex-col border-b border-border lg:max-h-none lg:w-56 lg:border-r lg:border-b-0"
 	>
-		<div class="flex h-10 shrink-0 items-center gap-2 border-b border-gray-800 px-4">
-			<FileText class="h-4 w-4 text-gray-400" />
-			<span class="text-sm font-semibold text-gray-100">Logs</span>
+		<div class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-4">
+			<FileText class="h-4 w-4 text-muted-foreground" />
+			<span class="text-sm font-semibold text-foreground">Logs</span>
 		</div>
 		<div class="flex-1 overflow-y-auto">
 			{#each serverList as server (server.id)}
 				<button
-					class="flex w-full items-center justify-between border-b border-gray-800 px-4 py-2.5 text-left transition-colors duration-100 {selectedServerId ===
+					class="flex w-full items-center justify-between border-b border-border px-4 py-2.5 text-left transition-colors duration-100 {selectedServerId ===
 					server.id
-						? 'bg-gray-800/60'
-						: 'hover:bg-gray-800/30'}"
+						? 'bg-muted/60'
+						: 'hover:bg-muted/30'}"
 					onclick={() => (selectedServerId = server.id)}
 				>
 					<div class="flex items-center gap-2">
@@ -216,9 +217,9 @@
 								? 'bg-emerald-500'
 								: 'bg-red-500'}"
 						></span>
-						<span class="text-sm text-gray-200">{server.name}</span>
+						<span class="text-sm text-foreground">{server.name}</span>
 					</div>
-					<ChevronRight class="h-3 w-3 text-gray-500" />
+					<ChevronRight class="h-3 w-3 text-muted-foreground" />
 				</button>
 			{/each}
 		</div>
@@ -227,9 +228,9 @@
 	<!-- Log content -->
 	<div class="flex flex-1 flex-col overflow-hidden">
 		<!-- Controls bar -->
-		<div class="flex h-10 shrink-0 items-center justify-between border-b border-gray-800 px-4">
+		<div class="flex h-10 shrink-0 items-center justify-between border-b border-border px-4">
 			<div class="flex items-center gap-2">
-				<span class="text-sm font-medium text-gray-200">{selectedServerId}</span>
+				<span class="text-sm font-medium text-foreground">{selectedServerId}</span>
 				{#if streaming}
 					<span class="flex items-center gap-1.5 text-[10px] text-emerald-500">
 						<span class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"></span>
@@ -240,17 +241,17 @@
 			<div class="flex items-center gap-2">
 				<div class="relative">
 					<Search
-						class="pointer-events-none absolute top-1/2 left-2.5 h-3 w-3 -translate-y-1/2 text-gray-500"
+						class="pointer-events-none absolute top-1/2 left-2.5 h-3 w-3 -translate-y-1/2 text-muted-foreground"
 					/>
 					<Input bind:value={search} placeholder="Filter logs..." class="h-7 w-44 pl-8 text-xs" />
 				</div>
-				<div class="flex items-center border border-gray-700">
+				<div class="flex items-center border border-border">
 					{#each filterOptions as opt (opt.value)}
 						<button
 							class="px-2 py-1 text-[11px] font-medium transition-colors duration-100 {filter ===
 							opt.value
-								? 'bg-gray-700 text-gray-100'
-								: 'text-gray-500 hover:text-gray-300'}"
+								? 'bg-muted text-foreground'
+								: 'text-muted-foreground hover:text-foreground'}"
 							onclick={() => (filter = opt.value)}
 						>
 							{opt.label}
@@ -292,35 +293,35 @@
 
 		<!-- Log stream -->
 		<div
-			class="flex-1 overflow-auto bg-gray-950 font-mono text-xs leading-relaxed"
+			class="flex-1 overflow-auto bg-background font-mono text-xs leading-relaxed"
 			bind:this={logContainer}
 		>
 			{#if serverList.find((s) => s.id === selectedServerId)?.status === 'stopped'}
-				<div class="flex flex-col items-center justify-center py-20 text-gray-500">
+				<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
 					<FileText class="mb-3 h-8 w-8" />
 					<p class="font-sans text-sm">Server is offline</p>
-					<p class="mt-1 font-sans text-xs text-gray-500">Start the server to view logs.</p>
+					<p class="mt-1 font-sans text-xs text-muted-foreground">Start the server to view logs.</p>
 				</div>
 			{:else}
 				{#each filtered as entry (entry.id)}
 					<div
-						class="flex items-start gap-3 border-b border-gray-800/20 px-5 py-1.5 transition-colors duration-100 hover:bg-gray-900/50"
+						class="flex items-start gap-3 border-b border-border/20 px-5 py-1.5 transition-colors duration-100 hover:bg-background/50"
 					>
-						<span class="shrink-0 pt-0.5 text-gray-500">{entry.timestamp}</span>
+						<span class="shrink-0 pt-0.5 text-muted-foreground">{entry.timestamp}</span>
 						<button onclick={() => (filter = filter === entry.severity ? 'all' : entry.severity)}>
 							<Badge
 								variant="outline"
 								class="shrink-0 cursor-pointer text-[9px] {severityColors[
 									entry.severity
-								]} {filter === entry.severity ? 'ring-1 ring-gray-500' : ''}"
+								]} {filter === entry.severity ? 'ring-1 ring-ring' : ''}"
 							>
 								{entry.severity.toUpperCase()}
 							</Badge>
 						</button>
 						<button
-							class="w-16 shrink-0 text-left text-gray-500 hover:text-gray-300 {sourceFilter ===
+							class="w-16 shrink-0 text-left text-muted-foreground hover:text-muted-foreground {sourceFilter ===
 							entry.source
-								? 'text-gray-200 underline'
+								? 'text-foreground underline'
 								: ''}"
 							onclick={() => (sourceFilter = sourceFilter === entry.source ? null : entry.source)}
 						>
@@ -331,7 +332,7 @@
 								? 'text-red-400'
 								: entry.severity === 'warn'
 									? 'text-amber-400/80'
-									: 'text-gray-300'}
+									: 'text-muted-foreground'}
 						>
 							{entry.message}
 						</span>
@@ -339,7 +340,7 @@
 				{/each}
 
 				{#if filtered.length === 0 && currentLogs.length > 0}
-					<div class="flex flex-col items-center justify-center py-20 text-gray-500">
+					<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
 						<Search class="mb-3 h-8 w-8" />
 						<p class="font-sans text-sm">No logs match your filter</p>
 					</div>
@@ -349,9 +350,9 @@
 
 		<!-- Footer status bar -->
 		<div
-			class="flex h-7 shrink-0 items-center justify-between border-t border-gray-800 bg-gray-950 px-5"
+			class="flex h-7 shrink-0 items-center justify-between border-t border-border bg-background px-5"
 		>
-			<span class="text-[10px] text-gray-500">
+			<span class="text-[10px] text-muted-foreground">
 				{filtered.length} entries
 				{#if filter !== 'all' || search.trim()}
 					(filtered from {currentLogs.length})
@@ -359,7 +360,7 @@
 			</span>
 			{#if !streaming}
 				<button
-					class="flex items-center gap-1 text-[10px] text-gray-500 transition-colors hover:text-gray-300"
+					class="flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
 					onclick={() => (streaming = true)}
 				>
 					<ArrowDown class="h-2.5 w-2.5" />

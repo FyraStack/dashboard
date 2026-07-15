@@ -107,7 +107,8 @@ export const officialImages: OfficialImage[] = [
 ];
 
 export const imageTypeColors: Record<string, string> = {
-	iso: 'border-blue-800 bg-blue-950/40 text-blue-400',
-	img: 'border-amber-800 bg-amber-950/40 text-amber-400',
-	qcow2: 'border-purple-800 bg-purple-950/40 text-purple-400'
+	iso: 'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-400',
+	img: 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400',
+	qcow2:
+		'border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-400'
 };

@@ -94,12 +94,12 @@
 
 <div class="flex flex-1 flex-col overflow-hidden">
 	<!-- Tab bar -->
-	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-gray-800">
+	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-border">
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'vmTypes'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin')}
 		>
 			<Cpu class="h-3.5 w-3.5 shrink-0" />
@@ -109,8 +109,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'vms'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/vms')}
 		>
 			<Server class="h-3.5 w-3.5 shrink-0" />
@@ -122,8 +122,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'images'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/images')}
 		>
 			<Disc class="h-3.5 w-3.5 shrink-0" />
@@ -133,8 +133,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'features'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/features')}
 		>
 			<Flag class="h-3.5 w-3.5 shrink-0" />
@@ -146,8 +146,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'ipam'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/ipam')}
 		>
 			<Network class="h-3.5 w-3.5 shrink-0" />
@@ -157,8 +157,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'users'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/users')}
 		>
 			<UserCog class="h-3.5 w-3.5 shrink-0" />
@@ -168,8 +168,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'emails'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/emails')}
 		>
 			<Mail class="h-3.5 w-3.5 shrink-0" />
@@ -208,22 +208,22 @@
 						{@const Icon = featureFlagIcons[flag] ?? Flag}
 						<div class="flex items-center justify-between px-4 py-3">
 							<div class="flex items-start gap-3">
-								<Icon class="mt-0.5 h-4 w-4 shrink-0 text-gray-500" />
+								<Icon class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 								<div class="flex flex-col gap-0.5">
-									<span class="text-sm font-medium text-gray-100">{featureFlagLabels[flag]}</span>
-									<p class="text-xs text-gray-500">Route visibility and direct access</p>
+									<span class="text-sm font-medium text-foreground">{featureFlagLabels[flag]}</span>
+									<p class="text-xs text-muted-foreground">Route visibility and direct access</p>
 								</div>
 							</div>
 							<div class="flex items-center gap-2">
 								{#if admin.featureFlagSaving[flag]}
-									<Loader2 class="h-3.5 w-3.5 animate-spin text-gray-500" />
+									<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 								{/if}
-								<div class="flex overflow-hidden border border-gray-800">
+								<div class="flex overflow-hidden border border-border">
 									<button
 										type="button"
 										class="px-3 py-1 text-xs font-medium transition-colors {enabled
 											? 'bg-red-500/15 text-red-400'
-											: 'text-gray-500 hover:text-gray-300'}"
+											: 'text-muted-foreground hover:text-foreground'}"
 										onclick={() =>
 											!admin.featureFlagSaving[flag] && admin.toggleFeatureFlag(flag, true)}
 										disabled={admin.featureFlagSaving[flag]}
@@ -233,8 +233,8 @@
 									<button
 										type="button"
 										class="px-3 py-1 text-xs font-medium transition-colors {!enabled
-											? 'bg-gray-800 text-gray-300'
-											: 'text-gray-500 hover:text-gray-300'}"
+											? 'bg-muted text-muted-foreground'
+											: 'text-muted-foreground hover:text-foreground'}"
 										onclick={() =>
 											!admin.featureFlagSaving[flag] && admin.toggleFeatureFlag(flag, false)}
 										disabled={admin.featureFlagSaving[flag]}
@@ -245,14 +245,14 @@
 							</div>
 						</div>
 						{#if flag !== featureFlagKeys[featureFlagKeys.length - 1]}
-							<div class="border-t border-gray-800/50"></div>
+							<div class="border-t border-border/50"></div>
 						{/if}
 					{/each}
 				</div>
 			</div>
 		{:else if activeTab === 'vmTypes'}
 			{#if admin.vmTypes.length === 0}
-				<div class="flex flex-col items-center justify-center py-20 text-gray-500">
+				<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
 					<Cpu class="mb-3 h-6 w-6" />
 					<p class="text-xs">No VM types yet</p>
 					<Button
@@ -265,25 +265,28 @@
 			{:else}
 				<table class="w-full whitespace-nowrap">
 					<thead
-						><tr class="border-b border-gray-800">
+						><tr class="border-b border-border">
 							<th class="w-8 px-3 py-3"></th>
-							<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Name</th>
-							<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">ISA</th>
-							<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Cores</th>
-							<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">RAM</th>
-							<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Storage</th>
-							<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Rate</th>
-							<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Cap</th>
-							<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Autumn feature</th>
-							<th class="px-5 py-3 text-right text-xs font-medium text-gray-500">Actions</th>
+							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Name</th>
+							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">ISA</th>
+							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Cores</th>
+							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">RAM</th>
+							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Storage</th>
+							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Rate</th>
+							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Cap</th>
+							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground"
+								>Autumn feature</th
+							>
+							<th class="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th
+							>
 						</tr></thead
 					>
-					<tbody class="divide-y divide-gray-800/50">
+					<tbody class="divide-y divide-border/50">
 						{#each admin.vmTypes as vt, index (vt.id)}
 							<tr
-								class="transition-colors hover:bg-gray-800/20 {vtDragIndex === index
+								class="transition-colors hover:bg-muted/20 {vtDragIndex === index
 									? 'opacity-40'
-									: ''} {vtDropIndex === index && vtDragIndex !== index ? 'bg-gray-800/40' : ''}"
+									: ''} {vtDropIndex === index && vtDragIndex !== index ? 'bg-muted/40' : ''}"
 								ondragover={(event) => vtDragOver(event, index)}
 								ondrop={(event) => vtDrop(event, index)}
 							>
@@ -293,7 +296,7 @@
 										tabindex="0"
 										aria-label={`Drag or use arrow keys to reorder ${vt.name}`}
 										draggable="true"
-										class="flex h-7 w-5 cursor-grab items-center justify-center text-gray-600 transition-colors hover:text-gray-300 focus:text-gray-300 focus:outline-none active:cursor-grabbing"
+										class="flex h-7 w-5 cursor-grab items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus:text-muted-foreground focus:outline-none active:cursor-grabbing"
 										ondragstart={(event) => vtDragStart(event, index)}
 										ondragend={vtDragEnd}
 										onkeydown={(event) => vtHandleKeydown(event, index)}
@@ -301,16 +304,16 @@
 										<GripVertical class="h-3.5 w-3.5" />
 									</span>
 								</td>
-								<td class="px-5 py-3 text-sm font-medium text-gray-100">{vt.name}</td>
+								<td class="px-5 py-3 text-sm font-medium text-foreground">{vt.name}</td>
 								<td class="px-5 py-3"
 									><Badge variant="secondary" class="text-[10px]">{vt.isa}</Badge></td
 								>
-								<td class="px-5 py-3 text-sm text-gray-300">{vt.cores}</td>
-								<td class="px-5 py-3 text-sm text-gray-300">{vt.ramCapacity} MB</td>
-								<td class="px-5 py-3 text-sm text-gray-300">{vt.storageAmount} GB</td>
-								<td class="px-5 py-3 text-sm text-gray-300">${vt.rate}/hr</td>
-								<td class="px-5 py-3 text-sm text-gray-300">${vt.cap}/mo</td>
-								<td class="max-w-xs truncate px-5 py-3 font-mono text-xs text-gray-500">
+								<td class="px-5 py-3 text-sm text-muted-foreground">{vt.cores}</td>
+								<td class="px-5 py-3 text-sm text-muted-foreground">{vt.ramCapacity} MB</td>
+								<td class="px-5 py-3 text-sm text-muted-foreground">{vt.storageAmount} GB</td>
+								<td class="px-5 py-3 text-sm text-muted-foreground">${vt.rate}/hr</td>
+								<td class="px-5 py-3 text-sm text-muted-foreground">${vt.cap}/mo</td>
+								<td class="max-w-xs truncate px-5 py-3 font-mono text-xs text-muted-foreground">
 									{vt.autumnFeatureId ?? 'Not configured'}
 								</td>
 								<td class="px-5 py-3 text-right">
@@ -318,7 +321,7 @@
 										<Button
 											variant="ghost"
 											size="sm"
-											class="h-7 w-7 p-0 text-gray-400 hover:text-gray-100"
+											class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
 											aria-label={`Edit ${vt.name}`}
 											onclick={() => admin.vtOpenEdit(vt)}><Pencil class="h-3 w-3" /></Button
 										>
@@ -347,7 +350,7 @@
 
 			<!-- ═══ Images Tab ═══ -->
 		{:else if admin.images.length === 0}
-			<div class="flex flex-col items-center justify-center py-20 text-gray-500">
+			<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
 				<Disc class="mb-3 h-6 w-6" />
 				<p class="text-xs">No admin.images configured</p>
 				<Button
@@ -360,18 +363,22 @@
 		{:else}
 			<table class="w-full whitespace-nowrap">
 				<thead
-					><tr class="border-b border-gray-800">
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Image</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Version</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">ISA</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Proxmox Path</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Description</th>
-						<th class="px-5 py-3 text-right text-xs font-medium text-gray-500">Actions</th>
+					><tr class="border-b border-border">
+						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Image</th>
+						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Version</th>
+						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">ISA</th>
+						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground"
+							>Proxmox Path</th
+						>
+						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground"
+							>Description</th
+						>
+						<th class="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th>
 					</tr></thead
 				>
-				<tbody class="divide-y divide-gray-800/50">
+				<tbody class="divide-y divide-border/50">
 					{#each admin.images as img (img.id)}
-						<tr class="transition-colors hover:bg-gray-800/20">
+						<tr class="transition-colors hover:bg-muted/20">
 							<td class="px-5 py-3">
 								<div class="flex items-center gap-2.5">
 									<span
@@ -379,23 +386,25 @@
 									>
 										<Disc class="h-3.5 w-3.5" />
 									</span>
-									<span class="text-sm font-medium text-gray-100">{img.name}</span>
+									<span class="text-sm font-medium text-foreground">{img.name}</span>
 								</div>
 							</td>
-							<td class="px-5 py-3 text-sm text-gray-300">{img.version}</td>
+							<td class="px-5 py-3 text-sm text-muted-foreground">{img.version}</td>
 							<td class="px-5 py-3"
 								><Badge variant="secondary" class="text-[10px]">{img.isa}</Badge></td
 							>
-							<td class="max-w-xs truncate px-5 py-3 font-mono text-xs text-gray-500"
+							<td class="max-w-xs truncate px-5 py-3 font-mono text-xs text-muted-foreground"
 								>{img.filePath}</td
 							>
-							<td class="max-w-xs truncate px-5 py-3 text-xs text-gray-400">{img.description}</td>
+							<td class="max-w-xs truncate px-5 py-3 text-xs text-muted-foreground"
+								>{img.description}</td
+							>
 							<td class="px-5 py-3 text-right">
 								<div class="flex items-center justify-end gap-1">
 									<Button
 										variant="ghost"
 										size="sm"
-										class="h-7 w-7 p-0 text-gray-400 hover:text-gray-100"
+										class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
 										aria-label={`Edit ${img.name}`}
 										onclick={() => admin.imgOpenEdit(img)}><Pencil class="h-3 w-3" /></Button
 									>
@@ -426,7 +435,7 @@
 
 <!-- VM Type Dialog -->
 <Dialog.Root bind:open={admin.vtDialogOpen}>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>{admin.vtEditing ? 'Edit VM Type' : 'Create VM Type'}</Dialog.Title>
 			<Dialog.Description
@@ -450,7 +459,7 @@
 				<Label>Architecture</Label>
 				<select
 					bind:value={admin.vtIsa}
-					class="h-9 w-full border border-gray-700 bg-gray-800 px-3 text-sm text-gray-100 focus:border-gray-500 focus:outline-none"
+					class="h-9 w-full border border-border bg-muted px-3 text-sm text-foreground focus:border-ring focus:outline-none"
 				>
 					<option value="x86">x86</option>
 				</select>
@@ -503,7 +512,7 @@
 
 <!-- Image Dialog -->
 <Dialog.Root bind:open={admin.imgDialogOpen}>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-lg">
+	<Dialog.Content class="border-border bg-background sm:max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>{admin.imgEditing ? 'Edit Image' : 'Add Image'}</Dialog.Title>
 			<Dialog.Description>Configure a base image for VM provisioning.</Dialog.Description>
@@ -531,7 +540,7 @@
 					<Label>Architecture</Label>
 					<select
 						bind:value={admin.imgIsa}
-						class="h-9 w-full border border-gray-700 bg-gray-800 px-3 text-sm text-gray-100 focus:border-gray-500 focus:outline-none"
+						class="h-9 w-full border border-border bg-muted px-3 text-sm text-foreground focus:border-ring focus:outline-none"
 					>
 						<option value="x86">x86</option>
 					</select>
@@ -544,7 +553,7 @@
 					bind:value={admin.imgDescription}
 					placeholder="Short description of this image..."
 					rows="2"
-					class="w-full resize-none border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus:border-gray-500 focus:outline-none"
+					class="w-full resize-none border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
 				></textarea>
 			</div>
 
@@ -556,7 +565,7 @@
 						<button
 							class="h-6 w-6 border-2 transition-colors {c} {admin.imgColor === c
 								? 'border-white'
-								: 'border-transparent hover:border-gray-500'}"
+								: 'border-transparent hover:border-ring'}"
 							onclick={() => (admin.imgColor = c)}
 							aria-label={`Select ${c}`}
 						></button>
@@ -566,15 +575,17 @@
 
 			<!-- Icon SVG -->
 			<div class="flex flex-col gap-2">
-				<Label>Icon <span class="font-normal text-gray-500">(icon name, optional)</span></Label>
+				<Label
+					>Icon <span class="font-normal text-muted-foreground">(icon name, optional)</span></Label
+				>
 				<textarea
 					bind:value={admin.imgIcon}
 					placeholder="logo--linux"
 					rows="2"
-					class="w-full resize-none border border-gray-700 bg-gray-800 px-3 py-2 font-mono text-xs text-gray-100 placeholder:text-gray-500 focus:border-gray-500 focus:outline-none"
+					class="w-full resize-none border border-border bg-muted px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
 				></textarea>
 				{#if admin.imgIcon.trim()}
-					<div class="flex items-center gap-2 text-xs text-gray-500">
+					<div class="flex items-center gap-2 text-xs text-muted-foreground">
 						Preview:
 						<span class="flex h-7 w-7 items-center justify-center text-white {admin.imgColor}"
 							>{admin.imgIcon}</span
@@ -590,7 +601,7 @@
 					<Button
 						variant="ghost"
 						size="sm"
-						class="h-6 gap-1 px-2 text-[10px] text-gray-500"
+						class="h-6 gap-1 px-2 text-[10px] text-muted-foreground"
 						onclick={() => admin.loadPveImages()}
 						disabled={admin.isoLoading}
 					>
@@ -602,7 +613,7 @@
 				</div>
 				<select
 					bind:value={admin.imgFilePath}
-					class="h-9 w-full border border-gray-700 bg-gray-800 px-3 font-mono text-xs text-gray-100 focus:border-gray-500 focus:outline-none"
+					class="h-9 w-full border border-border bg-muted px-3 font-mono text-xs text-foreground focus:border-ring focus:outline-none"
 				>
 					<option value="">Select an imported Proxmox image</option>
 					{#each admin.pveImages as image (image.volid)}
@@ -610,17 +621,17 @@
 					{/each}
 				</select>
 				{#if admin.pveImages.length > 0}
-					<div class="max-h-32 overflow-y-auto border border-gray-800">
+					<div class="max-h-32 overflow-y-auto border border-border">
 						{#each admin.pveImages as iso (iso.volid)}
 							<button
 								class="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs transition-colors {admin.imgFilePath ===
 								iso.volid
-									? 'bg-red-950/30 text-gray-100'
-									: 'text-gray-400 hover:bg-gray-800/50'}"
+									? 'bg-red-950/30 text-foreground'
+									: 'text-muted-foreground hover:bg-muted/50'}"
 								onclick={() => (admin.imgFilePath = iso.volid)}
 							>
 								<span class="truncate font-mono">{iso.volid}</span>
-								<span class="ml-2 shrink-0 text-gray-500">{formatSize(iso.size)}</span>
+								<span class="ml-2 shrink-0 text-muted-foreground">{formatSize(iso.size)}</span>
 							</button>
 						{/each}
 					</div>

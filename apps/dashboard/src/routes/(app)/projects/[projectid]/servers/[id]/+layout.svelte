@@ -86,22 +86,22 @@
 	}
 </script>
 
-<div class="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-gray-800 px-4">
+<div class="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
 	<div class="flex min-w-0 items-center gap-2">
-		<span class="truncate text-sm font-medium text-gray-200">{selectedServer.name}</span>
+		<span class="truncate text-sm font-medium text-foreground">{selectedServer.name}</span>
 		<Badge
 			variant="outline"
 			class="text-[10px] {selectedServer.status === 'deleting'
-				? 'border-red-800 bg-red-950/40 text-red-400'
+				? 'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
 				: !selectedServer.liveLoaded
-					? 'border-gray-700 bg-gray-900/40 text-gray-400'
+					? 'border-border bg-background/40 text-muted-foreground'
 					: selectedServer.status === 'running'
-						? 'border-emerald-800 bg-emerald-950/40 text-emerald-400'
+						? 'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400'
 						: selectedServer.status === 'provisioning'
-							? 'border-blue-800 bg-blue-950/40 text-blue-400'
+							? 'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-400'
 							: selectedServer.status === 'restarting'
-								? 'border-amber-800 bg-amber-950/40 text-amber-400'
-								: 'border-red-800 bg-red-950/40 text-red-400'}"
+								? 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400'
+								: 'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'}"
 		>
 			{selectedServer.status === 'deleting'
 				? 'deleting...'
@@ -172,7 +172,7 @@
 		<Button
 			variant="outline"
 			size="sm"
-			class="h-7 gap-1.5 border-red-700 px-2.5 text-xs text-red-400 hover:bg-red-950 sm:px-3"
+			class="h-7 gap-1.5 border-red-300 px-2.5 text-xs text-red-700 hover:bg-red-100 sm:px-3 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950"
 			aria-label="Kill"
 			disabled={powerLoading ||
 				selectedServer.status === 'stopped' ||
@@ -190,14 +190,14 @@
 	</div>
 </div>
 
-<div class="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-gray-800 px-2">
+<div class="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-border px-2">
 	{#each visibleServerTabs as tab (tab.id)}
 		<a
 			aria-current={activeTab === tab.id ? 'page' : undefined}
 			class="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors duration-100 {activeTab ===
 			tab.id
-				? 'border-b-2 border-red-500 text-gray-50'
-				: 'text-gray-500 hover:text-gray-300'}"
+				? 'border-b-2 border-red-500 text-foreground'
+				: 'text-muted-foreground hover:text-foreground'}"
 			href={resolve(tabHref(tab.id))}
 			data-sveltekit-preload-data="hover"
 		>

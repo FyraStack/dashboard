@@ -19,19 +19,19 @@
 
 <div class="max-w-xl space-y-5 p-5">
 	<div>
-		<h2 class="text-sm font-semibold text-gray-100">Rebuild Server</h2>
-		<p class="mt-1 text-xs text-gray-500">
+		<h2 class="text-sm font-semibold text-foreground">Rebuild Server</h2>
+		<p class="mt-1 text-xs text-muted-foreground">
 			Reinstall {selectedServer.name} with a fresh operating system.
 		</p>
 	</div>
-	<p class="border border-gray-800 bg-gray-900/40 px-3 py-2 text-xs text-gray-500">
+	<p class="border border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground">
 		Rebuilding isn't available yet.
 	</p>
 	<div class="space-y-2">
 		<Label for="rebuild-os-select">Operating System</Label><select
 			id="rebuild-os-select"
 			bind:value={rebuildOs}
-			class="h-9 w-full border border-gray-700 bg-gray-900 px-3 text-sm text-gray-100"
+			class="h-9 w-full border border-border bg-background px-3 text-sm text-foreground"
 			>{#each osOptions as os (os)}<option>{os}</option>{/each}</select
 		>
 	</div>
@@ -42,7 +42,10 @@
 			class="font-mono"
 		/>
 	</div>
-	<Button variant="outline" disabled class="border-red-700 text-red-400 hover:bg-red-950"
+	<Button
+		variant="outline"
+		disabled
+		class="border-red-400 text-red-800 hover:bg-red-100 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950"
 		>Rebuild Server</Button
 	>
 </div>

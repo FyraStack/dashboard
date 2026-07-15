@@ -788,7 +788,7 @@ export async function allocateVmNetworking(
 
 		return allocations;
 	} catch (err) {
-		await releaseVmNetworking(db, params.vmId).catch(() => { });
+		await releaseVmNetworking(db, params.vmId).catch(() => {});
 		throw err;
 	}
 }

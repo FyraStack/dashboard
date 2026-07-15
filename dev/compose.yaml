@@ -9,7 +9,7 @@ services:
     environment:
       POSTGRES_PASSWORD: mysecretpassword
     volumes:
-      - postgres_data:/var/lib/postgresql
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -66,6 +66,8 @@ services:
     volumes:
       - pve1_data:/var/lib/vz
       - pve1_config:/var/lib/pve-cluster
+      - pve1_corosync:/etc/corosync
+      - pve1_ssh:/root/.ssh
       - pve_shared:/shared
     networks:
       pve:
@@ -85,6 +87,8 @@ services:
     volumes:
       - pve2_data:/var/lib/vz
       - pve2_config:/var/lib/pve-cluster
+      - pve2_corosync:/etc/corosync
+      - pve2_ssh:/root/.ssh
       - pve_shared:/shared
     networks:
       pve:
@@ -104,6 +108,8 @@ services:
     volumes:
       - pve3_data:/var/lib/vz
       - pve3_config:/var/lib/pve-cluster
+      - pve3_corosync:/etc/corosync
+      - pve3_ssh:/root/.ssh
       - pve_shared:/shared
     networks:
       pve:
@@ -127,7 +133,13 @@ volumes:
   pve_shared:
   pve1_data:
   pve1_config:
+  pve1_corosync:
+  pve1_ssh:
   pve2_data:
   pve2_config:
+  pve2_corosync:
+  pve2_ssh:
   pve3_data:
   pve3_config:
+  pve3_corosync:
+  pve3_ssh:

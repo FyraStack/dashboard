@@ -4,7 +4,7 @@ import { getCachedAuthSession, hasAuthSessionCookie } from '$lib/server/auth-lit
 import { closeRequestDb } from '$lib/server/db';
 import { instrument, timingLog } from '$lib/server/observability';
 
-const publicRoutes = ['/login', '/register', '/signup', '/accept-invitation', '/api/'];
+const publicRoutes = ['/health', '/login', '/register', '/signup', '/accept-invitation', '/api/'];
 const authPages = ['/login', '/register', '/signup'];
 
 const moduleLoadedAt = performance.now();

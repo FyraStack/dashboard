@@ -75,6 +75,7 @@ export interface VmCreateParams {
 	diskGb: number;
 	imageId?: string;
 	imageSource?: string;
+	secureBoot?: boolean;
 	macAddress?: string;
 	networkConfig?: VmNetworkConfig;
 	sshKeys?: string[];

@@ -577,6 +577,7 @@ export const createVm = command(createParams, async (params) => {
 			diskGb: vmType.storageAmount,
 			imageId: params.imageId,
 			imageSource: baseImage?.filePath,
+			secureBoot: baseImage?.secureBoot ?? true,
 			networkConfig: {
 				firewallIpSet,
 				...(ipv4NetworkAllocation?.address

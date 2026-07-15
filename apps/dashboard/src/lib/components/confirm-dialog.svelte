@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { confirmController } from '$lib/confirm.svelte';
 
@@ -26,65 +27,53 @@
 		confirmController.resolve(ok);
 		confirmController.open = false;
 	}
-
-	function onKeydown(e: KeyboardEvent) {
-		if (!confirmController.open) return;
-		if (e.key === 'Escape') {
-			e.preventDefault();
-			decide(false);
-		}
-	}
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<Dialog.Root
+	bind:open={confirmController.open}
+	onOpenChange={(value) => {
+		if (!value) confirmController.resolve(false);
+	}}
+>
+	<Dialog.Content
+		class="z-101 max-w-md border-gray-800 bg-gray-900 text-gray-100 sm:max-w-md"
+		overlayProps={{ class: 'z-100 bg-black/50' }}
+		showCloseButton={false}
+	>
+		<Dialog.Header>
+			<Dialog.Title>{req?.title}</Dialog.Title>
+			<Dialog.Description>{req?.description}</Dialog.Description>
+		</Dialog.Header>
 
-{#if confirmController.open}
-	<!-- z above bits-ui dialogs (z-50) so a confirm opened from another dialog sits on top -->
-	<div class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-		<button
-			type="button"
-			aria-label="Cancel"
-			class="absolute inset-0 bg-black/50"
-			onclick={() => decide(false)}
-		></button>
-		<div
-			role="dialog"
-			aria-modal="true"
-			aria-labelledby="confirm-title"
-			aria-describedby="confirm-desc"
-			class="relative z-10 w-full max-w-md border border-gray-800 bg-gray-900 p-4 text-sm text-gray-100 ring-1 ring-foreground/10"
-		>
-			<h2 id="confirm-title" class="text-base font-semibold text-gray-50">{req?.title}</h2>
-			<p id="confirm-desc" class="mt-1 text-sm text-gray-400">{req?.description}</p>
-			{#if needsWord}
-				<div class="mt-4 space-y-1.5">
-					<label for="confirm-name-input" class="block text-xs text-gray-400">
-						Type <span class="font-mono text-gray-200">{req?.confirmWord}</span> to confirm
-					</label>
-					<Input
-						id="confirm-name-input"
-						bind:value={typed}
-						autocomplete="off"
-						autocapitalize="off"
-						spellcheck={false}
-						onkeydown={(e) => {
-							if (e.key === 'Enter') decide(true);
-						}}
-					/>
-				</div>
-			{/if}
-			<div class="mt-5 flex justify-end gap-2">
-				<Button variant="outline" size="sm" onclick={() => decide(false)}>Cancel</Button>
-				<Button
-					id="confirm-ok-btn"
-					variant="destructive"
-					size="sm"
-					disabled={!canConfirm}
-					onclick={() => decide(true)}
-				>
-					{req?.confirmLabel ?? 'Delete'}
-				</Button>
+		{#if needsWord}
+			<div class="mt-4 space-y-1.5">
+				<label for="confirm-name-input" class="block text-xs text-gray-400">
+					Type <span class="font-mono text-gray-200">{req?.confirmWord}</span> to confirm
+				</label>
+				<Input
+					id="confirm-name-input"
+					bind:value={typed}
+					autocomplete="off"
+					autocapitalize="off"
+					spellcheck={false}
+					onkeydown={(e) => {
+						if (e.key === 'Enter') decide(true);
+					}}
+				/>
 			</div>
-		</div>
-	</div>
-{/if}
+		{/if}
+
+		<Dialog.Footer class="mt-5">
+			<Button variant="outline" size="sm" onclick={() => decide(false)}>Cancel</Button>
+			<Button
+				id="confirm-ok-btn"
+				variant="destructive"
+				size="sm"
+				disabled={!canConfirm}
+				onclick={() => decide(true)}
+			>
+				{req?.confirmLabel ?? 'Delete'}
+			</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>

@@ -417,4 +417,12 @@ export class ProxmoxClient {
 			.json<PveResponse<{ result: PveAgentNetworkInterface[] }>>();
 		return res.data.result;
 	}
+
+	async updateHAResources(sid: string, params: Record<string, string>): Promise<void> {
+		await this.api
+			.put(`cluster/ha/resources/${sid}`, {
+				body: this.toForm(params)
+			})
+			.json<PveResponse<null>>();
+	}
 }

@@ -14,7 +14,12 @@
 		updateMemberRole as updateMemberRoleRpc,
 		removeMember as removeMemberRpc
 	} from '$lib/remote/projects.remote';
-	import { Settings, User, Trash2, Check, Plus, Loader2 } from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import Loader2 from '~icons/lucide/loader-2';
+	import Plus from '~icons/lucide/plus';
+	import Settings from '~icons/nucleo/settings';
+	import Trash2 from '~icons/nucleo/trash';
+	import User from '~icons/nucleo/user';
 	import { toast } from 'svelte-sonner';
 	import { getErrorMessage } from '$lib/utils';
 	import { projectRoleLabels } from '$lib/auth/organization-permissions';
@@ -262,7 +267,7 @@
 											{#if removingMemberIds.includes(member.userId)}
 												<Loader2 class="h-3.5 w-3.5 animate-spin" />
 											{:else}
-												<Trash2 class="h-3.5 w-3.5" />
+												<Trash2 class="size-4" />
 											{/if}
 										</Button>
 										<DropdownMenu.Root>

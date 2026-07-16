@@ -5,7 +5,12 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
 	import ComingSoon from '$lib/components/coming-soon.svelte';
-	import { Check, Copy, Pencil, Plus, Trash2, X } from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import Plus from '~icons/lucide/plus';
+	import X from '~icons/lucide/x';
+	import Copy from '~icons/nucleo/copy';
+	import Pencil from '~icons/nucleo/pencil';
+	import Trash2 from '~icons/nucleo/trash';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -41,7 +46,7 @@
 				class="text-muted-foreground hover:text-foreground"
 				onclick={() => copyToClipboard(selectedServer.ip, 'net-ipv4')}
 				>{#if copied === 'net-ipv4'}<Check class="h-3.5 w-3.5 text-emerald-500" />{:else}<Copy
-						class="h-3.5 w-3.5"
+						class="size-4"
 					/>{/if}</button
 			>
 		</div>

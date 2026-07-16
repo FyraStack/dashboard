@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
 	import { authClient } from '$lib/auth-client';
-	import { AlertCircle } from '@lucide/svelte';
+	import AlertCircle from '~icons/nucleo/alert-circle';
 	import { isProjectRole, projectRoleLabels } from '$lib/auth/organization-permissions';
 	import type { PageData } from './$types';
 
@@ -67,7 +67,7 @@
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
-					<AlertCircle class="h-3.5 w-3.5 shrink-0" />
+					<AlertCircle class="size-4 shrink-0" />
 					{data.error}
 				</div>
 
@@ -98,7 +98,7 @@
 					<div
 						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 					>
-						<AlertCircle class="h-3.5 w-3.5 shrink-0" />
+						<AlertCircle class="size-4 shrink-0" />
 						{error}
 					</div>
 				{/if}

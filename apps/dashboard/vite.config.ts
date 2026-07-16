@@ -1,6 +1,8 @@
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig, loadEnv } from 'vite';
+import Icons from 'unplugin-icons/vite';
+import { FileSystemIconLoader } from 'unplugin-icons/loaders';
 
 export default defineConfig(({ mode }) => {
 	const env = loadEnv(mode, process.cwd(), '');
@@ -16,7 +18,21 @@ export default defineConfig(({ mode }) => {
 	}
 
 	return {
-		plugins: [tailwindcss(), sveltekit()],
+		plugins: [
+			tailwindcss(),
+			sveltekit(),
+			Icons({
+				compiler: 'svelte',
+				customCollections: {
+					nucleo: FileSystemIconLoader('./src/lib/icons')
+				},
+				transform(svg, collection) {
+					return collection === 'lucide'
+						? svg.replace(/stroke-width="2"/g, 'stroke-width="1.5"')
+						: svg;
+				}
+			})
+		],
 		ssr: {
 			external: ['postcss']
 		},

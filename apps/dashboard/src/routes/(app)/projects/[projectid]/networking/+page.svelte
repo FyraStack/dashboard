@@ -5,7 +5,13 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Switch } from '$lib/components/ui/switch';
 	import CreateNetworkDialog from '$lib/components/dialogs/create-network-dialog.svelte';
-	import { Network, Pencil, Check, X, Plus, Globe, Trash2 } from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import Plus from '~icons/lucide/plus';
+	import X from '~icons/lucide/x';
+	import Globe from '~icons/nucleo/globe';
+	import Network from '~icons/nucleo/network';
+	import Pencil from '~icons/nucleo/pencil';
+	import Trash2 from '~icons/nucleo/trash';
 
 	type IpAddress = {
 		address: string;
@@ -119,7 +125,7 @@
 		<!-- IP Addresses Section -->
 		<div class="border-b border-border">
 			<div class="flex items-center gap-2 px-5 py-3">
-				<Globe class="h-3.5 w-3.5 text-muted-foreground" />
+				<Globe class="size-4 text-muted-foreground" />
 				<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
 					>IP Addresses</span
 				>
@@ -200,7 +206,7 @@
 		<div>
 			<div class="flex items-center justify-between px-5 py-3">
 				<div class="flex items-center gap-2">
-					<Network class="h-3.5 w-3.5 text-muted-foreground" />
+					<Network class="size-4 text-muted-foreground" />
 					<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
 						>Private Networks</span
 					>

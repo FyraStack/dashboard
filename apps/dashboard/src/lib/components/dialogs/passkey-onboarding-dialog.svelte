@@ -4,7 +4,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Label } from '$lib/components/ui/label';
-	import { Fingerprint, Loader2 } from '@lucide/svelte';
+	import Loader2 from '~icons/lucide/loader-2';
+	import Fingerprint from '~icons/nucleo/fingerprint';
 
 	type Props = {
 		open?: boolean;
@@ -69,7 +70,7 @@
 					<Loader2 class="h-3.5 w-3.5 animate-spin" />
 					Registering...
 				{:else}
-					<Fingerprint class="h-3.5 w-3.5" />
+					<Fingerprint class="size-4" />
 					Register Passkey
 				{/if}
 			</Button>

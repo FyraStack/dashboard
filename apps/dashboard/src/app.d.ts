@@ -1,3 +1,4 @@
+/// <reference types="unplugin-icons/types/svelte" />
 import type { User, Session } from 'better-auth';
 import type { Fetcher, KVNamespace, SendEmail } from '@cloudflare/workers-types';
 import type { Pool } from 'pg';

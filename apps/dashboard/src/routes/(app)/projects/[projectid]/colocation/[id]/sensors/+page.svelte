@@ -1,5 +1,8 @@
 <script lang="ts">
-	import { Activity, Cpu, Fan, Thermometer } from '@lucide/svelte';
+	import Activity from '~icons/nucleo/activity';
+	import Cpu from '~icons/nucleo/cpu';
+	import Fan from '~icons/nucleo/wind';
+	import Thermometer from '~icons/nucleo/thermometer';
 	import { getColocationContext } from '../../colocation-context.svelte';
 
 	const colo = getColocationContext();

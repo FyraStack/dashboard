@@ -2,7 +2,10 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { imageTypeColors } from '$lib/data/images';
-	import { ChevronLeft, ChevronRight, Disc, Search } from '@lucide/svelte';
+	import ChevronLeft from '~icons/lucide/chevron-left';
+	import ChevronRight from '~icons/lucide/chevron-right';
+	import Disc from '~icons/nucleo/disc';
+	import Search from '~icons/nucleo/search';
 
 	type PageData = {
 		images?: DbImage[];

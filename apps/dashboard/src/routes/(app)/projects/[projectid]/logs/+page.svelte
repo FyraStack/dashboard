@@ -2,16 +2,14 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
-	import {
-		FileText,
-		Search,
-		Pause,
-		Play,
-		Trash2,
-		ArrowDown,
-		ChevronRight,
-		X
-	} from '@lucide/svelte';
+	import ArrowDown from '~icons/lucide/arrow-down';
+	import ChevronRight from '~icons/lucide/chevron-right';
+	import FileText from '~icons/nucleo/file-text';
+	import X from '~icons/lucide/x';
+	import Pause from '~icons/nucleo/pause';
+	import Play from '~icons/nucleo/play';
+	import Search from '~icons/nucleo/search';
+	import Trash2 from '~icons/nucleo/trash';
 
 	type Severity = 'info' | 'warn' | 'error' | 'debug';
 

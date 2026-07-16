@@ -2,7 +2,11 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { authClient } from '$lib/auth-client';
-	import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2 } from '@lucide/svelte';
+	import Loader2 from '~icons/lucide/loader-2';
+	import AlertCircle from '~icons/nucleo/alert-circle';
+	import CheckCircle2 from '~icons/nucleo/check-circle';
+	import Eye from '~icons/nucleo/eye';
+	import EyeOff from '~icons/nucleo/eye-off';
 	import SiGithub from '@icons-pack/svelte-simple-icons/icons/SiGithub';
 	import type { PageData } from './$types';
 
@@ -91,7 +95,7 @@
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
-					<AlertCircle class="h-3.5 w-3.5 shrink-0" />
+					<AlertCircle class="size-4 shrink-0" />
 					{error}
 				</div>
 			{/if}
@@ -100,7 +104,7 @@
 				<div
 					class="flex items-center gap-2 border border-border bg-background px-3 py-2 text-sm text-muted-foreground"
 				>
-					<CheckCircle2 class="h-3.5 w-3.5 shrink-0 text-red-400" />
+					<CheckCircle2 class="size-4 shrink-0 text-red-400" />
 					Check your email to verify your account.
 				</div>
 			{/if}
@@ -127,7 +131,7 @@
 						class="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
 						onclick={() => (showPassword = !showPassword)}
 					>
-						{#if showPassword}<EyeOff class="h-3.5 w-3.5" />{:else}<Eye class="h-3.5 w-3.5" />{/if}
+						{#if showPassword}<EyeOff class="size-4" />{:else}<Eye class="size-4" />{/if}
 					</button>
 				</div>
 

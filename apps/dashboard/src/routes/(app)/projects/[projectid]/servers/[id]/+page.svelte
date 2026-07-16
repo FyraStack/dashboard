@@ -1,7 +1,12 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
 	import { Button } from '$lib/components/ui/button';
-	import { AlertTriangle, Check, Copy, FileText, Terminal, Trash2 } from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import FileText from '~icons/nucleo/file-text';
+	import AlertTriangle from '~icons/nucleo/alert-triangle';
+	import Copy from '~icons/nucleo/copy';
+	import Terminal from '~icons/nucleo/terminal';
+	import Trash2 from '~icons/nucleo/trash';
 	import { getServerWithFallback, serversState } from '$lib/state/servers.svelte';
 
 	let { data }: PageProps = $props();

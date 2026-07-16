@@ -2,7 +2,8 @@
 	import { getServerWithFallback } from '$lib/state/servers.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import ComingSoon from '$lib/components/coming-soon.svelte';
-	import { Camera, Trash2 } from '@lucide/svelte';
+	import Camera from '~icons/nucleo/camera';
+	import Trash2 from '~icons/nucleo/trash';
 
 	let { data } = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));

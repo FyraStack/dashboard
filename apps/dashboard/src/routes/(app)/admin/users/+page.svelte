@@ -15,40 +15,38 @@
 	import { beginDeleteUser, type AdminUser } from '$lib/remote/admin-users.remote';
 	import { getErrorMessage } from '$lib/utils';
 	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
-	import {
-		AlertTriangle,
-		Check,
-		Cpu,
-		Disc,
-		Flag,
-		Loader2,
-		ShieldCheck,
-		UserCog,
-		Users,
-		Shield,
-		Lock,
-		Unlock,
-		Key,
-		Calendar,
-		MoreHorizontal,
-		ChevronDown,
-		Mail,
-		User,
-		Crown,
-		Clock,
-		CreditCard,
-		Globe,
-		Fingerprint,
-		Hash,
-		Terminal,
-		ChevronLeft,
-		X,
-		ChevronRight,
-		Server,
-		HardDrive,
-		Trash2,
-		Network
-	} from '@lucide/svelte';
+	import Calendar from '~icons/nucleo/calendar';
+	import Check from '~icons/lucide/check';
+	import ChevronDown from '~icons/lucide/chevron-down';
+	import ChevronLeft from '~icons/lucide/chevron-left';
+	import ChevronRight from '~icons/lucide/chevron-right';
+	import Clock from '~icons/nucleo/clock';
+	import Loader2 from '~icons/lucide/loader-2';
+	import MoreHorizontal from '~icons/lucide/more-horizontal';
+	import X from '~icons/lucide/x';
+	import AlertTriangle from '~icons/nucleo/alert-triangle';
+	import Cpu from '~icons/nucleo/cpu';
+	import CreditCard from '~icons/nucleo/credit-card';
+	import Crown from '~icons/nucleo/crown';
+	import Disc from '~icons/nucleo/disc';
+	import Fingerprint from '~icons/nucleo/fingerprint';
+	import Flag from '~icons/nucleo/flag';
+	import Globe from '~icons/nucleo/globe';
+	import HardDrive from '~icons/nucleo/hard-drive';
+	import Hash from '~icons/nucleo/hash';
+	import Key from '~icons/nucleo/key';
+	import Lock from '~icons/nucleo/lock';
+	import Mail from '~icons/nucleo/mail';
+	import Network from '~icons/nucleo/network';
+	import Server from '~icons/nucleo/server';
+	import Shield from '~icons/nucleo/shield';
+	import ShieldCheck from '~icons/nucleo/shield-check';
+	import Terminal from '~icons/nucleo/terminal';
+	import Trash2 from '~icons/nucleo/trash';
+	import Unlock from '~icons/nucleo/unlock';
+	import User from '~icons/nucleo/user';
+	import UserCog from '~icons/nucleo/user-cog';
+	import Users from '~icons/nucleo/users';
 
 	type AdminTab = 'features' | 'vmTypes' | 'images' | 'ipam' | 'users' | 'vms' | 'emails';
 	type DeletionVerificationMethod = 'passkey' | 'totp' | 'email';
@@ -233,7 +231,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin')}
 		>
-			<Cpu class="h-3.5 w-3.5 shrink-0" />
+			<Cpu class="size-4 shrink-0" />
 			VM Types
 			<Badge variant="secondary" class="text-[10px]">{admin.vmTypes.length}</Badge>
 		</a>
@@ -244,7 +242,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/vms')}
 		>
-			<Server class="h-3.5 w-3.5 shrink-0" />
+			<Server class="size-4 shrink-0" />
 			VMs
 			<Badge variant="secondary" class="text-[10px]">
 				{admin.adminVms.filter((vm) => vm.active).length}
@@ -257,7 +255,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/images')}
 		>
-			<Disc class="h-3.5 w-3.5 shrink-0" />
+			<Disc class="size-4 shrink-0" />
 			Images
 			<Badge variant="secondary" class="text-[10px]">{admin.images.length}</Badge>
 		</a>
@@ -268,7 +266,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/features')}
 		>
-			<Flag class="h-3.5 w-3.5 shrink-0" />
+			<Flag class="size-4 shrink-0" />
 			Feature Flags
 			<Badge variant="secondary" class="text-[10px]">
 				{featureFlagKeys.filter((key) => admin.featureFlags[key]).length}
@@ -281,7 +279,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/ipam')}
 		>
-			<Network class="h-3.5 w-3.5 shrink-0" />
+			<Network class="size-4 shrink-0" />
 			IPAM
 			<Badge variant="secondary" class="text-[10px]">{admin.ipamPrefixes.length}</Badge>
 		</a>
@@ -292,7 +290,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/users')}
 		>
-			<UserCog class="h-3.5 w-3.5 shrink-0" />
+			<UserCog class="size-4 shrink-0" />
 			Users
 			<Badge variant="secondary" class="text-[10px]">{userCount}</Badge>
 		</a>
@@ -303,7 +301,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/emails')}
 		>
-			<Mail class="h-3.5 w-3.5 shrink-0" />
+			<Mail class="size-4 shrink-0" />
 			Emails
 		</a>
 	</div>
@@ -315,7 +313,7 @@
 				<div
 					class="flex items-center gap-2 rounded-md border border-red-300 bg-red-100 px-3 py-2 text-xs text-red-800 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-400"
 				>
-					<AlertTriangle class="h-3.5 w-3.5 shrink-0" />
+					<AlertTriangle class="size-4 shrink-0" />
 					{admin.adminUserError}
 				</div>
 			{/if}
@@ -789,7 +787,7 @@
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.sessionCount > 0 && admin.loadUserResources(u.id, 'session')}
 						>
-							<Terminal class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+							<Terminal class="size-4 shrink-0 text-muted-foreground" />
 							<div class="flex flex-col">
 								<span class="text-sm font-semibold text-foreground">{u.sessionCount}</span>
 								<span class="text-[10px] text-muted-foreground">Sessions</span>
@@ -802,7 +800,7 @@
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.accountCount > 0 && admin.loadUserResources(u.id, 'account')}
 						>
-							<Globe class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+							<Globe class="size-4 shrink-0 text-muted-foreground" />
 							<div class="flex flex-col">
 								<span class="text-sm font-semibold text-foreground">{u.accountCount}</span>
 								<span class="text-[10px] text-muted-foreground">Accounts</span>
@@ -815,7 +813,7 @@
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.orgCount > 0 && admin.loadUserResources(u.id, 'org')}
 						>
-							<Users class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+							<Users class="size-4 shrink-0 text-muted-foreground" />
 							<div class="flex flex-col">
 								<span class="text-sm font-semibold text-foreground">{u.orgCount}</span>
 								<span class="text-[10px] text-muted-foreground">Organizations</span>
@@ -828,7 +826,7 @@
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.sshKeyCount > 0 && admin.loadUserResources(u.id, 'sshKey')}
 						>
-							<Key class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+							<Key class="size-4 shrink-0 text-muted-foreground" />
 							<div class="flex flex-col">
 								<span class="text-sm font-semibold text-foreground">{u.sshKeyCount}</span>
 								<span class="text-[10px] text-muted-foreground">SSH Keys</span>
@@ -841,7 +839,7 @@
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.apiTokenCount > 0 && admin.loadUserResources(u.id, 'apiToken')}
 						>
-							<Fingerprint class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+							<Fingerprint class="size-4 shrink-0 text-muted-foreground" />
 							<div class="flex flex-col">
 								<span class="text-sm font-semibold text-foreground">{u.apiTokenCount}</span>
 								<span class="text-[10px] text-muted-foreground">API Tokens</span>

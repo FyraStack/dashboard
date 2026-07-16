@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { Plus, Server } from '@lucide/svelte';
+	import Plus from '~icons/lucide/plus';
+	import Server from '~icons/nucleo/server';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { serversState } from '$lib/state/servers.svelte';

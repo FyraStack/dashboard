@@ -22,21 +22,19 @@
 	} from '$lib/remote/email-campaign.remote';
 	import { getErrorMessage } from '$lib/utils';
 	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
-	import {
-		AlertTriangle,
-		Check,
-		Cpu,
-		Disc,
-		Eye,
-		Flag,
-		Loader2,
-		Mail,
-		Network,
-		Send,
-		Server,
-		UserCog,
-		Users
-	} from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import Loader2 from '~icons/lucide/loader-2';
+	import AlertTriangle from '~icons/nucleo/alert-triangle';
+	import Cpu from '~icons/nucleo/cpu';
+	import Disc from '~icons/nucleo/disc';
+	import Eye from '~icons/nucleo/eye';
+	import Flag from '~icons/nucleo/flag';
+	import Mail from '~icons/nucleo/mail';
+	import Network from '~icons/nucleo/network';
+	import Send from '~icons/nucleo/send';
+	import Server from '~icons/nucleo/server';
+	import UserCog from '~icons/nucleo/user-cog';
+	import Users from '~icons/nucleo/users';
 
 	type AdminTab = 'features' | 'vmTypes' | 'images' | 'ipam' | 'users' | 'vms' | 'emails';
 	let { data }: { data: AdminPageData } = $props();
@@ -290,7 +288,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin')}
 		>
-			<Cpu class="h-3.5 w-3.5 shrink-0" />
+			<Cpu class="size-4 shrink-0" />
 			VM Types
 			<Badge variant="secondary" class="text-[10px]">{admin.vmTypes.length}</Badge>
 		</a>
@@ -301,7 +299,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/vms')}
 		>
-			<Server class="h-3.5 w-3.5 shrink-0" />
+			<Server class="size-4 shrink-0" />
 			VMs
 			<Badge variant="secondary" class="text-[10px]">
 				{admin.adminVms.filter((vm) => vm.active).length}
@@ -314,7 +312,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/images')}
 		>
-			<Disc class="h-3.5 w-3.5 shrink-0" />
+			<Disc class="size-4 shrink-0" />
 			Images
 			<Badge variant="secondary" class="text-[10px]">{admin.images.length}</Badge>
 		</a>
@@ -325,7 +323,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/features')}
 		>
-			<Flag class="h-3.5 w-3.5 shrink-0" />
+			<Flag class="size-4 shrink-0" />
 			Feature Flags
 			<Badge variant="secondary" class="text-[10px]">
 				{featureFlagKeys.filter((key) => admin.featureFlags[key]).length}
@@ -338,7 +336,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/ipam')}
 		>
-			<Network class="h-3.5 w-3.5 shrink-0" />
+			<Network class="size-4 shrink-0" />
 			IPAM
 			<Badge variant="secondary" class="text-[10px]">{admin.ipamPrefixes.length}</Badge>
 		</a>
@@ -349,7 +347,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/users')}
 		>
-			<UserCog class="h-3.5 w-3.5 shrink-0" />
+			<UserCog class="size-4 shrink-0" />
 			Users
 			<Badge variant="secondary" class="text-[10px]">{userCount}</Badge>
 		</a>
@@ -360,7 +358,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/emails')}
 		>
-			<Mail class="h-3.5 w-3.5 shrink-0" />
+			<Mail class="size-4 shrink-0" />
 			Emails
 		</a>
 	</div>
@@ -422,7 +420,7 @@
 						class="flex items-center justify-between gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 					>
 						<span class="flex items-center gap-2">
-							<AlertTriangle class="h-3.5 w-3.5 shrink-0" />{editorError}
+							<AlertTriangle class="size-4 shrink-0" />{editorError}
 						</span>
 						<Button variant="outline" size="sm" class="h-6 text-xs" onclick={() => loadEditor()}>
 							Retry
@@ -456,7 +454,7 @@
 					<div
 						class="flex items-center gap-2 border border-amber-300 bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
 					>
-						<AlertTriangle class="h-3.5 w-3.5 shrink-0" />
+						<AlertTriangle class="size-4 shrink-0" />
 						No CSV column matches {missingColumns.map((name) => `{{${name}}}`).join(', ')} — those placeholders
 						will be blank.
 					</div>
@@ -479,12 +477,12 @@
 					<div
 						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 					>
-						<AlertTriangle class="h-3.5 w-3.5 shrink-0" />{csvError}
+						<AlertTriangle class="size-4 shrink-0" />{csvError}
 					</div>
 				{/if}
 				{#if csvRows.length > 0}
 					<div class="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-						<Users class="h-3.5 w-3.5 text-muted-foreground" />
+						<Users class="size-4 text-muted-foreground" />
 						{csvFileName} · {csvRows.length} recipient{csvRows.length === 1 ? '' : 's'} ·
 						{#each csvColumns as column (column)}
 							<Badge variant="secondary" class="font-mono text-[10px]">{`{{${column}}}`}</Badge>
@@ -544,14 +542,14 @@
 					<div
 						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 					>
-						<AlertTriangle class="h-3.5 w-3.5 shrink-0" />{previewError}
+						<AlertTriangle class="size-4 shrink-0" />{previewError}
 					</div>
 				{/if}
 				{#if sendError}
 					<div
 						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 					>
-						<AlertTriangle class="h-3.5 w-3.5 shrink-0" />{sendError}
+						<AlertTriangle class="size-4 shrink-0" />{sendError}
 					</div>
 				{/if}
 				<div class="flex items-center gap-2">

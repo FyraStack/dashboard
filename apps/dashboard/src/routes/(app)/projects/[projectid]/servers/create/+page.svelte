@@ -12,23 +12,21 @@
 	import { createVm } from '$lib/remote/vms.remote';
 	import { getErrorMessage } from '$lib/utils';
 	import { onMount } from 'svelte';
-	import {
-		ArrowLeft,
-		HardDrive,
-		Server,
-		Globe,
-		Key,
-		Loader2,
-		Check,
-		Copy,
-		Circle,
-		Eye,
-		EyeOff,
-		HardDriveUpload,
-		Plus,
-		X,
-		Dices
-	} from '@lucide/svelte';
+	import ArrowLeft from '~icons/lucide/arrow-left';
+	import Check from '~icons/lucide/check';
+	import Loader2 from '~icons/lucide/loader-2';
+	import Plus from '~icons/lucide/plus';
+	import X from '~icons/lucide/x';
+	import Circle from '~icons/nucleo/circle';
+	import Copy from '~icons/nucleo/copy';
+	import Dices from '~icons/nucleo/dices';
+	import Eye from '~icons/nucleo/eye';
+	import EyeOff from '~icons/nucleo/eye-off';
+	import Globe from '~icons/nucleo/globe';
+	import HardDrive from '~icons/nucleo/hard-drive';
+	import Key from '~icons/nucleo/key';
+	import Server from '~icons/nucleo/server';
+	import Upload from '~icons/nucleo/upload';
 	import { generateServerName } from '$lib/name-generator';
 
 	type PageData = {
@@ -198,7 +196,7 @@
 					{
 						id: 'storage',
 						label: 'Storage',
-						icon: HardDriveUpload,
+						icon: Upload,
 						isComplete: selectedPlanId !== null
 					}
 				]
@@ -417,7 +415,7 @@
 				<div class="flex flex-col gap-8">
 					<div id="section-name" class="scroll-mt-4">
 						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<Server class="h-4 w-4 shrink-0 text-red-400 sm:h-3.5 sm:w-3.5" />
+							<Server class="icon-flat size-4 shrink-0 text-red-400" />
 							<span
 								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
 								>Name</span
@@ -437,7 +435,7 @@
 
 					<div id="section-image" class="scroll-mt-4">
 						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<HardDrive class="h-4 w-4 shrink-0 text-red-400 sm:h-3.5 sm:w-3.5" />
+							<HardDrive class="icon-flat size-4 shrink-0 text-red-400" />
 							<span
 								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
 								>Image</span
@@ -557,9 +555,7 @@
 														}
 													}}
 												>
-													<HardDrive
-														class="h-4 w-4 shrink-0 text-muted-foreground sm:h-3.5 sm:w-3.5"
-													/>
+													<HardDrive class="size-4 shrink-0 text-muted-foreground" />
 													<span class="truncate text-sm text-foreground sm:text-xs">{img.name}</span
 													>
 													{#if img.version}
@@ -598,7 +594,7 @@
 
 					<div id="section-plan" class="scroll-mt-4">
 						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<Server class="h-4 w-4 shrink-0 text-red-400 sm:h-3.5 sm:w-3.5" />
+							<Server class="icon-flat size-4 shrink-0 text-red-400" />
 							<span
 								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
 								>Plan</span
@@ -654,7 +650,7 @@
 					{#if volumesEnabled}
 						<div id="section-storage" class="scroll-mt-4">
 							<div class="flex items-center gap-2 border-b border-border pb-2">
-								<HardDriveUpload class="h-4 w-4 shrink-0 text-red-400 sm:h-3.5 sm:w-3.5" />
+								<Upload class="icon-flat size-4 shrink-0 text-red-400" />
 								<span
 									class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
 									>Storage</span
@@ -794,7 +790,7 @@
 
 					<div id="section-networking" class="scroll-mt-4">
 						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<Globe class="h-4 w-4 shrink-0 text-red-400 sm:h-3.5 sm:w-3.5" />
+							<Globe class="icon-flat size-4 shrink-0 text-red-400" />
 							<span
 								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
 								>Networking</span
@@ -837,7 +833,7 @@
 
 					<div id="section-ssh" class="scroll-mt-4 pb-8">
 						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<Key class="h-4 w-4 shrink-0 text-red-400 sm:h-3.5 sm:w-3.5" />
+							<Key class="icon-flat size-4 shrink-0 text-red-400" />
 							<span
 								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
 								>Authentication</span
@@ -929,9 +925,9 @@
 											onclick={() => (showServerPassword = !showServerPassword)}
 										>
 											{#if showServerPassword}
-												<EyeOff class="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+												<EyeOff class="size-4" />
 											{:else}
-												<Eye class="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+												<Eye class="size-4" />
 											{/if}
 										</button>
 										<button
@@ -944,7 +940,7 @@
 											{#if passwordCopied}
 												<Check class="h-4 w-4 text-emerald-500 sm:h-3.5 sm:w-3.5" />
 											{:else}
-												<Copy class="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+												<Copy class="size-4" />
 											{/if}
 										</button>
 									</div>

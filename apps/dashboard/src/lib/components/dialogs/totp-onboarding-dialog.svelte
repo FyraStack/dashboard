@@ -5,7 +5,9 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Label } from '$lib/components/ui/label';
-	import { Copy, Check, ShieldCheck } from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import Copy from '~icons/nucleo/copy';
+	import ShieldCheck from '~icons/nucleo/shield-check';
 
 	type Props = {
 		open?: boolean;
@@ -129,7 +131,7 @@
 				</div>
 
 				<Button onclick={enableTotp} disabled={setupSubmitting || !setupPassword} class="gap-1.5">
-					<ShieldCheck class="h-3.5 w-3.5" />
+					<ShieldCheck class="size-4" />
 					{setupSubmitting ? 'Confirming...' : 'Continue'}
 				</Button>
 			</div>
@@ -157,7 +159,7 @@
 							{#if copiedSecret}
 								<Check class="h-3.5 w-3.5 text-emerald-500" />
 							{:else}
-								<Copy class="h-3.5 w-3.5" />
+								<Copy class="size-4" />
 							{/if}
 						</button>
 					</div>
@@ -205,7 +207,7 @@
 				</div>
 
 				<Button onclick={verifyTotp} disabled={verifying || !normalizedVerifyCode} class="gap-1.5">
-					<ShieldCheck class="h-3.5 w-3.5" />
+					<ShieldCheck class="size-4" />
 					{verifying ? 'Verifying...' : 'Verify & Enable'}
 				</Button>
 			</div>

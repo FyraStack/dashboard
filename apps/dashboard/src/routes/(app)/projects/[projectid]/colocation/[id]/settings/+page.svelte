@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { Check, Pencil, Trash2, X } from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import X from '~icons/lucide/x';
+	import Pencil from '~icons/nucleo/pencil';
+	import Trash2 from '~icons/nucleo/trash';
 	import { getColocationContext } from '../../colocation-context.svelte';
 
 	const colo = getColocationContext();

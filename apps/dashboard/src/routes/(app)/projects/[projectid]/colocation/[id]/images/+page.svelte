@@ -12,16 +12,14 @@
 		type ImageType,
 		type OfficialImage
 	} from '$lib/data/images';
-	import {
-		ChevronLeft,
-		ChevronRight,
-		Disc,
-		DollarSign,
-		Power,
-		Search,
-		Trash2,
-		Upload
-	} from '@lucide/svelte';
+	import ChevronLeft from '~icons/lucide/chevron-left';
+	import ChevronRight from '~icons/lucide/chevron-right';
+	import Disc from '~icons/nucleo/disc';
+	import DollarSign from '~icons/nucleo/dollar-sign';
+	import Power from '~icons/nucleo/power';
+	import Search from '~icons/nucleo/search';
+	import Trash2 from '~icons/nucleo/trash';
+	import Upload from '~icons/nucleo/upload';
 	import { getColocationContext } from '../../colocation-context.svelte';
 
 	type UserImage = {

@@ -3,7 +3,10 @@
 	import { getServerWithFallback } from '$lib/state/servers.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import { AlertTriangle, Search, Trash2, X } from '@lucide/svelte';
+	import X from '~icons/lucide/x';
+	import AlertTriangle from '~icons/nucleo/alert-triangle';
+	import Search from '~icons/nucleo/search';
+	import Trash2 from '~icons/nucleo/trash';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));

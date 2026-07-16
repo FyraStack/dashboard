@@ -2,7 +2,10 @@
 	import BillingSetupDialog from '$lib/components/billing-setup-dialog.svelte';
 	import { openBillingPortal } from '$lib/remote/billing.remote';
 	import { getErrorMessage } from '$lib/utils';
-	import { CreditCard, Server, HardDrive, Cpu } from '@lucide/svelte';
+	import Cpu from '~icons/nucleo/cpu';
+	import CreditCard from '~icons/nucleo/credit-card';
+	import HardDrive from '~icons/nucleo/hard-drive';
+	import Server from '~icons/nucleo/server';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 
 	type DateValue = Date | number | string | null | undefined;
@@ -174,7 +177,7 @@
 							<Tooltip.Trigger>
 								{#snippet child({ props })}
 									<div {...props} class="flex w-fit cursor-help items-center gap-2">
-										<Server class="size-3.5 text-blue-400" />
+										<Server class="size-4 text-blue-400" />
 										<p
 											class="text-[0.625rem] font-medium tracking-wide text-muted-foreground uppercase"
 										>
@@ -193,7 +196,7 @@
 					</div>
 					<div class="rounded-md border border-border/60 bg-background/40 p-3.5">
 						<div class="flex items-center gap-2">
-							<Cpu class="size-3.5 text-violet-400" />
+							<Cpu class="size-4 text-violet-400" />
 							<p class="text-[0.625rem] font-medium tracking-wide text-muted-foreground uppercase">
 								Compute hours
 							</p>
@@ -207,7 +210,7 @@
 							<Tooltip.Trigger>
 								{#snippet child({ props })}
 									<div {...props} class="flex w-fit cursor-help items-center gap-2">
-										<CreditCard class="size-3.5 text-emerald-400" />
+										<CreditCard class="size-4 text-emerald-400" />
 										<p
 											class="text-[0.625rem] font-medium tracking-wide text-muted-foreground uppercase"
 										>
@@ -239,7 +242,7 @@
 							onclick={handleBillingAction}
 							disabled={portalLoading}
 						>
-							<CreditCard class="size-3.5 text-muted-foreground" />
+							<CreditCard class="size-4 text-muted-foreground" />
 							{portalLoading
 								? 'Opening portal...'
 								: billingReady

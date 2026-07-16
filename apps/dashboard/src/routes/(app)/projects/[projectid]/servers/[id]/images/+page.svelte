@@ -10,16 +10,14 @@
 		type OfficialImage,
 		type ImageType
 	} from '$lib/data/images';
-	import {
-		ChevronLeft,
-		ChevronRight,
-		Disc,
-		DollarSign,
-		RotateCw,
-		Search,
-		Trash2,
-		Upload
-	} from '@lucide/svelte';
+	import ChevronLeft from '~icons/lucide/chevron-left';
+	import ChevronRight from '~icons/lucide/chevron-right';
+	import Disc from '~icons/nucleo/disc';
+	import DollarSign from '~icons/nucleo/dollar-sign';
+	import RotateCw from '~icons/nucleo/rotate-cw';
+	import Search from '~icons/nucleo/search';
+	import Trash2 from '~icons/nucleo/trash';
+	import Upload from '~icons/nucleo/upload';
 
 	let { data } = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));

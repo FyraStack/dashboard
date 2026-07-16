@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getServerWithFallback } from '$lib/state/servers.svelte';
-	import { Terminal } from '@lucide/svelte';
+	import Terminal from '~icons/nucleo/terminal';
 
 	let { data } = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));

@@ -9,29 +9,26 @@
 	import { featureFlagKeys } from '$lib/feature-flags';
 	import type { AdminVm } from '$lib/remote/admin-vms.remote';
 	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
-	import {
-		AlertTriangle,
-		Check,
-		ChevronDown,
-		Cpu,
-		Disc,
-		Flag,
-		Loader2,
-		MoreHorizontal,
-		Network,
-		Play,
-		Power,
-		RefreshCw,
-		RotateCcw,
-		Search,
-		Server,
-		ShieldOff,
-		Square,
-		Trash2,
-		UserCog,
-		Zap,
-		Mail
-	} from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import ChevronDown from '~icons/lucide/chevron-down';
+	import Loader2 from '~icons/lucide/loader-2';
+	import MoreHorizontal from '~icons/lucide/more-horizontal';
+	import AlertTriangle from '~icons/nucleo/alert-triangle';
+	import Cpu from '~icons/nucleo/cpu';
+	import Disc from '~icons/nucleo/disc';
+	import Flag from '~icons/nucleo/flag';
+	import Mail from '~icons/nucleo/mail';
+	import Network from '~icons/nucleo/network';
+	import Play from '~icons/nucleo/play';
+	import Power from '~icons/nucleo/power';
+	import PowerOff from '~icons/nucleo/power-off';
+	import RefreshCw from '~icons/nucleo/refresh-cw';
+	import RotateCw from '~icons/nucleo/rotate-cw';
+	import Search from '~icons/nucleo/search';
+	import Server from '~icons/nucleo/server';
+	import ShieldOff from '~icons/nucleo/shield-off';
+	import Trash2 from '~icons/nucleo/trash';
+	import UserCog from '~icons/nucleo/user-cog';
 
 	type AdminTab = 'features' | 'vmTypes' | 'images' | 'ipam' | 'users' | 'vms' | 'emails';
 	let { data }: { data: AdminPageData } = $props();
@@ -306,7 +303,7 @@
 					<div
 						class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted-foreground/10"
 					>
-						<Square class="h-4 w-4 text-muted-foreground" />
+						<PowerOff class="h-4 w-4 text-muted-foreground" />
 					</div>
 					<div class="flex flex-col">
 						<span class="text-lg leading-none font-semibold text-foreground">{stoppedCount}</span>
@@ -573,14 +570,14 @@
 														disabled={vm.liveStatus !== 'running'}
 														onSelect={() => admin.adminVmPower(vm.id, 'reboot')}
 													>
-														<RotateCcw class="h-3.5 w-3.5 text-sky-400" />Reboot
+														<RotateCw class="h-3.5 w-3.5 text-sky-400" />Reboot
 													</DropdownMenu.Item>
 													<DropdownMenu.Item
 														class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 														disabled={vm.liveStatus !== 'running'}
 														onSelect={() => admin.adminVmPower(vm.id, 'kill')}
 													>
-														<Zap class="h-3.5 w-3.5 text-amber-400" />Force stop
+														<PowerOff class="h-3.5 w-3.5 text-amber-400" />Force stop
 													</DropdownMenu.Item>
 													<DropdownMenu.Separator class="bg-muted" />
 													<DropdownMenu.Item

@@ -12,7 +12,7 @@
 		sendPasswordChangeCode
 	} from '$lib/remote/password-change.remote';
 	import { getErrorMessage } from '$lib/utils';
-	import { Fingerprint } from '@lucide/svelte';
+	import Fingerprint from '~icons/nucleo/fingerprint';
 
 	type VerificationMethod = 'passkey' | 'totp' | 'email';
 

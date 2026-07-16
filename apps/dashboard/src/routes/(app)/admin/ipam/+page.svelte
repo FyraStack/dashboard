@@ -17,21 +17,19 @@
 	import { AdminState, type AdminPageData, type IpamPrefix } from '$lib/state/admin.svelte';
 	import { getErrorMessage, runQuery } from '$lib/utils';
 	import { confirmDestructive } from '$lib/confirm.svelte';
-	import {
-		AlertTriangle,
-		Cpu,
-		Disc,
-		Flag,
-		Loader2,
-		Network,
-		Pencil,
-		Plus,
-		Power,
-		Server,
-		Trash2,
-		UserCog,
-		Mail
-	} from '@lucide/svelte';
+	import Loader2 from '~icons/lucide/loader-2';
+	import Plus from '~icons/lucide/plus';
+	import AlertTriangle from '~icons/nucleo/alert-triangle';
+	import Cpu from '~icons/nucleo/cpu';
+	import Disc from '~icons/nucleo/disc';
+	import Flag from '~icons/nucleo/flag';
+	import Mail from '~icons/nucleo/mail';
+	import Network from '~icons/nucleo/network';
+	import Pencil from '~icons/nucleo/pencil';
+	import Power from '~icons/nucleo/power';
+	import Server from '~icons/nucleo/server';
+	import Trash2 from '~icons/nucleo/trash';
+	import UserCog from '~icons/nucleo/user-cog';
 	import { featureFlagKeys } from '$lib/feature-flags';
 	import { toast } from 'svelte-sonner';
 

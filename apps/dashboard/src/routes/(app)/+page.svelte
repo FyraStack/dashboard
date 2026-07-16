@@ -10,15 +10,13 @@
 		createProject as createProjectRpc,
 		deleteProject as deleteProjectRpc
 	} from '$lib/remote/projects.remote';
-	import {
-		Plus,
-		FolderOpen,
-		Settings,
-		Trash2,
-		MoreHorizontal,
-		ArrowRight,
-		Loader2
-	} from '@lucide/svelte';
+	import ArrowRight from '~icons/lucide/arrow-right';
+	import FolderOpen from '~icons/nucleo/folder-open';
+	import Loader2 from '~icons/lucide/loader-2';
+	import MoreHorizontal from '~icons/lucide/more-horizontal';
+	import Plus from '~icons/lucide/plus';
+	import Settings from '~icons/nucleo/settings';
+	import Trash2 from '~icons/nucleo/trash';
 	import { toast } from 'svelte-sonner';
 	import { getErrorMessage } from '$lib/utils';
 	import { isProjectRole, projectRoleLabels } from '$lib/auth/organization-permissions';
@@ -181,7 +179,7 @@
 							<DropdownMenu.Root>
 								<DropdownMenu.Trigger
 									aria-label={`Actions for ${project.projectName}`}
-									class="absolute top-1/2 right-4 flex size-8 -translate-y-1/2 items-center justify-center text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground"
+									class="absolute top-1/2 right-12 flex size-8 -translate-y-1/2 items-center justify-center text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground data-[state=open]:opacity-100"
 								>
 									<MoreHorizontal class="size-4" />
 								</DropdownMenu.Trigger>

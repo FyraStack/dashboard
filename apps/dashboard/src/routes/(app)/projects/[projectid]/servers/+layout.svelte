@@ -4,7 +4,9 @@
 	import { untrack } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import { ChevronDown, HardDrive, Plus } from '@lucide/svelte';
+	import ChevronDown from '~icons/lucide/chevron-down';
+	import Plus from '~icons/lucide/plus';
+	import HardDrive from '~icons/nucleo/hard-drive';
 	import { listVmStatuses } from '$lib/remote/vms.remote';
 	import { clientTimingLog, runQuery } from '$lib/utils';
 	import { serversState, sortServers } from '$lib/state/servers.svelte';

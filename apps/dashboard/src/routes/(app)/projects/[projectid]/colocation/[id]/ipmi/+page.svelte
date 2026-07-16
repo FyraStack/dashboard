@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import { Check, Copy, Power, PowerOff, RotateCw } from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import Copy from '~icons/nucleo/copy';
+	import Power from '~icons/nucleo/power';
+	import PowerOff from '~icons/nucleo/power-off';
+	import RotateCw from '~icons/nucleo/rotate-cw';
 	import { getColocationContext } from '../../colocation-context.svelte';
 
 	const colo = getColocationContext();

@@ -2,7 +2,11 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { authClient } from '$lib/auth-client';
-	import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2 } from '@lucide/svelte';
+	import Loader2 from '~icons/lucide/loader-2';
+	import AlertCircle from '~icons/nucleo/alert-circle';
+	import CheckCircle2 from '~icons/nucleo/check-circle';
+	import Eye from '~icons/nucleo/eye';
+	import EyeOff from '~icons/nucleo/eye-off';
 	import SiGithub from '@icons-pack/svelte-simple-icons/icons/SiGithub';
 	import type { PageData } from './$types';
 

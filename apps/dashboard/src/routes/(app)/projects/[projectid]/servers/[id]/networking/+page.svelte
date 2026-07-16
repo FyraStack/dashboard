@@ -5,7 +5,12 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
 	import ComingSoon from '$lib/components/coming-soon.svelte';
-	import { Check, Copy, Pencil, Plus, Trash2, X } from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import Plus from '~icons/lucide/plus';
+	import X from '~icons/lucide/x';
+	import Copy from '~icons/nucleo/copy';
+	import Pencil from '~icons/nucleo/pencil';
+	import Trash2 from '~icons/nucleo/trash';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));

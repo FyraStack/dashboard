@@ -1,16 +1,15 @@
-import {
-	ArrowUpDown,
-	BarChart3,
-	Camera,
-	Clock,
-	Disc,
-	FileText,
-	Globe,
-	RotateCw,
-	Settings,
-	Terminal
-} from '@lucide/svelte';
+import ArrowUpDown from '~icons/lucide/arrow-up-down';
+import Clock from '~icons/nucleo/clock';
+import FileText from '~icons/nucleo/file-text';
+import Activity from '~icons/nucleo/activity';
+import Camera from '~icons/nucleo/camera';
+import Disc from '~icons/nucleo/disc';
+import Globe from '~icons/nucleo/globe';
+import RotateCw from '~icons/nucleo/rotate-cw';
+import Settings from '~icons/nucleo/settings';
+import Terminal from '~icons/nucleo/terminal';
 import type { FeatureFlagKey } from '$lib/feature-flags';
+import type { IconComponent } from '$lib';
 
 export type ServerTab =
 	| 'overview'
@@ -28,10 +27,10 @@ export type ServerTab =
 export const serverTabs: {
 	id: ServerTab;
 	label: string;
-	icon: typeof BarChart3;
+	icon: IconComponent;
 	featureFlag?: FeatureFlagKey;
 }[] = [
-	{ id: 'overview', label: 'Overview', icon: BarChart3 },
+	{ id: 'overview', label: 'Overview', icon: Activity },
 	{ id: 'console', label: 'Console', icon: Terminal, featureFlag: 'vpsConsole' },
 	{ id: 'logs', label: 'Logs', icon: FileText, featureFlag: 'vpsLogs' },
 	{ id: 'networking', label: 'Networking', icon: Globe, featureFlag: 'vpsNetworking' },

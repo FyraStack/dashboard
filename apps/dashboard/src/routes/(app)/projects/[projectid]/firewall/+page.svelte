@@ -6,7 +6,10 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import CreateFirewallGroupDialog from '$lib/components/dialogs/create-firewall-group-dialog.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { Shield, Plus, Trash2, ChevronRight } from '@lucide/svelte';
+	import ChevronRight from '~icons/lucide/chevron-right';
+	import Plus from '~icons/lucide/plus';
+	import Shield from '~icons/nucleo/shield';
+	import Trash2 from '~icons/nucleo/trash';
 
 	type FirewallRule = {
 		id: number;

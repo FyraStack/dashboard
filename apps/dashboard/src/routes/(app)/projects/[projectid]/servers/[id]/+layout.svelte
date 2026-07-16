@@ -3,7 +3,11 @@
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Play, Power, PowerOff, RotateCw, Loader2 } from '@lucide/svelte';
+	import Loader2 from '~icons/lucide/loader-2';
+	import Play from '~icons/nucleo/play';
+	import Power from '~icons/nucleo/power';
+	import PowerOff from '~icons/nucleo/power-off';
+	import RotateCw from '~icons/nucleo/rotate-cw';
 	import type { FeatureFlags } from '$lib/feature-flags';
 	import { killVm, rebootVm, startVm, stopVm } from '$lib/remote/vms.remote';
 	import { getServerWithFallback } from '$lib/state/servers.svelte';

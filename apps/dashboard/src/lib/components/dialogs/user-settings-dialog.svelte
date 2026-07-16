@@ -27,28 +27,26 @@
 	import { getErrorMessage } from '$lib/utils';
 	import { confirmDestructive } from '$lib/confirm.svelte';
 
-	import {
-		User,
-		Lock,
-		KeyRound,
-		LogOut,
-		Check,
-		Copy,
-		Minus,
-		Plus,
-		Trash2,
-		Eye,
-		EyeOff,
-		Terminal,
-		ShieldCheck,
-		Fingerprint,
-		Loader2,
-		X,
-		SunMoon,
-		Sun,
-		Moon,
-		Monitor
-	} from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import Loader2 from '~icons/lucide/loader-2';
+	import Minus from '~icons/lucide/minus';
+	import Plus from '~icons/lucide/plus';
+	import X from '~icons/lucide/x';
+	import Copy from '~icons/nucleo/copy';
+	import Eye from '~icons/nucleo/eye';
+	import EyeOff from '~icons/nucleo/eye-off';
+	import Fingerprint from '~icons/nucleo/fingerprint';
+	import Key from '~icons/nucleo/key';
+	import Lock from '~icons/nucleo/lock';
+	import LogOut from '~icons/nucleo/logout';
+	import Monitor from '~icons/nucleo/monitor';
+	import Moon from '~icons/nucleo/moon';
+	import ShieldCheck from '~icons/nucleo/shield-check';
+	import Sun from '~icons/nucleo/sun';
+	import SunMoon from '~icons/nucleo/sun-moon';
+	import Terminal from '~icons/nucleo/terminal';
+	import Trash2 from '~icons/nucleo/trash';
+	import User from '~icons/nucleo/user';
 	import { Dialog as DialogPrimitive } from 'bits-ui';
 	import { userPrefersMode, setMode } from 'mode-watcher';
 
@@ -537,7 +535,7 @@
 						value="keys"
 						class="w-full justify-start gap-2 rounded-none border-0 px-3 py-2 text-muted-foreground after:hidden data-active:bg-transparent data-active:text-foreground"
 					>
-						<KeyRound class="h-3.5 w-3.5" />
+						<Key class="h-3.5 w-3.5" />
 						Keys
 					</Tabs.Trigger>
 					<Tabs.Trigger
@@ -807,7 +805,7 @@
 					<Tabs.Content value="keys" class="mt-0 space-y-4 px-6 py-6">
 						<div class="rounded-xs border border-border/60 p-4">
 							<div class="mb-3 flex items-center gap-2 border-b border-border/50 pb-2">
-								<KeyRound class="h-3.5 w-3.5 text-red-400" />
+								<Key class="h-3.5 w-3.5 text-red-400" />
 								<p class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
 									SSH Keys
 								</p>
@@ -897,7 +895,7 @@
 					<Tabs.Content value="api" class="mt-0 flex-1 overflow-y-auto px-6 py-6">
 						<div class="rounded-xs border border-border/60 p-4">
 							<div class="mb-3 flex items-center gap-2 border-b border-border/50 pb-2">
-								<KeyRound class="h-3.5 w-3.5 text-red-400" />
+								<Key class="h-3.5 w-3.5 text-red-400" />
 								<p class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
 									API Tokens
 								</p>

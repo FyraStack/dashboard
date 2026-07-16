@@ -4,7 +4,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Label } from '$lib/components/ui/label';
-	import { Fingerprint, Loader2 } from '@lucide/svelte';
+	import Loader2 from '~icons/lucide/loader-2';
+	import Fingerprint from '~icons/nucleo/fingerprint';
 
 	type Props = {
 		open?: boolean;

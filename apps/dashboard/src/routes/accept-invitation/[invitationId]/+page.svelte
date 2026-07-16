@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
 	import { authClient } from '$lib/auth-client';
-	import { AlertCircle } from '@lucide/svelte';
+	import AlertCircle from '~icons/nucleo/alert-circle';
 	import { isProjectRole, projectRoleLabels } from '$lib/auth/organization-permissions';
 	import type { PageData } from './$types';
 

@@ -15,40 +15,38 @@
 	import { beginDeleteUser, type AdminUser } from '$lib/remote/admin-users.remote';
 	import { getErrorMessage } from '$lib/utils';
 	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
-	import {
-		AlertTriangle,
-		Check,
-		Cpu,
-		Disc,
-		Flag,
-		Loader2,
-		ShieldCheck,
-		UserCog,
-		Users,
-		Shield,
-		Lock,
-		Unlock,
-		Key,
-		Calendar,
-		MoreHorizontal,
-		ChevronDown,
-		Mail,
-		User,
-		Crown,
-		Clock,
-		CreditCard,
-		Globe,
-		Fingerprint,
-		Hash,
-		Terminal,
-		ChevronLeft,
-		X,
-		ChevronRight,
-		Server,
-		HardDrive,
-		Trash2,
-		Network
-	} from '@lucide/svelte';
+	import Calendar from '~icons/nucleo/calendar';
+	import Check from '~icons/lucide/check';
+	import ChevronDown from '~icons/lucide/chevron-down';
+	import ChevronLeft from '~icons/lucide/chevron-left';
+	import ChevronRight from '~icons/lucide/chevron-right';
+	import Clock from '~icons/nucleo/clock';
+	import Loader2 from '~icons/lucide/loader-2';
+	import MoreHorizontal from '~icons/lucide/more-horizontal';
+	import X from '~icons/lucide/x';
+	import AlertTriangle from '~icons/nucleo/alert-triangle';
+	import Cpu from '~icons/nucleo/cpu';
+	import CreditCard from '~icons/nucleo/credit-card';
+	import Crown from '~icons/nucleo/crown';
+	import Disc from '~icons/nucleo/disc';
+	import Fingerprint from '~icons/nucleo/fingerprint';
+	import Flag from '~icons/nucleo/flag';
+	import Globe from '~icons/nucleo/globe';
+	import HardDrive from '~icons/nucleo/hard-drive';
+	import Hash from '~icons/nucleo/hash';
+	import Key from '~icons/nucleo/key';
+	import Lock from '~icons/nucleo/lock';
+	import Mail from '~icons/nucleo/mail';
+	import Network from '~icons/nucleo/network';
+	import Server from '~icons/nucleo/server';
+	import Shield from '~icons/nucleo/shield';
+	import ShieldCheck from '~icons/nucleo/shield-check';
+	import Terminal from '~icons/nucleo/terminal';
+	import Trash2 from '~icons/nucleo/trash';
+	import Unlock from '~icons/nucleo/unlock';
+	import User from '~icons/nucleo/user';
+	import UserCog from '~icons/nucleo/user-cog';
+	import Users from '~icons/nucleo/users';
 
 	type AdminTab = 'features' | 'vmTypes' | 'images' | 'ipam' | 'users' | 'vms' | 'emails';
 	type DeletionVerificationMethod = 'passkey' | 'totp' | 'email';

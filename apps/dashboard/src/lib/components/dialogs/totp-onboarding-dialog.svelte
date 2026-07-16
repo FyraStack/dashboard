@@ -5,7 +5,9 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Label } from '$lib/components/ui/label';
-	import { Copy, Check, ShieldCheck } from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import Copy from '~icons/nucleo/copy';
+	import ShieldCheck from '~icons/nucleo/shield-check';
 
 	type Props = {
 		open?: boolean;

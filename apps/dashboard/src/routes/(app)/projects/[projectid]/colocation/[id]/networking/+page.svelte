@@ -4,7 +4,11 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { Check, Copy, Pencil, Plus, X } from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import Plus from '~icons/lucide/plus';
+	import X from '~icons/lucide/x';
+	import Copy from '~icons/nucleo/copy';
+	import Pencil from '~icons/nucleo/pencil';
 	import { getColocationContext } from '../../colocation-context.svelte';
 
 	type ColoIp = { address: string; rdns: string; type: 'Primary' | 'Additional' };

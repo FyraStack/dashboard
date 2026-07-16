@@ -5,7 +5,13 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Switch } from '$lib/components/ui/switch';
 	import CreateNetworkDialog from '$lib/components/dialogs/create-network-dialog.svelte';
-	import { Network, Pencil, Check, X, Plus, Globe, Trash2 } from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import Plus from '~icons/lucide/plus';
+	import X from '~icons/lucide/x';
+	import Globe from '~icons/nucleo/globe';
+	import Network from '~icons/nucleo/network';
+	import Pencil from '~icons/nucleo/pencil';
+	import Trash2 from '~icons/nucleo/trash';
 
 	type IpAddress = {
 		address: string;

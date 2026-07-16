@@ -15,7 +15,11 @@
 	import { getErrorMessage } from '$lib/utils';
 	import { confirmDestructive } from '$lib/confirm.svelte';
 	import { untrack } from 'svelte';
-	import { Plus, Trash2, Link, Unlink, HardDrive } from '@lucide/svelte';
+	import Plus from '~icons/lucide/plus';
+	import HardDrive from '~icons/nucleo/hard-drive';
+	import Link from '~icons/nucleo/link';
+	import Trash2 from '~icons/nucleo/trash';
+	import Unlink from '~icons/nucleo/unlink';
 
 	type PageData = {
 		currentProject: { id: string } | null;

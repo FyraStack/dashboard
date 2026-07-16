@@ -16,56 +16,54 @@
 		type FeatureFlagKey,
 		type FeatureFlagCategory
 	} from '$lib/feature-flags';
-	import {
-		Plus,
-		Pencil,
-		Trash2,
-		Cpu,
-		Disc,
-		Flag,
-		Server,
-		Shield,
-		Image,
-		HardDrive,
-		Loader2,
-		AlertTriangle,
-		RefreshCw,
-		Terminal,
-		ScrollText,
-		Network,
-		History,
-		CloudUpload,
-		Wrench,
-		Maximize,
-		Ambulance,
-		Settings,
-		Check,
-		X,
-		LayoutGrid,
-		FolderOpen,
-		UserCog,
-		Mail
-	} from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import FileText from '~icons/nucleo/file-text';
+	import FolderOpen from '~icons/nucleo/folder-open';
+	import Loader2 from '~icons/lucide/loader-2';
+	import Plus from '~icons/lucide/plus';
+	import X from '~icons/lucide/x';
+	import AlertTriangle from '~icons/nucleo/alert-triangle';
+	import Ambulance from '~icons/nucleo/ambulance';
+	import Camera from '~icons/nucleo/camera';
+	import Cpu from '~icons/nucleo/cpu';
+	import Disc from '~icons/nucleo/disc';
+	import Flag from '~icons/nucleo/flag';
+	import HardDrive from '~icons/nucleo/hard-drive';
+	import Image from '~icons/nucleo/layers';
+	import LayoutGrid from '~icons/nucleo/grid';
+	import Mail from '~icons/nucleo/mail';
+	import Maximize from '~icons/nucleo/expand-object';
+	import Network from '~icons/nucleo/network';
+	import Pencil from '~icons/nucleo/pencil';
+	import RefreshCw from '~icons/nucleo/refresh-cw';
+	import Server from '~icons/nucleo/server';
+	import Settings from '~icons/nucleo/settings';
+	import Shield from '~icons/nucleo/shield';
+	import Terminal from '~icons/nucleo/terminal';
+	import Trash2 from '~icons/nucleo/trash';
+	import Upload from '~icons/nucleo/upload';
+	import UserCog from '~icons/nucleo/user-cog';
 	import { AdminState, colorOptions, type AdminPageData } from '$lib/state/admin.svelte';
+	import type { IconComponent } from '$lib';
 
-	const featureFlagIcons: Record<FeatureFlagKey, typeof Server> = {
+	const featureFlagIcons: Record<FeatureFlagKey, IconComponent> = {
 		colocation: Server,
 		firewall: Shield,
 		images: Image,
 		volumes: HardDrive,
 		vpsConsole: Terminal,
-		vpsLogs: ScrollText,
+		vpsLogs: FileText,
 		vpsNetworking: Network,
 		vpsImages: Image,
-		vpsSnapshots: History,
-		vpsBackups: CloudUpload,
-		vpsRebuild: Wrench,
+		vpsSnapshots: Camera,
+		vpsBackups: Upload,
+		vpsRebuild: RefreshCw,
 		vpsResize: Maximize,
 		vpsRescue: Ambulance,
 		vpsSettings: Settings
 	};
 
-	const categoryIcons: Record<FeatureFlagCategory, typeof Server> = {
+	const categoryIcons: Record<FeatureFlagCategory, IconComponent> = {
 		platform: LayoutGrid,
 		server: FolderOpen
 	};

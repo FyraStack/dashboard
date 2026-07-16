@@ -2,7 +2,10 @@
 	import BillingSetupDialog from '$lib/components/billing-setup-dialog.svelte';
 	import { openBillingPortal } from '$lib/remote/billing.remote';
 	import { getErrorMessage } from '$lib/utils';
-	import { CreditCard, Server, HardDrive, Cpu } from '@lucide/svelte';
+	import Cpu from '~icons/nucleo/cpu';
+	import CreditCard from '~icons/nucleo/credit-card';
+	import HardDrive from '~icons/nucleo/hard-drive';
+	import Server from '~icons/nucleo/server';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 
 	type DateValue = Date | number | string | null | undefined;

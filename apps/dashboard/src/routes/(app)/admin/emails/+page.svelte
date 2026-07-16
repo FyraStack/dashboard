@@ -22,21 +22,19 @@
 	} from '$lib/remote/email-campaign.remote';
 	import { getErrorMessage } from '$lib/utils';
 	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
-	import {
-		AlertTriangle,
-		Check,
-		Cpu,
-		Disc,
-		Eye,
-		Flag,
-		Loader2,
-		Mail,
-		Network,
-		Send,
-		Server,
-		UserCog,
-		Users
-	} from '@lucide/svelte';
+	import Check from '~icons/lucide/check';
+	import Loader2 from '~icons/lucide/loader-2';
+	import AlertTriangle from '~icons/nucleo/alert-triangle';
+	import Cpu from '~icons/nucleo/cpu';
+	import Disc from '~icons/nucleo/disc';
+	import Eye from '~icons/nucleo/eye';
+	import Flag from '~icons/nucleo/flag';
+	import Mail from '~icons/nucleo/mail';
+	import Network from '~icons/nucleo/network';
+	import Send from '~icons/nucleo/send';
+	import Server from '~icons/nucleo/server';
+	import UserCog from '~icons/nucleo/user-cog';
+	import Users from '~icons/nucleo/users';
 
 	type AdminTab = 'features' | 'vmTypes' | 'images' | 'ipam' | 'users' | 'vms' | 'emails';
 	let { data }: { data: AdminPageData } = $props();

@@ -9,25 +9,23 @@
 	import Icon from '$lib/components/icon.svelte';
 	import { confirmDestructive } from '$lib/confirm.svelte';
 	import { featureFlagKeys, featureFlagLabels, type FeatureFlagKey } from '$lib/feature-flags';
-	import {
-		Plus,
-		Pencil,
-		Trash2,
-		Cpu,
-		Disc,
-		Flag,
-		Server,
-		Shield,
-		Image,
-		HardDrive,
-		GripVertical,
-		Loader2,
-		AlertTriangle,
-		RefreshCw,
-		UserCog,
-		Network,
-		Mail
-	} from '@lucide/svelte';
+	import GripVertical from '~icons/lucide/grip-vertical';
+	import Loader2 from '~icons/lucide/loader-2';
+	import Plus from '~icons/lucide/plus';
+	import AlertTriangle from '~icons/nucleo/alert-triangle';
+	import Cpu from '~icons/nucleo/cpu';
+	import Disc from '~icons/nucleo/disc';
+	import Flag from '~icons/nucleo/flag';
+	import HardDrive from '~icons/nucleo/hard-drive';
+	import Image from '~icons/nucleo/layers';
+	import Mail from '~icons/nucleo/mail';
+	import Network from '~icons/nucleo/network';
+	import Pencil from '~icons/nucleo/pencil';
+	import RefreshCw from '~icons/nucleo/refresh-cw';
+	import Server from '~icons/nucleo/server';
+	import Shield from '~icons/nucleo/shield';
+	import Trash2 from '~icons/nucleo/trash';
+	import UserCog from '~icons/nucleo/user-cog';
 	import { AdminState, colorOptions, type AdminPageData } from '$lib/state/admin.svelte';
 
 	const featureFlagIcons: Partial<Record<FeatureFlagKey, typeof Server>> = {

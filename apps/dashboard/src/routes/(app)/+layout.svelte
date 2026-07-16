@@ -22,25 +22,23 @@
 	import { listVms } from '$lib/remote/vms.remote';
 	import { authClient } from '$lib/auth-client';
 	import type { FeatureFlags } from '$lib/feature-flags';
-	import {
-		Server,
-		HardDrive,
-		Shield,
-		Warehouse,
-		Disc,
-		Settings,
-		Search,
-		ArrowRight,
-		User,
-		Key,
-		KeyRound,
-		CreditCard,
-		Check,
-		ChevronDown,
-		FolderOpen,
-		Menu,
-		Loader2
-	} from '@lucide/svelte';
+	import type { IconComponent } from '$lib';
+	import ArrowRight from '~icons/lucide/arrow-right';
+	import Check from '~icons/lucide/check';
+	import ChevronDown from '~icons/lucide/chevron-down';
+	import FolderOpen from '~icons/nucleo/folder-open';
+	import Loader2 from '~icons/lucide/loader-2';
+	import Menu from '~icons/lucide/menu';
+	import CreditCard from '~icons/nucleo/credit-card';
+	import Disc from '~icons/nucleo/disc';
+	import HardDrive from '~icons/nucleo/hard-drive';
+	import Key from '~icons/nucleo/key';
+	import Search from '~icons/nucleo/search';
+	import Server from '~icons/nucleo/server';
+	import Settings from '~icons/nucleo/settings';
+	import Shield from '~icons/nucleo/shield';
+	import User from '~icons/nucleo/user';
+	import Warehouse from '~icons/nucleo/box';
 
 	let { children, data } = $props();
 	let mobileNavOpen = $state(false);
@@ -87,7 +85,7 @@
 	const projectUrlPrefix = $derived(currentProject ? `/projects/${currentProject.id}` : '');
 
 	const navItems = $derived.by(() => {
-		const items: { icon: typeof Server; label: string; href: string }[] = [];
+		const items: { icon: IconComponent; label: string; href: string }[] = [];
 		if (!currentProject) return items;
 		const prefix = `/projects/${currentProject.id}`;
 		items.push({ icon: Server, label: 'Servers', href: `${prefix}/servers` });
@@ -176,7 +174,7 @@
 		detail: string;
 	};
 	type CommandEntry = {
-		icon: typeof Server;
+		icon: IconComponent;
 		label: string;
 		href?: string;
 		action?: () => void | Promise<void>;
@@ -194,7 +192,7 @@
 	);
 	const showServerFilter = $derived(commandServersLoading || commandServers.length > 0);
 	const cmdFilters = $derived.by(() => {
-		const filters: { id: CmdFilter; label: string; icon: typeof Server }[] = [
+		const filters: { id: CmdFilter; label: string; icon: IconComponent }[] = [
 			{ id: 'all', label: 'All', icon: Search },
 			{ id: 'navigate', label: 'Pages', icon: ArrowRight }
 		];
@@ -215,8 +213,8 @@
 	const accountCommands: CommandEntry[] = [
 		{ icon: User, label: 'Profile', action: () => openUserSettings('profile') },
 		{ icon: Key, label: 'SSH Keys', action: () => openUserSettings('keys') },
-		{ icon: KeyRound, label: 'API Tokens', action: () => openUserSettings('api') },
-		{ icon: KeyRound, label: 'Change Password', action: () => openUserSettings('security') }
+		{ icon: Key, label: 'API Tokens', action: () => openUserSettings('api') },
+		{ icon: Key, label: 'Change Password', action: () => openUserSettings('security') }
 	];
 	const filteredNavigateCommands = $derived.by(() =>
 		navigateCommands.filter((command) => matchesCommandSearch([command.label]))

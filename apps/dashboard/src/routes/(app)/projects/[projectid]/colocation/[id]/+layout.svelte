@@ -7,17 +7,14 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import {
-		Activity,
-		BarChart3,
-		Disc,
-		Globe,
-		Loader2,
-		Plus,
-		Power,
-		Settings,
-		Warehouse
-	} from '@lucide/svelte';
+	import Loader2 from '~icons/lucide/loader-2';
+	import Plus from '~icons/lucide/plus';
+	import Activity from '~icons/nucleo/activity';
+	import Disc from '~icons/nucleo/disc';
+	import Globe from '~icons/nucleo/globe';
+	import Power from '~icons/nucleo/power';
+	import Settings from '~icons/nucleo/settings';
+	import Warehouse from '~icons/nucleo/box';
 	import type { Snippet } from 'svelte';
 	import {
 		setColocationContext,
@@ -84,9 +81,9 @@
 		'6U': '$280/mo'
 	};
 
-	type TabDef = { id: ColocationTab; label: string; icon: typeof BarChart3 };
+	type TabDef = { id: ColocationTab; label: string; icon: typeof Activity };
 	const tabs: TabDef[] = [
-		{ id: 'overview', label: 'Overview', icon: BarChart3 },
+		{ id: 'overview', label: 'Overview', icon: Activity },
 		{ id: 'networking', label: 'Networking', icon: Globe },
 		{ id: 'images', label: 'Images', icon: Disc },
 		{ id: 'ipmi', label: 'IPMI', icon: Power },

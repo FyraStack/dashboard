@@ -70,7 +70,7 @@
 					<Loader2 class="h-3.5 w-3.5 animate-spin" />
 					Registering...
 				{:else}
-					<Fingerprint class="h-3.5 w-3.5" />
+					<Fingerprint class="size-4" />
 					Register Passkey
 				{/if}
 			</Button>

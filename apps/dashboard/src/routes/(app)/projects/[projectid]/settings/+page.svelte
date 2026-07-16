@@ -267,7 +267,7 @@
 											{#if removingMemberIds.includes(member.userId)}
 												<Loader2 class="h-3.5 w-3.5 animate-spin" />
 											{:else}
-												<Trash2 class="h-3.5 w-3.5" />
+												<Trash2 class="size-4" />
 											{/if}
 										</Button>
 										<DropdownMenu.Root>

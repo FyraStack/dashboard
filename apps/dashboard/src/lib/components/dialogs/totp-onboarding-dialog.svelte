@@ -131,7 +131,7 @@
 				</div>
 
 				<Button onclick={enableTotp} disabled={setupSubmitting || !setupPassword} class="gap-1.5">
-					<ShieldCheck class="h-3.5 w-3.5" />
+					<ShieldCheck class="size-4" />
 					{setupSubmitting ? 'Confirming...' : 'Continue'}
 				</Button>
 			</div>
@@ -159,7 +159,7 @@
 							{#if copiedSecret}
 								<Check class="h-3.5 w-3.5 text-emerald-500" />
 							{:else}
-								<Copy class="h-3.5 w-3.5" />
+								<Copy class="size-4" />
 							{/if}
 						</button>
 					</div>
@@ -207,7 +207,7 @@
 				</div>
 
 				<Button onclick={verifyTotp} disabled={verifying || !normalizedVerifyCode} class="gap-1.5">
-					<ShieldCheck class="h-3.5 w-3.5" />
+					<ShieldCheck class="size-4" />
 					{verifying ? 'Verifying...' : 'Verify & Enable'}
 				</Button>
 			</div>

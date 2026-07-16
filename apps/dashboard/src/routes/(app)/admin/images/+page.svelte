@@ -109,7 +109,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin')}
 		>
-			<Cpu class="h-3.5 w-3.5 shrink-0" />
+			<Cpu class="size-4 shrink-0" />
 			VM Types
 			<Badge variant="secondary" class="text-[10px]">{admin.vmTypes.length}</Badge>
 		</a>
@@ -120,7 +120,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/vms')}
 		>
-			<Server class="h-3.5 w-3.5 shrink-0" />
+			<Server class="size-4 shrink-0" />
 			VMs
 			<Badge variant="secondary" class="text-[10px]">
 				{admin.adminVms.filter((vm) => vm.active).length}
@@ -133,7 +133,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/images')}
 		>
-			<Disc class="h-3.5 w-3.5 shrink-0" />
+			<Disc class="size-4 shrink-0" />
 			Images
 			<Badge variant="secondary" class="text-[10px]">{admin.images.length}</Badge>
 		</a>
@@ -144,7 +144,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/features')}
 		>
-			<Flag class="h-3.5 w-3.5 shrink-0" />
+			<Flag class="size-4 shrink-0" />
 			Feature Flags
 			<Badge variant="secondary" class="text-[10px]">
 				{featureFlagKeys.filter((key) => admin.featureFlags[key]).length}
@@ -157,7 +157,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/ipam')}
 		>
-			<Network class="h-3.5 w-3.5 shrink-0" />
+			<Network class="size-4 shrink-0" />
 			IPAM
 			<Badge variant="secondary" class="text-[10px]">{admin.ipamPrefixes.length}</Badge>
 		</a>
@@ -168,7 +168,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/users')}
 		>
-			<UserCog class="h-3.5 w-3.5 shrink-0" />
+			<UserCog class="size-4 shrink-0" />
 			Users
 			<Badge variant="secondary" class="text-[10px]">{userCount}</Badge>
 		</a>
@@ -179,7 +179,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/emails')}
 		>
-			<Mail class="h-3.5 w-3.5 shrink-0" />
+			<Mail class="size-4 shrink-0" />
 			Emails
 		</a>
 		<div class="flex-1"></div>
@@ -213,7 +213,7 @@
 					<div
 						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 					>
-						<AlertTriangle class="h-3.5 w-3.5 shrink-0" />{admin.featureFlagError}
+						<AlertTriangle class="size-4 shrink-0" />{admin.featureFlagError}
 					</div>
 				{/if}
 				<div class="flex flex-col gap-2">
@@ -387,7 +387,7 @@
 										{#if img.isOfficial && img.logoSvg}
 											<img src={svgDataUrl(img.logoSvg)} alt="" class="h-4 w-4" />
 										{:else}
-											<Disc class="h-3.5 w-3.5" />
+											<Disc class="size-4" />
 										{/if}
 									</span>
 									<div class="flex flex-col gap-1">
@@ -453,7 +453,7 @@
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
-					<AlertTriangle class="h-3.5 w-3.5 shrink-0" />{admin.vtError}
+					<AlertTriangle class="size-4 shrink-0" />{admin.vtError}
 				</div>
 			{/if}
 			<div class="flex flex-col gap-2">
@@ -524,7 +524,7 @@
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
-					<AlertTriangle class="h-3.5 w-3.5 shrink-0" />{admin.importError}
+					<AlertTriangle class="size-4 shrink-0" />{admin.importError}
 				</div>
 			{/if}
 
@@ -655,7 +655,7 @@
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
-					<AlertTriangle class="h-3.5 w-3.5 shrink-0" />{admin.imgError}
+					<AlertTriangle class="size-4 shrink-0" />{admin.imgError}
 				</div>
 			{/if}
 

@@ -46,7 +46,7 @@
 				class="text-muted-foreground hover:text-foreground"
 				onclick={() => copyToClipboard(selectedServer.ip, 'net-ipv4')}
 				>{#if copied === 'net-ipv4'}<Check class="h-3.5 w-3.5 text-emerald-500" />{:else}<Copy
-						class="h-3.5 w-3.5"
+						class="size-4"
 					/>{/if}</button
 			>
 		</div>

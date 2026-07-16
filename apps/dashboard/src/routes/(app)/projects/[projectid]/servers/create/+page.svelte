@@ -415,7 +415,7 @@
 				<div class="flex flex-col gap-8">
 					<div id="section-name" class="scroll-mt-4">
 						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<Server class="h-4 w-4 shrink-0 text-red-400 sm:h-3.5 sm:w-3.5" />
+							<Server class="icon-flat size-4 shrink-0 text-red-400" />
 							<span
 								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
 								>Name</span
@@ -435,7 +435,7 @@
 
 					<div id="section-image" class="scroll-mt-4">
 						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<HardDrive class="h-4 w-4 shrink-0 text-red-400 sm:h-3.5 sm:w-3.5" />
+							<HardDrive class="icon-flat size-4 shrink-0 text-red-400" />
 							<span
 								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
 								>Image</span
@@ -555,9 +555,7 @@
 														}
 													}}
 												>
-													<HardDrive
-														class="h-4 w-4 shrink-0 text-muted-foreground sm:h-3.5 sm:w-3.5"
-													/>
+													<HardDrive class="size-4 shrink-0 text-muted-foreground" />
 													<span class="truncate text-sm text-foreground sm:text-xs">{img.name}</span
 													>
 													{#if img.version}
@@ -596,7 +594,7 @@
 
 					<div id="section-plan" class="scroll-mt-4">
 						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<Server class="h-4 w-4 shrink-0 text-red-400 sm:h-3.5 sm:w-3.5" />
+							<Server class="icon-flat size-4 shrink-0 text-red-400" />
 							<span
 								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
 								>Plan</span
@@ -652,7 +650,7 @@
 					{#if volumesEnabled}
 						<div id="section-storage" class="scroll-mt-4">
 							<div class="flex items-center gap-2 border-b border-border pb-2">
-								<Upload class="h-4 w-4 shrink-0 text-red-400 sm:h-3.5 sm:w-3.5" />
+								<Upload class="icon-flat size-4 shrink-0 text-red-400" />
 								<span
 									class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
 									>Storage</span
@@ -792,7 +790,7 @@
 
 					<div id="section-networking" class="scroll-mt-4">
 						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<Globe class="h-4 w-4 shrink-0 text-red-400 sm:h-3.5 sm:w-3.5" />
+							<Globe class="icon-flat size-4 shrink-0 text-red-400" />
 							<span
 								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
 								>Networking</span
@@ -835,7 +833,7 @@
 
 					<div id="section-ssh" class="scroll-mt-4 pb-8">
 						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<Key class="h-4 w-4 shrink-0 text-red-400 sm:h-3.5 sm:w-3.5" />
+							<Key class="icon-flat size-4 shrink-0 text-red-400" />
 							<span
 								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
 								>Authentication</span
@@ -927,9 +925,9 @@
 											onclick={() => (showServerPassword = !showServerPassword)}
 										>
 											{#if showServerPassword}
-												<EyeOff class="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+												<EyeOff class="size-4" />
 											{:else}
-												<Eye class="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+												<Eye class="size-4" />
 											{/if}
 										</button>
 										<button
@@ -942,7 +940,7 @@
 											{#if passwordCopied}
 												<Check class="h-4 w-4 text-emerald-500 sm:h-3.5 sm:w-3.5" />
 											{:else}
-												<Copy class="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+												<Copy class="size-4" />
 											{/if}
 										</button>
 									</div>

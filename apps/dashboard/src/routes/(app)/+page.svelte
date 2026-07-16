@@ -188,7 +188,7 @@
 										class="gap-2 text-sm text-muted-foreground focus:bg-muted focus:text-foreground"
 										onclick={() => openProject(project, 'settings')}
 									>
-										<Settings class="size-3.5" />
+										<Settings class="size-4" />
 										Project Settings
 									</DropdownMenu.Item>
 									<DropdownMenu.Separator class="bg-muted" />
@@ -196,7 +196,7 @@
 										class="gap-2 text-sm text-red-400 focus:bg-red-950/40 focus:text-red-300"
 										onclick={() => openDeleteDialog(project)}
 									>
-										<Trash2 class="size-3.5" />
+										<Trash2 class="size-4" />
 										Delete Project
 									</DropdownMenu.Item>
 								</DropdownMenu.Content>

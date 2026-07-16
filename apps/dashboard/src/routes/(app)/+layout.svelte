@@ -380,7 +380,7 @@
 									onclick={() => selectProject(project.id)}
 								>
 									<FolderOpen
-										class="h-3.5 w-3.5 {selectedProjectId === project.id
+										class="size-4 {selectedProjectId === project.id
 											? 'text-red-500'
 											: 'text-muted-foreground'}"
 									/>
@@ -412,7 +412,7 @@
 						aria-label="Admin"
 						class="flex h-8 shrink-0 items-center gap-1.5 border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
 					>
-						<Settings class="h-3.5 w-3.5" />
+						<Settings class="size-4" />
 						<span class="hidden sm:inline">Admin</span>
 					</a>
 				{/if}
@@ -607,7 +607,7 @@
 				<Command.Group heading="Servers">
 					{#if commandServersLoading}
 						<Command.Item value={commandSearch || 'Loading servers'} disabled class="gap-2">
-							<Server class="h-3.5 w-3.5 text-muted-foreground" />
+							<Server class="size-4 text-muted-foreground" />
 							<span>Loading servers...</span>
 						</Command.Item>
 					{/if}
@@ -620,7 +620,7 @@
 								)}
 							class="gap-2"
 						>
-							<Server class="h-3.5 w-3.5 text-muted-foreground" />
+							<Server class="size-4 text-muted-foreground" />
 							<div class="min-w-0 flex-1">
 								<p class="truncate text-sm text-foreground">{server.name}</p>
 								<p class="truncate text-xs text-muted-foreground">

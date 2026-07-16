@@ -134,3 +134,9 @@
 		font-feature-settings: 'ss01', 'ss02';
 	}
 }
+
+@utility icon-flat {
+	& [data-color='color-2'] {
+		display: none;
+	}
+}

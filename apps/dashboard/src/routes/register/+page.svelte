@@ -95,7 +95,7 @@
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
-					<AlertCircle class="h-3.5 w-3.5 shrink-0" />
+					<AlertCircle class="size-4 shrink-0" />
 					{error}
 				</div>
 			{/if}
@@ -104,7 +104,7 @@
 				<div
 					class="flex items-center gap-2 border border-border bg-background px-3 py-2 text-sm text-muted-foreground"
 				>
-					<CheckCircle2 class="h-3.5 w-3.5 shrink-0 text-red-400" />
+					<CheckCircle2 class="size-4 shrink-0 text-red-400" />
 					Check your email to verify your account.
 				</div>
 			{/if}
@@ -131,7 +131,7 @@
 						class="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
 						onclick={() => (showPassword = !showPassword)}
 					>
-						{#if showPassword}<EyeOff class="h-3.5 w-3.5" />{:else}<Eye class="h-3.5 w-3.5" />{/if}
+						{#if showPassword}<EyeOff class="size-4" />{:else}<Eye class="size-4" />{/if}
 					</button>
 				</div>
 

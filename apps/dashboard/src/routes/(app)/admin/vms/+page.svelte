@@ -182,7 +182,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin')}
 		>
-			<Cpu class="h-3.5 w-3.5 shrink-0" />
+			<Cpu class="size-4 shrink-0" />
 			VM Types
 			<Badge variant="secondary" class="text-[10px]">{admin.vmTypes.length}</Badge>
 		</a>
@@ -193,7 +193,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/vms')}
 		>
-			<Server class="h-3.5 w-3.5 shrink-0" />
+			<Server class="size-4 shrink-0" />
 			VMs
 			<Badge variant="secondary" class="text-[10px]">
 				{admin.adminVms.filter((vm) => vm.active).length}
@@ -206,7 +206,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/images')}
 		>
-			<Disc class="h-3.5 w-3.5 shrink-0" />
+			<Disc class="size-4 shrink-0" />
 			Images
 			<Badge variant="secondary" class="text-[10px]">{admin.images.length}</Badge>
 		</a>
@@ -217,7 +217,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/features')}
 		>
-			<Flag class="h-3.5 w-3.5 shrink-0" />
+			<Flag class="size-4 shrink-0" />
 			Feature Flags
 			<Badge variant="secondary" class="text-[10px]">
 				{featureFlagKeys.filter((key) => admin.featureFlags[key]).length}
@@ -230,7 +230,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/ipam')}
 		>
-			<Network class="h-3.5 w-3.5 shrink-0" />
+			<Network class="size-4 shrink-0" />
 			IPAM
 			<Badge variant="secondary" class="text-[10px]">{admin.ipamPrefixes.length}</Badge>
 		</a>
@@ -241,7 +241,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/users')}
 		>
-			<UserCog class="h-3.5 w-3.5 shrink-0" />
+			<UserCog class="size-4 shrink-0" />
 			Users
 			<Badge variant="secondary" class="text-[10px]">{admin.adminUsers.length}</Badge>
 		</a>
@@ -252,7 +252,7 @@
 				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/emails')}
 		>
-			<Mail class="h-3.5 w-3.5 shrink-0" />
+			<Mail class="size-4 shrink-0" />
 			Emails
 		</a>
 	</div>
@@ -264,7 +264,7 @@
 				<div
 					class="flex items-center gap-2 rounded-md border border-red-300 bg-red-100 px-3 py-2 text-xs text-red-800 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-400"
 				>
-					<AlertTriangle class="h-3.5 w-3.5 shrink-0" />
+					<AlertTriangle class="size-4 shrink-0" />
 					{admin.adminVmError}
 				</div>
 			{/if}
@@ -327,7 +327,7 @@
 			<div class="flex flex-wrap items-center gap-3">
 				<div class="relative max-w-xs flex-1">
 					<Search
-						class="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+						class="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
 					/>
 					<Input
 						bind:value={search}
@@ -556,35 +556,35 @@
 														disabled={vm.liveStatus === 'running'}
 														onSelect={() => admin.adminVmPower(vm.id, 'start')}
 													>
-														<Play class="h-3.5 w-3.5 text-emerald-400" />Start
+														<Play class="size-4 text-emerald-400" />Start
 													</DropdownMenu.Item>
 													<DropdownMenu.Item
 														class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 														disabled={vm.liveStatus !== 'running'}
 														onSelect={() => admin.adminVmPower(vm.id, 'stop')}
 													>
-														<Power class="h-3.5 w-3.5 text-muted-foreground" />Shut down
+														<Power class="size-4 text-muted-foreground" />Shut down
 													</DropdownMenu.Item>
 													<DropdownMenu.Item
 														class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 														disabled={vm.liveStatus !== 'running'}
 														onSelect={() => admin.adminVmPower(vm.id, 'reboot')}
 													>
-														<RotateCw class="h-3.5 w-3.5 text-sky-400" />Reboot
+														<RotateCw class="size-4 text-sky-400" />Reboot
 													</DropdownMenu.Item>
 													<DropdownMenu.Item
 														class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 														disabled={vm.liveStatus !== 'running'}
 														onSelect={() => admin.adminVmPower(vm.id, 'kill')}
 													>
-														<PowerOff class="h-3.5 w-3.5 text-amber-400" />Force stop
+														<PowerOff class="size-4 text-amber-400" />Force stop
 													</DropdownMenu.Item>
 													<DropdownMenu.Separator class="bg-muted" />
 													<DropdownMenu.Item
 														class="flex cursor-pointer items-center gap-2 text-xs text-red-400 data-[highlighted]:bg-red-500/10"
 														onSelect={() => openDeleteDialog(vm)}
 													>
-														<Trash2 class="h-3.5 w-3.5" />Delete
+														<Trash2 class="size-4" />Delete
 													</DropdownMenu.Item>
 												</DropdownMenu.Content>
 											</DropdownMenu.Root>

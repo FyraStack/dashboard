@@ -48,4 +48,10 @@ iptables -t nat -C POSTROUTING -o eth0 -j MASQUERADE 2>/dev/null ||
 ip6tables -t nat -C POSTROUTING -o vxlan100 -j MASQUERADE 2>/dev/null ||
 	ip6tables -t nat -A POSTROUTING -o vxlan100 -j MASQUERADE
 
+wan6_iface=$(ip -6 -o addr show scope global | awk '/fd42:f17a:57ac:12:/{print $2; exit}')
+if [ -n "$wan6_iface" ]; then
+	ip6tables -t nat -C POSTROUTING -o "$wan6_iface" -j MASQUERADE 2>/dev/null ||
+		ip6tables -t nat -A POSTROUTING -o "$wan6_iface" -j MASQUERADE
+fi
+
 exec sleep infinity

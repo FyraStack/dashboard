@@ -21,10 +21,10 @@
 
 {#if colo.selectedUnit}
 	<div class="flex-1 overflow-auto">
-		<div class="divide-y divide-gray-800/50">
+		<div class="divide-y divide-border/50">
 			<div class="flex items-center justify-between px-5 py-4">
 				<div>
-					<p class="text-sm font-medium text-gray-100">Equipment Name</p>
+					<p class="text-sm font-medium text-foreground">Equipment Name</p>
 					{#if editingName}
 						<div class="mt-2 flex items-center gap-2">
 							<Input bind:value={nameValue} class="h-7 w-48 text-xs" />
@@ -42,7 +42,7 @@
 							>
 						</div>
 					{:else}
-						<p class="mt-0.5 text-xs text-gray-400">{colo.selectedUnit.name}</p>
+						<p class="mt-0.5 text-xs text-muted-foreground">{colo.selectedUnit.name}</p>
 					{/if}
 				</div>
 				{#if !editingName}
@@ -59,19 +59,19 @@
 			</div>
 			{#each [['Rack Size', colo.selectedUnit.rackSize], ['Location', colo.selectedUnit.location], ['Monthly Rate', `${colo.selectedUnit.monthlyRate}/mo`], ['Created', colo.selectedUnit.created]] as [label, value] (label)}
 				<div class="flex items-center justify-between px-5 py-3">
-					<span class="text-sm text-gray-400">{label}</span>
-					<span class="text-sm text-gray-200">{value}</span>
+					<span class="text-sm text-muted-foreground">{label}</span>
+					<span class="text-sm text-foreground">{value}</span>
 				</div>
 			{/each}
 			<div class="px-5 py-4">
 				<p class="text-sm font-medium text-red-400">Danger Zone</p>
-				<p class="mt-0.5 text-xs text-gray-500">
+				<p class="mt-0.5 text-xs text-muted-foreground">
 					Remove this colocation slot and release the rack space.
 				</p>
 				<Button
 					variant="outline"
 					size="sm"
-					class="mt-3 gap-1.5 border-red-700 px-4 text-xs text-red-400 hover:bg-red-950"
+					class="mt-3 gap-1.5 border-red-300 px-4 text-xs text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950"
 					onclick={colo.openDeleteUnitDialog}
 				>
 					<Trash2 class="h-3 w-3" />

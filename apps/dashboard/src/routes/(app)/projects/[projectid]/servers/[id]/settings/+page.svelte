@@ -43,8 +43,10 @@
 
 <div class="max-w-xl space-y-5 p-5">
 	<div>
-		<h2 class="text-sm font-semibold text-gray-100">Server Settings</h2>
-		<p class="mt-1 text-xs text-gray-500">Manage basic settings for {selectedServer.name}.</p>
+		<h2 class="text-sm font-semibold text-foreground">Server Settings</h2>
+		<p class="mt-1 text-xs text-muted-foreground">
+			Manage basic settings for {selectedServer.name}.
+		</p>
 	</div>
 	<div class="space-y-2">
 		<Label for="server-name-input">Server Name</Label><Input
@@ -68,13 +70,13 @@
 		<Button size="sm" disabled>Save Changes</Button>
 		<ComingSoon />
 	</div>
-	<div class="border-t border-gray-800 pt-4">
+	<div class="border-t border-border pt-4">
 		<Button
 			variant="outline"
 			size="sm"
 			disabled={deleting || selectedServer.status === 'deleting'}
 			onclick={handleDelete}
-			class="border-red-700 text-red-400 hover:bg-red-950"
+			class="border-red-300 text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950"
 		>
 			{deleting || selectedServer.status === 'deleting' ? 'Deleting...' : 'Delete Server'}</Button
 		>

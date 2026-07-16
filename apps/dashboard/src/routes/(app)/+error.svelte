@@ -23,10 +23,10 @@
 </svelte:head>
 
 <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 text-center">
-	<p class="text-4xl font-bold text-gray-100">{page.status}</p>
+	<p class="text-4xl font-bold text-foreground">{page.status}</p>
 	<div class="space-y-1">
-		<p class="text-sm font-medium text-gray-200">{heading}</p>
-		<p class="max-w-sm text-sm text-gray-400">{detail}</p>
+		<p class="text-sm font-medium text-foreground">{heading}</p>
+		<p class="max-w-sm text-sm text-muted-foreground">{detail}</p>
 	</div>
 	<div class="mt-2 flex items-center gap-2">
 		{#if !isNotFound}

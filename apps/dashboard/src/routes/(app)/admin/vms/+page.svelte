@@ -102,7 +102,7 @@
 
 	function statusInfo(vm: AdminVm) {
 		if (!vm.active)
-			return { label: 'deleted', class: 'border-gray-600/20 bg-gray-700/30 text-gray-500' };
+			return { label: 'deleted', class: 'border-ring/20 bg-muted/30 text-muted-foreground' };
 		if (vm.status === 'deleting')
 			return { label: 'deleting', class: 'border-red-500/20 bg-red-500/10 text-red-400' };
 		if (vm.status === 'error')
@@ -116,7 +116,7 @@
 			};
 		if (vm.liveStatus === 'paused')
 			return { label: 'paused', class: 'border-amber-500/20 bg-amber-500/10 text-amber-400' };
-		return { label: 'stopped', class: 'border-gray-600/20 bg-gray-700/30 text-gray-400' };
+		return { label: 'stopped', class: 'border-ring/20 bg-muted/30 text-muted-foreground' };
 	}
 
 	function formatUptime(seconds: number) {
@@ -177,12 +177,12 @@
 
 <div class="flex flex-1 flex-col overflow-hidden">
 	<!-- Tabs -->
-	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-gray-800">
+	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-border">
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'vmTypes'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin')}
 		>
 			<Cpu class="h-3.5 w-3.5 shrink-0" />
@@ -192,8 +192,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'vms'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/vms')}
 		>
 			<Server class="h-3.5 w-3.5 shrink-0" />
@@ -205,8 +205,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'images'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/images')}
 		>
 			<Disc class="h-3.5 w-3.5 shrink-0" />
@@ -216,8 +216,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'features'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/features')}
 		>
 			<Flag class="h-3.5 w-3.5 shrink-0" />
@@ -229,8 +229,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'ipam'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/ipam')}
 		>
 			<Network class="h-3.5 w-3.5 shrink-0" />
@@ -240,8 +240,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'users'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/users')}
 		>
 			<UserCog class="h-3.5 w-3.5 shrink-0" />
@@ -251,8 +251,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'emails'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/emails')}
 		>
 			<Mail class="h-3.5 w-3.5 shrink-0" />
@@ -265,7 +265,7 @@
 		<div class="flex flex-col gap-5 p-5">
 			{#if admin.adminVmError}
 				<div
-					class="flex items-center gap-2 rounded-md border border-red-800/50 bg-red-950/50 px-3 py-2 text-xs text-red-400"
+					class="flex items-center gap-2 rounded-md border border-red-300 bg-red-100 px-3 py-2 text-xs text-red-800 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-400"
 				>
 					<AlertTriangle class="h-3.5 w-3.5 shrink-0" />
 					{admin.adminVmError}
@@ -275,18 +275,20 @@
 			<!-- Stat row -->
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
 				<div
-					class="flex items-center gap-3 rounded-md border border-gray-800/60 bg-gray-900/30 px-4 py-3"
+					class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
 				>
 					<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-sky-500/10">
 						<Server class="h-4 w-4 text-sky-400" />
 					</div>
 					<div class="flex flex-col">
-						<span class="text-lg leading-none font-semibold text-gray-100">{activeVms.length}</span>
-						<span class="mt-0.5 text-[10px] text-gray-500">Total VMs</span>
+						<span class="text-lg leading-none font-semibold text-foreground"
+							>{activeVms.length}</span
+						>
+						<span class="mt-0.5 text-[10px] text-muted-foreground">Total VMs</span>
 					</div>
 				</div>
 				<div
-					class="flex items-center gap-3 rounded-md border border-gray-800/60 bg-gray-900/30 px-4 py-3"
+					class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
 				>
 					<div
 						class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-500/10"
@@ -294,30 +296,32 @@
 						<Play class="h-4 w-4 text-emerald-400" />
 					</div>
 					<div class="flex flex-col">
-						<span class="text-lg leading-none font-semibold text-gray-100">{runningCount}</span>
-						<span class="mt-0.5 text-[10px] text-gray-500">Running</span>
+						<span class="text-lg leading-none font-semibold text-foreground">{runningCount}</span>
+						<span class="mt-0.5 text-[10px] text-muted-foreground">Running</span>
 					</div>
 				</div>
 				<div
-					class="flex items-center gap-3 rounded-md border border-gray-800/60 bg-gray-900/30 px-4 py-3"
+					class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
 				>
-					<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-500/10">
-						<Square class="h-4 w-4 text-gray-400" />
+					<div
+						class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted-foreground/10"
+					>
+						<Square class="h-4 w-4 text-muted-foreground" />
 					</div>
 					<div class="flex flex-col">
-						<span class="text-lg leading-none font-semibold text-gray-100">{stoppedCount}</span>
-						<span class="mt-0.5 text-[10px] text-gray-500">Stopped</span>
+						<span class="text-lg leading-none font-semibold text-foreground">{stoppedCount}</span>
+						<span class="mt-0.5 text-[10px] text-muted-foreground">Stopped</span>
 					</div>
 				</div>
 				<div
-					class="flex items-center gap-3 rounded-md border border-gray-800/60 bg-gray-900/30 px-4 py-3"
+					class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
 				>
 					<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-500/10">
 						<AlertTriangle class="h-4 w-4 text-red-400" />
 					</div>
 					<div class="flex flex-col">
-						<span class="text-lg leading-none font-semibold text-gray-100">{errorCount}</span>
-						<span class="mt-0.5 text-[10px] text-gray-500">Errors</span>
+						<span class="text-lg leading-none font-semibold text-foreground">{errorCount}</span>
+						<span class="mt-0.5 text-[10px] text-muted-foreground">Errors</span>
 					</div>
 				</div>
 			</div>
@@ -325,7 +329,9 @@
 			<!-- Filters -->
 			<div class="flex flex-wrap items-center gap-3">
 				<div class="relative max-w-xs flex-1">
-					<Search class="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-gray-600" />
+					<Search
+						class="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+					/>
 					<Input
 						bind:value={search}
 						placeholder="Search by name, project, owner, IP..."
@@ -337,31 +343,31 @@
 						<Button
 							variant="outline"
 							size="sm"
-							class="h-8 gap-1.5 border-gray-700/50 text-xs {ownerFilter === 'all'
-								? 'text-gray-400'
-								: 'text-gray-100'} hover:bg-gray-800 hover:text-gray-100"
+							class="h-8 gap-1.5 border-border/50 text-xs {ownerFilter === 'all'
+								? 'text-muted-foreground'
+								: 'text-foreground'} hover:bg-muted hover:text-foreground"
 						>
 							Owner: {ownerFilterLabel}
-							<ChevronDown class="h-3 w-3 text-gray-500" />
+							<ChevronDown class="h-3 w-3 text-muted-foreground" />
 						</Button>
 					</DropdownMenu.Trigger>
-					<DropdownMenu.Content class="max-h-72 w-56 overflow-y-auto border-gray-800 bg-gray-900">
+					<DropdownMenu.Content class="max-h-72 w-56 overflow-y-auto border-border bg-background">
 						<DropdownMenu.Item
-							class="flex cursor-pointer items-center gap-2 text-xs text-gray-100 data-[highlighted]:bg-gray-800"
+							class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 							onSelect={() => (ownerFilter = 'all')}
 						>
 							All owners
 							{#if ownerFilter === 'all'}<Check class="ml-auto h-3 w-3 text-emerald-400" />{/if}
 						</DropdownMenu.Item>
-						<DropdownMenu.Separator class="bg-gray-800" />
+						<DropdownMenu.Separator class="bg-muted" />
 						{#each ownerOptions as owner (owner.email)}
 							<DropdownMenu.Item
-								class="flex cursor-pointer items-center gap-2 text-xs text-gray-100 data-[highlighted]:bg-gray-800"
+								class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 								onSelect={() => (ownerFilter = owner.email)}
 							>
 								<span class="flex min-w-0 flex-col">
 									<span class="truncate">{owner.name}</span>
-									<span class="truncate text-[10px] text-gray-500">{owner.email}</span>
+									<span class="truncate text-[10px] text-muted-foreground">{owner.email}</span>
 								</span>
 								{#if ownerFilter === owner.email}
 									<Check class="ml-auto h-3 w-3 shrink-0 text-emerald-400" />
@@ -375,26 +381,26 @@
 						<Button
 							variant="outline"
 							size="sm"
-							class="h-8 gap-1.5 border-gray-700/50 text-xs {typeFilter === 'all'
-								? 'text-gray-400'
-								: 'text-gray-100'} hover:bg-gray-800 hover:text-gray-100"
+							class="h-8 gap-1.5 border-border/50 text-xs {typeFilter === 'all'
+								? 'text-muted-foreground'
+								: 'text-foreground'} hover:bg-muted hover:text-foreground"
 						>
 							Type: {typeFilter === 'all' ? 'All' : typeFilter}
-							<ChevronDown class="h-3 w-3 text-gray-500" />
+							<ChevronDown class="h-3 w-3 text-muted-foreground" />
 						</Button>
 					</DropdownMenu.Trigger>
-					<DropdownMenu.Content class="max-h-72 w-48 overflow-y-auto border-gray-800 bg-gray-900">
+					<DropdownMenu.Content class="max-h-72 w-48 overflow-y-auto border-border bg-background">
 						<DropdownMenu.Item
-							class="flex cursor-pointer items-center gap-2 text-xs text-gray-100 data-[highlighted]:bg-gray-800"
+							class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 							onSelect={() => (typeFilter = 'all')}
 						>
 							All types
 							{#if typeFilter === 'all'}<Check class="ml-auto h-3 w-3 text-emerald-400" />{/if}
 						</DropdownMenu.Item>
-						<DropdownMenu.Separator class="bg-gray-800" />
+						<DropdownMenu.Separator class="bg-muted" />
 						{#each typeOptions as vmTypeName (vmTypeName)}
 							<DropdownMenu.Item
-								class="flex cursor-pointer items-center gap-2 text-xs text-gray-100 data-[highlighted]:bg-gray-800"
+								class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 								onSelect={() => (typeFilter = vmTypeName)}
 							>
 								{vmTypeName}
@@ -410,26 +416,26 @@
 						<Button
 							variant="outline"
 							size="sm"
-							class="h-8 gap-1.5 border-gray-700/50 text-xs {statusFilter === 'all'
-								? 'text-gray-400'
-								: 'text-gray-100'} hover:bg-gray-800 hover:text-gray-100"
+							class="h-8 gap-1.5 border-border/50 text-xs {statusFilter === 'all'
+								? 'text-muted-foreground'
+								: 'text-foreground'} hover:bg-muted hover:text-foreground"
 						>
 							Status: {statusFilter === 'all' ? 'All' : statusFilter}
-							<ChevronDown class="h-3 w-3 text-gray-500" />
+							<ChevronDown class="h-3 w-3 text-muted-foreground" />
 						</Button>
 					</DropdownMenu.Trigger>
-					<DropdownMenu.Content class="w-44 border-gray-800 bg-gray-900">
+					<DropdownMenu.Content class="w-44 border-border bg-background">
 						<DropdownMenu.Item
-							class="flex cursor-pointer items-center gap-2 text-xs text-gray-100 data-[highlighted]:bg-gray-800"
+							class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 							onSelect={() => (statusFilter = 'all')}
 						>
 							All statuses
 							{#if statusFilter === 'all'}<Check class="ml-auto h-3 w-3 text-emerald-400" />{/if}
 						</DropdownMenu.Item>
-						<DropdownMenu.Separator class="bg-gray-800" />
+						<DropdownMenu.Separator class="bg-muted" />
 						{#each statusOptions as status (status)}
 							<DropdownMenu.Item
-								class="flex cursor-pointer items-center gap-2 text-xs text-gray-100 capitalize data-[highlighted]:bg-gray-800"
+								class="flex cursor-pointer items-center gap-2 text-xs text-foreground capitalize data-[highlighted]:bg-muted"
 								onSelect={() => (statusFilter = status)}
 							>
 								{status}
@@ -440,14 +446,14 @@
 						{/each}
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
-				<label class="flex items-center gap-2 text-xs text-gray-500">
+				<label class="flex items-center gap-2 text-xs text-muted-foreground">
 					<Switch bind:checked={showDeleted} />
 					Show deleted
 				</label>
 				<Button
 					variant="outline"
 					size="sm"
-					class="ml-auto h-8 gap-1.5 border-gray-700/50 text-xs text-gray-300 hover:bg-gray-800 hover:text-gray-100"
+					class="ml-auto h-8 gap-1.5 border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
 					onclick={() => refresh()}
 					disabled={refreshing}
 				>
@@ -461,16 +467,16 @@
 			</div>
 
 			{#if filteredVms.length === 0}
-				<div class="flex flex-col items-center justify-center gap-2 py-20 text-gray-500">
-					<Server class="h-8 w-8 text-gray-600" />
+				<div class="flex flex-col items-center justify-center gap-2 py-20 text-muted-foreground">
+					<Server class="h-8 w-8 text-muted-foreground" />
 					<p class="text-sm">No servers found</p>
 				</div>
 			{:else}
-				<div class="overflow-x-auto rounded-md border border-gray-800/60">
+				<div class="overflow-x-auto rounded-md border border-border/60">
 					<table class="w-full text-left text-xs">
 						<thead>
 							<tr
-								class="border-b border-gray-800/60 bg-gray-900/40 text-[10px] tracking-wider text-gray-500 uppercase"
+								class="border-b border-border/60 bg-background/40 text-[10px] tracking-wider text-muted-foreground uppercase"
 							>
 								<th class="px-4 py-2.5 font-medium">Server</th>
 								<th class="px-4 py-2.5 font-medium">Project / Owner</th>
@@ -481,23 +487,23 @@
 								<th class="px-4 py-2.5"></th>
 							</tr>
 						</thead>
-						<tbody class="divide-y divide-gray-800/50">
+						<tbody class="divide-y divide-border/50">
 							{#each filteredVms as vm (vm.id)}
 								{@const info = statusInfo(vm)}
 								{@const saving = admin.adminVmSaving[vm.id]}
-								<tr class="transition-colors hover:bg-gray-800/20">
+								<tr class="transition-colors hover:bg-muted/20">
 									<td class="px-4 py-3">
 										<div class="flex flex-col gap-0.5">
-											<span class="font-medium text-gray-100">{vm.name}</span>
-											<span class="font-mono text-[10px] text-gray-600">
+											<span class="font-medium text-foreground">{vm.name}</span>
+											<span class="font-mono text-[10px] text-muted-foreground">
 												{vm.lastKnownIpv4 ?? vm.lastKnownIpv6 ?? vm.id}
 											</span>
 										</div>
 									</td>
 									<td class="px-4 py-3">
 										<div class="flex flex-col gap-0.5">
-											<span class="text-gray-300">{vm.projectName ?? '—'}</span>
-											<span class="flex items-center gap-1.5 text-[10px] text-gray-600">
+											<span class="text-muted-foreground">{vm.projectName ?? '—'}</span>
+											<span class="flex items-center gap-1.5 text-[10px] text-muted-foreground">
 												{vm.ownerEmail ?? 'no owner'}
 												{#if vm.ownerBillingExempt}
 													<span
@@ -511,9 +517,9 @@
 									</td>
 									<td class="px-4 py-3">
 										<div class="flex flex-col gap-0.5">
-											<span class="text-gray-300">{vm.vmTypeName ?? '—'}</span>
+											<span class="text-muted-foreground">{vm.vmTypeName ?? '—'}</span>
 											{#if vm.vmTypeCores}
-												<span class="text-[10px] text-gray-600">
+												<span class="text-[10px] text-muted-foreground">
 													{vm.vmTypeCores}c · {vm.vmTypeRamCapacity} MB · {vm.vmTypeStorageAmount} GB
 												</span>
 											{/if}
@@ -527,10 +533,10 @@
 											{info.label}
 										</span>
 									</td>
-									<td class="px-4 py-3 text-gray-400">
+									<td class="px-4 py-3 text-muted-foreground">
 										{vm.liveStatus === 'running' ? formatUptime(vm.uptime) : '—'}
 									</td>
-									<td class="px-4 py-3 text-gray-400">{formatDate(vm.createdAt)}</td>
+									<td class="px-4 py-3 text-muted-foreground">{formatDate(vm.createdAt)}</td>
 									<td class="px-4 py-3 text-right">
 										{#if vm.active}
 											<DropdownMenu.Root>
@@ -538,7 +544,7 @@
 													<Button
 														variant="ghost"
 														size="sm"
-														class="h-7 w-7 p-0 text-gray-500 hover:text-gray-200"
+														class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
 													>
 														{#if saving}
 															<Loader2 class="h-3.5 w-3.5 animate-spin" />
@@ -547,36 +553,36 @@
 														{/if}
 													</Button>
 												</DropdownMenu.Trigger>
-												<DropdownMenu.Content class="w-44 border-gray-800 bg-gray-900" align="end">
+												<DropdownMenu.Content class="w-44 border-border bg-background" align="end">
 													<DropdownMenu.Item
-														class="flex cursor-pointer items-center gap-2 text-xs text-gray-100 data-[highlighted]:bg-gray-800"
+														class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 														disabled={vm.liveStatus === 'running'}
 														onSelect={() => admin.adminVmPower(vm.id, 'start')}
 													>
 														<Play class="h-3.5 w-3.5 text-emerald-400" />Start
 													</DropdownMenu.Item>
 													<DropdownMenu.Item
-														class="flex cursor-pointer items-center gap-2 text-xs text-gray-100 data-[highlighted]:bg-gray-800"
+														class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 														disabled={vm.liveStatus !== 'running'}
 														onSelect={() => admin.adminVmPower(vm.id, 'stop')}
 													>
-														<Power class="h-3.5 w-3.5 text-gray-400" />Shut down
+														<Power class="h-3.5 w-3.5 text-muted-foreground" />Shut down
 													</DropdownMenu.Item>
 													<DropdownMenu.Item
-														class="flex cursor-pointer items-center gap-2 text-xs text-gray-100 data-[highlighted]:bg-gray-800"
+														class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 														disabled={vm.liveStatus !== 'running'}
 														onSelect={() => admin.adminVmPower(vm.id, 'reboot')}
 													>
 														<RotateCcw class="h-3.5 w-3.5 text-sky-400" />Reboot
 													</DropdownMenu.Item>
 													<DropdownMenu.Item
-														class="flex cursor-pointer items-center gap-2 text-xs text-gray-100 data-[highlighted]:bg-gray-800"
+														class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 														disabled={vm.liveStatus !== 'running'}
 														onSelect={() => admin.adminVmPower(vm.id, 'kill')}
 													>
 														<Zap class="h-3.5 w-3.5 text-amber-400" />Force stop
 													</DropdownMenu.Item>
-													<DropdownMenu.Separator class="bg-gray-800" />
+													<DropdownMenu.Separator class="bg-muted" />
 													<DropdownMenu.Item
 														class="flex cursor-pointer items-center gap-2 text-xs text-red-400 data-[highlighted]:bg-red-500/10"
 														onSelect={() => openDeleteDialog(vm)}
@@ -604,10 +610,10 @@
 		if (!value) closeDeleteDialog();
 	}}
 >
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title class="text-base text-gray-100">Delete {deleteTarget?.name}?</Dialog.Title>
-			<Dialog.Description class="text-xs text-gray-500">
+			<Dialog.Title class="text-base text-foreground">Delete {deleteTarget?.name}?</Dialog.Title>
+			<Dialog.Description class="text-xs text-muted-foreground">
 				This deprovisions the server in Proxmox, releases its networking, and records final usage.
 				It belongs to {deleteTarget?.projectName ?? 'an unknown project'}
 				({deleteTarget?.ownerEmail ?? 'no owner'}).
@@ -635,7 +641,7 @@
 					variant="outline"
 					type="button"
 					size="sm"
-					class="border-gray-700/50 text-xs text-gray-300 hover:bg-gray-800 hover:text-gray-100"
+					class="border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
 					onclick={() => closeDeleteDialog()}
 				>
 					Cancel

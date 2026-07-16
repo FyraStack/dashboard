@@ -345,12 +345,12 @@
 {#if !data.user}
 	{@render children()}
 {:else}
-	<div class="flex h-screen flex-col overflow-hidden bg-gray-900">
-		<header class="flex h-12 shrink-0 items-center justify-between border-b border-gray-800 px-4">
+	<div class="flex h-screen flex-col overflow-hidden bg-background">
+		<header class="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
 			<div class="flex min-w-0 items-center gap-2">
 				{#if navItems.length > 0}
 					<button
-						class="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center text-gray-400 hover:text-gray-100 lg:hidden"
+						class="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground lg:hidden"
 						aria-label="Open navigation menu"
 						onclick={() => (mobileNavOpen = true)}
 					>
@@ -359,19 +359,19 @@
 				{/if}
 				<a href={resolve('/')} class="flex shrink-0 items-center gap-2">
 					<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
-					<span class="text-sm font-semibold tracking-tight text-gray-50">Stack</span>
+					<span class="text-sm font-semibold tracking-tight text-foreground">Stack</span>
 				</a>
 				{#if isOnProjectRoute}
-					<span class="text-sm text-gray-500">/</span>
+					<span class="text-sm text-muted-foreground">/</span>
 					<DropdownMenu.Root bind:open={projectMenuOpen}>
 						<DropdownMenu.Trigger
-							class="flex min-w-0 items-center gap-1 px-1.5 py-0.5 text-sm font-medium text-gray-200 transition-colors hover:bg-gray-800 hover:text-gray-50"
+							class="flex min-w-0 items-center gap-1 px-1.5 py-0.5 text-sm font-medium text-foreground transition-colors hover:bg-muted hover:text-foreground"
 						>
 							<span class="truncate">{currentProject?.projectName ?? 'Select Project'}</span>
-							<ChevronDown class="h-3 w-3 shrink-0 text-gray-500" />
+							<ChevronDown class="h-3 w-3 shrink-0 text-muted-foreground" />
 						</DropdownMenu.Trigger>
-						<DropdownMenu.Content align="start" class="w-52 border-gray-800 bg-gray-900">
-							<DropdownMenu.Label class="text-[10px] tracking-wider text-gray-500 uppercase"
+						<DropdownMenu.Content align="start" class="w-52 border-border bg-background">
+							<DropdownMenu.Label class="text-[10px] tracking-wider text-muted-foreground uppercase"
 								>Projects</DropdownMenu.Label
 							>
 							{#each projects as project (project.id)}
@@ -384,9 +384,9 @@
 									<FolderOpen
 										class="h-3.5 w-3.5 {selectedProjectId === project.id
 											? 'text-red-500'
-											: 'text-gray-500'}"
+											: 'text-muted-foreground'}"
 									/>
-									<span class={selectedProjectId === project.id ? 'text-gray-50' : ''}
+									<span class={selectedProjectId === project.id ? 'text-foreground' : ''}
 										>{project.projectName}</span
 									>
 									{#if switchingProjectId === project.id}
@@ -399,8 +399,10 @@
 						</DropdownMenu.Content>
 					</DropdownMenu.Root>
 					{#if currentProjectSection}
-						<span class="hidden text-sm text-gray-500 lg:inline">/</span>
-						<p class="hidden text-sm font-medium text-gray-400 lg:block">{currentProjectSection}</p>
+						<span class="hidden text-sm text-muted-foreground lg:inline">/</span>
+						<p class="hidden text-sm font-medium text-muted-foreground lg:block">
+							{currentProjectSection}
+						</p>
 					{/if}
 				{/if}
 			</div>
@@ -410,7 +412,7 @@
 					<a
 						href={resolve('/admin')}
 						aria-label="Admin"
-						class="flex h-8 shrink-0 items-center gap-1.5 border border-gray-800 bg-gray-800/30 px-2.5 text-xs font-medium text-gray-400 transition-colors hover:border-gray-700 hover:text-gray-100"
+						class="flex h-8 shrink-0 items-center gap-1.5 border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
 					>
 						<Settings class="h-3.5 w-3.5" />
 						<span class="hidden sm:inline">Admin</span>
@@ -418,30 +420,30 @@
 				{/if}
 
 				<button
-					class="flex shrink-0 items-center gap-2 border border-gray-800 bg-gray-800/30 px-3 py-1.5 text-xs text-gray-500 transition-colors hover:border-gray-700 hover:text-gray-400"
+					class="flex shrink-0 items-center gap-2 border border-border bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
 					aria-label="Search"
 					onclick={openCommandPalette}
 				>
 					<Search class="h-3 w-3" />
 					<span class="hidden sm:inline">Search...</span>
 					<kbd
-						class="ml-2 hidden border border-gray-700 bg-gray-800 px-1.5 py-0.5 text-[10px] text-gray-500 sm:inline-block"
+						class="ml-2 hidden border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline-block"
 						>⌘K</kbd
 					>
 				</button>
 
 				<button
-					class="flex min-w-0 items-center gap-2.5 rounded-xs px-2 py-1 transition-colors hover:bg-gray-800"
+					class="flex min-w-0 items-center gap-2.5 rounded-xs px-2 py-1 transition-colors hover:bg-muted"
 					aria-label={`Account settings for ${profileName || data.user?.email}`}
 					aria-haspopup="dialog"
 					onclick={() => openUserSettings()}
 				>
 					<div class="hidden min-w-0 text-right sm:block">
-						<p class="truncate text-sm leading-tight font-medium text-gray-100">{profileName}</p>
-						<p class="truncate text-xs leading-tight text-gray-500">{data.user?.email}</p>
+						<p class="truncate text-sm leading-tight font-medium text-foreground">{profileName}</p>
+						<p class="truncate text-xs leading-tight text-muted-foreground">{data.user?.email}</p>
 					</div>
-					<Avatar.Root class="h-8 w-8 shrink-0 rounded-xs border border-gray-700">
-						<Avatar.Fallback class="rounded-xs bg-gray-800 text-xs text-gray-400"
+					<Avatar.Root class="h-8 w-8 shrink-0 border border-border">
+						<Avatar.Fallback class="bg-muted text-xs text-muted-foreground"
 							>{(data.user?.name ?? '??')
 								.split(' ')
 								.map((n: string) => n[0])
@@ -461,7 +463,7 @@
 		{:else}
 			<div class="flex flex-1 overflow-hidden">
 				<aside
-					class="hidden w-12 shrink-0 flex-col items-center gap-1 border-r border-gray-800 py-3 lg:flex"
+					class="hidden w-12 shrink-0 flex-col items-center gap-1 border-r border-border py-3 lg:flex"
 				>
 					{#each navItems as item (item.label)}
 						<Tooltip.Root>
@@ -475,8 +477,8 @@
 										class="flex h-8 w-8 items-center justify-center transition-colors duration-100 {isActive(
 											item.href
 										)
-											? 'border border-red-500 text-gray-50'
-											: 'text-gray-500 hover:bg-gray-800/50 hover:text-gray-200'}"
+											? 'border border-red-500 text-foreground'
+											: 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
 									>
 										<item.icon class="h-4 w-4" />
 									</a>
@@ -497,9 +499,9 @@
 	</div>
 
 	<Sheet.Root bind:open={mobileNavOpen}>
-		<Sheet.Content side="left" class="flex w-64 flex-col gap-0 border-gray-800 bg-gray-900 p-0">
-			<Sheet.Header class="border-b border-gray-800 px-4 py-3 text-left">
-				<Sheet.Title class="truncate text-sm text-gray-100"
+		<Sheet.Content side="left" class="flex w-64 flex-col gap-0 border-border bg-background p-0">
+			<Sheet.Header class="border-b border-border px-4 py-3 text-left">
+				<Sheet.Title class="truncate text-sm text-foreground"
 					>{currentProject?.projectName ?? 'Menu'}</Sheet.Title
 				>
 			</Sheet.Header>
@@ -512,8 +514,8 @@
 						class="flex items-center gap-3 px-3 py-2.5 text-sm transition-colors {isActive(
 							item.href
 						)
-							? 'bg-gray-800 text-gray-50'
-							: 'text-gray-400 hover:bg-gray-800/50 hover:text-gray-200'}"
+							? 'bg-muted text-foreground'
+							: 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
 					>
 						<item.icon class="h-4 w-4 shrink-0" />
 						{item.label}
@@ -523,8 +525,10 @@
 
 			<div class="mt-auto">
 				{#if projects.length > 1}
-					<div class="border-t border-gray-800 p-2">
-						<p class="px-3 py-1 text-[10px] font-medium tracking-wider text-gray-500 uppercase">
+					<div class="border-t border-border p-2">
+						<p
+							class="px-3 py-1 text-[10px] font-medium tracking-wider text-muted-foreground uppercase"
+						>
 							Projects
 						</p>
 						{#each projects as project (project.id)}
@@ -535,13 +539,13 @@
 								}}
 								class="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors {selectedProjectId ===
 								project.id
-									? 'text-gray-50'
-									: 'text-gray-400 hover:bg-gray-800/50 hover:text-gray-200'}"
+									? 'text-foreground'
+									: 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
 							>
 								<FolderOpen
 									class="h-4 w-4 shrink-0 {selectedProjectId === project.id
 										? 'text-red-500'
-										: 'text-gray-500'}"
+										: 'text-muted-foreground'}"
 								/>
 								<span class="truncate">{project.projectName}</span>
 								{#if selectedProjectId === project.id}
@@ -556,7 +560,7 @@
 					<a
 						href={resolve('/admin')}
 						onclick={() => (mobileNavOpen = false)}
-						class="flex items-center gap-3 border-t border-gray-800 px-5 py-3 text-sm text-gray-400 transition-colors hover:bg-gray-800/50 hover:text-gray-200"
+						class="flex items-center gap-3 border-t border-border px-5 py-3 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
 					>
 						<Settings class="h-4 w-4 shrink-0" />
 						Admin
@@ -577,20 +581,20 @@
 
 	<Command.Dialog
 		bind:open={commandOpen}
-		class="top-1/2! max-w-xl! -translate-y-1/2! border-gray-800 bg-gray-900"
+		class="top-1/2! max-w-xl! -translate-y-1/2! border-border bg-background"
 	>
 		<Command.Input
 			bind:value={commandSearch}
 			placeholder="Search resources, actions..."
-			class="border-b border-gray-800"
+			class="border-b border-border"
 		/>
-		<div class="flex gap-1 border-b border-gray-800 px-3 py-2">
+		<div class="flex gap-1 border-b border-border px-3 py-2">
 			{#each cmdFilters as f (f.id)}
 				<button
 					class="flex items-center gap-1 px-2 py-1 text-[11px] font-medium transition-colors {cmdFilter ===
 					f.id
-						? 'bg-gray-800 text-gray-100'
-						: 'text-gray-500 hover:text-gray-300'}"
+						? 'bg-muted text-foreground'
+						: 'text-muted-foreground hover:text-foreground'}"
 					onclick={() => (cmdFilter = f.id)}
 				>
 					<f.icon class="h-3 w-3" />
@@ -598,14 +602,14 @@
 				</button>
 			{/each}
 		</div>
-		<Command.List class="max-h-[350px] bg-gray-900">
+		<Command.List class="max-h-[350px] bg-background">
 			<Command.Empty>No results found.</Command.Empty>
 
 			{#if showServersGroup}
 				<Command.Group heading="Servers">
 					{#if commandServersLoading}
 						<Command.Item value={commandSearch || 'Loading servers'} disabled class="gap-2">
-							<Server class="h-3.5 w-3.5 text-gray-500" />
+							<Server class="h-3.5 w-3.5 text-muted-foreground" />
 							<span>Loading servers...</span>
 						</Command.Item>
 					{/if}
@@ -618,16 +622,18 @@
 								)}
 							class="gap-2"
 						>
-							<Server class="h-3.5 w-3.5 text-gray-500" />
+							<Server class="h-3.5 w-3.5 text-muted-foreground" />
 							<div class="min-w-0 flex-1">
-								<p class="truncate text-sm text-gray-100">{server.name}</p>
-								<p class="truncate text-xs text-gray-500">{server.plan} · {server.detail}</p>
+								<p class="truncate text-sm text-foreground">{server.name}</p>
+								<p class="truncate text-xs text-muted-foreground">
+									{server.plan} · {server.detail}
+								</p>
 							</div>
-							<span class="ml-auto shrink-0 text-xs text-gray-500">{server.status}</span>
+							<span class="ml-auto shrink-0 text-xs text-muted-foreground">{server.status}</span>
 						</Command.Item>
 					{/each}
 				</Command.Group>
-				<Command.Separator class="bg-gray-800" />
+				<Command.Separator class="bg-muted" />
 			{/if}
 
 			{#if showNavigateGroup}
@@ -638,13 +644,13 @@
 								runCommand(() => goto(resolve(withProjectContext(command.href ?? '/') as any)))}
 							class="gap-2"
 						>
-							<command.icon class="h-3.5 w-3.5 text-gray-500" />
+							<command.icon class="h-3.5 w-3.5 text-muted-foreground" />
 							<span>{command.label}</span>
 							<Command.Shortcut><ArrowRight class="h-3 w-3" /></Command.Shortcut>
 						</Command.Item>
 					{/each}
 				</Command.Group>
-				<Command.Separator class="bg-gray-800" />
+				<Command.Separator class="bg-muted" />
 			{/if}
 
 			{#if showAccountGroup}
@@ -654,12 +660,12 @@
 							onSelect={() => runCommand(command.action ?? (() => openUserSettings()))}
 							class="gap-2"
 						>
-							<command.icon class="h-3.5 w-3.5 text-gray-500" />
+							<command.icon class="h-3.5 w-3.5 text-muted-foreground" />
 							<span>{command.label}</span>
 						</Command.Item>
 					{/each}
 				</Command.Group>
-				<Command.Separator class="bg-gray-800" />
+				<Command.Separator class="bg-muted" />
 			{/if}
 		</Command.List>
 	</Command.Dialog>

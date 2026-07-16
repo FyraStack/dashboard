@@ -282,12 +282,12 @@
 
 <div class="flex flex-1 flex-col overflow-hidden">
 	<!-- Tabs -->
-	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-gray-800">
+	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-border">
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'vmTypes'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin')}
 		>
 			<Cpu class="h-3.5 w-3.5 shrink-0" />
@@ -297,8 +297,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'vms'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/vms')}
 		>
 			<Server class="h-3.5 w-3.5 shrink-0" />
@@ -310,8 +310,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'images'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/images')}
 		>
 			<Disc class="h-3.5 w-3.5 shrink-0" />
@@ -321,8 +321,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'features'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/features')}
 		>
 			<Flag class="h-3.5 w-3.5 shrink-0" />
@@ -334,8 +334,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'ipam'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/ipam')}
 		>
 			<Network class="h-3.5 w-3.5 shrink-0" />
@@ -345,8 +345,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'users'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/users')}
 		>
 			<UserCog class="h-3.5 w-3.5 shrink-0" />
@@ -356,8 +356,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'emails'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/emails')}
 		>
 			<Mail class="h-3.5 w-3.5 shrink-0" />
@@ -376,8 +376,8 @@
 						title={entry.description}
 						class="border px-3 py-1.5 text-xs font-medium transition-colors {selectedTemplateKey ===
 						entry.key
-							? 'border-red-500 bg-red-950/20 text-gray-100'
-							: 'border-gray-800 text-gray-400 hover:border-gray-700 hover:text-gray-200'}"
+							? 'border-red-500 bg-red-950/20 text-foreground'
+							: 'border-border text-muted-foreground hover:border-ring hover:text-foreground'}"
 						onclick={() => selectTemplate(entry.key)}
 						disabled={sending}
 					>
@@ -388,13 +388,13 @@
 
 			<!-- Editor -->
 			<div class="flex flex-col gap-3">
-				<div class="flex items-center gap-3 border border-gray-800 bg-gray-900 px-3">
-					<span class="shrink-0 text-xs font-medium text-gray-500">Subject</span>
+				<div class="flex items-center gap-3 border border-border bg-background px-3">
+					<span class="shrink-0 text-xs font-medium text-muted-foreground">Subject</span>
 					<input
 						bind:value={subject}
 						placeholder="Subject line"
 						disabled={sending}
-						class="h-9 w-full bg-transparent text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none"
+						class="h-9 w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
 					/>
 				</div>
 				{#if settingsFields.length > 0}
@@ -403,7 +403,8 @@
 							<div class="flex flex-col gap-1.5">
 								<Label>
 									{field.label}
-									{#if !field.required}<span class="font-normal text-gray-500">(optional)</span
+									{#if !field.required}<span class="font-normal text-muted-foreground"
+											>(optional)</span
 										>{/if}
 								</Label>
 								<Input
@@ -428,7 +429,7 @@
 						</Button>
 					</div>
 				{/if}
-				<div class="relative min-h-48 border border-gray-800 bg-gray-950">
+				<div class="relative min-h-48 border border-border bg-background">
 					{#if editorHtml}
 						{#key editorHtml}
 							<div class="email-editor px-4" use:hydrateFields>
@@ -438,22 +439,22 @@
 						{/key}
 					{/if}
 					{#if editorLoading}
-						<div class="absolute inset-0 flex items-center justify-center bg-gray-950/60">
-							<Loader2 class="h-4 w-4 animate-spin text-gray-500" />
+						<div class="absolute inset-0 flex items-center justify-center bg-background/60">
+							<Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
 						</div>
 					{/if}
 				</div>
-				<p class="text-xs text-gray-500">
+				<p class="text-xs text-muted-foreground">
 					Click the outlined text in the email to edit it in place. Use <span
-						class="font-mono text-gray-400">{'{{column}}'}</span
+						class="font-mono text-muted-foreground">{'{{column}}'}</span
 					>
 					to pull values from the CSV. HTML tags like
-					<span class="font-mono text-gray-400">{'<a href="...">link</a>'}</span> render in the sent email
-					— check them with Preview.
+					<span class="font-mono text-muted-foreground">{'<a href="...">link</a>'}</span> render in the
+					sent email — check them with Preview.
 				</p>
 				{#if missingColumns.length > 0}
 					<div
-						class="flex items-center gap-2 border border-amber-700 bg-amber-950/40 px-3 py-2 text-xs text-amber-400"
+						class="flex items-center gap-2 border border-amber-300 bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
 					>
 						<AlertTriangle class="h-3.5 w-3.5 shrink-0" />
 						No CSV column matches {missingColumns.map((name) => `{{${name}}}`).join(', ')} — those placeholders
@@ -464,10 +465,13 @@
 
 			<!-- Recipients -->
 			<div class="flex flex-col gap-3">
-				<span class="text-xs font-medium tracking-wider text-gray-500 uppercase">Recipients</span>
+				<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+					>Recipients</span
+				>
 				<div class="flex flex-col gap-2">
 					<Label>
-						CSV file <span class="font-normal text-gray-500">(first row is the header)</span>
+						CSV file <span class="font-normal text-muted-foreground">(first row is the header)</span
+						>
 					</Label>
 					<Input type="file" accept=".csv,text/csv" onchange={handleCsvChange} disabled={sending} />
 				</div>
@@ -479,8 +483,8 @@
 					</div>
 				{/if}
 				{#if csvRows.length > 0}
-					<div class="flex flex-wrap items-center gap-1.5 text-xs text-gray-400">
-						<Users class="h-3.5 w-3.5 text-gray-500" />
+					<div class="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+						<Users class="h-3.5 w-3.5 text-muted-foreground" />
 						{csvFileName} · {csvRows.length} recipient{csvRows.length === 1 ? '' : 's'} ·
 						{#each csvColumns as column (column)}
 							<Badge variant="secondary" class="font-mono text-[10px]">{`{{${column}}}`}</Badge>
@@ -491,7 +495,7 @@
 						<select
 							bind:value={emailColumn}
 							disabled={sending}
-							class="h-9 w-full border border-gray-700 bg-gray-800 px-3 text-sm text-gray-100 focus:border-gray-500 focus:outline-none"
+							class="h-9 w-full border border-border bg-muted px-3 text-sm text-foreground focus:border-ring focus:outline-none"
 						>
 							<option value="">Select the column with email addresses</option>
 							{#each csvColumns as column (column)}
@@ -499,12 +503,12 @@
 							{/each}
 						</select>
 					</div>
-					<div class="overflow-x-auto border border-gray-800">
+					<div class="overflow-x-auto border border-border">
 						<table class="w-full whitespace-nowrap">
 							<thead>
-								<tr class="border-b border-gray-800">
+								<tr class="border-b border-border">
 									{#each csvColumns as column (column)}
-										<th class="px-3 py-2 text-left text-xs font-medium text-gray-500">
+										<th class="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
 											{column}
 											{#if column === emailColumn}
 												<Badge variant="secondary" class="ml-1 text-[10px]">email</Badge>
@@ -513,11 +517,11 @@
 									{/each}
 								</tr>
 							</thead>
-							<tbody class="divide-y divide-gray-800/50">
+							<tbody class="divide-y divide-border/50">
 								{#each csvRows.slice(0, 5) as row, index (index)}
 									<tr>
 										{#each csvColumns as column (column)}
-											<td class="max-w-48 truncate px-3 py-2 text-xs text-gray-300">
+											<td class="max-w-48 truncate px-3 py-2 text-xs text-muted-foreground">
 												{row[column] ?? ''}
 											</td>
 										{/each}
@@ -526,7 +530,7 @@
 							</tbody>
 						</table>
 						{#if csvRows.length > 5}
-							<p class="border-t border-gray-800 px-3 py-1.5 text-[11px] text-gray-500">
+							<p class="border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
 								and {csvRows.length - 5} more
 							</p>
 						{/if}
@@ -535,7 +539,7 @@
 			</div>
 
 			<!-- Actions -->
-			<div class="flex flex-col gap-3 border-t border-gray-800 pt-4">
+			<div class="flex flex-col gap-3 border-t border-border pt-4">
 				{#if previewError}
 					<div
 						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
@@ -572,7 +576,7 @@
 				</div>
 				{#if sending || sendComplete}
 					<div class="flex flex-col gap-1.5">
-						<div class="h-1.5 w-full bg-gray-800">
+						<div class="h-1.5 w-full bg-muted">
 							<div
 								class="h-full bg-red-500 transition-all"
 								style="width: {csvRows.length > 0
@@ -580,9 +584,9 @@
 									: 0}%"
 							></div>
 						</div>
-						<p class="flex items-center gap-1.5 text-xs text-gray-400">
+						<p class="flex items-center gap-1.5 text-xs text-muted-foreground">
 							{#if sending}
-								<Loader2 class="h-3 w-3 animate-spin text-gray-500" />
+								<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
 								Sending {processedCount} of {csvRows.length}...
 							{:else if sendFailures.length === 0}
 								<Check class="h-3 w-3 text-emerald-400" />
@@ -595,12 +599,14 @@
 					</div>
 				{/if}
 				{#if sendFailures.length > 0}
-					<div class="max-h-48 overflow-y-auto border border-gray-800">
+					<div class="max-h-48 overflow-y-auto border border-border">
 						{#each sendFailures as failure, index (index)}
 							<div
-								class="flex items-center justify-between gap-3 border-b border-gray-800/50 px-3 py-1.5 last:border-b-0"
+								class="flex items-center justify-between gap-3 border-b border-border/50 px-3 py-1.5 last:border-b-0"
 							>
-								<span class="truncate font-mono text-xs text-gray-300">{failure.recipient}</span>
+								<span class="truncate font-mono text-xs text-muted-foreground"
+									>{failure.recipient}</span
+								>
 								<span class="shrink-0 text-xs text-red-400">{failure.reason}</span>
 							</div>
 						{/each}
@@ -613,7 +619,7 @@
 
 <!-- Preview Dialog -->
 <Dialog.Root bind:open={previewOpen}>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-2xl">
+	<Dialog.Content class="border-border bg-background sm:max-w-2xl">
 		<Dialog.Header>
 			<Dialog.Title>Preview</Dialog.Title>
 			<Dialog.Description>
@@ -625,7 +631,7 @@
 			sandbox=""
 			srcdoc={previewHtml}
 			title="Email preview"
-			class="h-[480px] w-full border border-gray-800 bg-gray-950"
+			class="h-[480px] w-full border border-border bg-background"
 		></iframe>
 	</Dialog.Content>
 </Dialog.Root>

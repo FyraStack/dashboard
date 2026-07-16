@@ -43,9 +43,22 @@
 		ShieldCheck,
 		Fingerprint,
 		Loader2,
-		X
+		X,
+		SunMoon,
+		Sun,
+		Moon,
+		Monitor
 	} from '@lucide/svelte';
 	import { Dialog as DialogPrimitive } from 'bits-ui';
+	import { userPrefersMode, setMode } from 'mode-watcher';
+
+	type ThemeMode = 'light' | 'dark' | 'system';
+
+	const themeOptions: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
+		{ value: 'light', label: 'Light', icon: Sun },
+		{ value: 'dark', label: 'Dark', icon: Moon },
+		{ value: 'system', label: 'Auto', icon: Monitor }
+	];
 
 	type Props = {
 		open?: boolean;
@@ -465,14 +478,14 @@
 
 <Dialog.Root bind:open>
 	<Dialog.Content
-		class="flex h-[80dvh] w-full max-w-[calc(100%-2rem)] flex-col overflow-hidden border-gray-800 bg-gray-900 p-0 sm:h-[28rem] sm:max-w-4xl"
+		class="flex h-[80dvh] w-full max-w-[calc(100%-2rem)] flex-col overflow-hidden border-border bg-background p-0 sm:h-[28rem] sm:max-w-4xl"
 		showCloseButton={false}
 	>
 		<DialogPrimitive.Close data-slot="dialog-close" class="absolute top-3 right-3 z-50">
 			{#snippet child({ props })}
 				<button
 					type="button"
-					class="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200 focus:outline-none"
+					class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none"
 					{...props}
 				>
 					<X class="h-4 w-4" />
@@ -485,11 +498,11 @@
 			orientation="vertical"
 			class="flex min-h-0 flex-1 flex-col gap-0 sm:flex-row"
 		>
-			<div class="flex w-full flex-col border-b border-gray-800 sm:w-52 sm:border-r sm:border-b-0">
+			<div class="flex w-full flex-col border-b border-border sm:w-52 sm:border-r sm:border-b-0">
 				<div class="px-5 pt-5 pb-4">
 					<div class="flex items-center gap-3">
-						<Avatar.Root class="h-9 w-9 rounded-xs border border-gray-700">
-							<Avatar.Fallback class="rounded-xs bg-red-500/10 text-xs font-semibold text-red-400">
+						<Avatar.Root class="h-9 w-9 border border-border">
+							<Avatar.Fallback class="bg-red-500/10 text-xs font-semibold text-red-400">
 								{(user?.name ?? '??')
 									.split(' ')
 									.map((n: string) => n[0])
@@ -499,8 +512,8 @@
 							</Avatar.Fallback>
 						</Avatar.Root>
 						<div class="min-w-0">
-							<p class="truncate text-sm font-medium text-gray-100">{profileName}</p>
-							<p class="truncate text-xs text-gray-500">{profileEmail}</p>
+							<p class="truncate text-sm font-medium text-foreground">{profileName}</p>
+							<p class="truncate text-xs text-muted-foreground">{profileEmail}</p>
 						</div>
 					</div>
 				</div>
@@ -508,31 +521,38 @@
 				<Tabs.List variant="line" class="flex-col items-start gap-0 bg-transparent px-3">
 					<Tabs.Trigger
 						value="profile"
-						class="w-full justify-start gap-2 rounded-none border-0 px-3 py-2 text-gray-400 after:hidden data-active:bg-transparent data-active:text-gray-100"
+						class="w-full justify-start gap-2 rounded-none border-0 px-3 py-2 text-muted-foreground after:hidden data-active:bg-transparent data-active:text-foreground"
 					>
 						<User class="h-3.5 w-3.5" />
 						Profile
 					</Tabs.Trigger>
 					<Tabs.Trigger
 						value="security"
-						class="w-full justify-start gap-2 rounded-none border-0 px-3 py-2 text-gray-400 after:hidden data-active:bg-transparent data-active:text-gray-100"
+						class="w-full justify-start gap-2 rounded-none border-0 px-3 py-2 text-muted-foreground after:hidden data-active:bg-transparent data-active:text-foreground"
 					>
 						<Lock class="h-3.5 w-3.5" />
 						Security
 					</Tabs.Trigger>
 					<Tabs.Trigger
 						value="keys"
-						class="w-full justify-start gap-2 rounded-none border-0 px-3 py-2 text-gray-400 after:hidden data-active:bg-transparent data-active:text-gray-100"
+						class="w-full justify-start gap-2 rounded-none border-0 px-3 py-2 text-muted-foreground after:hidden data-active:bg-transparent data-active:text-foreground"
 					>
 						<KeyRound class="h-3.5 w-3.5" />
 						Keys
 					</Tabs.Trigger>
 					<Tabs.Trigger
 						value="api"
-						class="w-full justify-start gap-2 rounded-none border-0 px-3 py-2 text-gray-400 after:hidden data-active:bg-transparent data-active:text-gray-100"
+						class="w-full justify-start gap-2 rounded-none border-0 px-3 py-2 text-muted-foreground after:hidden data-active:bg-transparent data-active:text-foreground"
 					>
 						<Terminal class="h-3.5 w-3.5" />
 						API
+					</Tabs.Trigger>
+					<Tabs.Trigger
+						value="appearance"
+						class="w-full justify-start gap-2 rounded-none border-0 px-3 py-2 text-muted-foreground after:hidden data-active:bg-transparent data-active:text-foreground"
+					>
+						<SunMoon class="h-3.5 w-3.5" />
+						Appearance
 					</Tabs.Trigger>
 				</Tabs.List>
 			</div>
@@ -541,10 +561,12 @@
 				<div class="h-4 shrink-0"></div>
 				<div class="settings-scroll relative flex min-h-0 flex-1 flex-col overflow-y-auto">
 					<Tabs.Content value="profile" class="mt-0 px-6 py-6">
-						<div class="rounded-xs border border-gray-800/60 p-4">
-							<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
+						<div class="rounded-xs border border-border/60 p-4">
+							<div class="mb-3 flex items-center gap-2 border-b border-border/50 pb-2">
 								<User class="h-3.5 w-3.5 text-red-400" />
-								<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">Profile</p>
+								<p class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+									Profile
+								</p>
 							</div>
 							<div class="flex flex-col gap-3">
 								<div class="flex flex-col gap-1.5">
@@ -555,7 +577,7 @@
 									<Label>Email Address</Label>
 									<Input bind:value={profileEmail} type="email" />
 									{#if profileEmailChangePending}
-										<p class="text-xs text-gray-500">
+										<p class="text-xs text-muted-foreground">
 											Check {pendingProfileEmail} to verify this email change.
 										</p>
 									{/if}
@@ -583,10 +605,12 @@
 					</Tabs.Content>
 
 					<Tabs.Content value="security" class="mt-0 space-y-4 px-6 py-6">
-						<div class="rounded-xs border border-gray-800/60 p-4">
-							<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
+						<div class="rounded-xs border border-border/60 p-4">
+							<div class="mb-3 flex items-center gap-2 border-b border-border/50 pb-2">
 								<Lock class="h-3.5 w-3.5 text-red-400" />
-								<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">Password</p>
+								<p class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+									Password
+								</p>
 							</div>
 							<div class="flex flex-col gap-3">
 								{#if userHasPassword}
@@ -600,7 +624,7 @@
 											/>
 											<button
 												type="button"
-												class="absolute top-1/2 right-2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+												class="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
 												onclick={() => (showPassword = !showPassword)}
 											>
 												{#if showPassword}
@@ -647,20 +671,20 @@
 							</div>
 						</div>
 
-						<div class="rounded-xs border border-gray-800/60 p-4">
-							<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
+						<div class="rounded-xs border border-border/60 p-4">
+							<div class="mb-3 flex items-center gap-2 border-b border-border/50 pb-2">
 								<ShieldCheck class="h-3.5 w-3.5 text-red-400" />
-								<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">
+								<p class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
 									Two-Factor Authentication
 								</p>
 							</div>
 
 							<div class="flex items-center justify-between py-2.5">
 								<div class="flex items-center gap-2.5">
-									<ShieldCheck class="h-4 w-4 text-gray-500" />
+									<ShieldCheck class="h-4 w-4 text-muted-foreground" />
 									<div>
-										<p class="text-sm font-medium text-gray-100">Authenticator App</p>
-										<p class="text-xs text-gray-500">
+										<p class="text-sm font-medium text-foreground">Authenticator App</p>
+										<p class="text-xs text-muted-foreground">
 											{twoFactorEnabled ? 'Enabled' : 'Not configured'}
 										</p>
 									</div>
@@ -693,15 +717,15 @@
 									</Button>
 								{/if}
 							</div>
-							<div class="border-t border-gray-800/50"></div>
+							<div class="border-t border-border/50"></div>
 
 							<div class="py-2.5">
 								<div class="flex items-center justify-between">
 									<div class="flex items-center gap-2.5">
-										<Fingerprint class="h-4 w-4 text-gray-500" />
+										<Fingerprint class="h-4 w-4 text-muted-foreground" />
 										<div>
-											<p class="text-sm font-medium text-gray-100">Passkeys</p>
-											<p class="text-xs text-gray-500">
+											<p class="text-sm font-medium text-foreground">Passkeys</p>
+											<p class="text-xs text-muted-foreground">
 												{passkeys.length > 0 ? `${passkeys.length} registered` : 'Not configured'}
 											</p>
 										</div>
@@ -721,7 +745,7 @@
 									<div class="mt-2 flex flex-col gap-2">
 										{#each Array.from({ length: 2 }) as _, index (index)}
 											<div
-												class="flex items-center gap-2.5 rounded-xs border border-gray-800/60 bg-gray-900 px-3 py-2"
+												class="flex items-center gap-2.5 rounded-xs border border-border/60 bg-background px-3 py-2"
 											>
 												<Skeleton class="size-4 shrink-0 rounded-full" />
 												<div class="min-w-0 flex-1 space-y-1.5">
@@ -735,13 +759,13 @@
 									<div class="mt-2 flex flex-col gap-2">
 										{#each passkeys as pk (pk.id)}
 											<div
-												class="flex items-center gap-2.5 rounded-xs border border-gray-800/60 bg-gray-900 px-3 py-2"
+												class="flex items-center gap-2.5 rounded-xs border border-border/60 bg-background px-3 py-2"
 											>
-												<Fingerprint class="size-4 shrink-0 text-gray-500" />
+												<Fingerprint class="size-4 shrink-0 text-muted-foreground" />
 												<div class="min-w-0">
-													<p class="truncate text-sm text-gray-100">{pk.name || 'Unnamed'}</p>
+													<p class="truncate text-sm text-foreground">{pk.name || 'Unnamed'}</p>
 													{#if pk.createdAt}
-														<p class="text-xs text-gray-500">
+														<p class="text-xs text-muted-foreground">
 															Added {new Date(pk.createdAt).toISOString().slice(0, 10)}
 														</p>
 													{/if}
@@ -781,10 +805,12 @@
 					</Tabs.Content>
 
 					<Tabs.Content value="keys" class="mt-0 space-y-4 px-6 py-6">
-						<div class="rounded-xs border border-gray-800/60 p-4">
-							<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
+						<div class="rounded-xs border border-border/60 p-4">
+							<div class="mb-3 flex items-center gap-2 border-b border-border/50 pb-2">
 								<KeyRound class="h-3.5 w-3.5 text-red-400" />
-								<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">SSH Keys</p>
+								<p class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+									SSH Keys
+								</p>
 								<a
 									href="https://fyrastack.com/docs/vps/ssh"
 									target="_blank"
@@ -796,7 +822,7 @@
 							</div>
 
 							{#if sshKeysLoading}
-								<div class="divide-y divide-gray-800/50">
+								<div class="divide-y divide-border/50">
 									{#each Array.from({ length: 2 }) as _, index (index)}
 										<div class="flex items-center justify-between py-2.5">
 											<div class="min-w-0 flex-1 space-y-1.5">
@@ -809,12 +835,12 @@
 								</div>
 							{:else if sshKeys.length > 0}
 								<div class="max-h-48 overflow-y-auto">
-									<div class="divide-y divide-gray-800/50">
+									<div class="divide-y divide-border/50">
 										{#each sshKeys as key (key.id)}
 											<div class="flex items-center justify-between py-2.5">
 												<div class="min-w-0">
-													<p class="truncate text-sm font-medium text-gray-100">{key.name}</p>
-													<p class="mt-0.5 truncate font-mono text-[11px] text-gray-500">
+													<p class="truncate text-sm font-medium text-foreground">{key.name}</p>
+													<p class="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
 														{key.fingerprint}
 													</p>
 												</div>
@@ -832,10 +858,10 @@
 									</div>
 								</div>
 							{:else}
-								<p class="py-2 text-center text-xs text-gray-500">No SSH keys added.</p>
+								<p class="py-2 text-center text-xs text-muted-foreground">No SSH keys added.</p>
 							{/if}
 
-							<div class="mt-3 flex flex-col gap-2 border-t border-gray-800/50 pt-3">
+							<div class="mt-3 flex flex-col gap-2 border-t border-border/50 pt-3">
 								<Input
 									bind:value={newKeyName}
 									placeholder="Key name"
@@ -847,7 +873,7 @@
 									bind:value={newKeyValue}
 									placeholder="ssh-ed25519 AAAA..."
 									rows="3"
-									class="w-full resize-none border border-gray-700 bg-gray-800 px-3 py-2 font-mono text-xs text-gray-100 placeholder:text-gray-500 focus:border-gray-500 focus:outline-none"
+									class="w-full resize-none border border-border bg-muted px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
 								></textarea>
 								<Button
 									variant="outline"
@@ -869,28 +895,30 @@
 					</Tabs.Content>
 
 					<Tabs.Content value="api" class="mt-0 flex-1 overflow-y-auto px-6 py-6">
-						<div class="rounded-xs border border-gray-800/60 p-4">
-							<div class="mb-3 flex items-center gap-2 border-b border-gray-800/50 pb-2">
+						<div class="rounded-xs border border-border/60 p-4">
+							<div class="mb-3 flex items-center gap-2 border-b border-border/50 pb-2">
 								<KeyRound class="h-3.5 w-3.5 text-red-400" />
-								<p class="text-xs font-semibold tracking-wider text-gray-400 uppercase">
+								<p class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
 									API Tokens
 								</p>
 							</div>
 
 							{#if generatedToken}
-								<div class="mb-3 border border-amber-800/50 bg-amber-950/20 p-3">
-									<p class="text-xs font-medium text-amber-400">
+								<div
+									class="mb-3 border border-amber-300 bg-amber-100 p-3 dark:border-amber-800/50 dark:bg-amber-950/20"
+								>
+									<p class="text-xs font-medium text-amber-800 dark:text-amber-400">
 										Copy this token now — it won't be shown again.
 									</p>
 									<div class="mt-2 flex items-center gap-2">
 										<code
-											class="flex-1 overflow-hidden bg-gray-800 px-2 py-1 font-mono text-xs text-ellipsis whitespace-nowrap text-gray-100"
+											class="flex-1 overflow-hidden bg-muted px-2 py-1 font-mono text-xs text-ellipsis whitespace-nowrap text-foreground"
 										>
 											{generatedToken}
 										</code>
 										<button
 											type="button"
-											class="shrink-0 text-gray-500 hover:text-gray-300"
+											class="shrink-0 text-muted-foreground hover:text-foreground"
 											onclick={() => copyToken('new-token', generatedToken)}
 										>
 											{#if copiedTokenId === 'new-token'}
@@ -904,7 +932,7 @@
 							{/if}
 
 							{#if tokensLoading}
-								<div class="divide-y divide-gray-800/50">
+								<div class="divide-y divide-border/50">
 									{#each Array.from({ length: 2 }) as _, index (index)}
 										<div class="flex items-center justify-between py-2.5">
 											<div class="min-w-0 flex-1 space-y-1.5">
@@ -917,14 +945,15 @@
 								</div>
 							{:else if tokens.length > 0}
 								<div class="max-h-48 overflow-y-auto">
-									<div class="divide-y divide-gray-800/50">
+									<div class="divide-y divide-border/50">
 										{#each tokens as token (token.id)}
 											<div class="flex items-center justify-between py-2.5">
 												<div class="min-w-0">
-													<p class="truncate text-sm font-medium text-gray-100">{token.name}</p>
-													<p class="mt-0.5 truncate font-mono text-[11px] text-gray-500">
+													<p class="truncate text-sm font-medium text-foreground">{token.name}</p>
+													<p class="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
 														sk-stack-****...****
-														<span class="ml-2 font-sans text-gray-500">Created {token.created}</span
+														<span class="ml-2 font-sans text-muted-foreground"
+															>Created {token.created}</span
 														>
 													</p>
 												</div>
@@ -941,10 +970,10 @@
 									</div>
 								</div>
 							{:else}
-								<p class="py-2 text-center text-xs text-gray-500">No API tokens.</p>
+								<p class="py-2 text-center text-xs text-muted-foreground">No API tokens.</p>
 							{/if}
 
-							<div class="mt-3 flex items-center gap-3 border-t border-gray-800/50 pt-3">
+							<div class="mt-3 flex items-center gap-3 border-t border-border/50 pt-3">
 								<Input bind:value={newTokenName} placeholder="Token name" class="h-8 text-xs" />
 								<Button
 									variant="outline"
@@ -956,6 +985,39 @@
 									<Plus class="h-3 w-3" />
 									Generate
 								</Button>
+							</div>
+						</div>
+					</Tabs.Content>
+
+					<Tabs.Content value="appearance" class="mt-0 px-6 py-6">
+						<div class="rounded-xs border border-border/60 p-4">
+							<div class="mb-3 flex items-center gap-2 border-b border-border/50 pb-2">
+								<SunMoon class="h-3.5 w-3.5 text-red-400" />
+								<p class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+									Appearance
+								</p>
+							</div>
+							<div class="flex flex-col gap-1.5">
+								<Label>Theme</Label>
+								<div class="grid grid-cols-3 gap-2">
+									{#each themeOptions as option (option.value)}
+										{@const Icon = option.icon}
+										<button
+											type="button"
+											onclick={() => setMode(option.value)}
+											class="flex flex-col items-center gap-1.5 border px-3 py-2.5 text-xs transition-colors {userPrefersMode.current ===
+											option.value
+												? 'border-primary bg-primary/10 text-foreground'
+												: 'border-border text-muted-foreground hover:border-ring hover:text-foreground'}"
+										>
+											<Icon class="h-4 w-4" />
+											{option.label}
+										</button>
+									{/each}
+								</div>
+								<p class="mt-1.5 text-xs text-muted-foreground">
+									Auto follows your system's light/dark setting.
+								</p>
 							</div>
 						</div>
 					</Tabs.Content>
@@ -978,7 +1040,7 @@
 		onVerified={onPasswordVerified}
 	/>
 	<Dialog.Root bind:open={totpDisableDialogOpen}>
-		<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+		<Dialog.Content class="border-border bg-background sm:max-w-md">
 			<Dialog.Header>
 				<Dialog.Title>Disable Authenticator App</Dialog.Title>
 				<Dialog.Description>
@@ -1006,14 +1068,14 @@
 
 				<div class="flex flex-col gap-1.5">
 					<Label>Verification Method</Label>
-					<div class="flex rounded-xs border border-gray-800 bg-gray-950/40 p-1">
+					<div class="flex rounded-xs border border-border bg-background/40 p-1">
 						<button
 							type="button"
 							class={[
 								'flex-1 rounded-xs px-3 py-1.5 text-xs font-medium transition-colors',
 								totpDisableMethod === 'totp'
-									? 'bg-gray-800 text-gray-100'
-									: 'text-gray-500 hover:text-gray-300'
+									? 'bg-muted text-foreground'
+									: 'text-muted-foreground hover:text-foreground'
 							]}
 							onclick={() => {
 								totpDisableMethod = 'totp';
@@ -1028,8 +1090,8 @@
 							class={[
 								'flex-1 rounded-xs px-3 py-1.5 text-xs font-medium transition-colors',
 								totpDisableMethod === 'backupCode'
-									? 'bg-gray-800 text-gray-100'
-									: 'text-gray-500 hover:text-gray-300'
+									? 'bg-muted text-foreground'
+									: 'text-muted-foreground hover:text-foreground'
 							]}
 							onclick={() => {
 								totpDisableMethod = 'backupCode';

@@ -62,10 +62,10 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="border-gray-800 bg-gray-900 text-gray-100 sm:max-w-lg">
+	<Dialog.Content class="border-border bg-background text-foreground sm:max-w-lg">
 		<Dialog.Header>
 			<div
-				class="mb-2 flex size-10 items-center justify-center rounded-lg border border-gray-800 bg-gray-950"
+				class="mb-2 flex size-10 items-center justify-center rounded-lg border border-border bg-background"
 			>
 				{#if canManageBilling}
 					<CreditCard class="size-5 text-red-300" />
@@ -74,7 +74,7 @@
 				{/if}
 			</div>
 			<Dialog.Title>{canManageBilling ? title : 'Billing setup required'}</Dialog.Title>
-			<Dialog.Description class="text-gray-500">
+			<Dialog.Description class="text-muted-foreground">
 				{#if canManageBilling}
 					{description}
 				{:else}
@@ -84,17 +84,17 @@
 		</Dialog.Header>
 
 		{#if !billingReady}
-			<div class="flex gap-3 rounded-lg border border-gray-800/80 bg-gray-950/60 p-4">
-				<Info class="mt-0.5 size-4 shrink-0 text-gray-500" />
-				<p class="text-sm text-gray-500">
+			<div class="flex gap-3 rounded-lg border border-border/80 bg-background/60 p-4">
+				<Info class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+				<p class="text-sm text-muted-foreground">
 					This payment method is used for this project only. You can change it from Billing anytime.
 				</p>
 			</div>
 
 			{#if canManageBilling}
 				<div class="space-y-1.5">
-					<Label for="billing-discount-code" class="text-sm text-gray-400">
-						Discount code <span class="text-gray-600">(optional)</span>
+					<Label for="billing-discount-code" class="text-sm text-muted-foreground">
+						Discount code <span class="text-muted-foreground">(optional)</span>
 					</Label>
 					<Input
 						id="billing-discount-code"
@@ -103,14 +103,16 @@
 						autocomplete="off"
 						spellcheck={false}
 						disabled={loading}
-						class="border-gray-800 bg-gray-950 text-gray-100 placeholder:text-gray-600"
+						class="border-border bg-background text-foreground placeholder:text-muted-foreground"
 					/>
 				</div>
 			{/if}
 		{/if}
 
 		{#if actionError}
-			<div class="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-300">
+			<div
+				class="rounded-md border border-red-300 bg-red-100 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+			>
 				{actionError}
 			</div>
 		{/if}

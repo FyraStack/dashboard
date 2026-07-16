@@ -193,15 +193,15 @@
 	}
 </script>
 
-<div class="grid shrink-0 grid-cols-2 gap-px border-b border-gray-800 bg-gray-800 lg:grid-cols-4">
+<div class="grid shrink-0 grid-cols-2 gap-px border-b border-border bg-muted lg:grid-cols-4">
 	{#each charts as chart (chart.label)}
-		<div class="relative flex flex-col bg-gray-900">
+		<div class="relative flex flex-col bg-background">
 			<div class="flex items-baseline justify-between px-4 pt-3 pb-1">
-				<span class="relative z-10 text-xs font-medium text-gray-400">{chart.label}</span>
+				<span class="relative z-10 text-xs font-medium text-muted-foreground">{chart.label}</span>
 				{#if chart.loaded}
-					<span class="relative z-10 text-xs font-semibold text-gray-200">{chart.value}</span>
+					<span class="relative z-10 text-xs font-semibold text-foreground">{chart.value}</span>
 				{:else}
-					<span class="relative z-10 h-3 w-10 animate-pulse rounded bg-gray-800"></span>
+					<span class="relative z-10 h-3 w-10 animate-pulse rounded bg-muted"></span>
 				{/if}
 			</div>
 			<div>
@@ -223,7 +223,7 @@
 							y1="50"
 							x2="240"
 							y2="50"
-							stroke="var(--gray-700)"
+							stroke="var(--border)"
 							stroke-width="2"
 							stroke-dasharray="4 5"
 							stroke-linecap="round"
@@ -237,28 +237,28 @@
 	{/each}
 </div>
 
-<div class="grid shrink-0 grid-cols-1 gap-px border-b border-gray-800 bg-gray-800 lg:grid-cols-5">
-	<div class="col-span-2 divide-y divide-gray-800/50 bg-gray-900">
-		<div class="px-5 py-3 text-xs font-semibold tracking-wider text-gray-500 uppercase">
+<div class="grid shrink-0 grid-cols-1 gap-px border-b border-border bg-muted lg:grid-cols-5">
+	<div class="col-span-2 divide-y divide-border/50 bg-background">
+		<div class="px-5 py-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
 			Server Details
 		</div>
 		{#each [['Plan', selectedServer.plan], ['Region', selectedServer.region], ['vCPU', `${selectedServer.vcpu}`], ['RAM', selectedServer.ram], ['Disk', selectedServer.disk], ['Created', selectedServer.created], ['Uptime', selectedServer.uptime]] as [label, value] (label)}
 			<div class="flex items-center justify-between px-5 py-2">
-				<span class="text-xs text-gray-500">{label}</span>
+				<span class="text-xs text-muted-foreground">{label}</span>
 				{#if !liveLoaded && isLiveDetail(label)}
-					<span class="h-2.5 w-20 animate-pulse rounded bg-gray-800"></span>
+					<span class="h-2.5 w-20 animate-pulse rounded bg-muted"></span>
 				{:else}
-					<span class="text-xs font-medium text-gray-200">{value}</span>
+					<span class="text-xs font-medium text-foreground">{value}</span>
 				{/if}
 			</div>
 		{/each}
 		<div class="flex items-center justify-between px-5 py-2">
-			<span class="text-xs text-gray-500">IPv4</span>
+			<span class="text-xs text-muted-foreground">IPv4</span>
 			<div class="flex items-center gap-1.5">
 				{#if liveLoaded}
-					<span class="font-mono text-xs text-gray-200">{selectedServer.ip}</span>
+					<span class="font-mono text-xs text-foreground">{selectedServer.ip}</span>
 					<button
-						class="text-gray-500 hover:text-gray-300"
+						class="text-muted-foreground hover:text-foreground"
 						aria-label="Copy IPv4 address"
 						onclick={() => copyToClipboard(selectedServer.ip, 'ipv4')}
 					>
@@ -267,17 +267,17 @@
 							/>{/if}
 					</button>
 				{:else}
-					<span class="h-2.5 w-24 animate-pulse rounded bg-gray-800"></span>
+					<span class="h-2.5 w-24 animate-pulse rounded bg-muted"></span>
 				{/if}
 			</div>
 		</div>
 		<div class="flex items-center justify-between px-5 py-2">
-			<span class="text-xs text-gray-500">IPv6</span>
+			<span class="text-xs text-muted-foreground">IPv6</span>
 			<div class="flex items-center gap-1.5">
 				{#if liveLoaded}
-					<span class="font-mono text-[11px] text-gray-200">{selectedServer.ipv6}</span>
+					<span class="font-mono text-[11px] text-foreground">{selectedServer.ipv6}</span>
 					<button
-						class="text-gray-500 hover:text-gray-300"
+						class="text-muted-foreground hover:text-foreground"
 						aria-label="Copy IPv6 address"
 						onclick={() => copyToClipboard(selectedServer.ipv6, 'ipv6')}
 					>
@@ -286,32 +286,32 @@
 							/>{/if}
 					</button>
 				{:else}
-					<span class="h-2.5 w-28 animate-pulse rounded bg-gray-800"></span>
+					<span class="h-2.5 w-28 animate-pulse rounded bg-muted"></span>
 				{/if}
 			</div>
 		</div>
 	</div>
 
-	<div class="col-span-3 flex flex-col bg-gray-900">
-		<div class="flex items-center gap-2 border-b border-gray-800 px-4 py-2.5">
-			<Terminal class="h-3 w-3 text-gray-500" />
-			<span class="text-xs font-semibold text-gray-400">Console</span>
+	<div class="col-span-3 flex flex-col bg-background">
+		<div class="flex items-center gap-2 border-b border-border px-4 py-2.5">
+			<Terminal class="h-3 w-3 text-muted-foreground" />
+			<span class="text-xs font-semibold text-muted-foreground">Console</span>
 		</div>
 		<div
-			class="min-h-[180px] flex-1 bg-gray-950 p-4 font-mono text-sm leading-relaxed text-gray-300"
+			class="min-h-[180px] flex-1 bg-background p-4 font-mono text-sm leading-relaxed text-muted-foreground"
 		>
 			{#if !data.featureFlags.vpsConsole}
 				<div class="flex h-full min-h-[148px] flex-col items-center justify-center gap-3">
-					<Terminal class="h-8 w-8 text-gray-500/60" />
+					<Terminal class="h-8 w-8 text-muted-foreground/60" />
 					<div class="text-center">
-						<p class="text-sm font-medium text-gray-300">Coming soon</p>
-						<p class="mt-1 text-xs text-gray-500">Console access is not available yet.</p>
+						<p class="text-sm font-medium text-muted-foreground">Coming soon</p>
+						<p class="mt-1 text-xs text-muted-foreground">Console access is not available yet.</p>
 					</div>
 					{#if selectedServer.ip}
-						<div class="flex items-center gap-2 border border-gray-800 bg-gray-900 px-3 py-1.5">
-							<span class="text-xs text-gray-300">ssh root@{selectedServer.ip}</span>
+						<div class="flex items-center gap-2 border border-border bg-background px-3 py-1.5">
+							<span class="text-xs text-muted-foreground">ssh root@{selectedServer.ip}</span>
 							<button
-								class="text-gray-500 hover:text-gray-300"
+								class="text-muted-foreground hover:text-foreground"
 								aria-label="Copy SSH command"
 								onclick={() => copyToClipboard(`ssh root@${selectedServer.ip}`, 'ssh-console')}
 							>
@@ -320,7 +320,7 @@
 									/>{/if}
 							</button>
 						</div>
-						<p class="text-[11px] text-gray-500">
+						<p class="text-[11px] text-muted-foreground">
 							Connect over <a
 								href="https://fyrastack.com/docs/vps/ssh"
 								target="_blank"
@@ -334,34 +334,34 @@
 				{#each terminalLines as line (line.type + line.text)}
 					{#if line.type === 'prompt'}
 						<div>
-							<span class="text-gray-500">user@{selectedServer.name}~:</span>
+							<span class="text-muted-foreground">user@{selectedServer.name}~:</span>
 							{line.text}
 						</div>
 					{:else if line.type === 'output'}
-						<div class="text-gray-400">{line.text}</div>
+						<div class="text-muted-foreground">{line.text}</div>
 					{:else}
 						<div>
-							<span class="text-gray-500">user@{selectedServer.name}~:</span>
-							<span class="inline-block h-4 w-1.5 animate-pulse bg-gray-400"></span>
+							<span class="text-muted-foreground">user@{selectedServer.name}~:</span>
+							<span class="inline-block h-4 w-1.5 animate-pulse bg-muted-foreground"></span>
 						</div>
 					{/if}
 				{/each}
 			{:else if selectedServer.status === 'restarting'}
 				<div class="text-amber-500">Restarting server...</div>
 			{:else if selectedServer.status === 'unknown'}
-				<div class="text-gray-500">Server status unavailable. Reconnecting...</div>
+				<div class="text-muted-foreground">Server status unavailable. Reconnecting...</div>
 			{:else}
-				<div class="text-gray-500">Server is offline. Start the server to connect.</div>
+				<div class="text-muted-foreground">Server is offline. Start the server to connect.</div>
 			{/if}
 		</div>
 	</div>
 </div>
 
 <div class="flex min-h-[22rem] flex-1 flex-col lg:min-h-0">
-	<div class="flex h-8 shrink-0 items-center justify-between border-b border-gray-800 px-4">
+	<div class="flex h-8 shrink-0 items-center justify-between border-b border-border px-4">
 		<div class="flex items-center gap-2">
-			<FileText class="h-3 w-3 text-gray-500" />
-			<span class="text-xs font-semibold text-gray-400">Logs</span>
+			<FileText class="h-3 w-3 text-muted-foreground" />
+			<span class="text-xs font-semibold text-muted-foreground">Logs</span>
 		</div>
 		{#if data.featureFlags.vpsLogs}
 			<div class="flex items-center gap-1">
@@ -377,19 +377,19 @@
 			</div>
 		{/if}
 	</div>
-	<div class="flex-1 overflow-auto bg-gray-950 font-mono text-[11px] leading-relaxed">
+	<div class="flex-1 overflow-auto bg-background font-mono text-[11px] leading-relaxed">
 		{#if !data.featureFlags.vpsLogs}
 			<div class="flex h-full flex-col items-center justify-center gap-3">
-				<FileText class="h-8 w-8 text-gray-500/60" />
+				<FileText class="h-8 w-8 text-muted-foreground/60" />
 				<div class="text-center">
-					<p class="text-sm font-medium text-gray-300">Coming soon</p>
-					<p class="mt-1 text-xs text-gray-500">Log streaming is not available yet.</p>
+					<p class="text-sm font-medium text-muted-foreground">Coming soon</p>
+					<p class="mt-1 text-xs text-muted-foreground">Log streaming is not available yet.</p>
 				</div>
 				{#if selectedServer.ip}
-					<div class="flex items-center gap-2 border border-gray-800 bg-gray-900 px-3 py-1.5">
-						<span class="text-gray-300">ssh root@{selectedServer.ip} journalctl -f</span>
+					<div class="flex items-center gap-2 border border-border bg-background px-3 py-1.5">
+						<span class="text-muted-foreground">ssh root@{selectedServer.ip} journalctl -f</span>
 						<button
-							class="text-gray-500 hover:text-gray-300"
+							class="text-muted-foreground hover:text-foreground"
 							aria-label="Copy logs command"
 							onclick={() =>
 								copyToClipboard(`ssh root@${selectedServer.ip} journalctl -f`, 'ssh-logs')}
@@ -399,7 +399,7 @@
 								/>{/if}
 						</button>
 					</div>
-					<p class="text-gray-500">
+					<p class="text-muted-foreground">
 						Tail logs over <a
 							href="https://fyrastack.com/docs/vps/ssh"
 							target="_blank"
@@ -413,29 +413,31 @@
 			<div class="flex h-full flex-col items-center justify-center gap-3">
 				<AlertTriangle class="h-8 w-8 text-amber-500/60" />
 				<div class="text-center">
-					<p class="text-sm font-medium text-gray-300">Server not running</p>
-					<p class="mt-1 text-xs text-gray-500">Start the server to connect to the guest agent.</p>
+					<p class="text-sm font-medium text-muted-foreground">Server not running</p>
+					<p class="mt-1 text-xs text-muted-foreground">
+						Start the server to connect to the guest agent.
+					</p>
 				</div>
 			</div>
 		{:else if !selectedServer.agentConnected}
 			<div class="flex h-full flex-col items-center justify-center gap-3">
 				<AlertTriangle class="h-8 w-8 text-red-400/60" />
 				<div class="text-center">
-					<p class="text-sm font-medium text-gray-300">Guest agent unreachable</p>
-					<p class="mt-1 max-w-xs text-xs text-gray-500">
+					<p class="text-sm font-medium text-muted-foreground">Guest agent unreachable</p>
+					<p class="mt-1 max-w-xs text-xs text-muted-foreground">
 						The server is running but the guest agent is not responding.
 					</p>
 				</div>
 			</div>
 		{:else}
 			{#each currentLogs as entry (entry.id)}
-				<div class="flex items-baseline gap-0 px-4 py-px leading-[1.6] hover:bg-gray-800/20">
-					<span class="w-[148px] shrink-0 text-gray-500">{entry.timestamp}</span>
+				<div class="flex items-baseline gap-0 px-4 py-px leading-[1.6] hover:bg-muted/20">
+					<span class="w-[148px] shrink-0 text-muted-foreground">{entry.timestamp}</span>
 					<span class="w-[42px] shrink-0 font-semibold uppercase {sevColors[entry.severity]}"
 						>{entry.severity.slice(0, 4)}</span
 					>
-					<span class="w-[72px] shrink-0 text-gray-500">{entry.source}</span>
-					<span class="text-gray-300">{entry.message}</span>
+					<span class="w-[72px] shrink-0 text-muted-foreground">{entry.source}</span>
+					<span class="text-muted-foreground">{entry.message}</span>
 				</div>
 			{/each}
 		{/if}

@@ -14,7 +14,7 @@
 		info: 'text-blue-400',
 		warn: 'text-amber-400',
 		error: 'text-red-400',
-		debug: 'text-gray-500'
+		debug: 'text-muted-foreground'
 	};
 	const currentLogs = $derived([
 		{
@@ -69,11 +69,13 @@
 	}
 </script>
 
-<div class="flex h-8 shrink-0 items-center justify-between border-b border-gray-800 px-4">
+<div class="flex h-8 shrink-0 items-center justify-between border-b border-border px-4">
 	<div class="flex items-center gap-2">
-		<span class="text-xs font-medium text-gray-300">{selectedServer.name}</span>
+		<span class="text-xs font-medium text-muted-foreground">{selectedServer.name}</span>
 		{#if hasLogFilters}
-			<span class="text-[9px] text-gray-500">{filteredLogs.length}/{currentLogs.length}</span>
+			<span class="text-[9px] text-muted-foreground"
+				>{filteredLogs.length}/{currentLogs.length}</span
+			>
 			{#if logSevFilter}<button
 					aria-label="Clear severity filter"
 					onclick={() => (logSevFilter = null)}
@@ -95,12 +97,12 @@
 	<div class="flex items-center gap-1.5">
 		<div class="relative">
 			<Search
-				class="pointer-events-none absolute top-1/2 left-2 h-2.5 w-2.5 -translate-y-1/2 text-gray-500"
+				class="pointer-events-none absolute top-1/2 left-2 h-2.5 w-2.5 -translate-y-1/2 text-muted-foreground"
 			/><input
 				aria-label="Search logs"
 				bind:value={logSearch}
 				placeholder="Search..."
-				class="h-6 w-36 border border-gray-700 bg-gray-800 pr-2 pl-6 text-[11px] text-gray-100 placeholder:text-gray-500 focus:border-gray-500 focus:outline-none"
+				class="h-6 w-36 border border-border bg-muted pr-2 pl-6 text-[11px] text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
 			/>
 		</div>
 		{#if hasLogFilters}<button
@@ -116,16 +118,18 @@
 		>
 	</div>
 </div>
-<div class="shrink-0 border-b border-gray-800 bg-gray-900/40 px-4 py-1 text-[10px] text-gray-500">
+<div
+	class="shrink-0 border-b border-border bg-background/40 px-4 py-1 text-[10px] text-muted-foreground"
+>
 	Sample log data — live log streaming isn't available yet.
 </div>
-<div class="min-h-0 flex-1 overflow-auto bg-gray-950 font-mono text-[11px] leading-relaxed">
+<div class="min-h-0 flex-1 overflow-auto bg-background font-mono text-[11px] leading-relaxed">
 	{#if selectedServer.status !== 'running'}
 		<div class="flex h-full flex-col items-center justify-center gap-3">
 			<AlertTriangle class="h-10 w-10 text-amber-500/60" />
 			<div class="text-center">
-				<p class="text-base font-medium text-gray-200">Server not running</p>
-				<p class="mt-1 text-xs text-gray-500">
+				<p class="text-base font-medium text-foreground">Server not running</p>
+				<p class="mt-1 text-xs text-muted-foreground">
 					Start the server to connect to the guest agent and stream logs.
 				</p>
 			</div>
@@ -134,30 +138,30 @@
 		<div class="flex h-full flex-col items-center justify-center gap-3">
 			<AlertTriangle class="h-10 w-10 text-red-400/60" />
 			<div class="text-center">
-				<p class="text-base font-medium text-gray-200">Guest agent unreachable</p>
-				<p class="mt-1 max-w-sm text-xs text-gray-500">
+				<p class="text-base font-medium text-foreground">Guest agent unreachable</p>
+				<p class="mt-1 max-w-sm text-xs text-muted-foreground">
 					The server is running but the guest agent is not responding.
 				</p>
 			</div>
 		</div>
 	{:else}
 		{#each filteredLogs as entry (entry.id)}<div
-				class="flex items-baseline gap-0 px-4 py-px leading-[1.6] hover:bg-gray-800/20"
+				class="flex items-baseline gap-0 px-4 py-px leading-[1.6] hover:bg-muted/20"
 			>
-				<span class="w-[148px] shrink-0 text-gray-500">{entry.timestamp}</span><button
+				<span class="w-[148px] shrink-0 text-muted-foreground">{entry.timestamp}</span><button
 					class="w-[42px] shrink-0 cursor-pointer text-left font-semibold uppercase {sevColors[
 						entry.severity
 					]} {logSevFilter === entry.severity ? 'underline' : ''}"
 					onclick={() => (logSevFilter = logSevFilter === entry.severity ? null : entry.severity)}
 					>{entry.severity.slice(0, 4)}</button
 				><button
-					class="w-[72px] shrink-0 cursor-pointer text-left text-gray-500 hover:text-gray-300 {logSourceFilter ===
+					class="w-[72px] shrink-0 cursor-pointer text-left text-muted-foreground hover:text-muted-foreground {logSourceFilter ===
 					entry.source
-						? 'text-gray-200'
+						? 'text-foreground'
 						: ''}"
 					onclick={() => (logSourceFilter = logSourceFilter === entry.source ? null : entry.source)}
 					>{entry.source}</button
-				><span class="text-gray-300">{entry.message}</span>
+				><span class="text-muted-foreground">{entry.message}</span>
 			</div>{/each}
 	{/if}
 </div>

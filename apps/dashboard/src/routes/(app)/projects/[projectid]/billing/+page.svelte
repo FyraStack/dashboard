@@ -144,15 +144,17 @@
 		returnTo={`/projects/${projectId}/billing`}
 	/>
 
-	<div class="flex h-12 shrink-0 items-center border-b border-gray-800 px-5">
+	<div class="flex h-12 shrink-0 items-center border-b border-border px-5">
 		<div class="flex items-center gap-2">
-			<CreditCard class="size-4 text-gray-400" />
-			<span class="text-sm font-semibold text-gray-100">Billing</span>
+			<CreditCard class="size-4 text-muted-foreground" />
+			<span class="text-sm font-semibold text-foreground">Billing</span>
 		</div>
 	</div>
 
 	{#if actionError}
-		<div class="border-b border-red-900/40 bg-red-950/20 px-5 py-3 text-sm text-red-300">
+		<div
+			class="border-b border-red-300 bg-red-100 px-5 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300"
+		>
 			{actionError}
 		</div>
 	{/if}
@@ -160,20 +162,22 @@
 	<div class="flex-1 overflow-auto">
 		<div class="mx-auto flex max-w-6xl flex-col gap-0 md:flex-row">
 			<!-- Sidebar -->
-			<div class="shrink-0 border-b border-gray-800/60 p-6 md:w-72 md:border-r md:border-b-0">
+			<div class="shrink-0 border-b border-border/60 p-6 md:w-72 md:border-r md:border-b-0">
 				<div>
-					<h1 class="text-lg font-semibold text-gray-50">Billing</h1>
-					<p class="mt-1 text-xs text-gray-500">Project billing overview</p>
+					<h1 class="text-lg font-semibold text-foreground">Billing</h1>
+					<p class="mt-1 text-xs text-muted-foreground">Project billing overview</p>
 				</div>
 
 				<div class="mt-6 flex flex-col gap-4">
-					<div class="rounded-md border border-gray-800/60 bg-gray-900/40 p-3.5">
+					<div class="rounded-md border border-border/60 bg-background/40 p-3.5">
 						<Tooltip.Root>
 							<Tooltip.Trigger>
 								{#snippet child({ props })}
 									<div {...props} class="flex w-fit cursor-help items-center gap-2">
 										<Server class="size-3.5 text-blue-400" />
-										<p class="text-[0.625rem] font-medium tracking-wide text-gray-500 uppercase">
+										<p
+											class="text-[0.625rem] font-medium tracking-wide text-muted-foreground uppercase"
+										>
 											Active servers
 										</p>
 									</div>
@@ -185,26 +189,28 @@
 								</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
-						<p class="mt-1 text-sm font-semibold text-gray-100 tabular-nums">{activeServers}</p>
+						<p class="mt-1 text-sm font-semibold text-foreground tabular-nums">{activeServers}</p>
 					</div>
-					<div class="rounded-md border border-gray-800/60 bg-gray-900/40 p-3.5">
+					<div class="rounded-md border border-border/60 bg-background/40 p-3.5">
 						<div class="flex items-center gap-2">
 							<Cpu class="size-3.5 text-violet-400" />
-							<p class="text-[0.625rem] font-medium tracking-wide text-gray-500 uppercase">
+							<p class="text-[0.625rem] font-medium tracking-wide text-muted-foreground uppercase">
 								Compute hours
 							</p>
 						</div>
-						<p class="mt-1 text-sm font-semibold text-gray-100 tabular-nums">
+						<p class="mt-1 text-sm font-semibold text-foreground tabular-nums">
 							{formatHours(totalHours)}
 						</p>
 					</div>
-					<div class="rounded-md border border-gray-800/60 bg-gray-900/40 p-3.5">
+					<div class="rounded-md border border-border/60 bg-background/40 p-3.5">
 						<Tooltip.Root>
 							<Tooltip.Trigger>
 								{#snippet child({ props })}
 									<div {...props} class="flex w-fit cursor-help items-center gap-2">
 										<CreditCard class="size-3.5 text-emerald-400" />
-										<p class="text-[0.625rem] font-medium tracking-wide text-gray-500 uppercase">
+										<p
+											class="text-[0.625rem] font-medium tracking-wide text-muted-foreground uppercase"
+										>
 											Est. cost
 										</p>
 									</div>
@@ -217,21 +223,23 @@
 								</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
-						<p class="mt-1 text-sm font-semibold text-gray-100 tabular-nums">
+						<p class="mt-1 text-sm font-semibold text-foreground tabular-nums">
 							{hasCost ? formatCost(totalCost) : '—'}
 						</p>
 					</div>
 				</div>
 
 				<div class="mt-6">
-					<p class="text-[0.625rem] font-medium tracking-wide text-gray-500 uppercase">Actions</p>
+					<p class="text-[0.625rem] font-medium tracking-wide text-muted-foreground uppercase">
+						Actions
+					</p>
 					<div class="mt-2 flex flex-col gap-1.5">
 						<button
-							class="flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-gray-300 transition-colors hover:bg-gray-800/50"
+							class="flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/50"
 							onclick={handleBillingAction}
 							disabled={portalLoading}
 						>
-							<CreditCard class="size-3.5 text-gray-500" />
+							<CreditCard class="size-3.5 text-muted-foreground" />
 							{portalLoading
 								? 'Opening portal...'
 								: billingReady
@@ -244,32 +252,34 @@
 
 			<!-- Main -->
 			<div class="flex-1 p-6">
-				<h2 class="text-sm font-semibold text-gray-200">Active resources</h2>
-				<p class="mt-0.5 text-xs text-gray-500">Currently contributing to your project bill</p>
+				<h2 class="text-sm font-semibold text-foreground">Active resources</h2>
+				<p class="mt-0.5 text-xs text-muted-foreground">
+					Currently contributing to your project bill
+				</p>
 
 				{#if activeResources.length}
-					<div class="mt-4 divide-y divide-gray-800/40 rounded-md border border-gray-800/60">
+					<div class="mt-4 divide-y divide-border/40 rounded-md border border-border/60">
 						{#each activeResources as resource, index (activeResourceKey(resource, index))}
 							{@const Icon = resourceIcon(resource.resourceType ?? resource.type)}
 							{@const stripe = resourceStripe(resource)}
 							{@const costLabel = formatCost(resource.cost)}
 							<div
-								class="flex items-center justify-between px-4 py-3.5 transition-colors hover:bg-gray-800/20 {stripe}"
+								class="flex items-center justify-between px-4 py-3.5 transition-colors hover:bg-muted/20 {stripe}"
 							>
 								<div class="flex items-center gap-3">
 									<div
-										class="flex size-8 shrink-0 items-center justify-center rounded-md bg-gray-800/60"
+										class="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/60"
 									>
-										<Icon class="size-3.5 text-gray-400" />
+										<Icon class="size-3.5 text-muted-foreground" />
 									</div>
 									<div>
-										<p class="text-sm font-medium text-gray-200">{resourceLabel(resource)}</p>
-										<p class="text-xs text-gray-500">{resourceTypeLabel(resource)}</p>
+										<p class="text-sm font-medium text-foreground">{resourceLabel(resource)}</p>
+										<p class="text-xs text-muted-foreground">{resourceTypeLabel(resource)}</p>
 									</div>
 								</div>
 								<div class="text-right">
-									<p class="text-sm text-gray-200 tabular-nums">{resource.count ?? 0} active</p>
-									<p class="text-xs text-gray-500 tabular-nums">
+									<p class="text-sm text-foreground tabular-nums">{resource.count ?? 0} active</p>
+									<p class="text-xs text-muted-foreground tabular-nums">
 										{formatHours(resource.hours)}{#if costLabel}
 											· {costLabel} est.{/if}
 									</p>
@@ -278,16 +288,16 @@
 						{/each}
 					</div>
 				{:else if activeResourceCount > 0}
-					<div class="mt-4 rounded-md border border-gray-800/60 bg-gray-900/30 p-5 text-center">
-						<p class="text-sm text-gray-400">
+					<div class="mt-4 rounded-md border border-border/60 bg-background/30 p-5 text-center">
+						<p class="text-sm text-muted-foreground">
 							You have {activeResourceCount} active {activeResourceCount === 1
 								? 'resource'
 								: 'resources'}.
 						</p>
 					</div>
 				{:else}
-					<div class="mt-4 rounded-md border border-gray-800/60 bg-gray-900/30 p-8 text-center">
-						<p class="text-sm text-gray-500">No active resources right now.</p>
+					<div class="mt-4 rounded-md border border-border/60 bg-background/30 p-8 text-center">
+						<p class="text-sm text-muted-foreground">No active resources right now.</p>
 					</div>
 				{/if}
 			</div>

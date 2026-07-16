@@ -187,12 +187,12 @@
 
 <div class="flex flex-1 flex-col overflow-hidden lg:flex-row">
 	<div
-		class="flex max-h-[38vh] w-full shrink-0 flex-col border-b border-gray-800 lg:max-h-none lg:w-64 lg:border-r lg:border-b-0"
+		class="flex max-h-[38vh] w-full shrink-0 flex-col border-b border-border lg:max-h-none lg:w-64 lg:border-r lg:border-b-0"
 	>
-		<div class="flex h-10 shrink-0 items-center justify-between border-b border-gray-800 px-4">
+		<div class="flex h-10 shrink-0 items-center justify-between border-b border-border px-4">
 			<div class="flex items-center gap-2">
-				<Warehouse class="h-4 w-4 text-gray-400" />
-				<span class="text-sm font-semibold text-gray-100">Colocation</span>
+				<Warehouse class="h-4 w-4 text-muted-foreground" />
+				<span class="text-sm font-semibold text-foreground">Colocation</span>
 				<Badge variant="secondary" class="text-[10px]">{units.length}</Badge>
 			</div>
 			<Button
@@ -208,15 +208,17 @@
 		<div class="flex-1 overflow-y-auto">
 			{#each units as unit (unit.id)}
 				<a
-					class="flex w-full items-center justify-between border-b border-gray-800 px-4 py-3 text-left transition-colors duration-100 {selectedUnitId ===
+					class="flex w-full items-center justify-between border-b border-border px-4 py-3 text-left transition-colors duration-100 {selectedUnitId ===
 					unit.id
-						? 'bg-gray-800/60'
-						: 'hover:bg-gray-800/30'}"
+						? 'bg-muted/60'
+						: 'hover:bg-muted/30'}"
 					href={resolve(tabHref(activeTab, unit.id) as any)}
 				>
 					<div class="min-w-0">
-						<p class="truncate text-sm font-semibold text-gray-100">{unit.name}</p>
-						<p class="mt-0.5 text-xs text-gray-500">{unit.rackSize} &bull; {unit.location}</p>
+						<p class="truncate text-sm font-semibold text-foreground">{unit.name}</p>
+						<p class="mt-0.5 text-xs text-muted-foreground">
+							{unit.rackSize} &bull; {unit.location}
+						</p>
 					</div>
 					<span
 						role="img"
@@ -231,7 +233,7 @@
 				</a>
 			{/each}
 			{#if units.length === 0}
-				<div class="flex flex-col items-center justify-center py-16 text-gray-500">
+				<div class="flex flex-col items-center justify-center py-16 text-muted-foreground">
 					<Warehouse class="mb-3 h-6 w-6" />
 					<p class="text-xs">No colocation units</p>
 				</div>
@@ -241,31 +243,31 @@
 
 	{#if selectedUnit}
 		<div class="flex flex-1 flex-col overflow-hidden">
-			<div class="flex h-10 shrink-0 items-center justify-between border-b border-gray-800 px-5">
+			<div class="flex h-10 shrink-0 items-center justify-between border-b border-border px-5">
 				<div class="flex items-center gap-2">
-					<span class="text-sm font-medium text-gray-200">{selectedUnit.name}</span>
+					<span class="text-sm font-medium text-foreground">{selectedUnit.name}</span>
 					<Badge
 						variant="outline"
 						class="text-[10px] {selectedUnit.status === 'online'
-							? 'border-emerald-800 bg-emerald-950/40 text-emerald-400'
+							? 'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400'
 							: selectedUnit.status === 'provisioning'
-								? 'border-amber-800 bg-amber-950/40 text-amber-400'
-								: 'border-red-800 bg-red-950/40 text-red-400'}"
+								? 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400'
+								: 'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'}"
 					>
 						{selectedUnit.status}
 					</Badge>
 				</div>
-				<span class="text-xs font-medium text-gray-400">{selectedUnit.monthlyRate}/mo</span>
+				<span class="text-xs font-medium text-muted-foreground">{selectedUnit.monthlyRate}/mo</span>
 			</div>
 
-			<div class="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-gray-800 px-2">
+			<div class="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-border px-2">
 				{#each tabs as tab (tab.id)}
 					<a
 						aria-current={activeTab === tab.id ? 'page' : undefined}
 						class="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors duration-100 {activeTab ===
 						tab.id
-							? 'border-b-2 border-red-500 text-gray-50'
-							: 'text-gray-500 hover:text-gray-300'}"
+							? 'border-b-2 border-red-500 text-foreground'
+							: 'text-muted-foreground hover:text-foreground'}"
 						href={resolve(tabHref(tab.id) as any)}
 					>
 						<tab.icon class="h-3 w-3" />
@@ -282,7 +284,7 @@
 </div>
 
 <Dialog.Root bind:open={addOpen}>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Add Colocation Unit</Dialog.Title>
 			<Dialog.Description>Request a new colocation slot in Chicago, IL.</Dialog.Description>
@@ -298,12 +300,12 @@
 					{#each rackSizes as size (size)}
 						<button
 							class="border px-3 py-2 text-center text-sm transition-colors {newRackSize === size
-								? 'border-red-500 bg-red-950/20 text-gray-100'
-								: 'border-gray-700 text-gray-400 hover:border-gray-600'}"
+								? 'border-red-500 bg-red-950/20 text-foreground'
+								: 'border-border text-muted-foreground hover:border-ring'}"
 							onclick={() => (newRackSize = size)}
 						>
 							{size}
-							<span class="mt-0.5 block text-[10px] text-gray-500">{rackPrices[size]}</span>
+							<span class="mt-0.5 block text-[10px] text-muted-foreground">{rackPrices[size]}</span>
 						</button>
 					{/each}
 				</div>
@@ -323,7 +325,7 @@
 
 {#if selectedUnit}
 	<Dialog.Root bind:open={deleteOpen}>
-		<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+		<Dialog.Content class="border-border bg-background sm:max-w-md">
 			<Dialog.Header>
 				<Dialog.Title>Remove Colocation Unit</Dialog.Title>
 				<Dialog.Description>
@@ -350,7 +352,7 @@
 				<Button
 					variant="outline"
 					size="sm"
-					class="border-red-700 text-red-400 hover:bg-red-950"
+					class="border-red-300 text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950"
 					disabled={deleteConfirm !== selectedUnit.id || deletingUnit}
 					onclick={deleteSelectedUnit}
 				>

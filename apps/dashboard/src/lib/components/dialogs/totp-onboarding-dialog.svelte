@@ -105,7 +105,7 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Set Up Authenticator App</Dialog.Title>
 			<Dialog.Description>
@@ -136,22 +136,22 @@
 		{:else if step === 'verify' && totpUri}
 			<div class="flex flex-col gap-4 py-4">
 				<div class="flex justify-center">
-					<div class="rounded-xs border border-gray-800 bg-gray-800 p-3">
+					<div class="rounded-xs border border-border bg-muted p-3">
 						<img src={qrCodeSrc} alt="Authenticator app QR code" />
 					</div>
 				</div>
 
 				<div class="flex flex-col gap-1.5">
-					<Label class="text-xs text-gray-400">Manual Entry Key</Label>
+					<Label class="text-xs text-muted-foreground">Manual Entry Key</Label>
 					<div class="flex items-center gap-2">
 						<code
-							class="flex-1 overflow-hidden rounded-xs border border-gray-800 bg-gray-800 px-2 py-1.5 font-mono text-xs text-ellipsis whitespace-nowrap text-gray-100"
+							class="flex-1 overflow-hidden rounded-xs border border-border bg-muted px-2 py-1.5 font-mono text-xs text-ellipsis whitespace-nowrap text-foreground"
 						>
 							{secretKey}
 						</code>
 						<button
 							type="button"
-							class="shrink-0 text-gray-500 hover:text-gray-300"
+							class="shrink-0 text-muted-foreground hover:text-foreground"
 							onclick={() => copyText(secretKey, 'secret')}
 						>
 							{#if copiedSecret}
@@ -166,10 +166,10 @@
 				{#if backupCodes.length > 0}
 					<div class="flex flex-col gap-1.5">
 						<div class="flex items-center justify-between">
-							<Label class="text-xs text-gray-400">Backup Codes</Label>
+							<Label class="text-xs text-muted-foreground">Backup Codes</Label>
 							<button
 								type="button"
-								class="text-xs text-gray-500 hover:text-gray-300"
+								class="text-xs text-muted-foreground hover:text-foreground"
 								onclick={() => copyText(backupCodes.join('\n'), 'backup')}
 							>
 								{#if copiedBackup}
@@ -179,9 +179,9 @@
 								{/if}
 							</button>
 						</div>
-						<div class="grid grid-cols-2 gap-1 rounded-xs border border-gray-800 bg-gray-800 p-2">
+						<div class="grid grid-cols-2 gap-1 rounded-xs border border-border bg-muted p-2">
 							{#each backupCodes as code (code)}
-								<code class="font-mono text-xs text-gray-300">{code}</code>
+								<code class="font-mono text-xs text-muted-foreground">{code}</code>
 							{/each}
 						</div>
 					</div>

@@ -225,12 +225,12 @@
 
 <div class="flex flex-1 flex-col overflow-hidden">
 	<!-- Tabs -->
-	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-gray-800">
+	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-border">
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'vmTypes'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin')}
 		>
 			<Cpu class="h-3.5 w-3.5 shrink-0" />
@@ -240,8 +240,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'vms'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/vms')}
 		>
 			<Server class="h-3.5 w-3.5 shrink-0" />
@@ -253,8 +253,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'images'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/images')}
 		>
 			<Disc class="h-3.5 w-3.5 shrink-0" />
@@ -264,8 +264,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'features'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/features')}
 		>
 			<Flag class="h-3.5 w-3.5 shrink-0" />
@@ -277,8 +277,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'ipam'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/ipam')}
 		>
 			<Network class="h-3.5 w-3.5 shrink-0" />
@@ -288,8 +288,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'users'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/users')}
 		>
 			<UserCog class="h-3.5 w-3.5 shrink-0" />
@@ -299,8 +299,8 @@
 		<a
 			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
 			'emails'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
+				? 'border-red-500 text-foreground'
+				: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			href={resolve('/admin/emails')}
 		>
 			<Mail class="h-3.5 w-3.5 shrink-0" />
@@ -313,7 +313,7 @@
 		<div class="flex flex-col gap-5 p-5">
 			{#if admin.adminUserError}
 				<div
-					class="flex items-center gap-2 rounded-md border border-red-800/50 bg-red-950/50 px-3 py-2 text-xs text-red-400"
+					class="flex items-center gap-2 rounded-md border border-red-300 bg-red-100 px-3 py-2 text-xs text-red-800 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-400"
 				>
 					<AlertTriangle class="h-3.5 w-3.5 shrink-0" />
 					{admin.adminUserError}
@@ -323,8 +323,8 @@
 			<!-- Header -->
 			<div class="flex items-center justify-between">
 				<div>
-					<h2 class="text-base font-semibold tracking-tight text-gray-100">Users</h2>
-					<p class="mt-1 text-xs text-gray-500">
+					<h2 class="text-base font-semibold tracking-tight text-foreground">Users</h2>
+					<p class="mt-1 text-xs text-muted-foreground">
 						Manage registered users, roles, and account settings.
 					</p>
 				</div>
@@ -333,29 +333,29 @@
 			<!-- Stat row -->
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
 				<div
-					class="flex items-center gap-3 rounded-md border border-gray-800/60 bg-gray-900/30 px-4 py-3"
+					class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
 				>
 					<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-sky-500/10">
 						<Users class="h-4 w-4 text-sky-400" />
 					</div>
 					<div class="flex flex-col">
-						<span class="text-lg leading-none font-semibold text-gray-100">{userCount}</span>
-						<span class="mt-0.5 text-[10px] text-gray-500">Total users</span>
+						<span class="text-lg leading-none font-semibold text-foreground">{userCount}</span>
+						<span class="mt-0.5 text-[10px] text-muted-foreground">Total users</span>
 					</div>
 				</div>
 				<div
-					class="flex items-center gap-3 rounded-md border border-gray-800/60 bg-gray-900/30 px-4 py-3"
+					class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
 				>
 					<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-500/10">
 						<ShieldCheck class="h-4 w-4 text-red-400" />
 					</div>
 					<div class="flex flex-col">
-						<span class="text-lg leading-none font-semibold text-gray-100">{adminCount}</span>
-						<span class="mt-0.5 text-[10px] text-gray-500">Admins</span>
+						<span class="text-lg leading-none font-semibold text-foreground">{adminCount}</span>
+						<span class="mt-0.5 text-[10px] text-muted-foreground">Admins</span>
 					</div>
 				</div>
 				<div
-					class="flex items-center gap-3 rounded-md border border-gray-800/60 bg-gray-900/30 px-4 py-3"
+					class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
 				>
 					<div
 						class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-500/10"
@@ -363,26 +363,26 @@
 						<Mail class="h-4 w-4 text-emerald-400" />
 					</div>
 					<div class="flex flex-col">
-						<span class="text-lg leading-none font-semibold text-gray-100">{verifiedCount}</span>
-						<span class="mt-0.5 text-[10px] text-gray-500">Verified</span>
+						<span class="text-lg leading-none font-semibold text-foreground">{verifiedCount}</span>
+						<span class="mt-0.5 text-[10px] text-muted-foreground">Verified</span>
 					</div>
 				</div>
 				<div
-					class="flex items-center gap-3 rounded-md border border-gray-800/60 bg-gray-900/30 px-4 py-3"
+					class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
 				>
 					<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-500/10">
 						<Key class="h-4 w-4 text-amber-400" />
 					</div>
 					<div class="flex flex-col">
-						<span class="text-lg leading-none font-semibold text-gray-100">{has2faCount}</span>
-						<span class="mt-0.5 text-[10px] text-gray-500">With 2FA</span>
+						<span class="text-lg leading-none font-semibold text-foreground">{has2faCount}</span>
+						<span class="mt-0.5 text-[10px] text-muted-foreground">With 2FA</span>
 					</div>
 				</div>
 			</div>
 
 			{#if admin.adminUsers.length === 0}
-				<div class="flex flex-col items-center justify-center gap-2 py-20 text-gray-500">
-					<Users class="h-8 w-8 text-gray-500" />
+				<div class="flex flex-col items-center justify-center gap-2 py-20 text-muted-foreground">
+					<Users class="h-8 w-8 text-muted-foreground" />
 					<p class="text-sm">No users found</p>
 				</div>
 			{:else}
@@ -391,7 +391,7 @@
 					{#each sortedUsers as account (account.id)}
 						{@const colorClass = avatarColor(account.name)}
 						<div
-							class="group relative flex flex-col gap-4 rounded-md border border-gray-800/60 bg-gray-800/15 px-4 py-4 transition-colors hover:border-gray-700 hover:bg-gray-800/25"
+							class="group relative flex flex-col gap-4 rounded-md border border-border/60 bg-muted/15 px-4 py-4 transition-colors hover:border-border hover:bg-muted/25"
 						>
 							<!-- Top row: avatar + name + actions -->
 							<div class="flex items-start justify-between">
@@ -410,15 +410,15 @@
 										</div>
 									{/if}
 									<div class="flex min-w-0 flex-col">
-										<span class="truncate text-sm font-medium text-gray-100">{account.name}</span>
-										<span class="truncate text-xs text-gray-500">{account.email}</span>
+										<span class="truncate text-sm font-medium text-foreground">{account.name}</span>
+										<span class="truncate text-xs text-muted-foreground">{account.email}</span>
 									</div>
 								</div>
 
 								<Button
 									variant="ghost"
 									size="sm"
-									class="h-7 w-7 shrink-0 p-0 text-gray-500 opacity-0 transition-opacity group-hover:opacity-100"
+									class="h-7 w-7 shrink-0 p-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
 									onclick={() => admin.openUserSheet(account)}
 									aria-label={`Manage ${account.name}`}
 								>
@@ -436,7 +436,7 @@
 									</span>
 								{:else}
 									<span
-										class="inline-flex items-center gap-1 rounded-sm border border-gray-600/20 bg-gray-700/30 px-1.5 py-0.5 text-[10px] font-medium text-gray-400"
+										class="inline-flex items-center gap-1 rounded-sm border border-ring/20 bg-muted/30 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
 									>
 										<User class="h-2.5 w-2.5" />User
 									</span>
@@ -473,14 +473,14 @@
 
 							<!-- Bottom meta + action -->
 							<div class="flex items-center justify-between">
-								<div class="flex items-center gap-1 text-[11px] text-gray-500">
+								<div class="flex items-center gap-1 text-[11px] text-muted-foreground">
 									<Calendar class="h-3 w-3" />
 									{formatDateShort(account.createdAt)}
 								</div>
 								<Button
 									variant="outline"
 									size="sm"
-									class="h-7 gap-1.5 border-gray-700/50 text-xs text-gray-300 hover:bg-gray-800 hover:text-gray-100"
+									class="h-7 gap-1.5 border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
 									onclick={() => admin.openUserSheet(account)}
 								>
 									Manage
@@ -497,7 +497,7 @@
 
 <!-- User Detail Sheet -->
 <Sheet.Root open={admin.userSheetOpen} onOpenChange={(v) => !v && admin.closeUserSheet()}>
-	<Sheet.Content side="right" class="w-full border-gray-800 bg-gray-900 p-6 sm:max-w-md">
+	<Sheet.Content side="right" class="w-full border-border bg-background p-6 sm:max-w-md">
 		{#if admin.selectedUser && admin.userResourcesOpen === null}
 			{@const u = admin.selectedUser}
 			{@const colorClass = avatarColor(u.name)}
@@ -515,12 +515,12 @@
 					</div>
 				{/if}
 				<div class="flex min-w-0 flex-col">
-					<span class="text-base font-semibold text-gray-100">{u.name}</span>
-					<span class="truncate text-xs text-gray-500">{u.email}</span>
+					<span class="text-base font-semibold text-foreground">{u.name}</span>
+					<span class="truncate text-xs text-muted-foreground">{u.email}</span>
 				</div>
 			</div>
 
-			<Separator class="bg-gray-800" />
+			<Separator class="bg-muted" />
 
 			<div class="flex flex-col gap-6">
 				<!-- Status badges -->
@@ -533,7 +533,7 @@
 						</span>
 					{:else}
 						<span
-							class="inline-flex items-center gap-1 rounded-sm border border-gray-700/50 bg-gray-800 px-2 py-1 text-[11px] font-medium text-gray-500"
+							class="inline-flex items-center gap-1 rounded-sm border border-border/50 bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground"
 						>
 							<Mail class="h-3 w-3" />Unverified
 						</span>
@@ -549,36 +549,38 @@
 
 				<!-- Role -->
 				<div class="flex flex-col gap-2">
-					<span class="text-xs font-medium text-gray-400">Role</span>
+					<span class="text-xs font-medium text-muted-foreground">Role</span>
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger disabled={isAdminSaving}>
 							<Button
 								variant="outline"
-								class="h-9 w-full justify-between border-gray-700/50 bg-gray-800/40 text-xs text-gray-100 hover:bg-gray-800"
+								class="h-9 w-full justify-between border-border/50 bg-muted/40 text-xs text-foreground hover:bg-muted"
 							>
 								<span class="flex items-center gap-2">
-									<RoleIcon class="h-3.5 w-3.5 text-gray-400" />
+									<RoleIcon class="h-3.5 w-3.5 text-muted-foreground" />
 									{u.isAdmin ? 'Admin' : 'User'}
 								</span>
 								{#if isAdminSaving}
-									<Loader2 class="h-3 w-3 animate-spin text-gray-500" />
+									<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
 								{:else}
-									<ChevronDown class="h-3 w-3 text-gray-500" />
+									<ChevronDown class="h-3 w-3 text-muted-foreground" />
 								{/if}
 							</Button>
 						</DropdownMenu.Trigger>
-						<DropdownMenu.Content class="w-56 border-gray-800 bg-gray-900">
-							<DropdownMenu.Label class="text-xs text-gray-500">Change role</DropdownMenu.Label>
-							<DropdownMenu.Separator class="bg-gray-800" />
+						<DropdownMenu.Content class="w-56 border-border bg-background">
+							<DropdownMenu.Label class="text-xs text-muted-foreground"
+								>Change role</DropdownMenu.Label
+							>
+							<DropdownMenu.Separator class="bg-muted" />
 							{#each roleOptions as option (option.value)}
 								<DropdownMenu.Item
-									class="flex cursor-pointer items-center gap-2 text-xs text-gray-100 data-[highlighted]:bg-gray-800"
+									class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 									onSelect={() =>
 										option.value === 'admin'
 											? admin.setUserAdmin(u.id, true)
 											: admin.setUserAdmin(u.id, false)}
 								>
-									<option.icon class="h-3.5 w-3.5 text-gray-400" />
+									<option.icon class="h-3.5 w-3.5 text-muted-foreground" />
 									{option.label}
 									{#if (u.isAdmin && option.value === 'admin') || (!u.isAdmin && option.value === 'user')}
 										<Check class="ml-auto h-3 w-3 text-emerald-400" />
@@ -589,11 +591,13 @@
 					</DropdownMenu.Root>
 				</div>
 
-				<Separator class="bg-gray-800" />
+				<Separator class="bg-muted" />
 
 				<!-- Security toggles -->
 				<div class="flex flex-col gap-4">
-					<span class="text-xs font-medium tracking-wider text-gray-500 uppercase">Security</span>
+					<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+						>Security</span
+					>
 
 					<!-- Disabled toggle -->
 					<div class="flex items-center justify-between">
@@ -604,17 +608,17 @@
 								<Shield class="h-4 w-4 text-emerald-400" />
 							{/if}
 							<div class="flex flex-col">
-								<span class="text-sm font-medium text-gray-200">
+								<span class="text-sm font-medium text-foreground">
 									{u.disabled ? 'Disabled' : 'Active'}
 								</span>
-								<span class="text-[11px] text-gray-500">
+								<span class="text-[11px] text-muted-foreground">
 									{u.disabled ? 'User cannot access the platform' : 'Account is in good standing'}
 								</span>
 							</div>
 						</div>
 						<div class="flex items-center gap-2">
 							{#if admin.userSheetSaving[u.id]?.field === 'disabled' && admin.userSheetSaving[u.id]?.saving}
-								<Loader2 class="h-3.5 w-3.5 animate-spin text-gray-500" />
+								<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 							{/if}
 							<Switch
 								bind:checked={() => u.disabled, (v) => admin.setUserDisabled(u.id, v)}
@@ -629,11 +633,11 @@
 							{#if u.twoFactorEnabled || u.passkeyCount > 0}
 								<Lock class="h-4 w-4 text-emerald-400" />
 							{:else}
-								<Unlock class="h-4 w-4 text-gray-500" />
+								<Unlock class="h-4 w-4 text-muted-foreground" />
 							{/if}
 							<div class="flex flex-col">
-								<span class="text-sm font-medium text-gray-200">Two-factor auth</span>
-								<span class="text-[11px] text-gray-500">
+								<span class="text-sm font-medium text-foreground">Two-factor auth</span>
+								<span class="text-[11px] text-muted-foreground">
 									{u.twoFactorEnabled && u.passkeyCount > 0
 										? 'Authenticator app and passkey'
 										: u.twoFactorEnabled
@@ -646,7 +650,7 @@
 						</div>
 						<div class="flex items-center gap-2">
 							{#if admin.userSheetSaving[u.id]?.field === 'twoFactor' && admin.userSheetSaving[u.id]?.saving}
-								<Loader2 class="h-3.5 w-3.5 animate-spin text-gray-500" />
+								<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 							{/if}
 							<Switch
 								bind:checked={
@@ -659,17 +663,21 @@
 					</div>
 				</div>
 
-				<Separator class="bg-gray-800" />
+				<Separator class="bg-muted" />
 
 				<!-- Billing -->
 				<div class="flex flex-col gap-4">
-					<span class="text-xs font-medium tracking-wider text-gray-500 uppercase">Billing</span>
+					<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+						>Billing</span
+					>
 					<div class="flex items-center justify-between">
 						<div class="flex items-center gap-2">
-							<CreditCard class="h-4 w-4 {u.billingExempt ? 'text-violet-400' : 'text-gray-500'}" />
+							<CreditCard
+								class="h-4 w-4 {u.billingExempt ? 'text-violet-400' : 'text-muted-foreground'}"
+							/>
 							<div class="flex flex-col">
-								<span class="text-sm font-medium text-gray-200">Billing exempt</span>
-								<span class="text-[11px] text-gray-500">
+								<span class="text-sm font-medium text-foreground">Billing exempt</span>
+								<span class="text-[11px] text-muted-foreground">
 									{u.billingExempt
 										? 'Usage in projects they own is not metered or billed'
 										: 'Usage is metered and billed normally'}
@@ -678,7 +686,7 @@
 						</div>
 						<div class="flex items-center gap-2">
 							{#if admin.userSheetSaving[u.id]?.field === 'billingExempt' && admin.userSheetSaving[u.id]?.saving}
-								<Loader2 class="h-3.5 w-3.5 animate-spin text-gray-500" />
+								<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 							{/if}
 							<Switch
 								bind:checked={() => u.billingExempt, (v) => admin.setUserBillingExempt(u.id, v)}
@@ -688,44 +696,46 @@
 					</div>
 				</div>
 
-				<Separator class="bg-gray-800" />
+				<Separator class="bg-muted" />
 
 				<!-- Account info -->
 				<div class="flex flex-col gap-3">
-					<span class="text-xs font-medium tracking-wider text-gray-500 uppercase">Account</span>
+					<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+						>Account</span
+					>
 					<div class="flex flex-col gap-2">
 						<div class="flex items-center justify-between">
-							<span class="flex items-center gap-2 text-xs text-gray-500">
+							<span class="flex items-center gap-2 text-xs text-muted-foreground">
 								<Hash class="h-3 w-3" />User ID
 							</span>
-							<span class="font-mono text-xs text-gray-300">{u.id}</span>
+							<span class="font-mono text-xs text-muted-foreground">{u.id}</span>
 						</div>
 						<div class="flex items-center justify-between">
-							<span class="flex items-center gap-2 text-xs text-gray-500">
+							<span class="flex items-center gap-2 text-xs text-muted-foreground">
 								<Calendar class="h-3 w-3" />Created
 							</span>
-							<span class="text-xs text-gray-300">{formatDate(u.createdAt)}</span>
+							<span class="text-xs text-muted-foreground">{formatDate(u.createdAt)}</span>
 						</div>
 						<div class="flex items-center justify-between">
-							<span class="flex items-center gap-2 text-xs text-gray-500">
+							<span class="flex items-center gap-2 text-xs text-muted-foreground">
 								<Clock class="h-3 w-3" />Updated
 							</span>
-							<span class="text-xs text-gray-300">{formatDate(u.updatedAt)}</span>
+							<span class="text-xs text-muted-foreground">{formatDate(u.updatedAt)}</span>
 						</div>
 						<div class="flex items-center justify-between">
-							<span class="flex items-center gap-2 text-xs text-gray-500">
+							<span class="flex items-center gap-2 text-xs text-muted-foreground">
 								<Mail class="h-3 w-3" />Email
 							</span>
-							<span class="text-xs text-gray-300">{u.email}</span>
+							<span class="text-xs text-muted-foreground">{u.email}</span>
 						</div>
 						<div class="flex items-center justify-between">
-							<span class="flex items-center gap-2 text-xs text-gray-500">
+							<span class="flex items-center gap-2 text-xs text-muted-foreground">
 								<Mail class="h-3 w-3" />Verified
 							</span>
 							<span
 								class="flex items-center gap-1 text-xs {u.emailVerified
 									? 'text-emerald-400'
-									: 'text-gray-500'}"
+									: 'text-muted-foreground'}"
 							>
 								{#if u.emailVerified}<Check class="h-3 w-3" />{:else}<AlertTriangle
 										class="h-3 w-3"
@@ -736,7 +746,7 @@
 					</div>
 				</div>
 
-				<Separator class="bg-gray-800" />
+				<Separator class="bg-muted" />
 
 				<!-- Danger zone -->
 				<div class="flex flex-col gap-3 rounded-sm border border-red-500/20 bg-red-500/5 p-3">
@@ -767,75 +777,77 @@
 					</Button>
 				</div>
 
-				<Separator class="bg-gray-800" />
+				<Separator class="bg-muted" />
 
 				<!-- Resources counts with click-to-expand -->
 				<div class="flex flex-col gap-3">
-					<span class="text-xs font-medium tracking-wider text-gray-500 uppercase">Resources</span>
+					<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+						>Resources</span
+					>
 					<div class="grid grid-cols-2 gap-2">
 						<button
-							class="flex items-center gap-2 rounded-sm border border-gray-800/60 bg-gray-800/20 px-3 py-2.5 text-left transition-colors hover:border-gray-700 hover:bg-gray-800/40"
+							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.sessionCount > 0 && admin.loadUserResources(u.id, 'session')}
 						>
-							<Terminal class="h-3.5 w-3.5 shrink-0 text-gray-500" />
+							<Terminal class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 							<div class="flex flex-col">
-								<span class="text-sm font-semibold text-gray-100">{u.sessionCount}</span>
-								<span class="text-[10px] text-gray-500">Sessions</span>
+								<span class="text-sm font-semibold text-foreground">{u.sessionCount}</span>
+								<span class="text-[10px] text-muted-foreground">Sessions</span>
 							</div>
 							{#if u.sessionCount > 0}
-								<ChevronRight class="ml-auto h-3 w-3 text-gray-500" />
+								<ChevronRight class="ml-auto h-3 w-3 text-muted-foreground" />
 							{/if}
 						</button>
 						<button
-							class="flex items-center gap-2 rounded-sm border border-gray-800/60 bg-gray-800/20 px-3 py-2.5 text-left transition-colors hover:border-gray-700 hover:bg-gray-800/40"
+							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.accountCount > 0 && admin.loadUserResources(u.id, 'account')}
 						>
-							<Globe class="h-3.5 w-3.5 shrink-0 text-gray-500" />
+							<Globe class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 							<div class="flex flex-col">
-								<span class="text-sm font-semibold text-gray-100">{u.accountCount}</span>
-								<span class="text-[10px] text-gray-500">Accounts</span>
+								<span class="text-sm font-semibold text-foreground">{u.accountCount}</span>
+								<span class="text-[10px] text-muted-foreground">Accounts</span>
 							</div>
 							{#if u.accountCount > 0}
-								<ChevronRight class="ml-auto h-3 w-3 text-gray-500" />
+								<ChevronRight class="ml-auto h-3 w-3 text-muted-foreground" />
 							{/if}
 						</button>
 						<button
-							class="flex items-center gap-2 rounded-sm border border-gray-800/60 bg-gray-800/20 px-3 py-2.5 text-left transition-colors hover:border-gray-700 hover:bg-gray-800/40"
+							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.orgCount > 0 && admin.loadUserResources(u.id, 'org')}
 						>
-							<Users class="h-3.5 w-3.5 shrink-0 text-gray-500" />
+							<Users class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 							<div class="flex flex-col">
-								<span class="text-sm font-semibold text-gray-100">{u.orgCount}</span>
-								<span class="text-[10px] text-gray-500">Organizations</span>
+								<span class="text-sm font-semibold text-foreground">{u.orgCount}</span>
+								<span class="text-[10px] text-muted-foreground">Organizations</span>
 							</div>
 							{#if u.orgCount > 0}
-								<ChevronRight class="ml-auto h-3 w-3 text-gray-500" />
+								<ChevronRight class="ml-auto h-3 w-3 text-muted-foreground" />
 							{/if}
 						</button>
 						<button
-							class="flex items-center gap-2 rounded-sm border border-gray-800/60 bg-gray-800/20 px-3 py-2.5 text-left transition-colors hover:border-gray-700 hover:bg-gray-800/40"
+							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.sshKeyCount > 0 && admin.loadUserResources(u.id, 'sshKey')}
 						>
-							<Key class="h-3.5 w-3.5 shrink-0 text-gray-500" />
+							<Key class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 							<div class="flex flex-col">
-								<span class="text-sm font-semibold text-gray-100">{u.sshKeyCount}</span>
-								<span class="text-[10px] text-gray-500">SSH Keys</span>
+								<span class="text-sm font-semibold text-foreground">{u.sshKeyCount}</span>
+								<span class="text-[10px] text-muted-foreground">SSH Keys</span>
 							</div>
 							{#if u.sshKeyCount > 0}
-								<ChevronRight class="ml-auto h-3 w-3 text-gray-500" />
+								<ChevronRight class="ml-auto h-3 w-3 text-muted-foreground" />
 							{/if}
 						</button>
 						<button
-							class="flex items-center gap-2 rounded-sm border border-gray-800/60 bg-gray-800/20 px-3 py-2.5 text-left transition-colors hover:border-gray-700 hover:bg-gray-800/40"
+							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.apiTokenCount > 0 && admin.loadUserResources(u.id, 'apiToken')}
 						>
-							<Fingerprint class="h-3.5 w-3.5 shrink-0 text-gray-500" />
+							<Fingerprint class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 							<div class="flex flex-col">
-								<span class="text-sm font-semibold text-gray-100">{u.apiTokenCount}</span>
-								<span class="text-[10px] text-gray-500">API Tokens</span>
+								<span class="text-sm font-semibold text-foreground">{u.apiTokenCount}</span>
+								<span class="text-[10px] text-muted-foreground">API Tokens</span>
 							</div>
 							{#if u.apiTokenCount > 0}
-								<ChevronRight class="ml-auto h-3 w-3 text-gray-500" />
+								<ChevronRight class="ml-auto h-3 w-3 text-muted-foreground" />
 							{/if}
 						</button>
 					</div>
@@ -848,34 +860,34 @@
 					<Button
 						variant="ghost"
 						size="sm"
-						class="h-7 w-7 p-0 text-gray-400 hover:text-gray-100"
+						class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
 						onclick={() => admin.closeOrgResources()}
 						aria-label="Back"
 					>
 						<ChevronLeft class="h-4 w-4" />
 					</Button>
-					<span class="text-base font-semibold text-gray-100">{org.name}</span>
+					<span class="text-base font-semibold text-foreground">{org.name}</span>
 				</div>
-				<Separator class="bg-gray-800" />
+				<Separator class="bg-muted" />
 				{#if admin.orgResourcesLoading}
-					<div class="flex items-center justify-center gap-2 py-8 text-gray-500">
+					<div class="flex items-center justify-center gap-2 py-8 text-muted-foreground">
 						<Loader2 class="h-4 w-4 animate-spin" />
 						<span class="text-xs">Loading...</span>
 					</div>
 				{:else}
 					<div class="flex flex-col gap-2">
-						<span class="text-xs font-medium tracking-wider text-gray-500 uppercase"
+						<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
 							>Virtual Machines</span
 						>
 						{#if admin.orgVms.length === 0}
-							<p class="text-xs text-gray-500">No VMs</p>
+							<p class="text-xs text-muted-foreground">No VMs</p>
 						{:else}
-							<div class="flex flex-col gap-0 divide-y divide-gray-800/50">
+							<div class="flex flex-col gap-0 divide-y divide-border/50">
 								{#each admin.orgVms as vm (vm.id)}
 									<div class="flex items-center justify-between py-2.5">
 										<div class="flex flex-col">
-											<span class="text-xs text-gray-200">{vm.name}</span>
-											<span class="text-[11px] text-gray-500"
+											<span class="text-xs text-foreground">{vm.name}</span>
+											<span class="text-[11px] text-muted-foreground"
 												>{new Date(vm.createdAt).toLocaleString()}</span
 											>
 										</div>
@@ -885,18 +897,20 @@
 							</div>
 						{/if}
 					</div>
-					<Separator class="bg-gray-800" />
+					<Separator class="bg-muted" />
 					<div class="flex flex-col gap-2">
-						<span class="text-xs font-medium tracking-wider text-gray-500 uppercase">Volumes</span>
+						<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+							>Volumes</span
+						>
 						{#if admin.orgVolumes.length === 0}
-							<p class="text-xs text-gray-500">No volumes</p>
+							<p class="text-xs text-muted-foreground">No volumes</p>
 						{:else}
-							<div class="flex flex-col gap-0 divide-y divide-gray-800/50">
+							<div class="flex flex-col gap-0 divide-y divide-border/50">
 								{#each admin.orgVolumes as vol (vol.id)}
 									<div class="flex items-center justify-between py-2.5">
 										<div class="flex flex-col">
-											<span class="text-xs text-gray-200">{vol.name}</span>
-											<span class="text-[11px] text-gray-500"
+											<span class="text-xs text-foreground">{vol.name}</span>
+											<span class="text-[11px] text-muted-foreground"
 												>{vol.size} GB · {new Date(vol.createdAt).toLocaleString()}</span
 											>
 										</div>
@@ -916,68 +930,68 @@
 					<Button
 						variant="ghost"
 						size="sm"
-						class="h-7 w-7 p-0 text-gray-400 hover:text-gray-100"
+						class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
 						onclick={() => admin.closeUserResources()}
 						aria-label="Back"
 					>
 						<ChevronLeft class="h-4 w-4" />
 					</Button>
-					<span class="text-base font-semibold text-gray-100">{u.name}</span>
+					<span class="text-base font-semibold text-foreground">{u.name}</span>
 				</div>
-				<Separator class="bg-gray-800" />
+				<Separator class="bg-muted" />
 				<div class="flex items-center gap-2">
-					<info.icon class="h-4 w-4 text-gray-500" />
-					<span class="text-sm font-semibold text-gray-200">{info.label}</span>
+					<info.icon class="h-4 w-4 text-muted-foreground" />
+					<span class="text-sm font-semibold text-foreground">{info.label}</span>
 				</div>
 				{#if admin.userResourcesLoading}
-					<div class="flex items-center justify-center gap-2 py-8 text-gray-500">
+					<div class="flex items-center justify-center gap-2 py-8 text-muted-foreground">
 						<Loader2 class="h-4 w-4 animate-spin" />
 						<span class="text-xs">Loading...</span>
 					</div>
 				{:else if type === 'session'}
 					{#if admin.userSessions.length === 0}
-						<p class="py-4 text-xs text-gray-500">No sessions found</p>
+						<p class="py-4 text-xs text-muted-foreground">No sessions found</p>
 					{:else}
-						<div class="flex flex-col gap-0 divide-y divide-gray-800/50">
+						<div class="flex flex-col gap-0 divide-y divide-border/50">
 							{#each admin.userSessions as s (s.id)}
 								<div class="flex flex-col gap-0.5 py-2.5">
-									<span class="font-mono text-xs text-gray-300">{s.id}</span>
+									<span class="font-mono text-xs text-muted-foreground">{s.id}</span>
 									{#if s.ipAddress}
-										<span class="text-[11px] text-gray-500">IP: {s.ipAddress}</span>
+										<span class="text-[11px] text-muted-foreground">IP: {s.ipAddress}</span>
 									{/if}
-									<span class="text-[11px] text-gray-500">{formatDate(s.createdAt)}</span>
+									<span class="text-[11px] text-muted-foreground">{formatDate(s.createdAt)}</span>
 								</div>
 							{/each}
 						</div>
 					{/if}
 				{:else if type === 'account'}
 					{#if admin.userAccounts.length === 0}
-						<p class="py-4 text-xs text-gray-500">No accounts found</p>
+						<p class="py-4 text-xs text-muted-foreground">No accounts found</p>
 					{:else}
-						<div class="flex flex-col gap-0 divide-y divide-gray-800/50">
+						<div class="flex flex-col gap-0 divide-y divide-border/50">
 							{#each admin.userAccounts as a (a.id)}
 								<div class="flex flex-col gap-0.5 py-2.5">
-									<span class="text-xs font-medium text-gray-200">{a.providerId}</span>
-									<span class="font-mono text-[11px] text-gray-400">{a.accountId}</span>
-									<span class="text-[11px] text-gray-500">{formatDate(a.createdAt)}</span>
+									<span class="text-xs font-medium text-foreground">{a.providerId}</span>
+									<span class="font-mono text-[11px] text-muted-foreground">{a.accountId}</span>
+									<span class="text-[11px] text-muted-foreground">{formatDate(a.createdAt)}</span>
 								</div>
 							{/each}
 						</div>
 					{/if}
 				{:else if type === 'org'}
 					{#if admin.userOrgs.length === 0}
-						<p class="py-4 text-xs text-gray-500">No organizations found</p>
+						<p class="py-4 text-xs text-muted-foreground">No organizations found</p>
 					{:else}
-						<div class="flex flex-col gap-0 divide-y divide-gray-800/50">
+						<div class="flex flex-col gap-0 divide-y divide-border/50">
 							{#each admin.userOrgs as o (o.id)}
 								<button
 									class="flex items-center justify-between py-2.5 text-left transition-colors"
 									onclick={() => admin.loadOrgResources(o)}
 								>
-									<span class="text-xs text-gray-200">{o.name}</span>
+									<span class="text-xs text-foreground">{o.name}</span>
 									<div class="flex items-center gap-1.5">
 										<Badge variant="secondary" class="text-[10px]">{o.role}</Badge>
-										<ChevronRight class="h-3 w-3 text-gray-500" />
+										<ChevronRight class="h-3 w-3 text-muted-foreground" />
 									</div>
 								</button>
 							{/each}
@@ -985,26 +999,26 @@
 					{/if}
 				{:else if type === 'sshKey'}
 					{#if admin.userSshKeys.length === 0}
-						<p class="py-4 text-xs text-gray-500">No SSH keys found</p>
+						<p class="py-4 text-xs text-muted-foreground">No SSH keys found</p>
 					{:else}
-						<div class="flex flex-col gap-0 divide-y divide-gray-800/50">
+						<div class="flex flex-col gap-0 divide-y divide-border/50">
 							{#each admin.userSshKeys as k (k.id)}
 								<div class="flex flex-col gap-0.5 py-2.5">
-									<span class="text-xs text-gray-200">{k.name}</span>
-									<span class="font-mono text-[11px] text-gray-500">{k.fingerprint}</span>
+									<span class="text-xs text-foreground">{k.name}</span>
+									<span class="font-mono text-[11px] text-muted-foreground">{k.fingerprint}</span>
 								</div>
 							{/each}
 						</div>
 					{/if}
 				{:else if type === 'apiToken'}
 					{#if admin.userApiTokens.length === 0}
-						<p class="py-4 text-xs text-gray-500">No API tokens found</p>
+						<p class="py-4 text-xs text-muted-foreground">No API tokens found</p>
 					{:else}
-						<div class="flex flex-col gap-0 divide-y divide-gray-800/50">
+						<div class="flex flex-col gap-0 divide-y divide-border/50">
 							{#each admin.userApiTokens as t (t.id)}
 								<div class="flex flex-col gap-0.5 py-2.5">
-									<span class="text-xs text-gray-200">{t.name}</span>
-									<span class="text-[11px] text-gray-500"
+									<span class="text-xs text-foreground">{t.name}</span>
+									<span class="text-[11px] text-muted-foreground"
 										>{new Date(t.createdAt).toLocaleString()}</span
 									>
 								</div>
@@ -1024,10 +1038,10 @@
 		if (!value && !deleteVerifying) resetDeleteDialog();
 	}}
 >
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title class="text-base text-gray-100">Delete {deleteUserName}?</Dialog.Title>
-			<Dialog.Description class="text-xs text-gray-500">
+			<Dialog.Title class="text-base text-foreground">Delete {deleteUserName}?</Dialog.Title>
+			<Dialog.Description class="text-xs text-muted-foreground">
 				{deleteVerificationDescription}
 			</Dialog.Description>
 		</Dialog.Header>
@@ -1058,9 +1072,9 @@
 			</div>
 
 			{#if deleteVerificationMethod === 'passkey'}
-				<div class="flex items-center gap-3 rounded-sm border border-gray-800 bg-gray-950/40 p-3">
-					<Fingerprint class="size-5 shrink-0 text-gray-500" />
-					<p class="text-sm text-gray-300">
+				<div class="flex items-center gap-3 rounded-sm border border-border bg-background/40 p-3">
+					<Fingerprint class="size-5 shrink-0 text-muted-foreground" />
+					<p class="text-sm text-muted-foreground">
 						Your browser will ask you to authenticate with your registered passkey.
 					</p>
 				</div>
@@ -1077,7 +1091,7 @@
 						autocomplete="one-time-code"
 					/>
 					{#if deleteVerificationMethod === 'email'}
-						<p class="text-xs text-gray-500">
+						<p class="text-xs text-muted-foreground">
 							We sent a deletion code to {deleteVerificationEmail}.
 						</p>
 					{/if}
@@ -1093,7 +1107,7 @@
 					variant="outline"
 					type="button"
 					size="sm"
-					class="border-gray-700/50 text-xs text-gray-300 hover:bg-gray-800 hover:text-gray-100"
+					class="border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
 					onclick={() => resetDeleteDialog()}
 					disabled={deleteVerifying}
 				>
@@ -1121,10 +1135,10 @@
 
 <!-- 2FA Disable Confirmation Modal (only for disabling) -->
 <Dialog.Root open={admin.twoFADialogOpen} onOpenChange={(v) => !v && admin.cancel2FAConfirm()}>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-sm">
+	<Dialog.Content class="border-border bg-background sm:max-w-sm">
 		<Dialog.Header>
-			<Dialog.Title class="text-base text-gray-100">Disable two-factor auth?</Dialog.Title>
-			<Dialog.Description class="text-xs text-gray-500">
+			<Dialog.Title class="text-base text-foreground">Disable two-factor auth?</Dialog.Title>
+			<Dialog.Description class="text-xs text-muted-foreground">
 				{admin.selectedUser?.name ?? 'This user'} will be required to reconfigure 2FA on their next sign-in.
 				This reduces account security.
 			</Dialog.Description>
@@ -1133,7 +1147,7 @@
 			<Button
 				variant="outline"
 				size="sm"
-				class="border-gray-700/50 text-xs text-gray-300 hover:bg-gray-800 hover:text-gray-100"
+				class="border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
 				onclick={() => admin.cancel2FAConfirm()}
 			>
 				Cancel

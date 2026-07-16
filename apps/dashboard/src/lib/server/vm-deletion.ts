@@ -63,16 +63,19 @@ async function deleteVmResources(row: DeletableVm): Promise<void> {
 			.returning({ id: vms.id });
 		if (claimed.length === 0) return;
 
-		const metered = await meterResourceThrough('vm', row.id);
+		await releaseVmNetworking(db, row.id).catch((err) => {
+			console.warn(`Failed to release networking for VM ${row.id}`, err);
+		});
+
+		const metered = await meterResourceThrough('vm', row.id).catch((err) => {
+			console.warn(`Failed to meter VM ${row.id} during deletion`, err);
+			return null;
+		});
 		if (row.ownerProjectId && (!metered?.event || metered.syncStatus === 'synced')) {
 			await deleteProjectServerEntity(row.ownerProjectId, row.id).catch((err) => {
 				console.warn(`Failed to delete Autumn entity for VM ${row.id}`, err);
 			});
 		}
-
-		await releaseVmNetworking(db, row.id).catch((err) => {
-			console.warn(`Failed to release networking for VM ${row.id}`, err);
-		});
 
 		console.log(`VM ${row.id} deletion completed`);
 	} catch (err) {

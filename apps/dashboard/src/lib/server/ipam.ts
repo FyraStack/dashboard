@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit';
 import { Address4, Address6 } from 'ip-address';
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
-import { ipamAllocations, ipamPrefixes } from '$lib/server/db/schema';
+import { ipamAllocations, ipamPrefixes, vms } from '$lib/server/db/schema';
 import { isVyosConfigured, VyosClient } from '$lib/server/vyos';
 
 export type IpFamily = 'ipv4' | 'ipv6';
@@ -797,4 +797,27 @@ export async function releaseVmNetworking(db: QueryableDb, vmId: string) {
 	const allocations = await vmAllocations(db, vmId);
 	await deleteVyosDelegatedRoute(allocations);
 	await db.delete(ipamAllocations).where(eq(ipamAllocations.associatedVmId, vmId));
+}
+
+export async function reconcileOrphanedIpamAllocations(db: QueryableDb, limit = 200) {
+	const orphaned = await db
+		.selectDistinct({ vmId: ipamAllocations.associatedVmId })
+		.from(ipamAllocations)
+		.innerJoin(vms, eq(vms.id, ipamAllocations.associatedVmId))
+		.where(eq(vms.active, false))
+		.limit(limit);
+
+	let released = 0;
+	let failed = 0;
+	for (const { vmId } of orphaned) {
+		try {
+			await releaseVmNetworking(db, vmId);
+			released += 1;
+		} catch (err) {
+			failed += 1;
+			console.warn(`Failed to reconcile orphaned IPAM allocations for VM ${vmId}`, err);
+		}
+	}
+
+	return { checked: orphaned.length, released, failed };
 }

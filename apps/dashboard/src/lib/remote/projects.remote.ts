@@ -245,7 +245,10 @@ export const deleteProject = command(deleteParams, async (params) => {
 	}
 
 	for (const vm of projectVms.filter((item) => item.active)) {
-		const metered = await meterResourceThrough('vm', vm.id);
+		const metered = await meterResourceThrough('vm', vm.id).catch((err) => {
+			console.warn(`Failed to meter VM ${vm.id} during project delete`, err);
+			return null;
+		});
 		if (!metered?.event || metered.syncStatus === 'synced') {
 			await deleteProjectServerEntity(params.projectId, vm.id).catch((err) => {
 				console.warn(`Failed to delete Autumn entity for VM ${vm.id}`, err);
@@ -256,7 +259,9 @@ export const deleteProject = command(deleteParams, async (params) => {
 
 	await db.delete(volumes).where(eq(volumes.ownerProjectId, params.projectId));
 	for (const vm of projectVms) {
-		await releaseVmNetworking(db, vm.id);
+		await releaseVmNetworking(db, vm.id).catch((err) => {
+			console.warn(`Failed to release networking for VM ${vm.id} during project delete`, err);
+		});
 	}
 	if (vmIds.length > 0) {
 		await db.delete(ipAssignments).where(inArray(ipAssignments.associatedVmId, vmIds));

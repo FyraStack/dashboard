@@ -501,8 +501,8 @@
 			<div class="flex w-full flex-col border-b border-border sm:w-52 sm:border-r sm:border-b-0">
 				<div class="px-5 pt-5 pb-4">
 					<div class="flex items-center gap-3">
-						<Avatar.Root class="h-9 w-9 rounded-xs border border-border">
-							<Avatar.Fallback class="rounded-xs bg-red-500/10 text-xs font-semibold text-red-400">
+						<Avatar.Root class="h-9 w-9 border border-border">
+							<Avatar.Fallback class="bg-red-500/10 text-xs font-semibold text-red-400">
 								{(user?.name ?? '??')
 									.split(' ')
 									.map((n: string) => n[0])

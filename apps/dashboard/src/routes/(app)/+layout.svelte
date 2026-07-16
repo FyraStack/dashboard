@@ -442,8 +442,8 @@
 						<p class="truncate text-sm leading-tight font-medium text-foreground">{profileName}</p>
 						<p class="truncate text-xs leading-tight text-muted-foreground">{data.user?.email}</p>
 					</div>
-					<Avatar.Root class="h-8 w-8 shrink-0 rounded-xs border border-border">
-						<Avatar.Fallback class="rounded-xs bg-muted text-xs text-muted-foreground"
+					<Avatar.Root class="h-8 w-8 shrink-0 border border-border">
+						<Avatar.Fallback class="bg-muted text-xs text-muted-foreground"
 							>{(data.user?.name ?? '??')
 								.split(' ')
 								.map((n: string) => n[0])

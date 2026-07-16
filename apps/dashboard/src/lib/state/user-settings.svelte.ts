@@ -1,4 +1,4 @@
-export type UserSettingsTab = 'profile' | 'security' | 'keys' | 'api';
+export type UserSettingsTab = 'profile' | 'security' | 'keys' | 'api' | 'appearance';
 
 const queryParam = 'user-settings';
 
@@ -18,6 +18,9 @@ export function parseUserSettingsTab(value: string | null): UserSettingsTab | nu
 		case 'api':
 		case 'api-tokens':
 			return 'api';
+		case 'appearance':
+		case 'theme':
+			return 'appearance';
 		default:
 			return null;
 	}

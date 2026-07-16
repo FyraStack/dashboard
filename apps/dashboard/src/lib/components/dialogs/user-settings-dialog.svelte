@@ -43,9 +43,22 @@
 		ShieldCheck,
 		Fingerprint,
 		Loader2,
-		X
+		X,
+		SunMoon,
+		Sun,
+		Moon,
+		Monitor
 	} from '@lucide/svelte';
 	import { Dialog as DialogPrimitive } from 'bits-ui';
+	import { userPrefersMode, setMode } from 'mode-watcher';
+
+	type ThemeMode = 'light' | 'dark' | 'system';
+
+	const themeOptions: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
+		{ value: 'light', label: 'Light', icon: Sun },
+		{ value: 'dark', label: 'Dark', icon: Moon },
+		{ value: 'system', label: 'Auto', icon: Monitor }
+	];
 
 	type Props = {
 		open?: boolean;
@@ -534,6 +547,13 @@
 						<Terminal class="h-3.5 w-3.5" />
 						API
 					</Tabs.Trigger>
+					<Tabs.Trigger
+						value="appearance"
+						class="w-full justify-start gap-2 rounded-none border-0 px-3 py-2 text-muted-foreground after:hidden data-active:bg-transparent data-active:text-foreground"
+					>
+						<SunMoon class="h-3.5 w-3.5" />
+						Appearance
+					</Tabs.Trigger>
 				</Tabs.List>
 			</div>
 
@@ -965,6 +985,39 @@
 									<Plus class="h-3 w-3" />
 									Generate
 								</Button>
+							</div>
+						</div>
+					</Tabs.Content>
+
+					<Tabs.Content value="appearance" class="mt-0 px-6 py-6">
+						<div class="rounded-xs border border-border/60 p-4">
+							<div class="mb-3 flex items-center gap-2 border-b border-border/50 pb-2">
+								<SunMoon class="h-3.5 w-3.5 text-red-400" />
+								<p class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+									Appearance
+								</p>
+							</div>
+							<div class="flex flex-col gap-1.5">
+								<Label>Theme</Label>
+								<div class="grid grid-cols-3 gap-2">
+									{#each themeOptions as option (option.value)}
+										{@const Icon = option.icon}
+										<button
+											type="button"
+											onclick={() => setMode(option.value)}
+											class="flex flex-col items-center gap-1.5 border px-3 py-2.5 text-xs transition-colors {userPrefersMode.current ===
+											option.value
+												? 'border-primary bg-primary/10 text-foreground'
+												: 'border-border text-muted-foreground hover:border-ring hover:text-foreground'}"
+										>
+											<Icon class="h-4 w-4" />
+											{option.label}
+										</button>
+									{/each}
+								</div>
+								<p class="mt-1.5 text-xs text-muted-foreground">
+									Auto follows your system's light/dark setting.
+								</p>
 							</div>
 						</div>
 					</Tabs.Content>

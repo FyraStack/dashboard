@@ -23,7 +23,7 @@
 	<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
 </svelte:head>
 
-<ModeWatcher />
+<ModeWatcher defaultMode="dark" />
 <NavigationProgress />
 
 {@render children()}

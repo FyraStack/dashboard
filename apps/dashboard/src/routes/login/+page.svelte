@@ -106,7 +106,7 @@
 	<title>Sign in / Stack</title>
 </svelte:head>
 
-<div class="flex min-h-screen items-center justify-center bg-background px-4">
+<main class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">
 		<div class="mb-10 flex items-center justify-center gap-2">
 			<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
@@ -141,18 +141,21 @@
 				}}
 				class="space-y-3"
 			>
-				<Input type="email" bind:value={email} placeholder="Email" required />
+				<Input type="email" bind:value={email} placeholder="Email" aria-label="Email" required />
 
 				<div class="relative">
 					<Input
 						type={showPassword ? 'text' : 'password'}
 						bind:value={password}
 						placeholder="Password"
+						aria-label="Password"
+						class="pr-10"
 						required
 					/>
 					<button
 						type="button"
-						class="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+						aria-label={showPassword ? 'Hide password' : 'Show password'}
+						class="absolute top-1/2 right-1 flex size-8 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
 						onclick={() => (showPassword = !showPassword)}
 					>
 						{#if showPassword}<EyeOff class="size-4" />{:else}<Eye class="size-4" />{/if}
@@ -204,8 +207,11 @@
 			</Button>
 
 			<p class="text-center text-xs text-muted-foreground">
-				No account? <a href={registerHref} class="text-red-400 hover:text-red-300">Create one</a>
+				No account?
+				<a href={registerHref} class="text-red-300 underline underline-offset-2 hover:text-red-200">
+					Create one
+				</a>
 			</p>
 		</div>
 	</div>
-</div>
+</main>

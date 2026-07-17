@@ -9,6 +9,8 @@
 		"dev": "pnpm -r --parallel dev",
 		"check": "pnpm -r check",
 		"lint": "pnpm -r lint",
+		"test:accessibility": "pnpm --filter stack-dashboard run test:accessibility",
+		"test:accessibility:ci": "pnpm --filter stack-dashboard run test:accessibility:ci",
 		"format": "pnpm -r format",
 		"cf:deploy": "pnpm -r build && pnpm --filter stack-dashboard run cf:deploy && pnpm --filter stack-dashboard-cron run cf:deploy",
 		"cf:deploy:preview": "pnpm --filter stack-dashboard run cf:deploy:preview && pnpm --filter stack-dashboard-cron run cf:deploy:preview",

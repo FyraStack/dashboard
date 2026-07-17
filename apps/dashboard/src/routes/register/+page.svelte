@@ -177,7 +177,10 @@
 
 			<p class="text-center text-xs text-muted-foreground">
 				Already have an account?
-				<a href={loginHref} class="text-red-300 underline underline-offset-2 hover:text-red-200">
+				<a
+					href={loginHref}
+					class="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
+				>
 					Sign in
 				</a>
 			</p>

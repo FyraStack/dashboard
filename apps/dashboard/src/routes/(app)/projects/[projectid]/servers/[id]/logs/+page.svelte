@@ -14,9 +14,9 @@
 	let logSevFilter = $state<string | null>(null);
 	let logSourceFilter = $state<string | null>(null);
 	const sevColors: Record<string, string> = {
-		info: 'text-blue-400',
-		warn: 'text-amber-400',
-		error: 'text-red-400',
+		info: 'text-blue-700 dark:text-blue-400',
+		warn: 'text-amber-700 dark:text-amber-400',
+		error: 'text-red-700 dark:text-red-400',
 		debug: 'text-muted-foreground'
 	};
 	const currentLogs = $derived([

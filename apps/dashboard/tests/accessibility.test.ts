@@ -16,40 +16,50 @@ function formatImpact(impact: string | null | undefined) {
 	return impactKey[impact] ?? impact;
 }
 
-for (const { label, path } of pages) {
-	test(`Testing for accessibility violations on ${label}.`, async ({ page, makeAxeBuilder }) => {
-		await page.goto(`${localURL}${path}`, { waitUntil: 'networkidle' });
+const modes = ['dark', 'light'] as const;
 
-		const { violations } = await makeAxeBuilder().analyze();
-		const reportMessage = `Found ${violations.length} accessibility violations on ${label}.`;
+for (const mode of modes) {
+	for (const { label, path } of pages) {
+		test(`Testing for accessibility violations on ${label} in ${mode} mode.`, async ({
+			page,
+			makeAxeBuilder
+		}) => {
+			await page.addInitScript((selectedMode) => {
+				window.localStorage.setItem('mode-watcher-mode', selectedMode);
+			}, mode);
+			await page.goto(`${localURL}${path}`, { waitUntil: 'networkidle' });
 
-		if (violations.length === 0) {
-			expect(violations, reportMessage).toHaveLength(0);
-			return;
-		}
+			const { violations } = await makeAxeBuilder().analyze();
+			const reportMessage = `Found ${violations.length} accessibility violations on ${label} in ${mode} mode.`;
 
-		const violationLog = violations
-			.map((violation, violationIndex) => {
-				const nodes = violation.nodes
-					.map(
-						(node, nodeIndex) => `
+			if (violations.length === 0) {
+				expect(violations, reportMessage).toHaveLength(0);
+				return;
+			}
+
+			const violationLog = violations
+				.map((violation, violationIndex) => {
+					const nodes = violation.nodes
+						.map(
+							(node, nodeIndex) => `
 ${styleText('redBright', `  Node ${nodeIndex + 1} HTML:`)} ${node.html}
 ${styleText('redBright', `  Node ${nodeIndex + 1} CSS:`)} ${node.target.join(', ')}
 ${styleText('green', '  Suggested fix:')}
   ${node.failureSummary ?? 'No failure summary provided.'}`
-					)
-					.join('\n');
+						)
+						.join('\n');
 
-				return `
+					return `
 ${styleText(['redBright', 'bold'], `Violation ${violationIndex + 1}:`)}
 ${styleText('redBright', '  Violation ID:')} ${violation.id}
 ${styleText('redBright', '  Violation Impact:')} ${formatImpact(violation.impact)}
 ${styleText('redBright', '  Violation Description:')} ${violation.help}
 ${styleText('redBright', '  More info:')} ${violation.helpUrl}
 ${nodes}`;
-			})
-			.join('\n\n');
+				})
+				.join('\n\n');
 
-		throw new Error(`${violationLog}\n\n${reportMessage}`);
-	});
+			throw new Error(`${violationLog}\n\n${reportMessage}`);
+		});
+	}
 }

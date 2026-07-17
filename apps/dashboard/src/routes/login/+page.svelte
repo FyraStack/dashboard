@@ -208,7 +208,10 @@
 
 			<p class="text-center text-xs text-muted-foreground">
 				No account?
-				<a href={registerHref} class="text-red-300 underline underline-offset-2 hover:text-red-200">
+				<a
+					href={registerHref}
+					class="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
+				>
 					Create one
 				</a>
 			</p>

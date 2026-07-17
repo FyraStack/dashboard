@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { invalidate } from '$app/navigation';
-	import { resolve } from '$app/paths';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -20,22 +19,14 @@
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
-	import Cpu from '~icons/nucleo/cpu';
-	import Disc from '~icons/nucleo/disc';
-	import Flag from '~icons/nucleo/flag';
-	import Mail from '~icons/nucleo/mail';
 	import Network from '~icons/nucleo/network';
 	import Pencil from '~icons/nucleo/pencil';
 	import Power from '~icons/nucleo/power';
-	import Server from '~icons/nucleo/server';
 	import Trash2 from '~icons/nucleo/trash';
-	import UserCog from '~icons/nucleo/user-cog';
 	import { featureFlagKeys } from '$lib/feature-flags';
 	import { toast } from 'svelte-sonner';
 
-	type AdminTab = 'features' | 'vmTypes' | 'images' | 'ipam' | 'users' | 'vms' | 'emails';
 	let { data }: { data: AdminPageData } = $props();
-	const activeTab = 'ipam' as AdminTab;
 	const admin = new AdminState(untrack(() => data));
 
 	$effect(() => {
@@ -166,196 +157,112 @@
 	}
 </script>
 
-<div class="flex flex-1 flex-col overflow-hidden">
-	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-border">
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'vmTypes'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin')}
-		>
-			<Cpu class="size-4 shrink-0" />
-			VM Types
-			<Badge variant="secondary" class="text-[10px]">{admin.vmTypes.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'vms'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/vms')}
-		>
-			<Server class="size-4 shrink-0" />
-			VMs
-			<Badge variant="secondary" class="text-[10px]">
-				{admin.adminVms.filter((vm) => vm.active).length}
-			</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'images'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/images')}
-		>
-			<Disc class="size-4 shrink-0" />
-			Images
-			<Badge variant="secondary" class="text-[10px]">{admin.images.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'features'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/features')}
-		>
-			<Flag class="size-4 shrink-0" />
-			Feature Flags
-			<Badge variant="secondary" class="text-[10px]">{enabledCount}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'ipam'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/ipam')}
-		>
-			<Network class="size-4 shrink-0" />
-			IPAM
-			<Badge variant="secondary" class="text-[10px]">{admin.ipamPrefixes.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'users'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/users')}
-		>
-			<UserCog class="size-4 shrink-0" />
-			Users
-			<Badge variant="secondary" class="text-[10px]">{userCount}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'emails'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/emails')}
-		>
-			<Mail class="size-4 shrink-0" />
-			Emails
-		</a>
-		<div class="flex-1"></div>
-		<div class="px-4">
+<div class="flex-1 overflow-auto">
+	<div class="flex items-center gap-4 border-b border-border/60 px-5 py-3">
+		<div class="flex items-center gap-2 text-xs text-muted-foreground">
+			<span class="text-muted-foreground">IPv4</span>
+			<span class="font-medium text-foreground">{ipv4Count}</span>
+		</div>
+		<div class="flex items-center gap-2 text-xs text-muted-foreground">
+			<span class="text-muted-foreground">IPv6</span>
+			<span class="font-medium text-foreground">{ipv6Count}</span>
+		</div>
+		<div class="ml-auto">
 			<Button size="sm" class="h-7 gap-1.5 text-xs" onclick={openCreate}>
 				<Plus class="h-3 w-3" /> Add Prefix
 			</Button>
 		</div>
 	</div>
 
-	<div class="flex-1 overflow-auto">
-		<div class="flex items-center gap-4 border-b border-border/60 px-5 py-3">
-			<div class="flex items-center gap-2 text-xs text-muted-foreground">
-				<span class="text-muted-foreground">IPv4</span>
-				<span class="font-medium text-foreground">{ipv4Count}</span>
-			</div>
-			<div class="flex items-center gap-2 text-xs text-muted-foreground">
-				<span class="text-muted-foreground">IPv6</span>
-				<span class="font-medium text-foreground">{ipv6Count}</span>
-			</div>
+	{#if admin.ipamPrefixes.length === 0}
+		<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
+			<Network class="mb-3 h-6 w-6" />
+			<p class="text-xs">No IPAM prefixes configured</p>
+			<Button variant="outline" size="sm" class="mt-3 gap-1.5 text-xs" onclick={openCreate}>
+				<Plus class="h-3 w-3" /> Add Prefix
+			</Button>
 		</div>
+	{:else}
+		<table class="w-full whitespace-nowrap">
+			<thead>
+				<tr class="border-b border-border">
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Name</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Prefix</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Family</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Gateway</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Mode</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Available</th>
+					<th class="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-border/50">
+				{#each admin.ipamPrefixes as prefix (prefix.id)}
+					<tr class="transition-colors hover:bg-muted/20">
+						<td class="px-5 py-3">
+							<div class="flex items-center gap-2">
+								<span class="text-sm font-medium text-foreground">{prefix.name}</span>
+								{#if prefix.disabled}
+									<Badge variant="secondary" class="text-[10px]">Disabled</Badge>
+								{/if}
+							</div>
+						</td>
+						<td class="px-5 py-3 font-mono text-xs text-muted-foreground">{prefix.cidr}</td>
+						<td class="px-5 py-3">
+							<Badge variant="secondary" class="text-[10px]">{prefix.family}</Badge>
+						</td>
+						<td class="px-5 py-3 font-mono text-xs text-muted-foreground">
+							{prefix.gatewayAddress ?? '-'}
+						</td>
+						<td class="px-5 py-3">
+							<Badge variant="outline" class="text-[10px]">
+								{prefix.family === 'ipv6'
+									? prefix.ipv6UseTransitAddress
+										? '/128 transit'
+										: '/64 prefixes'
+									: '/32 addresses'}
+							</Badge>
+						</td>
+						<td class="px-5 py-3 text-sm text-muted-foreground">
+							<span class="tabular-nums">{formatCount(prefix.available)}</span>
+							<span class="text-muted-foreground"> / {formatCount(prefix.capacity)}</span>
+						</td>
 
-		{#if admin.ipamPrefixes.length === 0}
-			<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
-				<Network class="mb-3 h-6 w-6" />
-				<p class="text-xs">No IPAM prefixes configured</p>
-				<Button variant="outline" size="sm" class="mt-3 gap-1.5 text-xs" onclick={openCreate}>
-					<Plus class="h-3 w-3" /> Add Prefix
-				</Button>
-			</div>
-		{:else}
-			<table class="w-full whitespace-nowrap">
-				<thead>
-					<tr class="border-b border-border">
-						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Name</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Prefix</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Family</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Gateway</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Mode</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Available</th>
-						<th class="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th>
+						<td class="px-5 py-3 text-right">
+							<div class="flex items-center justify-end gap-1">
+								<Button
+									variant="ghost"
+									size="sm"
+									class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+									onclick={() => togglePrefix(prefix)}
+									aria-label={prefix.disabled ? 'Enable prefix' : 'Disable prefix'}
+								>
+									<Power class="h-3 w-3" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+									onclick={() => openEdit(prefix)}
+									aria-label="Edit prefix"
+								>
+									<Pencil class="h-3 w-3" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									class="h-7 w-7 p-0 text-red-400 hover:text-red-300"
+									onclick={() => removePrefix(prefix)}
+									aria-label="Delete prefix"
+								>
+									<Trash2 class="h-3 w-3" />
+								</Button>
+							</div>
+						</td>
 					</tr>
-				</thead>
-				<tbody class="divide-y divide-border/50">
-					{#each admin.ipamPrefixes as prefix (prefix.id)}
-						<tr class="transition-colors hover:bg-muted/20">
-							<td class="px-5 py-3">
-								<div class="flex items-center gap-2">
-									<span class="text-sm font-medium text-foreground">{prefix.name}</span>
-									{#if prefix.disabled}
-										<Badge variant="secondary" class="text-[10px]">Disabled</Badge>
-									{/if}
-								</div>
-							</td>
-							<td class="px-5 py-3 font-mono text-xs text-muted-foreground">{prefix.cidr}</td>
-							<td class="px-5 py-3">
-								<Badge variant="secondary" class="text-[10px]">{prefix.family}</Badge>
-							</td>
-							<td class="px-5 py-3 font-mono text-xs text-muted-foreground">
-								{prefix.gatewayAddress ?? '—'}
-							</td>
-							<td class="px-5 py-3">
-								<Badge variant="outline" class="text-[10px]">
-									{prefix.family === 'ipv6'
-										? prefix.ipv6UseTransitAddress
-											? '/128 transit'
-											: '/64 prefixes'
-										: '/32 addresses'}
-								</Badge>
-							</td>
-							<td class="px-5 py-3 text-sm text-muted-foreground">
-								<span class="tabular-nums">{formatCount(prefix.available)}</span>
-								<span class="text-muted-foreground"> / {formatCount(prefix.capacity)}</span>
-							</td>
-
-							<td class="px-5 py-3 text-right">
-								<div class="flex items-center justify-end gap-1">
-									<Button
-										variant="ghost"
-										size="sm"
-										class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-										onclick={() => togglePrefix(prefix)}
-										aria-label={prefix.disabled ? 'Enable prefix' : 'Disable prefix'}
-									>
-										<Power class="h-3 w-3" />
-									</Button>
-									<Button
-										variant="ghost"
-										size="sm"
-										class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-										onclick={() => openEdit(prefix)}
-										aria-label="Edit prefix"
-									>
-										<Pencil class="h-3 w-3" />
-									</Button>
-									<Button
-										variant="ghost"
-										size="sm"
-										class="h-7 w-7 p-0 text-red-400 hover:text-red-300"
-										onclick={() => removePrefix(prefix)}
-										aria-label="Delete prefix"
-									>
-										<Trash2 class="h-3 w-3" />
-									</Button>
-								</div>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		{/if}
-	</div>
+				{/each}
+			</tbody>
+		</table>
+	{/if}
 </div>
 
 <Dialog.Root bind:open={dialogOpen}>

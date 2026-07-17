@@ -1,7 +1,7 @@
 import { getRequestEvent } from '$app/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, lt } from 'drizzle-orm';
 import { initDrizzle, closeRequestDb, type Database } from '$lib/server/db';
-import { vms } from '$lib/server/db/schema';
+import { ipAssignments, paymentPeriods, vms, volumes } from '$lib/server/db/schema';
 import { getBackend } from '$lib/server/backends';
 import { deleteProjectServerEntity } from '$lib/server/billing/autumn';
 import { meterResourceThrough } from '$lib/server/billing/metering';
@@ -18,6 +18,31 @@ type DeletableVm = {
 export async function queueVmDeletion(db: Database, row: DeletableVm): Promise<void> {
 	await db.update(vms).set({ status: 'deleting', statusError: null }).where(eq(vms.id, row.id));
 	runInBackground(deleteVmResources(row), `vm-delete-${row.id}`);
+}
+
+export const DELETED_VM_RETENTION_DAYS = 90;
+
+export async function purgeExpiredDeletedVms(now = Date.now(), limit = 50) {
+	const db = initDrizzle();
+	const cutoff = now - DELETED_VM_RETENTION_DAYS * 86_400_000;
+
+	const expired = await db
+		.select({ id: vms.id })
+		.from(vms)
+		.where(and(eq(vms.active, false), isNotNull(vms.deletedAt), lt(vms.deletedAt, cutoff)))
+		.limit(limit);
+	const vmIds = expired.map((row) => row.id);
+	if (vmIds.length === 0) return { purged: 0 };
+
+	await db
+		.update(volumes)
+		.set({ associatedVmId: null })
+		.where(inArray(volumes.associatedVmId, vmIds));
+	await db.delete(ipAssignments).where(inArray(ipAssignments.associatedVmId, vmIds));
+	await db.delete(paymentPeriods).where(inArray(paymentPeriods.vmId, vmIds));
+	await db.delete(vms).where(inArray(vms.id, vmIds));
+
+	return { purged: vmIds.length };
 }
 
 function initOwnedDb() {
@@ -58,7 +83,7 @@ async function deleteVmResources(row: DeletableVm): Promise<void> {
 	try {
 		const claimed = await db
 			.update(vms)
-			.set({ active: false })
+			.set({ active: false, deletedAt: Date.now() })
 			.where(and(eq(vms.id, row.id), eq(vms.active, true)))
 			.returning({ id: vms.id });
 		if (claimed.length === 0) return;

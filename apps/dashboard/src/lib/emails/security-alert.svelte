@@ -48,7 +48,7 @@
 					{message}
 				</Text>
 				{#if details}
-					<Section class="mt-4 border border-gray-800 bg-gray-950/50 p-4">
+					<Section class="mt-4 border border-gray-800 bg-gray-950 p-4">
 						<Text class="m-0 text-sm leading-5 text-gray-300">{details}</Text>
 					</Section>
 				{/if}

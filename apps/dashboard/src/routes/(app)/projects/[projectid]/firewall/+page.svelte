@@ -182,7 +182,7 @@
 
 <div class="flex flex-1 flex-col overflow-hidden">
 	<div class="border-b border-border bg-background/40 px-5 py-2 text-xs text-muted-foreground">
-		Preview — firewall isn't live yet. Changes here aren't saved.
+		Preview: firewall isn't live yet. Changes here aren't saved.
 	</div>
 	<div class="flex flex-1 flex-col overflow-hidden lg:flex-row">
 		<!-- Groups sidebar -->

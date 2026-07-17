@@ -23,7 +23,7 @@ export default defineConfig({
 	webServer: [
 		{
 			command:
-				'pnpm run build && ACCESSIBILITY_FIXTURES=1 pnpm exec vite preview --host 127.0.0.1 --port 4173',
+				'pnpm run build && ACCESSIBILITY_FIXTURES=1 CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=postgres://postgres:postgres@127.0.0.1:5432/postgres pnpm exec vite preview --host 127.0.0.1 --port 4173',
 			reuseExistingServer: !isCI,
 			// The timeout of the build and preview startup before the accessibility tests.
 			timeout: 120 * 1_000,

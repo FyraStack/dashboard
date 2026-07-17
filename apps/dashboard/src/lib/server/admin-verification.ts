@@ -32,8 +32,15 @@ export function normalizeVerificationCode(code: string) {
 
 function generateVerificationCode() {
 	const max = 10 ** ADMIN_VERIFICATION_CODE_LENGTH;
-	const value = crypto.getRandomValues(new Uint32Array(1))[0] % max;
-	return value.toString().padStart(ADMIN_VERIFICATION_CODE_LENGTH, '0');
+	const upperBound = 0x1_0000_0000;
+	const limit = Math.floor(upperBound / max) * max;
+	let value: number;
+
+	do {
+		value = crypto.getRandomValues(new Uint32Array(1))[0];
+	} while (value >= limit);
+
+	return (value % max).toString().padStart(ADMIN_VERIFICATION_CODE_LENGTH, '0');
 }
 
 async function hashVerificationCode(adminUserId: string, targetId: string, code: string) {

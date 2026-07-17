@@ -356,7 +356,7 @@
 					</button>
 				{/if}
 				<a href={resolve('/')} class="flex shrink-0 items-center gap-2">
-					<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
+					<img src="/logo.svg" alt="" class="h-5 w-5" />
 					<span class="text-sm font-semibold tracking-tight text-foreground">Stack</span>
 				</a>
 				{#if isOnProjectRoute}
@@ -455,9 +455,9 @@
 		</header>
 
 		{#if isRootPage || isAdminPage}
-			<div class="flex flex-1 overflow-hidden">
+			<main class="flex flex-1 overflow-hidden">
 				{@render children()}
-			</div>
+			</main>
 		{:else}
 			<div class="flex flex-1 overflow-hidden">
 				<aside
@@ -489,9 +489,9 @@
 					{/each}
 				</aside>
 
-				<div class="flex flex-1 overflow-hidden">
+				<main class="flex flex-1 overflow-hidden">
 					{@render children()}
-				</div>
+				</main>
 			</div>
 		{/if}
 	</div>

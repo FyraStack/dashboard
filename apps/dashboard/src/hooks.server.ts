@@ -3,6 +3,11 @@ import { building } from '$app/environment';
 import { getCachedAuthSession, hasAuthSessionCookie } from '$lib/server/auth-lite';
 import { closeRequestDb } from '$lib/server/db';
 import { instrument, timingLog } from '$lib/server/observability';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureSession,
+	accessibilityFixtureUser
+} from '$lib/server/accessibility-fixtures';
 
 const publicRoutes = ['/health', '/login', '/register', '/signup', '/accept-invitation', '/api/'];
 const authPages = ['/login', '/register', '/signup'];
@@ -68,6 +73,16 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	timingLog('request.handle.enter', requestAttrs);
 
 	try {
+		if (
+			accessibilityFixtureEnabled &&
+			!authPages.some((route) => event.url.pathname.startsWith(route))
+		) {
+			event.locals.session = accessibilityFixtureSession;
+			event.locals.user = accessibilityFixtureUser;
+			event.locals.activeProjectId = accessibilityFixtureSession.activeOrganizationId;
+			return await instrument('sveltekit.resolve', () => resolve(event), requestAttrs);
+		}
+
 		return await instrument(
 			'request.handle',
 			async () => {

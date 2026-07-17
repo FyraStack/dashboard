@@ -198,6 +198,8 @@
 	}
 </script>
 
+<h1 class="sr-only">Server Overview</h1>
+
 <div class="grid shrink-0 grid-cols-2 gap-px border-b border-border bg-muted lg:grid-cols-4">
 	{#each charts as chart (chart.label)}
 		<div class="relative flex flex-col bg-background">

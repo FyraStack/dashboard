@@ -22,7 +22,8 @@ export default defineConfig({
 	timeout: 180 * 1_000,
 	webServer: [
 		{
-			command: 'pnpm run build && pnpm exec vite preview --host 127.0.0.1 --port 4173',
+			command:
+				'pnpm run build && ACCESSIBILITY_FIXTURES=1 pnpm exec vite preview --host 127.0.0.1 --port 4173',
 			reuseExistingServer: !isCI,
 			// The timeout of the build and preview startup before the accessibility tests.
 			timeout: 120 * 1_000,

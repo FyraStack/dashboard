@@ -1,5 +1,5 @@
 import { styleText } from 'node:util';
-import { expect, localURL, publicPages, test } from './accessibility';
+import { expect, localURL, pages, test } from './accessibility';
 
 function formatImpact(impact: string | null | undefined) {
 	if (!impact) {
@@ -16,7 +16,7 @@ function formatImpact(impact: string | null | undefined) {
 	return impactKey[impact] ?? impact;
 }
 
-for (const { label, path } of publicPages) {
+for (const { label, path } of pages) {
 	test(`Testing for accessibility violations on ${label}.`, async ({ page, makeAxeBuilder }) => {
 		await page.goto(`${localURL}${path}`, { waitUntil: 'networkidle' });
 

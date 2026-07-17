@@ -7,11 +7,15 @@ type AxeFixture = {
 
 export const localURL = 'http://127.0.0.1:4173';
 
-export const publicPages = [
+export const pages = [
 	{ label: 'login', path: '/login' },
 	{ label: 'login verified state', path: '/login?verified=1' },
 	{ label: 'register', path: '/register' },
-	{ label: 'signup redirect', path: '/signup' }
+	{ label: 'signup redirect', path: '/signup' },
+	{ label: 'project dashboard', path: '/' },
+	{ label: 'server list', path: '/projects/accessibility-project/servers' },
+	{ label: 'server detail', path: '/projects/accessibility-project/servers/accessibility-server' },
+	{ label: 'project settings', path: '/projects/accessibility-project/settings' }
 ];
 
 export const test = base.extend<AxeFixture>({

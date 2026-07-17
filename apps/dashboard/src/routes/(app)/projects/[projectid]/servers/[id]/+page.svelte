@@ -332,7 +332,8 @@
 								href="https://fyrastack.com/docs/vps/ssh"
 								target="_blank"
 								rel="noopener noreferrer"
-								class="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200">SSH</a
+								class="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
+								>SSH</a
 							> in the meantime.
 						</p>
 					{/if}
@@ -411,7 +412,8 @@
 							href="https://fyrastack.com/docs/vps/ssh"
 							target="_blank"
 							rel="noopener noreferrer"
-							class="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200">SSH</a
+							class="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
+							>SSH</a
 						> in the meantime.
 					</p>
 				{/if}

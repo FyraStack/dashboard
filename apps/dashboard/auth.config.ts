@@ -41,7 +41,34 @@ export default betterAuth({
 		admin({ defaultRole: 'user' }),
 		twoFactor(),
 		passkey(),
-		organization({ ac, roles: organizationRoles }),
+		organization({
+			ac,
+			roles: organizationRoles,
+			schema: {
+				organization: {
+					additionalFields: {
+						billingExempt: {
+							type: 'boolean',
+							input: false,
+							required: true,
+							defaultValue: false
+						},
+						disabled: {
+							type: 'boolean',
+							input: false,
+							required: true,
+							defaultValue: false
+						},
+						deletedAt: {
+							type: 'number',
+							bigint: true,
+							input: false,
+							required: false
+						}
+					}
+				}
+			}
+		}),
 		autumn({ customerScope: 'organization' })
 	]
 });

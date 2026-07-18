@@ -146,6 +146,7 @@ dashboard .env:
   PROXMOX_SNIPPETS_ENDPOINT_USERNAME="dev"
   PROXMOX_SNIPPETS_ENDPOINT_PASSWORD="dev"
   PROXMOX_SNIPPETS_STORAGE="stack-volumes"
+  PROXMOX_SNIPPETS_ENDPOINT_VERIFY_SSL="false"
 
 reach VM test IPs from the host:
   sudo dnf install wireguard-tools

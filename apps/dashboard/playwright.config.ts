@@ -13,6 +13,14 @@ export default defineConfig({
 				channel: isCI ? 'chrome' : undefined,
 				headless: true
 			}
+		},
+		{
+			name: 'Mobile Chrome',
+			use: {
+				...devices['Pixel 5'],
+				channel: isCI ? 'chrome' : undefined,
+				headless: true
+			}
 		}
 	],
 	reporter: 'list',

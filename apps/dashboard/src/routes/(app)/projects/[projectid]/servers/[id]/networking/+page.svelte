@@ -74,7 +74,7 @@
 						onclick={() => (editingRdnsKey = null)}><X class="h-3 w-3" /></Button
 					>
 				</div>{:else}<div class="flex items-center gap-1.5">
-					<span class="font-mono text-xs text-muted-foreground">{ipv4Rdns || '—'}</span><Button
+					<span class="font-mono text-xs text-muted-foreground">{ipv4Rdns || '-'}</span><Button
 						aria-label="Edit reverse DNS"
 						variant="ghost"
 						size="sm"
@@ -106,7 +106,7 @@
 		>
 			<div class="flex items-center gap-3">
 				<span class="font-mono text-xs text-foreground">{entry.ip}</span><span
-					class="font-mono text-xs text-muted-foreground">{entry.rdns || '—'}</span
+					class="font-mono text-xs text-muted-foreground">{entry.rdns || '-'}</span
 				>
 			</div>
 			<div class="flex items-center gap-1">

@@ -1,6 +1,7 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { meterActiveResources, syncPendingUsage } from '$lib/server/billing/metering';
+import { purgeExpiredDeletedVms } from '$lib/server/vm-deletion';
 import {
 	isBillingConfigured,
 	retryOrphanedProjectBillingCancellations
@@ -24,6 +25,10 @@ export const POST: RequestHandler = async ({ request }) => {
 		console.error('Billing grace enforcement failed', err);
 		return { checked: 0, suspended: 0, failed: true };
 	});
+	const purge = await purgeExpiredDeletedVms().catch((err) => {
+		console.error('Deleted VM purge failed', err);
+		return { purged: 0, failed: true };
+	});
 
-	return json({ metered, synced, cancellations, enforcement });
+	return json({ metered, synced, cancellations, enforcement, purge });
 };

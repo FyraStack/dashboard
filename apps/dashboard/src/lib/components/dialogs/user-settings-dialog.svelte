@@ -906,7 +906,7 @@
 									class="mb-3 border border-amber-300 bg-amber-100 p-3 dark:border-amber-800/50 dark:bg-amber-950/20"
 								>
 									<p class="text-xs font-medium text-amber-800 dark:text-amber-400">
-										Copy this token now — it won't be shown again.
+										Copy this token now. It won't be shown again.
 									</p>
 									<div class="mt-2 flex items-center gap-2">
 										<code

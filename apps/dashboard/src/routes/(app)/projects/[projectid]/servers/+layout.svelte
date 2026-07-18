@@ -14,7 +14,7 @@
 	let { data, children } = $props();
 
 	function formatUptime(seconds: number): string {
-		if (!seconds) return '—';
+		if (!seconds) return '-';
 		const d = Math.floor(seconds / 86400);
 		const h = Math.floor((seconds % 86400) / 3600);
 		const m = Math.floor((seconds % 3600) / 60);

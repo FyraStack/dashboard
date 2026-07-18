@@ -9,6 +9,7 @@ import OrganizationInvitationEmail from '$lib/emails/organization-invitation.sve
 import PasswordChangeCodeEmail from '$lib/emails/password-change-code.svelte';
 import ResetPasswordEmail from '$lib/emails/reset-password.svelte';
 import SecurityAlertEmail from '$lib/emails/security-alert.svelte';
+import ServiceDisruptionEmail from '$lib/emails/service-disruption.svelte';
 import VerifyEmailEmail from '$lib/emails/verify-email.svelte';
 import {
 	applyPlaceholders,
@@ -32,6 +33,7 @@ const templateComponents: Record<string, unknown> = {
 	'password-change-code': PasswordChangeCodeEmail,
 	'reset-password': ResetPasswordEmail,
 	'security-alert': SecurityAlertEmail,
+	'service-disruption': ServiceDisruptionEmail,
 	'verify-email': VerifyEmailEmail
 };
 

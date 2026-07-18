@@ -1,14 +1,10 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import { resolve } from '$app/paths';
-	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { confirmDestructive } from '$lib/confirm.svelte';
-	import { featureFlagKeys } from '$lib/feature-flags';
-	import { parseCsv } from '$lib/csv';
 	import {
 		CAMPAIGN_BATCH_SIZE,
 		campaignTemplates,
@@ -24,21 +20,14 @@
 	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';
+	import Plus from '~icons/lucide/plus';
+	import X from '~icons/lucide/x';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
-	import Cpu from '~icons/nucleo/cpu';
-	import Disc from '~icons/nucleo/disc';
 	import Eye from '~icons/nucleo/eye';
-	import Flag from '~icons/nucleo/flag';
-	import Mail from '~icons/nucleo/mail';
-	import Network from '~icons/nucleo/network';
 	import Send from '~icons/nucleo/send';
-	import Server from '~icons/nucleo/server';
-	import UserCog from '~icons/nucleo/user-cog';
 	import Users from '~icons/nucleo/users';
 
-	type AdminTab = 'features' | 'vmTypes' | 'images' | 'ipam' | 'users' | 'vms' | 'emails';
 	let { data }: { data: AdminPageData } = $props();
-	const activeTab = 'emails' as AdminTab;
 	const admin = new AdminState(untrack(() => data));
 	$effect(() => {
 		admin.sync(data);
@@ -141,44 +130,117 @@
 		return () => clearTimeout(refreshTimer);
 	});
 
-	let csvFileName = $state('');
-	let csvColumns = $state<string[]>([]);
-	let csvRows = $state<Record<string, string>[]>([]);
-	let csvError = $state('');
-	let emailColumn = $state('');
+	const recipientColumns = ['name', 'email'];
 
-	async function handleCsvChange(event: Event) {
-		const input = event.currentTarget as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-		csvError = '';
-		try {
-			const parsed = parseCsv(await file.text());
-			if (parsed.columns.length === 0 || parsed.rows.length === 0) {
-				throw new Error('The CSV needs a header row and at least one data row');
-			}
-			csvFileName = file.name;
-			csvColumns = parsed.columns;
-			csvRows = parsed.rows;
-			emailColumn = guessEmailColumn(parsed.columns, parsed.rows);
-			sendComplete = false;
-			sentCount = 0;
-			sendFailures = [];
-		} catch (err) {
-			csvError = getErrorMessage(err, 'Failed to parse CSV');
-			csvFileName = '';
-			csvColumns = [];
-			csvRows = [];
-			emailColumn = '';
+	const activeVmsByOwnerEmail = $derived.by(() => {
+		const map = new Map<string, { count: number; types: Set<string> }>();
+		for (const vm of admin.adminVms) {
+			if (!vm.active || !vm.ownerEmail) continue;
+			const entry = map.get(vm.ownerEmail) ?? { count: 0, types: new Set<string>() };
+			entry.count += 1;
+			if (vm.vmTypeName) entry.types.add(vm.vmTypeName);
+			map.set(vm.ownerEmail, entry);
 		}
-		input.value = '';
+		return map;
+	});
+	const vmTypeOptions = $derived(
+		[
+			...new Set(
+				admin.adminVms.filter((vm) => vm.active && vm.vmTypeName).map((vm) => vm.vmTypeName!)
+			)
+		].sort()
+	);
+
+	type AudienceField =
+		'signedUp' | 'vmCount' | 'vmType' | 'verified' | 'billingExempt' | 'disabled';
+	type AudienceCondition = { field: AudienceField; op: string; value: string };
+
+	const audienceFieldDefs: Record<
+		AudienceField,
+		{ label: string; ops: { value: string; label: string }[] }
+	> = {
+		signedUp: {
+			label: 'Signed up',
+			ops: [
+				{ value: 'before', label: 'before' },
+				{ value: 'after', label: 'after' }
+			]
+		},
+		vmCount: {
+			label: 'Active VMs',
+			ops: [
+				{ value: 'gte', label: 'at least' },
+				{ value: 'eq', label: 'exactly' }
+			]
+		},
+		vmType: {
+			label: 'Owns VM type',
+			ops: [
+				{ value: 'is', label: 'is' },
+				{ value: 'not', label: 'is not' }
+			]
+		},
+		verified: { label: 'Email verified', ops: [{ value: 'is', label: 'is' }] },
+		billingExempt: { label: 'Billing exempt', ops: [{ value: 'is', label: 'is' }] },
+		disabled: { label: 'Disabled', ops: [{ value: 'is', label: 'is' }] }
+	};
+
+	function defaultCondition(field: AudienceField): AudienceCondition {
+		if (field === 'signedUp') return { field, op: 'before', value: '' };
+		if (field === 'vmCount') return { field, op: 'gte', value: '1' };
+		if (field === 'vmType') return { field, op: 'is', value: vmTypeOptions[0] ?? '' };
+		return { field, op: 'is', value: 'yes' };
 	}
 
-	function guessEmailColumn(columns: string[], rows: Record<string, string>[]) {
-		const byName = columns.find((column) => column.toLowerCase().includes('email'));
-		if (byName) return byName;
-		return columns.find((column) => rows.some((row) => row[column]?.includes('@'))) ?? '';
-	}
+	let audienceConditions = $state<AudienceCondition[]>([defaultCondition('vmCount')]);
+
+	const queryRecipients = $derived(
+		admin.adminUsers.filter((account) =>
+			audienceConditions.every((condition) => {
+				const owned = activeVmsByOwnerEmail.get(account.email);
+				switch (condition.field) {
+					case 'signedUp': {
+						if (!condition.value) return true;
+						const cutoff = new Date(condition.value).getTime();
+						if (Number.isNaN(cutoff)) return true;
+						const created = new Date(account.createdAt).getTime();
+						return condition.op === 'before' ? created < cutoff : created > cutoff;
+					}
+					case 'vmCount': {
+						const target = Number.parseInt(condition.value, 10);
+						if (Number.isNaN(target)) return true;
+						const ownedCount = owned?.count ?? 0;
+						return condition.op === 'gte' ? ownedCount >= target : ownedCount === target;
+					}
+					case 'vmType': {
+						if (!condition.value) return true;
+						const hasType = owned?.types.has(condition.value) ?? false;
+						return condition.op === 'is' ? hasType : !hasType;
+					}
+					case 'verified':
+						return account.emailVerified === (condition.value === 'yes');
+					case 'billingExempt':
+						return account.billingExempt === (condition.value === 'yes');
+					case 'disabled':
+						return account.disabled === (condition.value === 'yes');
+				}
+			})
+		)
+	);
+	const queryLabel = $derived(
+		audienceConditions.length === 0
+			? 'All users'
+			: audienceConditions
+					.map((condition) => {
+						const def = audienceFieldDefs[condition.field];
+						const op = def.ops.find((entry) => entry.value === condition.op)?.label ?? condition.op;
+						return `${def.label} ${op} ${condition.value}`.trim();
+					})
+					.join(' and ')
+	);
+	const recipientRows = $derived(
+		queryRecipients.map((account) => ({ name: account.name, email: account.email }))
+	);
 
 	const usedPlaceholders = $derived([
 		...new Set(
@@ -188,8 +250,8 @@
 		)
 	]);
 	const missingColumns = $derived(
-		csvColumns.length > 0
-			? usedPlaceholders.filter((placeholder) => !csvColumns.includes(placeholder))
+		recipientRows.length > 0
+			? usedPlaceholders.filter((placeholder) => !recipientColumns.includes(placeholder))
 			: []
 	);
 
@@ -207,7 +269,7 @@
 				template: selectedTemplateKey,
 				subject,
 				fields: $state.snapshot(fieldValues),
-				row: $state.snapshot(csvRows)[0] ?? {}
+				row: $state.snapshot(recipientRows)[0] ?? {}
 			});
 			previewSubject = result.subject;
 			previewHtml = result.html;
@@ -232,7 +294,7 @@
 	);
 	const canPreview = $derived(!previewLoading && subject.trim() !== '' && fieldsComplete);
 	const canSend = $derived(
-		!sending && csvRows.length > 0 && emailColumn !== '' && subject.trim() !== '' && fieldsComplete
+		!sending && recipientRows.length > 0 && subject.trim() !== '' && fieldsComplete
 	);
 	const processedCount = $derived(sentCount + sendFailures.length);
 
@@ -240,7 +302,7 @@
 		if (!canSend) return;
 		const ok = await confirmDestructive({
 			title: 'Send emails',
-			description: `This sends the "${template.label}" template to ${csvRows.length} recipient${csvRows.length === 1 ? '' : 's'} from ${csvFileName}. This cannot be undone.`,
+			description: `This sends the "${template.label}" template to ${recipientRows.length} recipient${recipientRows.length === 1 ? '' : 's'} (${queryLabel}). This cannot be undone.`,
 			confirmWord: 'send',
 			confirmLabel: 'Send emails'
 		});
@@ -251,7 +313,7 @@
 		sentCount = 0;
 		sendFailures = [];
 		sendError = '';
-		const rows = $state.snapshot(csvRows);
+		const rows = $state.snapshot(recipientRows);
 		const fields = $state.snapshot(fieldValues);
 		try {
 			for (let i = 0; i < rows.length; i += CAMPAIGN_BATCH_SIZE) {
@@ -260,7 +322,7 @@
 					subject,
 					fields,
 					rows: rows.slice(i, i + CAMPAIGN_BATCH_SIZE),
-					emailColumn
+					emailColumn: 'email'
 				});
 				sentCount += result.sent;
 				sendFailures = [...sendFailures, ...result.failures];
@@ -278,339 +340,301 @@
 	<title>Emails</title>
 </svelte:head>
 
-<div class="flex flex-1 flex-col overflow-hidden">
-	<!-- Tabs -->
-	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-border">
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'vmTypes'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin')}
-		>
-			<Cpu class="size-4 shrink-0" />
-			VM Types
-			<Badge variant="secondary" class="text-[10px]">{admin.vmTypes.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'vms'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/vms')}
-		>
-			<Server class="size-4 shrink-0" />
-			VMs
-			<Badge variant="secondary" class="text-[10px]">
-				{admin.adminVms.filter((vm) => vm.active).length}
-			</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'images'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/images')}
-		>
-			<Disc class="size-4 shrink-0" />
-			Images
-			<Badge variant="secondary" class="text-[10px]">{admin.images.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'features'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/features')}
-		>
-			<Flag class="size-4 shrink-0" />
-			Feature Flags
-			<Badge variant="secondary" class="text-[10px]">
-				{featureFlagKeys.filter((key) => admin.featureFlags[key]).length}
-			</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'ipam'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/ipam')}
-		>
-			<Network class="size-4 shrink-0" />
-			IPAM
-			<Badge variant="secondary" class="text-[10px]">{admin.ipamPrefixes.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'users'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/users')}
-		>
-			<UserCog class="size-4 shrink-0" />
-			Users
-			<Badge variant="secondary" class="text-[10px]">{userCount}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'emails'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/emails')}
-		>
-			<Mail class="size-4 shrink-0" />
-			Emails
-		</a>
-	</div>
+<div class="flex-1 overflow-auto">
+	<div class="mx-auto flex w-full max-w-3xl flex-col gap-6 p-5">
+		<!-- Template -->
+		<div class="flex flex-wrap gap-1.5">
+			{#each campaignTemplates as entry (entry.key)}
+				<button
+					type="button"
+					title={entry.description}
+					class="border px-3 py-1.5 text-xs font-medium transition-colors {selectedTemplateKey ===
+					entry.key
+						? 'border-red-500 bg-red-950/20 text-foreground'
+						: 'border-border text-muted-foreground hover:border-ring hover:text-foreground'}"
+					onclick={() => selectTemplate(entry.key)}
+					disabled={sending}
+				>
+					{entry.label}
+				</button>
+			{/each}
+		</div>
 
-	<!-- Content -->
-	<div class="flex-1 overflow-auto">
-		<div class="mx-auto flex w-full max-w-3xl flex-col gap-6 p-5">
-			<!-- Template -->
-			<div class="flex flex-wrap gap-1.5">
-				{#each campaignTemplates as entry (entry.key)}
-					<button
-						type="button"
-						title={entry.description}
-						class="border px-3 py-1.5 text-xs font-medium transition-colors {selectedTemplateKey ===
-						entry.key
-							? 'border-red-500 bg-red-950/20 text-foreground'
-							: 'border-border text-muted-foreground hover:border-ring hover:text-foreground'}"
-						onclick={() => selectTemplate(entry.key)}
-						disabled={sending}
-					>
-						{entry.label}
-					</button>
-				{/each}
+		<!-- Editor -->
+		<div class="flex flex-col gap-3">
+			<div class="flex items-center gap-3 border border-border bg-background px-3">
+				<span class="shrink-0 text-xs font-medium text-muted-foreground">Subject</span>
+				<input
+					bind:value={subject}
+					placeholder="Subject line"
+					disabled={sending}
+					class="h-9 w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+				/>
 			</div>
-
-			<!-- Editor -->
-			<div class="flex flex-col gap-3">
-				<div class="flex items-center gap-3 border border-border bg-background px-3">
-					<span class="shrink-0 text-xs font-medium text-muted-foreground">Subject</span>
-					<input
-						bind:value={subject}
-						placeholder="Subject line"
-						disabled={sending}
-						class="h-9 w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-					/>
-				</div>
-				{#if settingsFields.length > 0}
-					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-						{#each settingsFields as field (template.key + field.name)}
-							<div class="flex flex-col gap-1.5">
-								<Label>
-									{field.label}
-									{#if !field.required}<span class="font-normal text-muted-foreground"
-											>(optional)</span
-										>{/if}
-								</Label>
+			{#if settingsFields.length > 0}
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+					{#each settingsFields as field (template.key + field.name)}
+						<div class="flex flex-col gap-1.5">
+							<Label>
+								{field.label}
+								{#if !field.required}<span class="font-normal text-muted-foreground"
+										>(optional)</span
+									>{/if}
+							</Label>
+							{#if field.options}
+								<select
+									bind:value={fieldValues[field.name]}
+									disabled={sending}
+									onchange={scheduleEditorRefresh}
+									class="h-9 w-full border border-border bg-muted px-3 text-sm text-foreground focus:border-ring focus:outline-none"
+								>
+									{#each field.options as option (option.value)}
+										<option value={option.value}>{option.label}</option>
+									{/each}
+								</select>
+							{:else}
 								<Input
 									bind:value={fieldValues[field.name]}
 									placeholder={field.placeholder}
 									disabled={sending}
 									oninput={scheduleEditorRefresh}
 								/>
-							</div>
-						{/each}
-					</div>
-				{/if}
-				{#if editorError}
-					<div
-						class="flex items-center justify-between gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-					>
-						<span class="flex items-center gap-2">
-							<AlertTriangle class="size-4 shrink-0" />{editorError}
-						</span>
-						<Button variant="outline" size="sm" class="h-6 text-xs" onclick={() => loadEditor()}>
-							Retry
-						</Button>
-					</div>
-				{/if}
-				<div class="relative min-h-48 border border-border bg-background">
-					{#if editorHtml}
-						{#key editorHtml}
-							<div class="email-editor px-4" use:hydrateFields>
-								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-								{@html editorHtml}
-							</div>
-						{/key}
-					{/if}
-					{#if editorLoading}
-						<div class="absolute inset-0 flex items-center justify-center bg-background/60">
-							<Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
+							{/if}
 						</div>
-					{/if}
+					{/each}
 				</div>
-				<p class="text-xs text-muted-foreground">
-					Click the outlined text in the email to edit it in place. Use <span
-						class="font-mono text-muted-foreground">{'{{column}}'}</span
-					>
-					to pull values from the CSV. HTML tags like
-					<span class="font-mono text-muted-foreground">{'<a href="...">link</a>'}</span> render in the
-					sent email — check them with Preview.
-				</p>
-				{#if missingColumns.length > 0}
-					<div
-						class="flex items-center gap-2 border border-amber-300 bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
-					>
-						<AlertTriangle class="size-4 shrink-0" />
-						No CSV column matches {missingColumns.map((name) => `{{${name}}}`).join(', ')} — those placeholders
-						will be blank.
+			{/if}
+			{#if editorError}
+				<div
+					class="flex items-center justify-between gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
+				>
+					<span class="flex items-center gap-2">
+						<AlertTriangle class="size-4 shrink-0" />{editorError}
+					</span>
+					<Button variant="outline" size="sm" class="h-6 text-xs" onclick={() => loadEditor()}>
+						Retry
+					</Button>
+				</div>
+			{/if}
+			<div class="relative min-h-48 border border-border bg-background">
+				{#if editorHtml}
+					{#key editorHtml}
+						<div class="email-editor px-4" use:hydrateFields>
+							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+							{@html editorHtml}
+						</div>
+					{/key}
+				{/if}
+				{#if editorLoading}
+					<div class="absolute inset-0 flex items-center justify-center bg-background/60">
+						<Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
 					</div>
 				{/if}
 			</div>
-
-			<!-- Recipients -->
-			<div class="flex flex-col gap-3">
-				<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
-					>Recipients</span
+			<p class="text-xs text-muted-foreground">
+				Click the outlined text in the email to edit it in place. Use <span
+					class="font-mono text-muted-foreground">{'{{column}}'}</span
 				>
-				<div class="flex flex-col gap-2">
-					<Label>
-						CSV file <span class="font-normal text-muted-foreground">(first row is the header)</span
-						>
-					</Label>
-					<Input type="file" accept=".csv,text/csv" onchange={handleCsvChange} disabled={sending} />
+				to pull values from the audience columns (name, email). HTML tags like
+				<span class="font-mono text-muted-foreground">{'<a href="...">link</a>'}</span> render in the
+				sent email. Check them with Preview.
+			</p>
+			{#if missingColumns.length > 0}
+				<div
+					class="flex items-center gap-2 border border-amber-300 bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+				>
+					<AlertTriangle class="size-4 shrink-0" />
+					No audience column matches {missingColumns.map((name) => `{{${name}}}`).join(', ')}, so
+					those placeholders will be blank.
 				</div>
-				{#if csvError}
-					<div
-						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-					>
-						<AlertTriangle class="size-4 shrink-0" />{csvError}
-					</div>
-				{/if}
-				{#if csvRows.length > 0}
-					<div class="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-						<Users class="size-4 text-muted-foreground" />
-						{csvFileName} · {csvRows.length} recipient{csvRows.length === 1 ? '' : 's'} ·
-						{#each csvColumns as column (column)}
-							<Badge variant="secondary" class="font-mono text-[10px]">{`{{${column}}}`}</Badge>
-						{/each}
-					</div>
-					<div class="flex flex-col gap-2">
-						<Label>Email column</Label>
+			{/if}
+		</div>
+
+		<div class="flex flex-col gap-3">
+			<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+				>Recipients</span
+			>
+			<div class="flex flex-col gap-2">
+				{#each audienceConditions as condition, index (index)}
+					<div class="flex flex-wrap items-center gap-2">
+						{#if index > 0}
+							<span class="w-8 text-right text-[11px] text-muted-foreground">and</span>
+						{:else}
+							<span class="w-8 text-right text-[11px] text-muted-foreground">where</span>
+						{/if}
 						<select
-							bind:value={emailColumn}
+							value={condition.field}
+							onchange={(event) =>
+								(audienceConditions[index] = defaultCondition(
+									event.currentTarget.value as AudienceField
+								))}
 							disabled={sending}
-							class="h-9 w-full border border-border bg-muted px-3 text-sm text-foreground focus:border-ring focus:outline-none"
+							class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
 						>
-							<option value="">Select the column with email addresses</option>
-							{#each csvColumns as column (column)}
-								<option value={column}>{column}</option>
+							{#each Object.entries(audienceFieldDefs) as [value, def] (value)}
+								<option {value}>{def.label}</option>
 							{/each}
 						</select>
-					</div>
-					<div class="overflow-x-auto border border-border">
-						<table class="w-full whitespace-nowrap">
-							<thead>
-								<tr class="border-b border-border">
-									{#each csvColumns as column (column)}
-										<th class="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-											{column}
-											{#if column === emailColumn}
-												<Badge variant="secondary" class="ml-1 text-[10px]">email</Badge>
-											{/if}
-										</th>
-									{/each}
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-border/50">
-								{#each csvRows.slice(0, 5) as row, index (index)}
-									<tr>
-										{#each csvColumns as column (column)}
-											<td class="max-w-48 truncate px-3 py-2 text-xs text-muted-foreground">
-												{row[column] ?? ''}
-											</td>
-										{/each}
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-						{#if csvRows.length > 5}
-							<p class="border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
-								and {csvRows.length - 5} more
-							</p>
-						{/if}
-					</div>
-				{/if}
-			</div>
-
-			<!-- Actions -->
-			<div class="flex flex-col gap-3 border-t border-border pt-4">
-				{#if previewError}
-					<div
-						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-					>
-						<AlertTriangle class="size-4 shrink-0" />{previewError}
-					</div>
-				{/if}
-				{#if sendError}
-					<div
-						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-					>
-						<AlertTriangle class="size-4 shrink-0" />{sendError}
-					</div>
-				{/if}
-				<div class="flex items-center gap-2">
-					<Button
-						variant="outline"
-						size="sm"
-						class="gap-1.5 text-xs"
-						onclick={() => openPreview()}
-						disabled={!canPreview}
-					>
-						{#if previewLoading}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Eye
-								class="h-3 w-3"
-							/>{/if}
-						Preview{csvRows.length > 0 ? ' with first row' : ''}
-					</Button>
-					<Button size="sm" class="gap-1.5 text-xs" onclick={() => startSend()} disabled={!canSend}>
-						{#if sending}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Send
-								class="h-3 w-3"
-							/>{/if}
-						Send to {csvRows.length} recipient{csvRows.length === 1 ? '' : 's'}
-					</Button>
-				</div>
-				{#if sending || sendComplete}
-					<div class="flex flex-col gap-1.5">
-						<div class="h-1.5 w-full bg-muted">
-							<div
-								class="h-full bg-red-500 transition-all"
-								style="width: {csvRows.length > 0
-									? Math.round((processedCount / csvRows.length) * 100)
-									: 0}%"
-							></div>
-						</div>
-						<p class="flex items-center gap-1.5 text-xs text-muted-foreground">
-							{#if sending}
-								<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
-								Sending {processedCount} of {csvRows.length}...
-							{:else if sendFailures.length === 0}
-								<Check class="h-3 w-3 text-emerald-400" />
-								Sent {sentCount} email{sentCount === 1 ? '' : 's'}.
-							{:else}
-								<AlertTriangle class="h-3 w-3 text-amber-400" />
-								Sent {sentCount} of {csvRows.length}; {sendFailures.length} failed.
-							{/if}
-						</p>
-					</div>
-				{/if}
-				{#if sendFailures.length > 0}
-					<div class="max-h-48 overflow-y-auto border border-border">
-						{#each sendFailures as failure, index (index)}
-							<div
-								class="flex items-center justify-between gap-3 border-b border-border/50 px-3 py-1.5 last:border-b-0"
+						<select
+							bind:value={condition.op}
+							disabled={sending}
+							class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
+						>
+							{#each audienceFieldDefs[condition.field].ops as op (op.value)}
+								<option value={op.value}>{op.label}</option>
+							{/each}
+						</select>
+						{#if condition.field === 'signedUp'}
+							<input
+								type="date"
+								bind:value={condition.value}
+								disabled={sending}
+								class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
+							/>
+						{:else if condition.field === 'vmCount'}
+							<input
+								type="number"
+								min="0"
+								bind:value={condition.value}
+								disabled={sending}
+								class="h-8 w-20 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
+							/>
+						{:else if condition.field === 'vmType'}
+							<select
+								bind:value={condition.value}
+								disabled={sending}
+								class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
 							>
-								<span class="truncate font-mono text-xs text-muted-foreground"
-									>{failure.recipient}</span
-								>
-								<span class="shrink-0 text-xs text-red-400">{failure.reason}</span>
-							</div>
-						{/each}
+								{#each vmTypeOptions as typeName (typeName)}
+									<option value={typeName}>{typeName}</option>
+								{/each}
+							</select>
+						{:else}
+							<select
+								bind:value={condition.value}
+								disabled={sending}
+								class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
+							>
+								<option value="yes">yes</option>
+								<option value="no">no</option>
+							</select>
+						{/if}
+						<Button
+							variant="ghost"
+							size="sm"
+							class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+							onclick={() =>
+								(audienceConditions = audienceConditions.filter((_, i) => i !== index))}
+							disabled={sending}
+							aria-label="Remove condition"
+						>
+							<X class="h-3.5 w-3.5" />
+						</Button>
 					</div>
-				{/if}
+				{/each}
+				<Button
+					variant="outline"
+					size="sm"
+					class="w-fit gap-1.5 border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+					onclick={() =>
+						(audienceConditions = [...audienceConditions, defaultCondition('verified')])}
+					disabled={sending}
+				>
+					<Plus class="h-3 w-3" />
+					Add condition
+				</Button>
 			</div>
+			<div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+				<Users class="size-4 text-muted-foreground" />
+				{queryRecipients.length} recipient{queryRecipients.length === 1 ? '' : 's'} matched
+			</div>
+			{#if queryRecipients.length > 0}
+				<div class="max-h-48 overflow-y-auto border border-border">
+					{#each queryRecipients as recipient (recipient.id)}
+						<div
+							class="flex items-center justify-between gap-3 border-b border-border/50 px-3 py-1.5 last:border-b-0"
+						>
+							<span class="truncate text-xs text-foreground">{recipient.name}</span>
+							<span class="shrink-0 font-mono text-xs text-muted-foreground">{recipient.email}</span
+							>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+
+		<!-- Actions -->
+		<div class="flex flex-col gap-3 border-t border-border pt-4">
+			{#if previewError}
+				<div
+					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
+				>
+					<AlertTriangle class="size-4 shrink-0" />{previewError}
+				</div>
+			{/if}
+			{#if sendError}
+				<div
+					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
+				>
+					<AlertTriangle class="size-4 shrink-0" />{sendError}
+				</div>
+			{/if}
+			<div class="flex items-center gap-2">
+				<Button
+					variant="outline"
+					size="sm"
+					class="gap-1.5 text-xs"
+					onclick={() => openPreview()}
+					disabled={!canPreview}
+				>
+					{#if previewLoading}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Eye
+							class="h-3 w-3"
+						/>{/if}
+					Preview{recipientRows.length > 0 ? ' with first row' : ''}
+				</Button>
+				<Button size="sm" class="gap-1.5 text-xs" onclick={() => startSend()} disabled={!canSend}>
+					{#if sending}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Send class="h-3 w-3" />{/if}
+					Send to {recipientRows.length} recipient{recipientRows.length === 1 ? '' : 's'}
+				</Button>
+			</div>
+			{#if sending || sendComplete}
+				<div class="flex flex-col gap-1.5">
+					<div class="h-1.5 w-full bg-muted">
+						<div
+							class="h-full bg-red-500 transition-all"
+							style="width: {recipientRows.length > 0
+								? Math.round((processedCount / recipientRows.length) * 100)
+								: 0}%"
+						></div>
+					</div>
+					<p class="flex items-center gap-1.5 text-xs text-muted-foreground">
+						{#if sending}
+							<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
+							Sending {processedCount} of {recipientRows.length}...
+						{:else if sendFailures.length === 0}
+							<Check class="h-3 w-3 text-emerald-400" />
+							Sent {sentCount} email{sentCount === 1 ? '' : 's'}.
+						{:else}
+							<AlertTriangle class="h-3 w-3 text-amber-400" />
+							Sent {sentCount} of {recipientRows.length}; {sendFailures.length} failed.
+						{/if}
+					</p>
+				</div>
+			{/if}
+			{#if sendFailures.length > 0}
+				<div class="max-h-48 overflow-y-auto border border-border">
+					{#each sendFailures as failure, index (index)}
+						<div
+							class="flex items-center justify-between gap-3 border-b border-border/50 px-3 py-1.5 last:border-b-0"
+						>
+							<span class="truncate font-mono text-xs text-muted-foreground"
+								>{failure.recipient}</span
+							>
+							<span class="shrink-0 text-xs text-red-400">{failure.reason}</span>
+						</div>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	</div>
 </div>
@@ -622,7 +646,7 @@
 			<Dialog.Title>Preview</Dialog.Title>
 			<Dialog.Description>
 				Subject: {previewSubject}
-				{#if csvRows.length > 0}· rendered with the first CSV row{/if}
+				{#if recipientRows.length > 0}· rendered with the first recipient{/if}
 			</Dialog.Description>
 		</Dialog.Header>
 		<iframe

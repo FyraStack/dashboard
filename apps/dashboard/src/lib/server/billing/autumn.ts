@@ -390,6 +390,14 @@ export async function getProjectBillingState(
 
 export async function isProjectBillingExempt(projectId: string) {
 	const db = initDrizzle();
+
+	const [project] = await db
+		.select({ billingExempt: organization.billingExempt })
+		.from(organization)
+		.where(eq(organization.id, projectId))
+		.limit(1);
+	if (project?.billingExempt) return true;
+
 	const [exemptOwner] = await db
 		.select({ userId: member.userId })
 		.from(member)

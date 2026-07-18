@@ -369,7 +369,7 @@
 
 				<!-- Server -->
 				<div class="w-28">
-					<span class="text-xs text-muted-foreground">{vol.server ?? '—'}</span>
+					<span class="text-xs text-muted-foreground">{vol.server ?? '-'}</span>
 				</div>
 
 				<!-- Actions -->

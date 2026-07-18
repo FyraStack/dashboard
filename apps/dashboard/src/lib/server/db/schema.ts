@@ -67,6 +67,7 @@ export const vms = pgTable(
 		lastKnownUptime: integer('last_known_uptime').notNull().default(0),
 		lastKnownAt: bigint('last_known_at', { mode: 'number' }),
 		active: boolean('active').notNull().default(true),
+		deletedAt: bigint('deleted_at', { mode: 'number' }),
 		ownerProjectId: ulidFk('owner_project_id').references(() => organization.id),
 		vmTypeId: ulidFk('vm_type_id')
 			.notNull()
@@ -213,6 +214,7 @@ export const billingUsageEvents = pgTable(
 		periodStart: bigint('period_start', { mode: 'number' }).notNull(),
 		periodEnd: bigint('period_end', { mode: 'number' }).notNull(),
 		idempotencyKey: text('idempotency_key').notNull(),
+		note: text('note'),
 		syncStatus: billingSyncStatusEnum('sync_status').notNull().default('pending'),
 		syncError: text('sync_error'),
 		syncedAt: bigint('synced_at', { mode: 'number' }),

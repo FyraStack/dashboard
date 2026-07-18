@@ -27,7 +27,7 @@
 	</div>
 	<div class="px-5 pb-3">
 		<div class="border border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground">
-			Preview — snapshots aren't available yet. The entries below are sample data.
+			Preview: snapshots aren't available yet. The entries below are sample data.
 		</div>
 	</div>
 	<div class="divide-y divide-border/50">

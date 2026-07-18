@@ -124,7 +124,7 @@
 <div
 	class="shrink-0 border-b border-border bg-background/40 px-4 py-1 text-[10px] text-muted-foreground"
 >
-	Sample log data — live log streaming isn't available yet.
+	Sample log data. Live log streaming isn't available yet.
 </div>
 <div class="min-h-0 flex-1 overflow-auto bg-background font-mono text-[11px] leading-relaxed">
 	{#if selectedServer.status !== 'running'}

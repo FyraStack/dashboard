@@ -227,7 +227,7 @@
 							</Tooltip.Content>
 						</Tooltip.Root>
 						<p class="mt-1 text-sm font-semibold text-foreground tabular-nums">
-							{hasCost ? formatCost(totalCost) : '—'}
+							{hasCost ? formatCost(totalCost) : '-'}
 						</p>
 					</div>
 				</div>

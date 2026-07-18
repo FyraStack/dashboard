@@ -993,7 +993,7 @@
 							<div class="flex items-center justify-between gap-3 text-sm sm:text-xs">
 								<span class="text-muted-foreground">Image</span>
 								<span class="min-w-0 truncate text-right text-foreground">
-									{selectedImage?.name ?? '—'}
+									{selectedImage?.name ?? '-'}
 									{#if selectedImageVersion}/ {selectedImageVersion}{/if}
 								</span>
 							</div>
@@ -1002,7 +1002,7 @@
 								<span class="min-w-0 truncate text-right text-foreground">
 									{selectedPlan
 										? `${selectedPlan.name} (${selectedPlan.cores} vCPU, ${formatRam(selectedPlan.ramCapacity)})`
-										: '—'}
+										: '-'}
 								</span>
 							</div>
 							{#if selectedPlan}

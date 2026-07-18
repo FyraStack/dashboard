@@ -37,6 +37,7 @@ import {
 	listAllAdminVms,
 	type AdminVm
 } from '$lib/remote/admin-vms.remote';
+import { setProjectBillingExempt, type AdminProject } from '$lib/remote/admin-projects.remote';
 import {
 	createVmType,
 	deleteVmType,
@@ -131,6 +132,7 @@ export type AdminPageData = {
 	adminUsers?: AdminUser[];
 	ipamPrefixes?: IpamPrefix[];
 	adminVms?: AdminVm[];
+	adminProjects?: AdminProject[];
 };
 
 export const colorOptions = [
@@ -158,6 +160,9 @@ export class AdminState {
 	adminVms = $state<AdminVm[]>([]);
 	adminVmSaving = $state<Record<string, string>>({});
 	adminVmError = $state('');
+	adminProjects = $state<AdminProject[]>([]);
+	adminProjectSaving = $state<Record<string, boolean>>({});
+	adminProjectError = $state('');
 
 	userSheetOpen = $state(false);
 	selectedUser = $state<AdminUser | null>(null);
@@ -242,6 +247,7 @@ export class AdminState {
 		this.ipamPrefixes = [...(data.ipamPrefixes ?? [])];
 		this.adminUsers = [...(data.adminUsers ?? [])];
 		this.adminVms = [...(data.adminVms ?? [])];
+		this.adminProjects = [...(data.adminProjects ?? [])];
 		const incoming = data.featureFlags ?? { ...defaultFeatureFlags };
 		this.featureFlags = untrack(() =>
 			Object.fromEntries(
@@ -335,6 +341,24 @@ export class AdminState {
 			this.adminUserError = getErrorMessage(err, 'Failed to update billing exemption');
 		} finally {
 			this.stopUserSheetSave(userId);
+		}
+	}
+
+	async setProjectBillingExempt(projectId: string, billingExempt: boolean) {
+		const previousProjects = this.adminProjects.map((project) => ({ ...project }));
+		this.adminProjectError = '';
+		this.adminProjectSaving[projectId] = true;
+		this.adminProjects = this.adminProjects.map((project) =>
+			project.id === projectId ? { ...project, billingExempt } : project
+		);
+		try {
+			await setProjectBillingExempt({ projectId, billingExempt });
+			await invalidate('app:admin-projects');
+		} catch (err) {
+			this.adminProjects = previousProjects;
+			this.adminProjectError = getErrorMessage(err, 'Failed to update billing exemption');
+		} finally {
+			delete this.adminProjectSaving[projectId];
 		}
 	}
 

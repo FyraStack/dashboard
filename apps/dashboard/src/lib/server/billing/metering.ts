@@ -343,7 +343,8 @@ async function trackUsageEvent(event: BillingUsageEvent) {
 				resourceType: event.resourceType,
 				resourceId: event.resourceId,
 				periodStart: event.periodStart,
-				periodEnd: event.periodEnd
+				periodEnd: event.periodEnd,
+				...(event.note ? { note: event.note } : {})
 			}
 		};
 

@@ -118,7 +118,7 @@
 	</div>
 
 	<div class="border-b border-border bg-background/40 px-5 py-2 text-xs text-muted-foreground">
-		Preview — networking isn't live yet. Changes here aren't saved.
+		Preview: networking isn't live yet. Changes here aren't saved.
 	</div>
 
 	<div class="flex-1 overflow-auto">
@@ -179,7 +179,7 @@
 									</div>
 								{:else}
 									<span class="text-sm text-muted-foreground">
-										{ip.rdns || '—'}
+										{ip.rdns || '-'}
 									</span>
 								{/if}
 							</td>

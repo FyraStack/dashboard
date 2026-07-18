@@ -19,14 +19,15 @@ function cachedLookup<T>(key: string, compute: () => Promise<T>): Promise<T> {
 	return lookup;
 }
 
-type ProjectAccess = { projectId: string; role: string | null } | null;
+type ProjectAccess = { projectId: string; role: string | null; disabled: boolean } | null;
 
 function loadProjectAccess(db: any, userId: string, projectId: string): Promise<ProjectAccess> {
 	return cachedLookup(`project-access:${userId}:${projectId}`, async () => {
 		const [projectAccess] = await db
 			.select({
 				projectId: organization.id,
-				role: member.role
+				role: member.role,
+				disabled: organization.disabled
 			})
 			.from(organization)
 			.leftJoin(member, and(eq(member.organizationId, organization.id), eq(member.userId, userId)))
@@ -66,6 +67,10 @@ export async function requireProjectAccess(
 
 	if (!projectAccess) {
 		error(404, `Project "${projectId}" not found`);
+	}
+
+	if (projectAccess.disabled) {
+		error(403, 'This project has been disabled');
 	}
 
 	if (!projectAccess.role || !hasProjectRole(projectAccess.role, minLevel)) {

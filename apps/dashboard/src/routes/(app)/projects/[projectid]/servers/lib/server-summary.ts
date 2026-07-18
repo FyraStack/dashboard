@@ -76,7 +76,7 @@ function formatBytes(bytes: number): string {
 }
 
 function formatUptime(seconds: number): string {
-	if (!seconds) return '—';
+	if (!seconds) return '-';
 	const d = Math.floor(seconds / 86400);
 	const h = Math.floor((seconds % 86400) / 3600);
 	const m = Math.floor((seconds % 3600) / 60);
@@ -87,12 +87,12 @@ function getFirstIp(
 	networkInterfaces: NetworkInterfaces | null | undefined,
 	match: (address: string) => boolean
 ): string {
-	if (!networkInterfaces) return '—';
+	if (!networkInterfaces) return '-';
 
 	return (
 		Object.values(networkInterfaces)
 			.flatMap((networkInterface) => networkInterface.ipAddresses ?? [])
-			.find((address) => address && match(address)) ?? '—'
+			.find((address) => address && match(address)) ?? '-'
 	);
 }
 

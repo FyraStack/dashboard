@@ -1,42 +1,23 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { featureFlagKeys, featureFlagLabels, type FeatureFlagKey } from '$lib/feature-flags';
 	import GripVertical from '~icons/lucide/grip-vertical';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
-	import Cpu from '~icons/nucleo/cpu';
 	import Disc from '~icons/nucleo/disc';
-	import Flag from '~icons/nucleo/flag';
-	import HardDrive from '~icons/nucleo/hard-drive';
 	import Image from '~icons/nucleo/layers';
-	import Mail from '~icons/nucleo/mail';
-	import Network from '~icons/nucleo/network';
 	import Pencil from '~icons/nucleo/pencil';
 	import RefreshCw from '~icons/nucleo/refresh-cw';
-	import Server from '~icons/nucleo/server';
-	import Shield from '~icons/nucleo/shield';
 	import Trash2 from '~icons/nucleo/trash';
 	import Upload from '~icons/nucleo/upload';
-	import UserCog from '~icons/nucleo/user-cog';
 	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
 
-	const featureFlagIcons: Partial<Record<FeatureFlagKey, typeof Server>> = {
-		colocation: Server,
-		firewall: Shield,
-		images: Image,
-		volumes: HardDrive
-	};
-
-	type AdminTab = 'features' | 'vmTypes' | 'images' | 'ipam' | 'users' | 'vms' | 'emails';
 	let { data }: { data: AdminPageData } = $props();
-	const activeTab = 'images' as AdminTab;
 	const admin = new AdminState(untrack(() => data));
 	$effect(() => {
 		admin.sync(data);
@@ -96,419 +77,126 @@
 	let selectedPveImage = $derived(
 		admin.pveImages.find((image) => image.volid === admin.imgFilePath)
 	);
-	const userCount = $derived(admin.adminUsers.length);
 </script>
 
-<div class="flex flex-1 flex-col overflow-hidden">
-	<!-- Tab bar -->
-	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-border">
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'vmTypes'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin')}
+<div class="flex-1 overflow-auto">
+	<div class="flex items-center justify-end gap-2 border-b border-border/60 px-5 py-2">
+		<Button
+			size="sm"
+			variant="outline"
+			class="h-7 gap-1.5 text-xs"
+			onclick={() => admin.imgImportOpen()}
 		>
-			<Cpu class="size-4 shrink-0" />
-			VM Types
-			<Badge variant="secondary" class="text-[10px]">{admin.vmTypes.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'vms'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/vms')}
-		>
-			<Server class="size-4 shrink-0" />
-			VMs
-			<Badge variant="secondary" class="text-[10px]">
-				{admin.adminVms.filter((vm) => vm.active).length}
-			</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'images'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/images')}
-		>
-			<Disc class="size-4 shrink-0" />
-			Images
-			<Badge variant="secondary" class="text-[10px]">{admin.images.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'features'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/features')}
-		>
-			<Flag class="size-4 shrink-0" />
-			Feature Flags
-			<Badge variant="secondary" class="text-[10px]">
-				{featureFlagKeys.filter((key) => admin.featureFlags[key]).length}
-			</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'ipam'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/ipam')}
-		>
-			<Network class="size-4 shrink-0" />
-			IPAM
-			<Badge variant="secondary" class="text-[10px]">{admin.ipamPrefixes.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'users'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/users')}
-		>
-			<UserCog class="size-4 shrink-0" />
-			Users
-			<Badge variant="secondary" class="text-[10px]">{userCount}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'emails'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/emails')}
-		>
-			<Mail class="size-4 shrink-0" />
-			Emails
-		</a>
-		<div class="flex-1"></div>
-		{#if activeTab === 'vmTypes'}
-			<div class="px-4">
-				<Button size="sm" class="h-7 gap-1.5 text-xs" onclick={() => admin.vtOpenCreate()}
-					><Plus class="h-3 w-3" /> Create Type</Button
-				>
-			</div>
-		{:else if activeTab === 'images'}
-			<div class="flex gap-2 px-4">
-				<Button
-					size="sm"
-					variant="outline"
-					class="h-7 gap-1.5 text-xs"
-					onclick={() => admin.imgImportOpen()}
-					><Upload class="h-3 w-3" /> Upload/Import Image</Button
-				>
-				<Button size="sm" class="h-7 gap-1.5 text-xs" onclick={() => admin.imgOpenCreate()}
-					><Plus class="h-3 w-3" /> Add Image</Button
-				>
-			</div>
-		{/if}
+			<Upload class="h-3 w-3" /> Upload/Import Image
+		</Button>
+		<Button size="sm" class="h-7 gap-1.5 text-xs" onclick={() => admin.imgOpenCreate()}>
+			<Plus class="h-3 w-3" /> Add Image
+		</Button>
 	</div>
-
-	<!-- Content -->
-	<div class="flex-1 overflow-auto">
-		{#if activeTab === 'features'}
-			<div class="flex flex-col gap-4 p-5">
-				{#if admin.featureFlagError}
-					<div
-						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-					>
-						<AlertTriangle class="size-4 shrink-0" />{admin.featureFlagError}
-					</div>
-				{/if}
-				<div class="flex flex-col gap-2">
-					{#each featureFlagKeys as flag (flag)}
-						{@const enabled = admin.featureFlags[flag]}
-						{@const Icon = featureFlagIcons[flag] ?? Flag}
-						<div class="flex items-center justify-between px-4 py-3">
-							<div class="flex items-start gap-3">
-								<Icon class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-								<div class="flex flex-col gap-0.5">
-									<span class="text-sm font-medium text-foreground">{featureFlagLabels[flag]}</span>
-									<p class="text-xs text-muted-foreground">Route visibility and direct access</p>
-								</div>
-							</div>
-							<div class="flex items-center gap-2">
-								{#if admin.featureFlagSaving[flag]}
-									<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-								{/if}
-								<div class="flex overflow-hidden border border-border">
-									<button
-										type="button"
-										class="px-3 py-1 text-xs font-medium transition-colors {enabled
-											? 'bg-red-500/15 text-red-400'
-											: 'text-muted-foreground hover:text-foreground'}"
-										onclick={() =>
-											!admin.featureFlagSaving[flag] && admin.toggleFeatureFlag(flag, true)}
-										disabled={admin.featureFlagSaving[flag]}
-									>
-										On
-									</button>
-									<button
-										type="button"
-										class="px-3 py-1 text-xs font-medium transition-colors {!enabled
-											? 'bg-muted text-muted-foreground'
-											: 'text-muted-foreground hover:text-foreground'}"
-										onclick={() =>
-											!admin.featureFlagSaving[flag] && admin.toggleFeatureFlag(flag, false)}
-										disabled={admin.featureFlagSaving[flag]}
-									>
-										Off
-									</button>
-								</div>
-							</div>
-						</div>
-						{#if flag !== featureFlagKeys[featureFlagKeys.length - 1]}
-							<div class="border-t border-border/50"></div>
-						{/if}
-					{/each}
-				</div>
-			</div>
-		{:else if activeTab === 'vmTypes'}
-			{#if admin.vmTypes.length === 0}
-				<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
-					<Cpu class="mb-3 h-6 w-6" />
-					<p class="text-xs">No VM types yet</p>
-					<Button
-						variant="outline"
-						size="sm"
-						class="mt-3 gap-1.5 text-xs"
-						onclick={() => admin.vtOpenCreate()}><Plus class="h-3 w-3" /> Create Type</Button
-					>
-				</div>
-			{:else}
-				<table class="w-full whitespace-nowrap">
-					<thead
-						><tr class="border-b border-border">
-							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Name</th>
-							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">ISA</th>
-							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Cores</th>
-							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">RAM</th>
-							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Storage</th>
-							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Rate</th>
-							<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Cap</th>
-							<th class="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th
-							>
-						</tr></thead
-					>
-					<tbody class="divide-y divide-border/50">
-						{#each admin.vmTypes as vt (vt.id)}
-							<tr class="transition-colors hover:bg-muted/20">
-								<td class="px-5 py-3 text-sm font-medium text-foreground">{vt.name}</td>
-								<td class="px-5 py-3"
-									><Badge variant="secondary" class="text-[10px]">{vt.isa}</Badge></td
-								>
-								<td class="px-5 py-3 text-sm text-muted-foreground">{vt.cores}</td>
-								<td class="px-5 py-3 text-sm text-muted-foreground">{vt.ramCapacity} MB</td>
-								<td class="px-5 py-3 text-sm text-muted-foreground">{vt.storageAmount} GB</td>
-								<td class="px-5 py-3 text-sm text-muted-foreground">${vt.rate}/hr</td>
-								<td class="px-5 py-3 text-sm text-muted-foreground">${vt.cap}/mo</td>
-								<td class="px-5 py-3 text-right">
-									<div class="flex items-center justify-end gap-1">
-										<Button
-											variant="ghost"
-											size="sm"
-											aria-label={`Edit ${vt.name}`}
-											class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-											onclick={() => admin.vtOpenEdit(vt)}><Pencil class="h-3 w-3" /></Button
-										>
-										<Button
-											variant="ghost"
-											size="sm"
-											aria-label={`Delete ${vt.name}`}
-											class="h-7 w-7 p-0 text-red-400 hover:text-red-300"
-											onclick={() => admin.vtRemove(vt.id)}><Trash2 class="h-3 w-3" /></Button
-										>
-									</div>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			{/if}
-
-			<!-- ═══ Images Tab ═══ -->
-		{:else if admin.images.length === 0}
-			<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
-				<Disc class="mb-3 h-6 w-6" />
-				<p class="text-xs">No admin.images configured</p>
-				<Button
-					variant="outline"
-					size="sm"
-					class="mt-3 gap-1.5 text-xs"
-					onclick={() => admin.imgOpenCreate()}><Plus class="h-3 w-3" /> Add Image</Button
-				>
-			</div>
-		{:else}
-			<table class="w-full whitespace-nowrap">
-				<thead
-					><tr class="border-b border-border">
-						<th class="w-8 px-3 py-3"></th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Image</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Version</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Type</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground"
-							>Proxmox Path</th
-						>
-						<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground"
-							>Description</th
-						>
-						<th class="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th>
-					</tr></thead
-				>
-				<tbody class="divide-y divide-border/50">
-					{#each admin.images as img, index (img.id)}
-						<tr
-							class="transition-colors hover:bg-muted/20 {imgDragIndex === index
-								? 'opacity-40'
-								: ''} {imgDropIndex === index && imgDragIndex !== index ? 'bg-muted/40' : ''}"
-							ondragover={(event) => imgDragOver(event, index)}
-							ondrop={(event) => imgDrop(event, index)}
-						>
-							<td class="px-3 py-3">
-								<span
-									role="button"
-									tabindex="0"
-									aria-label={`Drag or use arrow keys to reorder ${img.name}`}
-									draggable="true"
-									class="flex h-7 w-5 cursor-grab items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus:text-muted-foreground focus:outline-none active:cursor-grabbing"
-									ondragstart={(event) => imgDragStart(event, index)}
-									ondragend={imgDragEnd}
-									onkeydown={(event) => imgHandleKeydown(event, index)}
-								>
-									<GripVertical class="h-3.5 w-3.5" />
-								</span>
-							</td>
-							<td class="px-5 py-3">
-								<div class="flex items-center gap-2.5">
-									<span
-										class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden text-white {img.color}"
-									>
-										{#if img.isOfficial && img.logoSvg}
-											<img src={svgDataUrl(img.logoSvg)} alt="" class="h-4 w-4" />
-										{:else}
-											<Disc class="size-4" />
-										{/if}
-									</span>
-									<div class="flex flex-col gap-1">
-										<span class="text-sm font-medium text-foreground">{img.name}</span>
-										{#if img.isOfficial}
-											<Badge variant="secondary" class="w-fit text-[10px] text-emerald-300"
-												>Official</Badge
-											>
-										{/if}
-									</div>
-								</div>
-							</td>
-							<td class="px-5 py-3 text-sm text-muted-foreground">{img.version}</td>
-							<td class="px-5 py-3"
-								><Badge variant="secondary" class="text-[10px]">{img.imageType || 'import'}</Badge
-								></td
-							>
-							<td class="max-w-xs truncate px-5 py-3 font-mono text-xs text-muted-foreground"
-								>{img.filePath}</td
-							>
-							<td class="max-w-xs truncate px-5 py-3 text-xs text-muted-foreground"
-								>{img.description}</td
-							>
-							<td class="px-5 py-3 text-right">
-								<div class="flex items-center justify-end gap-1">
-									<Button
-										variant="ghost"
-										size="sm"
-										aria-label={`Edit ${img.name}`}
-										class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-										onclick={() => admin.imgOpenEdit(img)}><Pencil class="h-3 w-3" /></Button
-									>
-									<Button
-										variant="ghost"
-										size="sm"
-										aria-label={`Delete ${img.name}`}
-										class="h-7 w-7 p-0 text-red-400 hover:text-red-300"
-										onclick={() => admin.imgRemove(img.id)}><Trash2 class="h-3 w-3" /></Button
-									>
-								</div>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		{/if}
-	</div>
-</div>
-
-<!-- VM Type Dialog -->
-<Dialog.Root bind:open={admin.vtDialogOpen}>
-	<Dialog.Content class="border-border bg-background sm:max-w-md">
-		<Dialog.Header>
-			<Dialog.Title>{admin.vtEditing ? 'Edit VM Type' : 'Create VM Type'}</Dialog.Title>
-			<Dialog.Description
-				>{admin.vtEditing
-					? 'Update plan specifications.'
-					: 'Define a new VM plan.'}</Dialog.Description
-			>
-		</Dialog.Header>
-		<div class="flex flex-col gap-4 py-4">
-			{#if admin.vtError}
-				<div
-					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-				>
-					<AlertTriangle class="size-4 shrink-0" />{admin.vtError}
-				</div>
-			{/if}
-			<div class="flex flex-col gap-2">
-				<Label>Name</Label><Input bind:value={admin.vtName} placeholder="STACK-XXS" />
-			</div>
-			<div class="flex flex-col gap-2">
-				<Label>Architecture</Label>
-				<select
-					bind:value={admin.vtIsa}
-					class="h-9 w-full border border-border bg-muted px-3 text-sm text-foreground focus:border-ring focus:outline-none"
-				>
-					<option value="x86">x86</option>
-				</select>
-			</div>
-			<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-				<div class="flex flex-col gap-2">
-					<Label>Cores</Label><Input type="number" bind:value={admin.vtCores} min="1" />
-				</div>
-				<div class="flex flex-col gap-2">
-					<Label>RAM (MB)</Label><Input
-						type="number"
-						bind:value={admin.vtRam}
-						min="128"
-						step="128"
-					/>
-				</div>
-				<div class="flex flex-col gap-2">
-					<Label>Storage (GB)</Label><Input type="number" bind:value={admin.vtStorage} min="1" />
-				</div>
-			</div>
-			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-				<div class="flex flex-col gap-2">
-					<Label>Rate ($/hr)</Label><Input bind:value={admin.vtRate} placeholder="0.007" />
-				</div>
-				<div class="flex flex-col gap-2">
-					<Label>Cap ($/mo)</Label><Input bind:value={admin.vtCap} placeholder="5.00" />
-				</div>
-			</div>
-		</div>
-		<Dialog.Footer>
-			<Button variant="outline" size="sm" onclick={() => (admin.vtDialogOpen = false)}
-				>Cancel</Button
-			>
+	{#if admin.images.length === 0}
+		<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
+			<Disc class="mb-3 h-6 w-6" />
+			<p class="text-xs">No admin.images configured</p>
 			<Button
+				variant="outline"
 				size="sm"
-				onclick={() => admin.vtSave()}
-				disabled={admin.vtSaving || !admin.vtName.trim()}
+				class="mt-3 gap-1.5 text-xs"
+				onclick={() => admin.imgOpenCreate()}><Plus class="h-3 w-3" /> Add Image</Button
 			>
-				{#if admin.vtSaving}<Loader2 class="h-3 w-3 animate-spin" />{/if}{admin.vtEditing
-					? 'Save'
-					: 'Create'}
-			</Button>
-		</Dialog.Footer>
-	</Dialog.Content>
-</Dialog.Root>
+		</div>
+	{:else}
+		<table class="w-full whitespace-nowrap">
+			<thead
+				><tr class="border-b border-border">
+					<th class="w-8 px-3 py-3"></th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Image</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Version</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Type</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Proxmox Path</th
+					>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Description</th>
+					<th class="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th>
+				</tr></thead
+			>
+			<tbody class="divide-y divide-border/50">
+				{#each admin.images as img, index (img.id)}
+					<tr
+						class="transition-colors hover:bg-muted/20 {imgDragIndex === index
+							? 'opacity-40'
+							: ''} {imgDropIndex === index && imgDragIndex !== index ? 'bg-muted/40' : ''}"
+						ondragover={(event) => imgDragOver(event, index)}
+						ondrop={(event) => imgDrop(event, index)}
+					>
+						<td class="px-3 py-3">
+							<span
+								role="button"
+								tabindex="0"
+								aria-label={`Drag or use arrow keys to reorder ${img.name}`}
+								draggable="true"
+								class="flex h-7 w-5 cursor-grab items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus:text-muted-foreground focus:outline-none active:cursor-grabbing"
+								ondragstart={(event) => imgDragStart(event, index)}
+								ondragend={imgDragEnd}
+								onkeydown={(event) => imgHandleKeydown(event, index)}
+							>
+								<GripVertical class="h-3.5 w-3.5" />
+							</span>
+						</td>
+						<td class="px-5 py-3">
+							<div class="flex items-center gap-2.5">
+								<span
+									class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden text-white {img.color}"
+								>
+									{#if img.isOfficial && img.logoSvg}
+										<img src={svgDataUrl(img.logoSvg)} alt="" class="h-4 w-4" />
+									{:else}
+										<Disc class="size-4" />
+									{/if}
+								</span>
+								<div class="flex flex-col gap-1">
+									<span class="text-sm font-medium text-foreground">{img.name}</span>
+									{#if img.isOfficial}
+										<Badge variant="secondary" class="w-fit text-[10px] text-emerald-300"
+											>Official</Badge
+										>
+									{/if}
+								</div>
+							</div>
+						</td>
+						<td class="px-5 py-3 text-sm text-muted-foreground">{img.version}</td>
+						<td class="px-5 py-3"
+							><Badge variant="secondary" class="text-[10px]">{img.imageType || 'import'}</Badge
+							></td
+						>
+						<td class="max-w-xs truncate px-5 py-3 font-mono text-xs text-muted-foreground"
+							>{img.filePath}</td
+						>
+						<td class="max-w-xs truncate px-5 py-3 text-xs text-muted-foreground"
+							>{img.description}</td
+						>
+						<td class="px-5 py-3 text-right">
+							<div class="flex items-center justify-end gap-1">
+								<Button
+									variant="ghost"
+									size="sm"
+									aria-label={`Edit ${img.name}`}
+									class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+									onclick={() => admin.imgOpenEdit(img)}><Pencil class="h-3 w-3" /></Button
+								>
+								<Button
+									variant="ghost"
+									size="sm"
+									aria-label={`Delete ${img.name}`}
+									class="h-7 w-7 p-0 text-red-400 hover:text-red-300"
+									onclick={() => admin.imgRemove(img.id)}><Trash2 class="h-3 w-3" /></Button
+								>
+							</div>
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	{/if}
+</div>
 
 <!-- Import Image Dialog -->
 <Dialog.Root bind:open={admin.importDialogOpen}>

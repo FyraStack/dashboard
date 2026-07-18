@@ -111,7 +111,7 @@
 				<div class="flex items-center justify-between px-5 py-2">
 					<span class="text-xs text-muted-foreground">Location</span>
 					<span class="text-xs font-medium text-foreground"
-						>Chicago, IL — {colo.selectedUnit.location}</span
+						>Chicago, IL · {colo.selectedUnit.location}</span
 					>
 				</div>
 				<div class="divide-y divide-border/50 border-t border-border/50">

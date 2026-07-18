@@ -7,6 +7,7 @@ export type CampaignField = {
 	required: boolean;
 	placeholder: string;
 	defaultValue?: string;
+	options?: { value: string; label: string }[];
 };
 
 export type CampaignTemplate = {
@@ -30,7 +31,7 @@ export const campaignTemplates: CampaignTemplate[] = [
 	{
 		key: 'empty',
 		label: 'Empty',
-		description: 'Blank template — just your text on the standard email shell.',
+		description: 'Blank template: just your text on the standard email shell.',
 		defaultSubject: '',
 		fields: [
 			{
@@ -55,6 +56,84 @@ export const campaignTemplates: CampaignTemplate[] = [
 				required: true,
 				placeholder: 'Write your message here',
 				defaultValue: 'Hi {{name}},\n\nWrite your message here. Blank lines start new paragraphs.'
+			}
+		]
+	},
+	{
+		key: 'service-disruption',
+		label: 'Service disruption',
+		description: 'Incident notice with a status banner, affected services, and status page link.',
+		defaultSubject: 'Service disruption: {{incident}}',
+		fields: [
+			userNameField,
+			{
+				name: 'heading',
+				label: 'Incident title',
+				inline: true,
+				required: true,
+				placeholder: 'Incident title',
+				defaultValue: 'Degraded VM performance in our datacenter'
+			},
+			{
+				name: 'preview',
+				label: 'Preview text',
+				inline: false,
+				required: true,
+				placeholder: 'Shown in inbox previews',
+				defaultValue: 'We are investigating a service disruption'
+			},
+			{
+				name: 'severity',
+				label: 'Severity',
+				inline: false,
+				required: true,
+				placeholder: 'warning',
+				defaultValue: 'warning',
+				options: [
+					{ value: 'critical', label: 'Critical' },
+					{ value: 'warning', label: 'Warning' },
+					{ value: 'info', label: 'Info' },
+					{ value: 'resolved', label: 'Resolved' }
+				]
+			},
+			{
+				name: 'status',
+				label: 'Status',
+				inline: true,
+				required: true,
+				placeholder: 'Investigating / Identified / Monitoring / Resolved',
+				defaultValue: 'Investigating'
+			},
+			{
+				name: 'affectedServices',
+				label: 'Affected services',
+				inline: true,
+				required: false,
+				placeholder: 'Affected services',
+				defaultValue: 'Virtual machines, volumes'
+			},
+			{
+				name: 'timestamp',
+				label: 'Timestamp',
+				inline: true,
+				required: false,
+				placeholder: '2026-07-17 12:00 UTC'
+			},
+			{
+				name: 'body',
+				label: 'Body',
+				inline: true,
+				required: true,
+				placeholder: 'What happened, impact, and next update',
+				defaultValue:
+					'We are investigating an issue affecting some services. Your data is safe, and we will follow up here as soon as we know more.'
+			},
+			{
+				name: 'statusUrl',
+				label: 'Status page URL',
+				inline: false,
+				required: false,
+				placeholder: 'https://status.fyrastack.com'
 			}
 		]
 	},

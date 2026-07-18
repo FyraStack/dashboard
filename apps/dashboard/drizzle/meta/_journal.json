@@ -169,6 +169,34 @@
       "when": 1783925195204,
       "tag": "0023_familiar_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784298548259,
+      "tag": "0024_curious_scourge",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784301658548,
+      "tag": "0025_charming_roland_deschain",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784316474741,
+      "tag": "0026_lively_talos",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1784357065417,
+      "tag": "0027_adorable_bedlam",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { authClient } from '$lib/auth-client';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -11,7 +13,6 @@
 	import * as Sheet from '$lib/components/ui/sheet';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import { featureFlagKeys } from '$lib/feature-flags';
 	import { beginDeleteUser, type AdminUser } from '$lib/remote/admin-users.remote';
 	import { getErrorMessage } from '$lib/utils';
 	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
@@ -22,22 +23,18 @@
 	import ChevronRight from '~icons/lucide/chevron-right';
 	import Clock from '~icons/nucleo/clock';
 	import Loader2 from '~icons/lucide/loader-2';
-	import MoreHorizontal from '~icons/lucide/more-horizontal';
 	import X from '~icons/lucide/x';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
-	import Cpu from '~icons/nucleo/cpu';
 	import CreditCard from '~icons/nucleo/credit-card';
 	import Crown from '~icons/nucleo/crown';
-	import Disc from '~icons/nucleo/disc';
 	import Fingerprint from '~icons/nucleo/fingerprint';
-	import Flag from '~icons/nucleo/flag';
 	import Globe from '~icons/nucleo/globe';
 	import HardDrive from '~icons/nucleo/hard-drive';
 	import Hash from '~icons/nucleo/hash';
 	import Key from '~icons/nucleo/key';
 	import Lock from '~icons/nucleo/lock';
 	import Mail from '~icons/nucleo/mail';
-	import Network from '~icons/nucleo/network';
+	import Search from '~icons/nucleo/search';
 	import Server from '~icons/nucleo/server';
 	import Shield from '~icons/nucleo/shield';
 	import ShieldCheck from '~icons/nucleo/shield-check';
@@ -45,16 +42,36 @@
 	import Trash2 from '~icons/nucleo/trash';
 	import Unlock from '~icons/nucleo/unlock';
 	import User from '~icons/nucleo/user';
-	import UserCog from '~icons/nucleo/user-cog';
 	import Users from '~icons/nucleo/users';
 
-	type AdminTab = 'features' | 'vmTypes' | 'images' | 'ipam' | 'users' | 'vms' | 'emails';
 	type DeletionVerificationMethod = 'passkey' | 'totp' | 'email';
 	let { data }: { data: AdminPageData } = $props();
-	const activeTab = 'users' as AdminTab;
 	const admin = new AdminState(untrack(() => data));
 	$effect(() => {
 		admin.sync(data);
+	});
+
+	const usersBase = resolve('/admin/users');
+
+	function openUser(userId: string) {
+		void goto(resolve(`/admin/users/${userId}`), {
+			noScroll: true,
+			keepFocus: true
+		});
+	}
+
+	function closeUser() {
+		void goto(usersBase, { noScroll: true, keepFocus: true });
+	}
+
+	$effect(() => {
+		const id = page.params.id;
+		if (!id) {
+			if (admin.userSheetOpen) admin.closeUserSheet();
+			return;
+		}
+		const target = admin.adminUsers.find((account) => account.id === id);
+		if (target) admin.openUserSheet(target);
 	});
 
 	const adminCount = $derived(admin.adminUsers.filter((u) => u.isAdmin).length);
@@ -98,6 +115,52 @@
 			if (a.isAdmin && !b.isAdmin) return -1;
 			if (!a.isAdmin && b.isAdmin) return 1;
 			return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+		})
+	);
+
+	let userSearch = $state('');
+	let roleFilter = $state<'all' | 'admin' | 'user'>('all');
+	let statusFilter = $state<'all' | 'verified' | 'unverified' | 'twofa' | 'disabled' | 'exempt'>(
+		'all'
+	);
+
+	const roleFilterOptions = [
+		{ value: 'admin', label: 'Admins' },
+		{ value: 'user', label: 'Users' }
+	] as const;
+	const statusFilterOptions = [
+		{ value: 'verified', label: 'Verified' },
+		{ value: 'unverified', label: 'Unverified' },
+		{ value: 'twofa', label: 'With 2FA' },
+		{ value: 'disabled', label: 'Disabled' },
+		{ value: 'exempt', label: 'Billing exempt' }
+	] as const;
+	const roleFilterLabel = $derived(
+		roleFilterOptions.find((option) => option.value === roleFilter)?.label ?? 'All'
+	);
+	const statusFilterLabel = $derived(
+		statusFilterOptions.find((option) => option.value === statusFilter)?.label ?? 'All'
+	);
+
+	function matchesStatusFilter(account: AdminUser) {
+		if (statusFilter === 'verified') return account.emailVerified;
+		if (statusFilter === 'unverified') return !account.emailVerified;
+		if (statusFilter === 'twofa') return account.twoFactorEnabled || account.passkeyCount > 0;
+		if (statusFilter === 'disabled') return account.disabled;
+		if (statusFilter === 'exempt') return account.billingExempt;
+		return true;
+	}
+
+	const tableUsers = $derived(
+		sortedUsers.filter((account) => {
+			if (roleFilter === 'admin' && !account.isAdmin) return false;
+			if (roleFilter === 'user' && account.isAdmin) return false;
+			if (!matchesStatusFilter(account)) return false;
+			const term = userSearch.trim().toLowerCase();
+			if (!term) return true;
+			return [account.name, account.email, account.id].some((value) =>
+				value.toLowerCase().includes(term)
+			);
 		})
 	);
 
@@ -209,6 +272,7 @@
 				normalizedDeleteVerificationCode
 			);
 			resetDeleteDialog();
+			closeUser();
 		} catch (err) {
 			deleteError = getErrorMessage(err, 'Failed to delete user');
 		} finally {
@@ -221,272 +285,276 @@
 	<title>Users</title>
 </svelte:head>
 
-<div class="flex flex-1 flex-col overflow-hidden">
-	<!-- Tabs -->
-	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-border">
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'vmTypes'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin')}
-		>
-			<Cpu class="size-4 shrink-0" />
-			VM Types
-			<Badge variant="secondary" class="text-[10px]">{admin.vmTypes.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'vms'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/vms')}
-		>
-			<Server class="size-4 shrink-0" />
-			VMs
-			<Badge variant="secondary" class="text-[10px]">
-				{admin.adminVms.filter((vm) => vm.active).length}
-			</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'images'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/images')}
-		>
-			<Disc class="size-4 shrink-0" />
-			Images
-			<Badge variant="secondary" class="text-[10px]">{admin.images.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'features'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/features')}
-		>
-			<Flag class="size-4 shrink-0" />
-			Feature Flags
-			<Badge variant="secondary" class="text-[10px]">
-				{featureFlagKeys.filter((key) => admin.featureFlags[key]).length}
-			</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'ipam'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/ipam')}
-		>
-			<Network class="size-4 shrink-0" />
-			IPAM
-			<Badge variant="secondary" class="text-[10px]">{admin.ipamPrefixes.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'users'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/users')}
-		>
-			<UserCog class="size-4 shrink-0" />
-			Users
-			<Badge variant="secondary" class="text-[10px]">{userCount}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'emails'
-				? 'border-red-500 text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			href={resolve('/admin/emails')}
-		>
-			<Mail class="size-4 shrink-0" />
-			Emails
-		</a>
-	</div>
+<div class="flex-1 overflow-auto">
+	<div class="flex flex-col gap-5 p-5">
+		{#if admin.adminUserError}
+			<div
+				class="flex items-center gap-2 rounded-md border border-red-300 bg-red-100 px-3 py-2 text-xs text-red-800 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-400"
+			>
+				<AlertTriangle class="size-4 shrink-0" />
+				{admin.adminUserError}
+			</div>
+		{/if}
 
-	<!-- Content -->
-	<div class="flex-1 overflow-auto">
-		<div class="flex flex-col gap-5 p-5">
-			{#if admin.adminUserError}
-				<div
-					class="flex items-center gap-2 rounded-md border border-red-300 bg-red-100 px-3 py-2 text-xs text-red-800 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-400"
-				>
-					<AlertTriangle class="size-4 shrink-0" />
-					{admin.adminUserError}
+		<!-- Header -->
+		<div class="flex items-center justify-between">
+			<div>
+				<h2 class="text-base font-semibold tracking-tight text-foreground">Users</h2>
+				<p class="mt-1 text-xs text-muted-foreground">
+					Manage registered users, roles, and account settings.
+				</p>
+			</div>
+		</div>
+
+		<!-- Stat row -->
+		<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+			<div
+				class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
+			>
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-sky-500/10">
+					<Users class="h-4 w-4 text-sky-400" />
 				</div>
-			{/if}
-
-			<!-- Header -->
-			<div class="flex items-center justify-between">
-				<div>
-					<h2 class="text-base font-semibold tracking-tight text-foreground">Users</h2>
-					<p class="mt-1 text-xs text-muted-foreground">
-						Manage registered users, roles, and account settings.
-					</p>
+				<div class="flex flex-col">
+					<span class="text-lg leading-none font-semibold text-foreground">{userCount}</span>
+					<span class="mt-0.5 text-[10px] text-muted-foreground">Total users</span>
 				</div>
 			</div>
-
-			<!-- Stat row -->
-			<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-				<div
-					class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
-				>
-					<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-sky-500/10">
-						<Users class="h-4 w-4 text-sky-400" />
-					</div>
-					<div class="flex flex-col">
-						<span class="text-lg leading-none font-semibold text-foreground">{userCount}</span>
-						<span class="mt-0.5 text-[10px] text-muted-foreground">Total users</span>
-					</div>
+			<div
+				class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
+			>
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-500/10">
+					<ShieldCheck class="h-4 w-4 text-red-400" />
 				</div>
-				<div
-					class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
-				>
-					<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-500/10">
-						<ShieldCheck class="h-4 w-4 text-red-400" />
-					</div>
-					<div class="flex flex-col">
-						<span class="text-lg leading-none font-semibold text-foreground">{adminCount}</span>
-						<span class="mt-0.5 text-[10px] text-muted-foreground">Admins</span>
-					</div>
-				</div>
-				<div
-					class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
-				>
-					<div
-						class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-500/10"
-					>
-						<Mail class="h-4 w-4 text-emerald-400" />
-					</div>
-					<div class="flex flex-col">
-						<span class="text-lg leading-none font-semibold text-foreground">{verifiedCount}</span>
-						<span class="mt-0.5 text-[10px] text-muted-foreground">Verified</span>
-					</div>
-				</div>
-				<div
-					class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
-				>
-					<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-500/10">
-						<Key class="h-4 w-4 text-amber-400" />
-					</div>
-					<div class="flex flex-col">
-						<span class="text-lg leading-none font-semibold text-foreground">{has2faCount}</span>
-						<span class="mt-0.5 text-[10px] text-muted-foreground">With 2FA</span>
-					</div>
+				<div class="flex flex-col">
+					<span class="text-lg leading-none font-semibold text-foreground">{adminCount}</span>
+					<span class="mt-0.5 text-[10px] text-muted-foreground">Admins</span>
 				</div>
 			</div>
+			<div
+				class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
+			>
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-500/10">
+					<Mail class="h-4 w-4 text-emerald-400" />
+				</div>
+				<div class="flex flex-col">
+					<span class="text-lg leading-none font-semibold text-foreground">{verifiedCount}</span>
+					<span class="mt-0.5 text-[10px] text-muted-foreground">Verified</span>
+				</div>
+			</div>
+			<div
+				class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
+			>
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-500/10">
+					<Key class="h-4 w-4 text-amber-400" />
+				</div>
+				<div class="flex flex-col">
+					<span class="text-lg leading-none font-semibold text-foreground">{has2faCount}</span>
+					<span class="mt-0.5 text-[10px] text-muted-foreground">With 2FA</span>
+				</div>
+			</div>
+		</div>
 
-			{#if admin.adminUsers.length === 0}
+		<div class="flex flex-col gap-3">
+			<div class="flex flex-wrap items-center gap-3">
+				<div class="relative max-w-xs flex-1">
+					<Search class="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+					<Input
+						bind:value={userSearch}
+						placeholder="Search by name, email, ID..."
+						class="h-8 pl-8 text-xs"
+					/>
+				</div>
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						<Button
+							variant="outline"
+							size="sm"
+							class="h-8 gap-1.5 border-border/50 text-xs {roleFilter === 'all'
+								? 'text-muted-foreground'
+								: 'text-foreground'} hover:bg-muted hover:text-foreground"
+						>
+							Role: {roleFilterLabel}
+							<ChevronDown class="h-3 w-3 text-muted-foreground" />
+						</Button>
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content class="w-44 border-border bg-background">
+						<DropdownMenu.Item
+							class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
+							onSelect={() => (roleFilter = 'all')}
+						>
+							All roles
+							{#if roleFilter === 'all'}<Check class="ml-auto h-3 w-3 text-emerald-400" />{/if}
+						</DropdownMenu.Item>
+						<DropdownMenu.Separator class="bg-muted" />
+						{#each roleFilterOptions as option (option.value)}
+							<DropdownMenu.Item
+								class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
+								onSelect={() => (roleFilter = option.value)}
+							>
+								{option.label}
+								{#if roleFilter === option.value}
+									<Check class="ml-auto h-3 w-3 text-emerald-400" />
+								{/if}
+							</DropdownMenu.Item>
+						{/each}
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						<Button
+							variant="outline"
+							size="sm"
+							class="h-8 gap-1.5 border-border/50 text-xs {statusFilter === 'all'
+								? 'text-muted-foreground'
+								: 'text-foreground'} hover:bg-muted hover:text-foreground"
+						>
+							Status: {statusFilterLabel}
+							<ChevronDown class="h-3 w-3 text-muted-foreground" />
+						</Button>
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content class="w-44 border-border bg-background">
+						<DropdownMenu.Item
+							class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
+							onSelect={() => (statusFilter = 'all')}
+						>
+							All statuses
+							{#if statusFilter === 'all'}<Check class="ml-auto h-3 w-3 text-emerald-400" />{/if}
+						</DropdownMenu.Item>
+						<DropdownMenu.Separator class="bg-muted" />
+						{#each statusFilterOptions as option (option.value)}
+							<DropdownMenu.Item
+								class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
+								onSelect={() => (statusFilter = option.value)}
+							>
+								{option.label}
+								{#if statusFilter === option.value}
+									<Check class="ml-auto h-3 w-3 text-emerald-400" />
+								{/if}
+							</DropdownMenu.Item>
+						{/each}
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			</div>
+			{#if tableUsers.length === 0}
 				<div class="flex flex-col items-center justify-center gap-2 py-20 text-muted-foreground">
 					<Users class="h-8 w-8 text-muted-foreground" />
 					<p class="text-sm">No users found</p>
 				</div>
 			{:else}
-				<!-- User grid -->
-				<div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-					{#each sortedUsers as account (account.id)}
-						{@const colorClass = avatarColor(account.name)}
-						<div
-							class="group relative flex flex-col gap-4 rounded-md border border-border/60 bg-muted/15 px-4 py-4 transition-colors hover:border-border hover:bg-muted/25"
-						>
-							<!-- Top row: avatar + name + actions -->
-							<div class="flex items-start justify-between">
-								<div class="flex items-center gap-3">
-									{#if account.image}
-										<img
-											src={account.image}
-											alt={account.name}
-											class="h-10 w-10 shrink-0 object-cover"
-										/>
-									{:else}
-										<div
-											class="flex h-10 w-10 shrink-0 items-center justify-center text-xs font-bold {colorClass}"
-										>
-											{initials(account.name)}
+				<div class="overflow-x-auto rounded-md border border-border/60">
+					<table class="w-full text-left text-xs">
+						<thead>
+							<tr
+								class="border-b border-border/60 bg-background/40 text-[10px] tracking-wider text-muted-foreground uppercase"
+							>
+								<th class="px-4 py-2.5 font-medium">User</th>
+								<th class="px-4 py-2.5 font-medium">Role</th>
+								<th class="px-4 py-2.5 font-medium">Status</th>
+								<th class="px-4 py-2.5 font-medium">Resources</th>
+								<th class="px-4 py-2.5 font-medium">Created</th>
+								<th class="px-4 py-2.5"></th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-border/50">
+							{#each tableUsers as account (account.id)}
+								{@const colorClass = avatarColor(account.name)}
+								<tr
+									class="cursor-pointer transition-colors hover:bg-muted/20"
+									onclick={() => openUser(account.id)}
+								>
+									<td class="px-4 py-2.5">
+										<div class="flex items-center gap-2.5">
+											{#if account.image}
+												<img
+													src={account.image}
+													alt={account.name}
+													class="h-7 w-7 shrink-0 object-cover"
+												/>
+											{:else}
+												<div
+													class="flex h-7 w-7 shrink-0 items-center justify-center text-[10px] font-bold {colorClass}"
+												>
+													{initials(account.name)}
+												</div>
+											{/if}
+											<div class="flex min-w-0 flex-col">
+												<span class="truncate font-medium text-foreground">{account.name}</span>
+												<span class="truncate text-[10px] text-muted-foreground"
+													>{account.email}</span
+												>
+											</div>
 										</div>
-									{/if}
-									<div class="flex min-w-0 flex-col">
-										<span class="truncate text-sm font-medium text-foreground">{account.name}</span>
-										<span class="truncate text-xs text-muted-foreground">{account.email}</span>
-									</div>
-								</div>
-
-								<Button
-									variant="ghost"
-									size="sm"
-									class="h-7 w-7 shrink-0 p-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-									onclick={() => admin.openUserSheet(account)}
-									aria-label={`Manage ${account.name}`}
-								>
-									<MoreHorizontal class="h-4 w-4" />
-								</Button>
-							</div>
-
-							<!-- Badge row -->
-							<div class="flex flex-wrap items-center gap-1.5">
-								{#if account.isAdmin}
-									<span
-										class="inline-flex items-center gap-1 rounded-sm border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
-									>
-										<Shield class="h-2.5 w-2.5" />Admin
-									</span>
-								{:else}
-									<span
-										class="inline-flex items-center gap-1 rounded-sm border border-ring/20 bg-muted/30 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-									>
-										<User class="h-2.5 w-2.5" />User
-									</span>
-								{/if}
-								{#if account.emailVerified}
-									<span
-										class="inline-flex items-center gap-1 rounded-sm border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
-									>
-										<Check class="h-2.5 w-2.5" />Verified
-									</span>
-								{/if}
-								{#if account.twoFactorEnabled || account.passkeyCount > 0}
-									<span
-										class="inline-flex items-center gap-1 rounded-sm border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
-									>
-										<Key class="h-2.5 w-2.5" />2FA
-									</span>
-								{/if}
-								{#if account.disabled}
-									<span
-										class="inline-flex items-center gap-1 rounded-sm border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
-									>
-										<X class="h-2.5 w-2.5" />Disabled
-									</span>
-								{/if}
-								{#if account.billingExempt}
-									<span
-										class="inline-flex items-center gap-1 rounded-sm border border-violet-500/20 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-400"
-									>
-										<CreditCard class="h-2.5 w-2.5" />Billing exempt
-									</span>
-								{/if}
-							</div>
-
-							<!-- Bottom meta + action -->
-							<div class="flex items-center justify-between">
-								<div class="flex items-center gap-1 text-[11px] text-muted-foreground">
-									<Calendar class="h-3 w-3" />
-									{formatDateShort(account.createdAt)}
-								</div>
-								<Button
-									variant="outline"
-									size="sm"
-									class="h-7 gap-1.5 border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-									onclick={() => admin.openUserSheet(account)}
-								>
-									Manage
-									<ChevronRight class="h-3 w-3" />
-								</Button>
-							</div>
-						</div>
-					{/each}
+									</td>
+									<td class="px-4 py-2.5">
+										{#if account.isAdmin}
+											<span
+												class="inline-flex items-center gap-1 rounded-sm border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
+											>
+												<Shield class="h-2.5 w-2.5" />Admin
+											</span>
+										{:else}
+											<span
+												class="inline-flex items-center gap-1 rounded-sm border border-ring/20 bg-muted/30 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+											>
+												<User class="h-2.5 w-2.5" />User
+											</span>
+										{/if}
+									</td>
+									<td class="px-4 py-2.5">
+										<div class="flex flex-wrap items-center gap-1">
+											{#if account.emailVerified}
+												<span
+													class="inline-flex items-center gap-1 rounded-sm border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
+												>
+													<Check class="h-2.5 w-2.5" />Verified
+												</span>
+											{/if}
+											{#if account.twoFactorEnabled || account.passkeyCount > 0}
+												<span
+													class="inline-flex items-center gap-1 rounded-sm border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+												>
+													<Key class="h-2.5 w-2.5" />2FA
+												</span>
+											{/if}
+											{#if account.disabled}
+												<span
+													class="inline-flex items-center gap-1 rounded-sm border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
+												>
+													<X class="h-2.5 w-2.5" />Disabled
+												</span>
+											{/if}
+											{#if account.billingExempt}
+												<span
+													class="inline-flex items-center gap-1 rounded-sm border border-violet-500/20 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-400"
+												>
+													<CreditCard class="h-2.5 w-2.5" />Exempt
+												</span>
+											{/if}
+										</div>
+									</td>
+									<td class="px-4 py-2.5 text-muted-foreground">
+										<div class="flex items-center gap-3">
+											<span class="flex items-center gap-1" title="Organizations">
+												<Users class="h-3 w-3" />{account.orgCount}
+											</span>
+											<span class="flex items-center gap-1" title="SSH keys">
+												<Key class="h-3 w-3" />{account.sshKeyCount}
+											</span>
+											<span class="flex items-center gap-1" title="Sessions">
+												<Terminal class="h-3 w-3" />{account.sessionCount}
+											</span>
+										</div>
+									</td>
+									<td class="px-4 py-2.5 text-muted-foreground">
+										{formatDateShort(account.createdAt)}
+									</td>
+									<td class="px-4 py-2.5 text-right">
+										<ChevronRight class="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
 				</div>
 			{/if}
 		</div>
@@ -494,7 +562,7 @@
 </div>
 
 <!-- User Detail Sheet -->
-<Sheet.Root open={admin.userSheetOpen} onOpenChange={(v) => !v && admin.closeUserSheet()}>
+<Sheet.Root open={admin.userSheetOpen} onOpenChange={(v) => !v && closeUser()}>
 	<Sheet.Content side="right" class="w-full border-border bg-background p-6 sm:max-w-md">
 		{#if admin.selectedUser && admin.userResourcesOpen === null}
 			{@const u = admin.selectedUser}

@@ -1,5 +1,5 @@
 import { Autumn } from 'autumn-js';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import { initDrizzle } from '$lib/server/db';
 import { member, organization, projectBillingCustomers, user } from '$lib/server/db/schema';
@@ -21,7 +21,7 @@ function errorMessage(err: unknown) {
 	return err instanceof Error ? err.message : String(err);
 }
 
-function autumnStatus(err: unknown) {
+export function autumnStatus(err: unknown) {
 	return typeof err === 'object' && err !== null && 'statusCode' in err
 		? Number(err.statusCode)
 		: null;
@@ -60,7 +60,7 @@ async function getProjectCustomerData(projectId: string) {
 		with: { members: { with: { user: true } } }
 	});
 
-	if (!project) error(404, `Project "${projectId}" not found`);
+	if (!project || project.deletedAt != null) error(404, `Project "${projectId}" not found`);
 
 	const owner = project.members.find((item) => item.role === 'owner') ?? project.members[0];
 
@@ -95,12 +95,16 @@ export async function ensureLocalProjectBillingCustomer(projectId: string) {
 export async function ensureProjectCustomer(projectId: string) {
 	const db = initDrizzle();
 	const now = Date.now();
+
+	if (!isBillingConfigured()) {
+		await ensureLocalProjectBillingCustomer(projectId);
+		return;
+	}
+
+	const customer = await getProjectCustomerData(projectId);
 	await ensureLocalProjectBillingCustomer(projectId);
 
-	if (!isBillingConfigured()) return;
-
 	try {
-		const customer = await getProjectCustomerData(projectId);
 		await createAutumnClient().customers.getOrCreate({
 			customerId: projectId,
 			name: customer.name,
@@ -221,7 +225,7 @@ export async function retryOrphanedProjectBillingCancellations(limit = 100) {
 		.select({ projectId: projectBillingCustomers.projectId })
 		.from(projectBillingCustomers)
 		.leftJoin(organization, eq(organization.id, projectBillingCustomers.projectId))
-		.where(isNull(organization.id))
+		.where(or(isNull(organization.id), isNotNull(organization.deletedAt)))
 		.limit(limit);
 
 	let cancelled = 0;
@@ -390,6 +394,14 @@ export async function getProjectBillingState(
 
 export async function isProjectBillingExempt(projectId: string) {
 	const db = initDrizzle();
+
+	const [project] = await db
+		.select({ billingExempt: organization.billingExempt })
+		.from(organization)
+		.where(eq(organization.id, projectId))
+		.limit(1);
+	if (project?.billingExempt) return true;
+
 	const [exemptOwner] = await db
 		.select({ userId: member.userId })
 		.from(member)

@@ -1,10 +1,10 @@
 import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { and, eq, sql } from 'drizzle-orm';
-import { initDrizzle, closeRequestDb, type Database } from '$lib/server/db';
+import { eq, sql } from 'drizzle-orm';
+import { initDrizzle, type Database } from '$lib/server/db';
 import { runInBackground } from '$lib/server/background';
-import { vms, vmTypes, sshKeys, baseImages } from '$lib/server/db/schema';
+import { vms, vmTypes, sshKeys } from '$lib/server/db/schema';
 import {
 	getBackend,
 	type VmBackend,
@@ -12,16 +12,9 @@ import {
 	type VmMetricsTimeframe
 } from '$lib/server/backends';
 import { requireProjectAccess } from '$lib/server/auth-context';
-import {
-	deleteProjectServerEntity,
-	ensureProjectServerEntity,
-	isBillingConfigured,
-	isProjectBillingExempt,
-	requireProjectBillingActive
-} from '$lib/server/billing/autumn';
-import { createBillingMeter } from '$lib/server/billing/metering';
-import { allocateVmNetworking, generateMacAddress, releaseVmNetworking } from '$lib/server/ipam';
+import { isProjectBillingExempt, requireProjectBillingActive } from '$lib/server/billing/autumn';
 import { queueVmDeletion } from '$lib/server/vm-deletion';
+import { provisionVm } from '$lib/server/vm-provisioning';
 import { instrument, timingLog } from '$lib/server/observability';
 import {
 	accessibilityFixtureEnabled,
@@ -519,184 +512,26 @@ export const createVm = command(createParams, async (params) => {
 	const billingExempt = await isProjectBillingExempt(params.projectId);
 	if (!billingExempt) await requireProjectBillingActive(params.projectId);
 
-	const [vmType, baseImage, keys] = await Promise.all([
-		db.query.vmTypes.findFirst({
-			where: eq(vmTypes.id, params.vmTypeId)
-		}),
-		params.imageId
-			? db.query.baseImages.findFirst({
-					where: eq(baseImages.id, params.imageId)
-				})
-			: null,
-		params.sshKeyIds?.length
-			? db.query.sshKeys.findMany({
-					where: eq(sshKeys.userId, event.locals.user.id)
-				})
-			: []
-	]);
-	if (!vmType) error(400, `VM type "${params.vmTypeId}" not found`);
-	if (isBillingConfigured() && !vmType.autumnFeatureId)
-		error(400, `VM type "${vmType.name}" is missing an Autumn feature ID`);
-	const featureId = vmType.autumnFeatureId;
-
-	if (params.imageId && !baseImage) error(400, `Image "${params.imageId}" not found`);
-
+	const keys = params.sshKeyIds?.length
+		? await db.query.sshKeys.findMany({
+				where: eq(sshKeys.userId, event.locals.user.id)
+			})
+		: [];
 	const publicKeys = params.sshKeyIds?.length
 		? keys.filter((key) => params.sshKeyIds!.includes(key.id)).map((key) => key.publicKey)
 		: [];
 
-	const now = Date.now();
-	const [inserted] = await db
-		.insert(vms)
-		.values({
-			name: params.name,
-			proxmoxId: null,
-			active: true,
-			ownerProjectId: params.projectId,
-			vmTypeId: params.vmTypeId,
-			creationDate: new Date().toISOString().split('T')[0],
-			createdAt: now,
-			backend: 'proxmox',
-			status: 'provisioning'
-		})
-		.returning();
-
-	const vmId = inserted.id;
-	const macAddress = generateMacAddress();
-	let networkingAllocations: Awaited<ReturnType<typeof allocateVmNetworking>> = [];
-	let result;
-	try {
-		if (!billingExempt) {
-			await ensureProjectServerEntity({
-				projectId: params.projectId,
-				serverId: vmId,
-				name: params.name
-			});
-		}
-		networkingAllocations = await allocateVmNetworking(db, {
-			vmId,
-			macAddress,
-			mode: params.networkingMode ?? 'both'
-		});
-		const ipv4NetworkAllocation = networkingAllocations.find(
-			(allocation) => allocation.family === 'ipv4' && allocation.address
-		);
-		const ipv6TransitNetworkAllocation = networkingAllocations.find(
-			(allocation) => allocation.family === 'ipv6' && allocation.address
-		);
-		const ipv6PrefixNetworkAllocation = networkingAllocations.find(
-			(allocation) => allocation.family === 'ipv6' && allocation.prefix
-		);
-		const firewallIpSet = [
-			...(ipv4NetworkAllocation?.address ? [`${ipv4NetworkAllocation.address}/32`] : []),
-			...(ipv6TransitNetworkAllocation?.address
-				? [`${ipv6TransitNetworkAllocation.address}/128`]
-				: []),
-			...(ipv6PrefixNetworkAllocation?.prefix ? [ipv6PrefixNetworkAllocation.prefix] : [])
-		];
-		const backend = getBackend('proxmox');
-		result = await backend.createVm({
-			id: vmId,
-			name: params.name,
-			proxmoxId: inserted.proxmoxId ?? undefined,
-			macAddress,
-			cores: vmType.cores,
-			memoryMb: vmType.ramCapacity,
-			diskGb: vmType.storageAmount,
-			imageId: params.imageId,
-			imageSource: baseImage?.filePath,
-			secureBoot: baseImage?.secureBoot ?? true,
-			networkConfig: {
-				firewallIpSet,
-				...(ipv4NetworkAllocation?.address
-					? {
-							ipv4: {
-								address: ipv4NetworkAllocation.address,
-								prefixLength: ipv4NetworkAllocation.prefixLength,
-								gateway: ipv4NetworkAllocation.sourcePrefix.gatewayAddress ?? ''
-							}
-						}
-					: {}),
-				...(ipv6TransitNetworkAllocation?.address
-					? {
-							ipv6: {
-								address: ipv6TransitNetworkAllocation.address,
-								prefixLength: ipv6TransitNetworkAllocation.prefixLength
-							}
-						}
-					: {}),
-				...(ipv6PrefixNetworkAllocation?.prefix
-					? { ipv6Prefix: ipv6PrefixNetworkAllocation.prefix }
-					: {})
-			},
-			sshKeys: publicKeys,
-			password: params.password,
-			onProvisionSettled: async ({ ok, error: err }) => {
-				const settledEvent = getRequestEvent();
-				const settledDb = initDrizzle();
-				try {
-					await settledDb
-						.update(vms)
-						.set(
-							ok ? { status: 'ready' } : { status: 'error', statusError: err ?? 'Unknown error' }
-						)
-						.where(and(eq(vms.id, vmId), eq(vms.active, true)));
-					console.log(`VM ${vmId} provision ${ok ? 'succeeded' : 'failed'}`);
-				} catch (updateErr) {
-					console.error(`VM ${vmId} status update failed:`, updateErr);
-				} finally {
-					closeRequestDb(settledEvent);
-				}
-			},
-			registerBackground: runInBackground,
-			userId: event.locals.user.id,
-			projectId: params.projectId
-		});
-
-		if (!result.macAddress) error(502, 'Proxmox did not return a MAC address');
-	} catch (err) {
-		if (result?.proxmoxId != null) {
-			await getBackend('proxmox')
-				.deleteVm(vmId, result.proxmoxId)
-				.catch((deleteErr) => {
-					console.warn(`Failed to clean up Proxmox VM ${vmId} after provisioning error`, deleteErr);
-				});
-		}
-		await releaseVmNetworking(db, vmId).catch(() => {});
-		await deleteProjectServerEntity(params.projectId, vmId).catch(() => {});
-		await db
-			.delete(vms)
-			.where(eq(vms.id, inserted.id))
-			.catch(() => {});
-		throw err;
-	}
-
-	const ipv4Allocation = networkingAllocations.find((allocation) => allocation.family === 'ipv4');
-	const ipv6Allocation = networkingAllocations.find(
-		(allocation) => allocation.family === 'ipv6' && allocation.address
-	);
-
-	await db
-		.update(vms)
-		.set({
-			proxmoxId: result.proxmoxId ?? null,
-			proxmoxNode: result.proxmoxNode ?? null,
-			lastKnownIpv4: ipv4Allocation?.address ?? null,
-			lastKnownIpv6: ipv6Allocation?.address ?? null
-		})
-		.where(eq(vms.id, vmId));
-	if (featureId) {
-		await createBillingMeter({
-			projectId: params.projectId,
-			resourceType: 'vm',
-			resourceId: vmId,
-			featureId,
-			units: 1,
-			now
-		});
-	}
-
-	return { id: inserted.id, taskId: result.taskId };
+	return provisionVm(db, {
+		projectId: params.projectId,
+		vmTypeId: params.vmTypeId,
+		name: params.name,
+		userId: event.locals.user.id,
+		billingExempt,
+		networkingMode: params.networkingMode,
+		imageId: params.imageId,
+		sshPublicKeys: publicKeys,
+		password: params.password
+	});
 });
 
 const deleteParams = type({ vmId: 'string' });

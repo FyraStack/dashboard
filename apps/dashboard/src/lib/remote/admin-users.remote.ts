@@ -1,45 +1,30 @@
 import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { and, asc, count, desc, eq, gt, inArray } from 'drizzle-orm';
+import { asc, count, desc, eq } from 'drizzle-orm';
 import AdminUserDeletionCodeEmail from '$lib/emails/admin-user-deletion-code.svelte';
+import {
+	ADMIN_VERIFICATION_CODE_TTL_MS,
+	beginAdminVerification,
+	consumeAdminVerification
+} from '$lib/server/admin-verification';
 import { hasAdminRole, requireAdmin } from '$lib/server/auth-context';
-import { initAuth } from '$lib/server/auth';
 import { initDrizzle } from '$lib/server/db';
 import {
 	account,
 	apiTokens,
-	invitation,
-	ipAssignments,
 	member,
 	organization,
 	passkey,
-	paymentPeriods,
 	session,
 	sshKeys,
-	twoFactor,
 	user,
-	verification,
 	volumes,
 	vms
 } from '$lib/server/db/schema';
-import { getBackend } from '$lib/server/backends';
-import {
-	cancelProjectBilling,
-	deleteLocalProjectBillingCustomer,
-	deleteProjectServerEntity,
-	updateProjectCustomer
-} from '$lib/server/billing/autumn';
-import { meterResourceThrough, syncProjectUsage } from '$lib/server/billing/metering';
+import { updateProjectCustomer } from '$lib/server/billing/autumn';
 import { sendRenderedEmail } from '$lib/server/email';
-import { ulid } from '$lib/server/id';
-import { releaseVmNetworking } from '$lib/server/ipam';
-
-const CODE_LENGTH = 6;
-const USER_DELETE_CODE_TTL_MS = 10 * 60 * 1000;
-const USER_DELETE_INTENT_TTL_MS = 60 * 1000;
-
-type UserDeletionVerificationMethod = 'passkey' | 'totp' | 'email';
+import { softDeleteOrganizationResources } from '$lib/server/project-deletion';
 
 export type UserSession = {
 	id: string;
@@ -104,55 +89,6 @@ async function requireCurrentAdmin() {
 	return { db, userId: event.locals.user.id };
 }
 
-function adminUserDeletionIntentIdentifier(adminUserId: string) {
-	return `admin-user-delete-intent:${adminUserId}`;
-}
-
-function adminUserDeletionPasskeyIdentifier(adminUserId: string, targetUserId: string) {
-	return `admin-user-delete-passkey:${adminUserId}:${targetUserId}`;
-}
-
-function adminUserDeletionEmailIdentifier(adminUserId: string, targetUserId: string) {
-	return `admin-user-delete-email:${adminUserId}:${targetUserId}`;
-}
-
-function generateCode() {
-	const max = 10 ** CODE_LENGTH;
-	const value = crypto.getRandomValues(new Uint32Array(1))[0] % max;
-	return value.toString().padStart(CODE_LENGTH, '0');
-}
-
-function normalizeCode(code: string) {
-	return code.replace(/\D/g, '');
-}
-
-async function hashCode(adminUserId: string, targetUserId: string, code: string) {
-	const data = new TextEncoder().encode(`${adminUserId}:${targetUserId}:${code}`);
-	const hash = await crypto.subtle.digest('SHA-256', data);
-	return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-async function getDeletionVerificationMethod(
-	db: ReturnType<typeof initDrizzle>,
-	adminUserId: string
-): Promise<UserDeletionVerificationMethod> {
-	const [registeredPasskey] = await db
-		.select({ id: passkey.id })
-		.from(passkey)
-		.where(eq(passkey.userId, adminUserId))
-		.limit(1);
-
-	if (registeredPasskey) return 'passkey';
-
-	const [registeredTotp] = await db
-		.select({ id: twoFactor.id })
-		.from(twoFactor)
-		.where(eq(twoFactor.userId, adminUserId))
-		.limit(1);
-
-	return registeredTotp ? 'totp' : 'email';
-}
-
 async function assertCanDeleteUser(
 	db: ReturnType<typeof initDrizzle>,
 	adminUserId: string,
@@ -172,54 +108,6 @@ async function assertCanDeleteUser(
 	}
 
 	return target;
-}
-
-async function verifyDeletionEmailCode(
-	db: ReturnType<typeof initDrizzle>,
-	adminUserId: string,
-	targetUserId: string,
-	code: string
-) {
-	const normalizedCode = normalizeCode(code);
-	if (normalizedCode.length !== CODE_LENGTH)
-		error(400, 'Enter the verification code from your email.');
-
-	const identifier = adminUserDeletionEmailIdentifier(adminUserId, targetUserId);
-	const value = await hashCode(adminUserId, targetUserId, normalizedCode);
-	const [record] = await db
-		.select({ id: verification.id })
-		.from(verification)
-		.where(
-			and(
-				eq(verification.identifier, identifier),
-				eq(verification.value, value),
-				gt(verification.expiresAt, new Date())
-			)
-		)
-		.limit(1);
-
-	if (!record) error(400, 'Invalid or expired verification code.');
-	await db.delete(verification).where(eq(verification.id, record.id));
-}
-
-async function verifyDeletionPasskey(
-	db: ReturnType<typeof initDrizzle>,
-	adminUserId: string,
-	targetUserId: string
-) {
-	const [record] = await db
-		.select({ id: verification.id })
-		.from(verification)
-		.where(
-			and(
-				eq(verification.identifier, adminUserDeletionPasskeyIdentifier(adminUserId, targetUserId)),
-				gt(verification.expiresAt, new Date())
-			)
-		)
-		.limit(1);
-
-	if (!record) error(400, 'Verify with your passkey before deleting this user.');
-	await db.delete(verification).where(eq(verification.id, record.id));
 }
 
 async function deleteUserData(db: ReturnType<typeof initDrizzle>, targetUserId: string) {
@@ -254,69 +142,8 @@ async function settleUserOrganizations(db: ReturnType<typeof initDrizzle>, targe
 			continue;
 		}
 
-		await deleteOrganizationResources(db, membership.organizationId);
+		await softDeleteOrganizationResources(db, membership.organizationId);
 	}
-}
-
-async function deleteOrganizationResources(
-	db: ReturnType<typeof initDrizzle>,
-	organizationId: string
-) {
-	const projectVms = await db.query.vms.findMany({
-		where: eq(vms.ownerProjectId, organizationId),
-		columns: {
-			id: true,
-			name: true,
-			proxmoxId: true,
-			active: true,
-			backend: true
-		}
-	});
-	const vmIds = projectVms.map((vm) => vm.id);
-
-	for (const vm of projectVms.filter((item) => item.active)) {
-		try {
-			await getBackend(vm.backend).deleteVm(vm.id, vm.proxmoxId ?? undefined);
-		} catch (err) {
-			console.warn(`Failed to deprovision VM ${vm.id} during user delete`, err);
-			error(502, `Failed to deprovision VM "${vm.name}" in Proxmox`);
-		}
-	}
-
-	for (const vm of projectVms.filter((item) => item.active)) {
-		const metered = await meterResourceThrough('vm', vm.id).catch((err) => {
-			console.warn(`Failed to meter VM ${vm.id} during user delete`, err);
-			error(502, `Failed to meter VM "${vm.name}" during user delete`);
-		});
-		if (!metered?.event || metered.syncStatus === 'synced') {
-			await deleteProjectServerEntity(organizationId, vm.id).catch((err) => {
-				console.warn(`Failed to delete Autumn entity for VM ${vm.id}`, err);
-			});
-		}
-	}
-	await syncProjectUsage(organizationId);
-
-	await db.delete(volumes).where(eq(volumes.ownerProjectId, organizationId));
-	for (const vm of projectVms) {
-		await releaseVmNetworking(db, vm.id).catch((err) => {
-			console.warn(`Failed to release networking for VM ${vm.id} during user delete`, err);
-		});
-	}
-	if (vmIds.length > 0) {
-		await db.delete(ipAssignments).where(inArray(ipAssignments.associatedVmId, vmIds));
-		await db.delete(paymentPeriods).where(inArray(paymentPeriods.vmId, vmIds));
-	}
-	await db.delete(vms).where(eq(vms.ownerProjectId, organizationId));
-	await db.delete(invitation).where(eq(invitation.organizationId, organizationId));
-	await db.delete(member).where(eq(member.organizationId, organizationId));
-	const billingCancelled = await cancelProjectBilling(organizationId).catch((err) => {
-		console.warn(`Failed to cancel Autumn billing for project ${organizationId}`, err);
-		return false;
-	});
-	if (billingCancelled) {
-		await deleteLocalProjectBillingCustomer(organizationId);
-	}
-	await db.delete(organization).where(eq(organization.id, organizationId));
 }
 
 function makeCountMap(rows: { userId: string | null; count: number }[]) {
@@ -469,39 +296,16 @@ export const beginDeleteUser = command(beginDeleteUserParams, async (params) => 
 	if (!adminUser) error(401, 'Authentication required');
 
 	const target = await assertCanDeleteUser(db, adminUserId, params.userId);
-	const method = await getDeletionVerificationMethod(db, adminUserId);
+	const { method, code } = await beginAdminVerification(db, adminUserId, params.userId);
 
-	await db
-		.delete(verification)
-		.where(eq(verification.identifier, adminUserDeletionIntentIdentifier(adminUserId)));
-
-	if (method === 'passkey') {
-		await db.insert(verification).values({
-			id: ulid(),
-			identifier: adminUserDeletionIntentIdentifier(adminUserId),
-			value: params.userId,
-			expiresAt: new Date(Date.now() + USER_DELETE_INTENT_TTL_MS)
-		});
-	} else if (method === 'email') {
-		const code = generateCode();
-		const identifier = adminUserDeletionEmailIdentifier(adminUserId, params.userId);
-		const value = await hashCode(adminUserId, params.userId, code);
-
-		await db.delete(verification).where(eq(verification.identifier, identifier));
-		await db.insert(verification).values({
-			id: ulid(),
-			identifier,
-			value,
-			expiresAt: new Date(Date.now() + USER_DELETE_CODE_TTL_MS)
-		});
-
+	if (code) {
 		await sendRenderedEmail({
 			component: AdminUserDeletionCodeEmail,
 			props: {
 				userName: adminUser.name,
 				targetEmail: target.email,
 				code,
-				expiresInMinutes: USER_DELETE_CODE_TTL_MS / 60_000
+				expiresInMinutes: ADMIN_VERIFICATION_CODE_TTL_MS / 60_000
 			},
 			subject: 'Confirm Stack user deletion',
 			to: adminUser.email
@@ -515,27 +319,8 @@ const deleteUserParams = type({ userId: 'string', method: 'string', code: 'strin
 export const deleteUserWithVerification = command(deleteUserParams, async (params) => {
 	const { db, userId: adminUserId } = await requireCurrentAdmin();
 	const target = await assertCanDeleteUser(db, adminUserId, params.userId);
-	const method = await getDeletionVerificationMethod(db, adminUserId);
 
-	if (params.method !== method)
-		error(400, 'Use the required verification method for this account.');
-
-	if (method === 'passkey') {
-		await verifyDeletionPasskey(db, adminUserId, params.userId);
-	} else if (method === 'totp') {
-		const code = normalizeCode(params.code ?? '');
-		if (code.length !== CODE_LENGTH)
-			error(400, 'Enter the verification code from your authenticator app.');
-
-		const auth = initAuth();
-		await auth.api.verifyTOTP({
-			headers: getRequestEvent().request.headers,
-			body: { code, trustDevice: false }
-		});
-	} else {
-		await verifyDeletionEmailCode(db, adminUserId, params.userId, params.code ?? '');
-	}
-
+	await consumeAdminVerification(db, adminUserId, params.userId, params.method, params.code);
 	await deleteUserData(db, params.userId);
 
 	return { userId: params.userId, email: target.email };

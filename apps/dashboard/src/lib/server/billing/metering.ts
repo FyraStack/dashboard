@@ -1,14 +1,16 @@
-import { and, asc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
 import {
 	billingMeters,
 	billingUsageEvents,
+	organization,
 	vms,
 	vmTypes,
 	type billingResourceTypeEnum
 } from '$lib/server/db/schema';
 import { requireVmFeatureId, usageIdempotencyKey, usageQuantity } from './features';
 import {
+	autumnStatus,
 	createAutumnClient,
 	ensureProjectCustomer,
 	ensureProjectServerEntity,
@@ -208,6 +210,79 @@ export async function meterResourceThrough(
 	return { event, syncStatus };
 }
 
+export async function reconcileOrphanedMeters(now = Date.now(), limit = 100) {
+	const db = initDrizzle();
+	const orphans = await db
+		.select({
+			id: billingMeters.id,
+			projectId: billingMeters.projectId,
+			resourceId: billingMeters.resourceId
+		})
+		.from(billingMeters)
+		.leftJoin(vms, eq(vms.id, billingMeters.resourceId))
+		.leftJoin(organization, eq(organization.id, billingMeters.projectId))
+		.where(
+			and(
+				eq(billingMeters.active, true),
+				eq(billingMeters.resourceType, 'vm'),
+				or(
+					isNull(vms.id),
+					eq(vms.active, false),
+					isNull(organization.id),
+					isNotNull(organization.deletedAt)
+				)
+			)
+		)
+		.limit(limit);
+
+	if (orphans.length === 0) return { closed: 0 };
+
+	await db
+		.update(billingMeters)
+		.set({ active: false, endedAt: now })
+		.where(
+			inArray(
+				billingMeters.id,
+				orphans.map((orphan) => orphan.id)
+			)
+		);
+
+	for (const orphan of orphans) {
+		console.error(
+			`Closed orphaned billing meter ${orphan.id} for project ${orphan.projectId}, resource ${orphan.resourceId}`
+		);
+	}
+
+	return { closed: orphans.length };
+}
+
+export async function closeProjectMeters(projectId: string, now = Date.now()) {
+	const db = initDrizzle();
+	const closed = await db
+		.update(billingMeters)
+		.set({ active: false, endedAt: now })
+		.where(and(eq(billingMeters.projectId, projectId), eq(billingMeters.active, true)))
+		.returning({ id: billingMeters.id });
+
+	return closed.length;
+}
+
+export async function abandonProjectUsageEvents(projectId: string, reason: string) {
+	const db = initDrizzle();
+	const abandoned = await db
+		.update(billingUsageEvents)
+		.set({ syncStatus: 'abandoned', syncError: reason })
+		.where(
+			and(
+				eq(billingUsageEvents.projectId, projectId),
+				inArray(billingUsageEvents.syncStatus, ['pending', 'failed'])
+			)
+		)
+		.returning({ id: billingUsageEvents.id });
+
+	return abandoned.length;
+}
+
 export async function meterActiveResources(now = Date.now(), limit = 100) {
 	const db = initDrizzle();
 	await reconcileMissingMeters(now, limit);
@@ -234,8 +309,11 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 	return { meters: meters.length, events: events.length };
 }
 
+type ProjectTargetStatus = 'ok' | 'failed' | 'gone';
+type EventTargetStatus = 'ready' | 'failed' | 'abandoned';
+
 type EnsureCaches = {
-	projects: Map<string, Promise<boolean>>;
+	projects: Map<string, Promise<ProjectTargetStatus>>;
 	entities: Map<string, Promise<boolean>>;
 };
 
@@ -260,6 +338,25 @@ async function markUsageEventFailed(eventId: string, error: string) {
 		.where(eq(billingUsageEvents.id, eventId));
 }
 
+async function markUsageEventAbandoned(eventId: string, error: string) {
+	const db = initDrizzle();
+	await db
+		.update(billingUsageEvents)
+		.set({ syncStatus: 'abandoned', syncError: error })
+		.where(eq(billingUsageEvents.id, eventId));
+}
+
+async function projectIsGone(projectId: string) {
+	const db = initDrizzle();
+	const [org] = await db
+		.select({ deletedAt: organization.deletedAt })
+		.from(organization)
+		.where(eq(organization.id, projectId))
+		.limit(1);
+
+	return !org || org.deletedAt != null;
+}
+
 async function markUsageEventSynced(eventId: string) {
 	const db = initDrizzle();
 	await db
@@ -272,8 +369,11 @@ function ensureProjectTarget(projectId: string, caches: EnsureCaches) {
 	let ensured = caches.projects.get(projectId);
 	if (!ensured) {
 		ensured = ensureProjectCustomer(projectId)
-			.then(() => true)
-			.catch(() => false);
+			.then((): ProjectTargetStatus => 'ok')
+			.catch(async (): Promise<ProjectTargetStatus> => {
+				const gone = await projectIsGone(projectId).catch(() => false);
+				return gone ? 'gone' : 'failed';
+			});
 		caches.projects.set(projectId, ensured);
 	}
 
@@ -308,22 +408,29 @@ function ensureEntityTarget(
 	return ensured;
 }
 
-async function ensureEventTarget(event: BillingUsageEvent, caches: EnsureCaches) {
-	const customerEnsured = await ensureProjectTarget(event.projectId, caches);
-	if (!customerEnsured) {
+async function ensureEventTarget(
+	event: BillingUsageEvent,
+	caches: EnsureCaches
+): Promise<EventTargetStatus> {
+	const customerStatus = await ensureProjectTarget(event.projectId, caches);
+	if (customerStatus === 'gone') {
+		await markUsageEventAbandoned(event.id, 'Project no longer exists');
+		return 'abandoned';
+	}
+	if (customerStatus !== 'ok') {
 		await markUsageEventFailed(event.id, 'Failed to ensure Autumn customer');
-		return false;
+		return 'failed';
 	}
 
 	if (event.resourceType === 'vm') {
-		const entityEnsured = await ensureEntityTarget(event, caches, customerEnsured);
+		const entityEnsured = await ensureEntityTarget(event, caches, true);
 		if (!entityEnsured) {
 			await markUsageEventFailed(event.id, 'Failed to ensure Autumn entity');
-			return false;
+			return 'failed';
 		}
 	}
 
-	return true;
+	return 'ready';
 }
 
 async function trackUsageEvent(event: BillingUsageEvent) {
@@ -343,7 +450,8 @@ async function trackUsageEvent(event: BillingUsageEvent) {
 				resourceType: event.resourceType,
 				resourceId: event.resourceId,
 				periodStart: event.periodStart,
-				periodEnd: event.periodEnd
+				periodEnd: event.periodEnd,
+				...(event.note ? { note: event.note } : {})
 			}
 		};
 
@@ -357,6 +465,10 @@ async function trackUsageEvent(event: BillingUsageEvent) {
 			.where(eq(billingUsageEvents.id, event.id));
 		return 'synced' as const;
 	} catch (err) {
+		if (autumnStatus(err) === 404) {
+			await markUsageEventAbandoned(event.id, formatAutumnError(err));
+			return 'abandoned' as const;
+		}
 		await markUsageEventFailed(event.id, formatAutumnError(err));
 		return 'failed' as const;
 	}
@@ -367,6 +479,7 @@ async function syncUsageEvents(events: BillingUsageEvent[]) {
 	const ready: BillingUsageEvent[] = [];
 	let synced = 0;
 	let failed = 0;
+	let abandoned = 0;
 
 	await runBounded(events, SYNC_CONCURRENCY, async (event) => {
 		if (event.syncStatus === 'synced') {
@@ -378,17 +491,20 @@ async function syncUsageEvents(events: BillingUsageEvent[]) {
 			synced += 1;
 			return;
 		}
-		if (await ensureEventTarget(event, caches)) ready.push(event);
+		const target = await ensureEventTarget(event, caches);
+		if (target === 'ready') ready.push(event);
+		else if (target === 'abandoned') abandoned += 1;
 		else failed += 1;
 	});
 
 	await runBounded(ready, SYNC_CONCURRENCY, async (event) => {
 		const status = await trackUsageEvent(event);
 		if (status === 'synced') synced += 1;
+		else if (status === 'abandoned') abandoned += 1;
 		else failed += 1;
 	});
 
-	return { synced, failed };
+	return { synced, failed, abandoned };
 }
 
 export async function syncUsageEvent(id: string) {
@@ -405,13 +521,40 @@ export async function syncUsageEvent(id: string) {
 	}
 
 	const caches: EnsureCaches = { projects: new Map(), entities: new Map() };
-	if (!(await ensureEventTarget(event, caches))) return 'failed' as const;
+	const target = await ensureEventTarget(event, caches);
+	if (target !== 'ready')
+		return target === 'abandoned' ? ('abandoned' as const) : ('failed' as const);
 
 	return trackUsageEvent(event);
 }
 
+const FAILED_EVENT_MAX_AGE_MS = 7 * 86_400_000;
+
+async function abandonStaleFailedEvents(now: number) {
+	const db = initDrizzle();
+	const stale = await db
+		.update(billingUsageEvents)
+		.set({ syncStatus: 'abandoned' })
+		.where(
+			and(
+				eq(billingUsageEvents.syncStatus, 'failed'),
+				lt(billingUsageEvents.createdAt, now - FAILED_EVENT_MAX_AGE_MS)
+			)
+		)
+		.returning({ id: billingUsageEvents.id });
+
+	if (stale.length > 0) {
+		console.error(
+			`Abandoned ${stale.length} usage events that stayed failed for over ${FAILED_EVENT_MAX_AGE_MS / 86_400_000} days`
+		);
+	}
+
+	return stale.length;
+}
+
 export async function syncPendingUsage(limit = 50) {
 	const db = initDrizzle();
+	const expired = await abandonStaleFailedEvents(Date.now());
 	const events = await db
 		.select()
 		.from(billingUsageEvents)
@@ -422,9 +565,9 @@ export async function syncPendingUsage(limit = 50) {
 		)
 		.limit(limit);
 
-	const { synced, failed } = await syncUsageEvents(events);
+	const { synced, failed, abandoned } = await syncUsageEvents(events);
 
-	return { attempted: events.length, synced, failed };
+	return { attempted: events.length, synced, failed, abandoned, expired };
 }
 
 export async function syncProjectUsage(projectId: string, limit = 50) {
@@ -444,7 +587,7 @@ export async function syncProjectUsage(projectId: string, limit = 50) {
 		)
 		.limit(limit);
 
-	const { synced, failed } = await syncUsageEvents(events);
+	const { synced, failed, abandoned } = await syncUsageEvents(events);
 
-	return { attempted: events.length, synced, failed };
+	return { attempted: events.length, synced, failed, abandoned };
 }

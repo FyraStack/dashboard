@@ -1,6 +1,12 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { meterActiveResources, syncPendingUsage } from '$lib/server/billing/metering';
+import {
+	meterActiveResources,
+	reconcileOrphanedMeters,
+	syncPendingUsage
+} from '$lib/server/billing/metering';
+import { purgeExpiredDeletedVms } from '$lib/server/vm-deletion';
+import { purgeExpiredDeletedOrganizations } from '$lib/server/project-deletion';
 import {
 	isBillingConfigured,
 	retryOrphanedProjectBillingCancellations
@@ -17,6 +23,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	if (!isBillingConfigured()) error(503, 'Billing is not configured');
 
+	const reconciled = await reconcileOrphanedMeters().catch((err) => {
+		console.error('Orphaned meter reconciliation failed', err);
+		return { closed: 0, failed: true };
+	});
 	const metered = await meterActiveResources();
 	const synced = await syncPendingUsage();
 	const cancellations = await retryOrphanedProjectBillingCancellations();
@@ -24,6 +34,14 @@ export const POST: RequestHandler = async ({ request }) => {
 		console.error('Billing grace enforcement failed', err);
 		return { checked: 0, suspended: 0, failed: true };
 	});
+	const purge = await purgeExpiredDeletedVms().catch((err) => {
+		console.error('Deleted VM purge failed', err);
+		return { purged: 0, failed: true };
+	});
+	const projectPurge = await purgeExpiredDeletedOrganizations().catch((err) => {
+		console.error('Deleted project purge failed', err);
+		return { purged: 0, failed: true };
+	});
 
-	return json({ metered, synced, cancellations, enforcement });
+	return json({ reconciled, metered, synced, cancellations, enforcement, purge, projectPurge });
 };

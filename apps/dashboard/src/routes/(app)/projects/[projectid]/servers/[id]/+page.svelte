@@ -26,12 +26,12 @@
 	let lastSampleKeyByServer = $state<Record<string, string>>({});
 
 	function formatPercent(value: number | null) {
-		if (value == null) return '—';
+		if (value == null) return '-';
 		return `${Math.round(value * 100)}%`;
 	}
 
 	function formatRate(bytes: number | null) {
-		if (bytes == null) return '—';
+		if (bytes == null) return '-';
 		const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
 		let value = bytes;
 		let unit = 0;

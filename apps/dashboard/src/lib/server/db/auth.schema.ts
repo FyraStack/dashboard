@@ -2,6 +2,7 @@ import { relations } from 'drizzle-orm';
 import {
 	pgTable,
 	text,
+	bigint,
 	timestamp,
 	boolean,
 	integer,
@@ -140,7 +141,10 @@ export const organization = pgTable(
 		slug: text('slug').notNull().unique(),
 		logo: text('logo'),
 		createdAt: timestamp('created_at').notNull(),
-		metadata: text('metadata')
+		metadata: text('metadata'),
+		billingExempt: boolean('billing_exempt').default(false).notNull(),
+		disabled: boolean('disabled').default(false).notNull(),
+		deletedAt: bigint('deleted_at', { mode: 'number' })
 	},
 	(table) => [uniqueIndex('organization_slug_uidx').on(table.slug)]
 );

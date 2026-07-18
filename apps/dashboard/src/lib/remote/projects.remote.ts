@@ -1,36 +1,23 @@
 import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { projectRoles, type ProjectRole } from '$lib/auth/organization-permissions';
 import { initDrizzle } from '$lib/server/db';
-import {
-	invitation,
-	ipAssignments,
-	member,
-	organization,
-	paymentPeriods,
-	vms,
-	volumes
-} from '$lib/server/db/schema';
+import { member, organization } from '$lib/server/db/schema';
 import { requireProjectAccess } from '$lib/server/auth-context';
 import { initAuth } from '$lib/server/auth';
-import { getBackend } from '$lib/server/backends';
 import {
-	cancelProjectBilling,
-	deleteLocalProjectBillingCustomer,
-	deleteProjectServerEntity,
 	ensureLocalProjectBillingCustomer,
 	ensureProjectCustomer,
 	updateProjectCustomer
 } from '$lib/server/billing/autumn';
-import { meterResourceThrough, syncProjectUsage } from '$lib/server/billing/metering';
-import { releaseVmNetworking } from '$lib/server/ipam';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureProjectDetails,
 	accessibilityFixtureProjects
 } from '$lib/server/accessibility-fixtures';
+import { softDeleteOrganizationResources } from '$lib/server/project-deletion';
 
 type ListResult = {
 	id: string;
@@ -100,7 +87,7 @@ async function loadProjectsForUser(userId: string): Promise<ListResult> {
 	});
 
 	return memberships
-		.filter((membership) => membership.organization)
+		.filter((membership) => membership.organization && membership.organization.deletedAt == null)
 		.map((membership) => {
 			const org = membership.organization!;
 			const owner = org.members.find((item: { role: string }) => item.role === 'owner');
@@ -228,65 +215,7 @@ export const deleteProject = command(deleteParams, async (params) => {
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'owner');
 
-	const projectVms = await db.query.vms.findMany({
-		where: eq(vms.ownerProjectId, params.projectId),
-		columns: {
-			id: true,
-			name: true,
-			proxmoxId: true,
-			active: true,
-			backend: true
-		}
-	});
-	const vmIds = projectVms.map((vm) => vm.id);
-	const projectVolumes = await db.query.volumes.findMany({
-		where: eq(volumes.ownerProjectId, params.projectId),
-		columns: { id: true }
-	});
-
-	for (const vm of projectVms.filter((item) => item.active)) {
-		try {
-			await getBackend(vm.backend).deleteVm(vm.id, vm.proxmoxId ?? undefined);
-		} catch (err) {
-			console.warn(`Failed to deprovision VM ${vm.id} during project delete`, err);
-			error(502, `Failed to deprovision VM "${vm.name}" in Proxmox`);
-		}
-	}
-
-	for (const vm of projectVms.filter((item) => item.active)) {
-		const metered = await meterResourceThrough('vm', vm.id).catch((err) => {
-			console.warn(`Failed to meter VM ${vm.id} during project delete`, err);
-			return null;
-		});
-		if (!metered?.event || metered.syncStatus === 'synced') {
-			await deleteProjectServerEntity(params.projectId, vm.id).catch((err) => {
-				console.warn(`Failed to delete Autumn entity for VM ${vm.id}`, err);
-			});
-		}
-	}
-	await syncProjectUsage(params.projectId);
-
-	await db.delete(volumes).where(eq(volumes.ownerProjectId, params.projectId));
-	for (const vm of projectVms) {
-		await releaseVmNetworking(db, vm.id).catch((err) => {
-			console.warn(`Failed to release networking for VM ${vm.id} during project delete`, err);
-		});
-	}
-	if (vmIds.length > 0) {
-		await db.delete(ipAssignments).where(inArray(ipAssignments.associatedVmId, vmIds));
-		await db.delete(paymentPeriods).where(inArray(paymentPeriods.vmId, vmIds));
-	}
-	await db.delete(vms).where(eq(vms.ownerProjectId, params.projectId));
-	await db.delete(invitation).where(eq(invitation.organizationId, params.projectId));
-	await db.delete(member).where(eq(member.organizationId, params.projectId));
-	const billingCancelled = await cancelProjectBilling(params.projectId).catch((err) => {
-		console.warn(`Failed to cancel Autumn billing for project ${params.projectId}`, err);
-		return false;
-	});
-	if (billingCancelled) {
-		await deleteLocalProjectBillingCustomer(params.projectId);
-	}
-	await db.delete(organization).where(eq(organization.id, params.projectId));
+	await softDeleteOrganizationResources(db, params.projectId);
 	clearProjectListCache();
 });
 

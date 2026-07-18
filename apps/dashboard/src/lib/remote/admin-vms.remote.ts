@@ -12,16 +12,23 @@ export type AdminVm = {
 	id: string;
 	name: string;
 	proxmoxId: number | null;
+	proxmoxNode: string | null;
 	active: boolean;
 	status: 'provisioning' | 'ready' | 'error' | 'deleting';
 	statusError: string | null;
 	liveStatus: string | null;
 	uptime: number;
+	cpuUsage: number | null;
+	memoryUsageBytes: number | null;
+	memoryTotalBytes: number | null;
 	createdAt: number;
+	deletedAt: number | null;
+	lastKnownAt: number | null;
 	lastKnownIpv4: string | null;
 	lastKnownIpv6: string | null;
 	projectId: string | null;
 	projectName: string | null;
+	projectBillingExempt: boolean;
 	ownerName: string | null;
 	ownerEmail: string | null;
 	ownerBillingExempt: boolean;
@@ -29,6 +36,7 @@ export type AdminVm = {
 	vmTypeCores: number | null;
 	vmTypeRamCapacity: number | null;
 	vmTypeStorageAmount: number | null;
+	vmTypeRate: string | null;
 };
 
 async function requireCurrentAdmin() {
@@ -50,21 +58,26 @@ export const listAllAdminVms = query(async (): Promise<AdminVm[]> => {
 				id: vms.id,
 				name: vms.name,
 				proxmoxId: vms.proxmoxId,
+				proxmoxNode: vms.proxmoxNode,
 				active: vms.active,
 				backend: vms.backend,
 				status: vms.status,
 				statusError: vms.statusError,
 				lastKnownStatus: vms.lastKnownStatus,
 				lastKnownUptime: vms.lastKnownUptime,
+				lastKnownAt: vms.lastKnownAt,
 				createdAt: vms.createdAt,
+				deletedAt: vms.deletedAt,
 				lastKnownIpv4: vms.lastKnownIpv4,
 				lastKnownIpv6: vms.lastKnownIpv6,
 				projectId: vms.ownerProjectId,
 				projectName: organization.name,
+				projectBillingExempt: organization.billingExempt,
 				vmTypeName: vmTypes.name,
 				vmTypeCores: vmTypes.cores,
 				vmTypeRamCapacity: vmTypes.ramCapacity,
-				vmTypeStorageAmount: vmTypes.storageAmount
+				vmTypeStorageAmount: vmTypes.storageAmount,
+				vmTypeRate: vmTypes.rate
 			})
 			.from(vms)
 			.leftJoin(vmTypes, eq(vmTypes.id, vms.vmTypeId))
@@ -116,6 +129,7 @@ export const listAllAdminVms = query(async (): Promise<AdminVm[]> => {
 		}
 	}
 
+	const now = Date.now();
 	return rows.map((row) => {
 		const live = row.proxmoxId != null ? liveByProxmoxId.get(row.proxmoxId) : null;
 		const owner = row.projectId ? ownerByProject.get(row.projectId) : null;
@@ -124,23 +138,31 @@ export const listAllAdminVms = query(async (): Promise<AdminVm[]> => {
 			id: row.id,
 			name: row.name,
 			proxmoxId: row.proxmoxId,
+			proxmoxNode: live?.proxmoxNode ?? row.proxmoxNode,
 			active: row.active,
 			status: row.status,
 			statusError: row.statusError,
 			liveStatus: row.active ? (live?.status ?? row.lastKnownStatus) : null,
 			uptime: live?.uptime ?? row.lastKnownUptime ?? 0,
+			cpuUsage: row.active ? (live?.metrics?.cpu ?? null) : null,
+			memoryUsageBytes: row.active ? (live?.metrics?.memory ?? null) : null,
+			memoryTotalBytes: row.active ? (live?.memory ?? null) : null,
 			createdAt: row.createdAt,
+			deletedAt: row.deletedAt,
+			lastKnownAt: live ? now : row.lastKnownAt,
 			lastKnownIpv4: row.lastKnownIpv4,
 			lastKnownIpv6: row.lastKnownIpv6,
 			projectId: row.projectId,
 			projectName: row.projectName,
+			projectBillingExempt: row.projectBillingExempt ?? false,
 			ownerName: owner?.name ?? null,
 			ownerEmail: owner?.email ?? null,
 			ownerBillingExempt: owner?.billingExempt ?? false,
 			vmTypeName: row.vmTypeName,
 			vmTypeCores: row.vmTypeCores,
 			vmTypeRamCapacity: row.vmTypeRamCapacity,
-			vmTypeStorageAmount: row.vmTypeStorageAmount
+			vmTypeStorageAmount: row.vmTypeStorageAmount,
+			vmTypeRate: row.vmTypeRate
 		};
 	});
 });

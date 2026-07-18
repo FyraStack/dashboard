@@ -7,6 +7,7 @@
 	import Fingerprint from '~icons/nucleo/fingerprint';
 	import { onMount } from 'svelte';
 	import type { PageData } from './$types';
+	import { dashboardBrand, pageTitle } from '$lib/branding';
 
 	let { data }: { data: PageData } = $props();
 	const redirectTo: string = $derived(data.redirectTo ?? '/');
@@ -44,20 +45,22 @@
 </script>
 
 <svelte:head>
-	<title>Verify with Passkey / Stack</title>
+	<title>{pageTitle('Verify with Passkey')}</title>
 </svelte:head>
 
 <div class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">
 		<div class="mb-10 flex items-center justify-center gap-2">
-			<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
-			<span class="text-base font-semibold tracking-tight text-foreground">Stack</span>
+			<img src={dashboardBrand.logo} alt={dashboardBrand.name} class="h-5 w-5" />
+			<span class="text-base font-semibold tracking-tight text-foreground">
+				{dashboardBrand.name}
+			</span>
 		</div>
 
 		<div class="space-y-5">
 			<div class="flex flex-col items-center gap-3">
 				<div class="flex h-12 w-12 items-center justify-center border border-border bg-background">
-					<Fingerprint class="h-5 w-5 text-red-400" />
+					<Fingerprint class="h-5 w-5 text-primary" />
 				</div>
 				<h1 class="text-lg font-medium text-foreground">Verify with Passkey</h1>
 				<p class="text-center text-sm text-muted-foreground">
@@ -85,14 +88,14 @@
 
 			{#if data.canUseTotp}
 				<p class="text-center text-xs">
-					<a href={totpHref} class="text-red-400 hover:text-red-300"
+					<a href={totpHref} class="text-primary hover:text-primary/80"
 						>Use authenticator app instead</a
 					>
 				</p>
 			{/if}
 
 			<p class="text-center text-xs text-muted-foreground">
-				Need another method? <a href={loginHref} class="text-red-400 hover:text-red-300"
+				Need another method? <a href={loginHref} class="text-primary hover:text-primary/80"
 					>Back to sign in</a
 				>
 			</p>

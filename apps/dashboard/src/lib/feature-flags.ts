@@ -2,6 +2,7 @@ export const featureFlagKeys = [
 	'colocation',
 	'firewall',
 	'images',
+	'managedHosts',
 	'volumes',
 	'vpsConsole',
 	'vpsLogs',
@@ -23,6 +24,7 @@ export const defaultFeatureFlags: FeatureFlags = {
 	colocation: false,
 	firewall: false,
 	images: false,
+	managedHosts: true,
 	volumes: false,
 	vpsConsole: true,
 	vpsLogs: true,
@@ -40,6 +42,7 @@ export const developmentFeatureFlags: FeatureFlags = {
 	colocation: true,
 	firewall: true,
 	images: true,
+	managedHosts: true,
 	volumes: true,
 	vpsConsole: true,
 	vpsLogs: true,
@@ -57,6 +60,7 @@ export const featureFlagLabels: Record<FeatureFlagKey, string> = {
 	colocation: 'Colocation',
 	firewall: 'Firewall',
 	images: 'Images',
+	managedHosts: 'Managed Hosts',
 	volumes: 'Volumes',
 	vpsConsole: 'Console Tab',
 	vpsLogs: 'Logs Tab',
@@ -74,6 +78,7 @@ export const featureFlagDescriptions: Record<FeatureFlagKey, string> = {
 	colocation: 'Enable colocation server management',
 	firewall: 'Enable firewall rule management for projects',
 	images: 'Enable custom image management and deployment',
+	managedHosts: 'Enable Tetra-managed host enrollment and control',
 	volumes: 'Enable persistent volume management',
 	vpsConsole: 'Web-based serial console access for VPS instances',
 	vpsLogs: 'System and service log viewing for VPS instances',
@@ -90,7 +95,7 @@ export const featureFlagDescriptions: Record<FeatureFlagKey, string> = {
 export type FeatureFlagCategory = 'platform' | 'server';
 
 export const featureFlagCategories: Record<FeatureFlagCategory, FeatureFlagKey[]> = {
-	platform: ['colocation', 'firewall', 'images', 'volumes'],
+	platform: ['colocation', 'firewall', 'images', 'managedHosts', 'volumes'],
 	server: [
 		'vpsConsole',
 		'vpsLogs',

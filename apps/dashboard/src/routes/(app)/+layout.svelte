@@ -21,6 +21,7 @@
 	import { untrack } from 'svelte';
 	import { listVms } from '$lib/remote/vms.remote';
 	import { authClient } from '$lib/auth-client';
+	import { dashboardBrand, pageTitle } from '$lib/branding';
 	import type { FeatureFlags } from '$lib/feature-flags';
 	import type { IconComponent } from '$lib';
 	import ArrowRight from '~icons/lucide/arrow-right';
@@ -88,7 +89,11 @@
 		const items: { icon: IconComponent; label: string; href: string }[] = [];
 		if (!currentProject) return items;
 		const prefix = `/projects/${currentProject.id}`;
-		items.push({ icon: Server, label: 'Servers', href: `${prefix}/servers` });
+		if (featureFlags.managedHosts)
+			items.push({ icon: Server, label: 'Managed Hosts', href: `${prefix}/hosts` });
+		if (!dashboardBrand.isStandalone) {
+			items.push({ icon: Server, label: 'Servers', href: `${prefix}/servers` });
+		}
 		if (featureFlags.colocation)
 			items.push({ icon: Warehouse, label: 'Colocation', href: `${prefix}/colocation` });
 		if (featureFlags.volumes)
@@ -96,7 +101,9 @@
 		if (featureFlags.firewall)
 			items.push({ icon: Shield, label: 'Firewall', href: `${prefix}/firewall` });
 		if (featureFlags.images) items.push({ icon: Disc, label: 'Images', href: `${prefix}/images` });
-		items.push({ icon: CreditCard, label: 'Billing', href: `${prefix}/billing` });
+		if (!dashboardBrand.isStandalone) {
+			items.push({ icon: CreditCard, label: 'Billing', href: `${prefix}/billing` });
+		}
 		items.push({ icon: Settings, label: 'Settings', href: `${prefix}/settings` });
 		return items;
 	});
@@ -130,7 +137,7 @@
 		try {
 			selectedProjectId = projectId;
 			await authClient.organization.setActive({ organizationId: projectId });
-			await goto(resolve(`/projects/${projectId}/servers`));
+			await goto(resolve(`/projects/${projectId}/${dashboardBrand.defaultProjectPath}`));
 		} catch (error) {
 			toast.error(getErrorMessage(error, 'Failed to switch project'));
 		} finally {
@@ -196,13 +203,19 @@
 			{ id: 'all', label: 'All', icon: Search },
 			{ id: 'navigate', label: 'Pages', icon: ArrowRight }
 		];
-		if (showServerFilter) filters.push({ id: 'servers', label: 'Servers', icon: Server });
+		if (!dashboardBrand.isStandalone && showServerFilter) {
+			filters.push({ id: 'servers', label: 'Servers', icon: Server });
+		}
 		filters.push({ id: 'account', label: 'Account', icon: User });
 		return filters;
 	});
 
 	const navigateCommands = $derived.by(() => {
-		const commands: CommandEntry[] = [{ icon: Server, label: 'Servers', href: '/servers' }];
+		const commands: CommandEntry[] = [];
+		if (showManagedHosts) commands.push({ icon: Server, label: 'Managed Hosts', href: '/hosts' });
+		if (!dashboardBrand.isStandalone) {
+			commands.push({ icon: Server, label: 'Servers', href: '/servers' });
+		}
 		if (showColocation)
 			commands.push({ icon: Warehouse, label: 'Colocation', href: '/colocation' });
 		if (showVolumes) commands.push({ icon: HardDrive, label: 'Volumes', href: '/volumes' });
@@ -248,6 +261,7 @@
 	}
 
 	async function loadCommandServers(projectId = selectedProjectId) {
+		if (dashboardBrand.isStandalone) return;
 		if (!projectId || commandServersLoading || commandServersLoadedProjectId === projectId) return;
 		const requestId = ++commandServersRequestId;
 		commandServersLoading = true;
@@ -286,7 +300,7 @@
 		commandSearch = '';
 		cmdFilter = 'all';
 		commandOpen = true;
-		void loadCommandServers();
+		if (!dashboardBrand.isStandalone) void loadCommandServers();
 	}
 
 	$effect(() => {
@@ -327,6 +341,7 @@
 	}
 
 	const showColocation = $derived(!!featureFlags.colocation);
+	const showManagedHosts = $derived(!!featureFlags.managedHosts);
 	const showVolumes = $derived(!!featureFlags.volumes);
 	const showFirewall = $derived(!!featureFlags.firewall);
 	const showImages = $derived(!!featureFlags.images);
@@ -337,7 +352,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
-	<title>Stack / Dashboard</title>
+	<title>{pageTitle('Dashboard')}</title>
 </svelte:head>
 
 {#if !data.user}
@@ -356,8 +371,10 @@
 					</button>
 				{/if}
 				<a href={resolve('/')} class="flex shrink-0 items-center gap-2">
-					<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
-					<span class="text-sm font-semibold tracking-tight text-foreground">Stack</span>
+					<img src={dashboardBrand.logo} alt={dashboardBrand.name} class="h-5 w-5" />
+					<span class="text-sm font-semibold tracking-tight text-foreground">
+						{dashboardBrand.name}
+					</span>
 				</a>
 				{#if isOnProjectRoute}
 					<span class="text-sm text-muted-foreground">/</span>
@@ -381,16 +398,16 @@
 								>
 									<FolderOpen
 										class="size-4 {selectedProjectId === project.id
-											? 'text-red-500'
+											? 'text-primary'
 											: 'text-muted-foreground'}"
 									/>
 									<span class={selectedProjectId === project.id ? 'text-foreground' : ''}
 										>{project.projectName}</span
 									>
 									{#if switchingProjectId === project.id}
-										<Loader2 class="ml-auto h-3 w-3 animate-spin text-red-500" />
+										<Loader2 class="ml-auto h-3 w-3 animate-spin text-primary" />
 									{:else if selectedProjectId === project.id}
-										<Check class="ml-auto h-3 w-3 text-red-500" />
+										<Check class="ml-auto h-3 w-3 text-primary" />
 									{/if}
 								</DropdownMenu.Item>
 							{/each}
@@ -475,7 +492,7 @@
 										class="flex h-8 w-8 items-center justify-center transition-colors duration-100 {isActive(
 											item.href
 										)
-											? 'border border-red-500 text-foreground'
+											? 'border border-primary text-foreground'
 											: 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
 									>
 										<item.icon class="h-4 w-4" />
@@ -542,12 +559,12 @@
 							>
 								<FolderOpen
 									class="h-4 w-4 shrink-0 {selectedProjectId === project.id
-										? 'text-red-500'
+										? 'text-primary'
 										: 'text-muted-foreground'}"
 								/>
 								<span class="truncate">{project.projectName}</span>
 								{#if selectedProjectId === project.id}
-									<Check class="ml-auto h-3.5 w-3.5 shrink-0 text-red-500" />
+									<Check class="ml-auto h-3.5 w-3.5 shrink-0 text-primary" />
 								{/if}
 							</button>
 						{/each}

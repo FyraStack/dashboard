@@ -7,7 +7,7 @@ import { setFeatureFlag } from '$lib/server/feature-flags';
 import type { FeatureFlagKey } from '$lib/feature-flags';
 
 const featureFlagParam =
-	"'colocation' | 'firewall' | 'images' | 'volumes' | 'vpsConsole' | 'vpsLogs' | 'vpsNetworking' | 'vpsImages' | 'vpsSnapshots' | 'vpsBackups' | 'vpsRebuild' | 'vpsResize' | 'vpsRescue' | 'vpsSettings'";
+	"'colocation' | 'firewall' | 'images' | 'managedHosts' | 'volumes' | 'vpsConsole' | 'vpsLogs' | 'vpsNetworking' | 'vpsImages' | 'vpsSnapshots' | 'vpsBackups' | 'vpsRebuild' | 'vpsResize' | 'vpsRescue' | 'vpsSettings'";
 
 const updateFeatureFlagParams = type({
 	flag: featureFlagParam,

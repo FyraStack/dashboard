@@ -7,6 +7,7 @@
 	import AlertCircle from '~icons/nucleo/alert-circle';
 	import ShieldCheck from '~icons/nucleo/shield-check';
 	import type { PageData } from './$types';
+	import { dashboardBrand, pageTitle } from '$lib/branding';
 
 	let { data }: { data: PageData } = $props();
 	const redirectTo: string = $derived(data.redirectTo ?? '/');
@@ -37,20 +38,22 @@
 </script>
 
 <svelte:head>
-	<title>Two-Factor Authentication / Stack</title>
+	<title>{pageTitle('Two-Factor Authentication')}</title>
 </svelte:head>
 
 <div class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">
 		<div class="mb-10 flex items-center justify-center gap-2">
-			<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
-			<span class="text-base font-semibold tracking-tight text-foreground">Stack</span>
+			<img src={dashboardBrand.logo} alt={dashboardBrand.name} class="h-5 w-5" />
+			<span class="text-base font-semibold tracking-tight text-foreground">
+				{dashboardBrand.name}
+			</span>
 		</div>
 
 		<div class="space-y-5">
 			<div class="flex flex-col items-center gap-3">
 				<div class="flex h-12 w-12 items-center justify-center border border-border bg-background">
-					<ShieldCheck class="h-5 w-5 text-red-400" />
+					<ShieldCheck class="h-5 w-5 text-primary" />
 				</div>
 				<h1 class="text-lg font-medium text-foreground">Two-Factor Authentication</h1>
 				<p class="text-center text-sm text-muted-foreground">

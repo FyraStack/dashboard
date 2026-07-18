@@ -5,6 +5,7 @@
 	import AlertCircle from '~icons/nucleo/alert-circle';
 	import { isProjectRole, projectRoleLabels } from '$lib/auth/organization-permissions';
 	import type { PageData } from './$types';
+	import { dashboardBrand, pageTitle } from '$lib/branding';
 
 	let { data }: { data: PageData } = $props();
 	let error = $state('');
@@ -24,7 +25,9 @@
 			accepting = false;
 			return;
 		}
-		await goto(`/projects/${res.member.organizationId}/servers`, { invalidateAll: true });
+		await goto(`/projects/${res.member.organizationId}/${dashboardBrand.defaultProjectPath}`, {
+			invalidateAll: true
+		});
 	}
 
 	async function decline() {
@@ -50,14 +53,16 @@
 </script>
 
 <svelte:head>
-	<title>Invitation / Stack</title>
+	<title>{pageTitle('Invitation')}</title>
 </svelte:head>
 
 <div class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">
 		<div class="mb-10 flex items-center justify-center gap-2">
-			<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
-			<span class="text-base font-semibold tracking-tight text-foreground">Stack</span>
+			<img src={dashboardBrand.logo} alt={dashboardBrand.name} class="h-5 w-5" />
+			<span class="text-base font-semibold tracking-tight text-foreground">
+				{dashboardBrand.name}
+			</span>
 		</div>
 
 		{#if data.error}

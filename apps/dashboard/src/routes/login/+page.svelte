@@ -11,6 +11,7 @@
 	import Fingerprint from '~icons/nucleo/fingerprint';
 	import SiGithub from '@icons-pack/svelte-simple-icons/icons/SiGithub';
 	import type { PageData } from './$types';
+	import { dashboardBrand, pageTitle } from '$lib/branding';
 	type SignInDataWithTwoFactor = {
 		twoFactorRedirect?: boolean;
 		twoFactorMethods?: string[] | null;
@@ -103,14 +104,16 @@
 </script>
 
 <svelte:head>
-	<title>Sign in / Stack</title>
+	<title>{pageTitle('Sign in')}</title>
 </svelte:head>
 
 <div class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">
 		<div class="mb-10 flex items-center justify-center gap-2">
-			<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
-			<span class="text-base font-semibold tracking-tight text-foreground">Stack</span>
+			<img src={dashboardBrand.logo} alt={dashboardBrand.name} class="h-5 w-5" />
+			<span class="text-base font-semibold tracking-tight text-foreground">
+				{dashboardBrand.name}
+			</span>
 		</div>
 
 		<div class="space-y-5">
@@ -129,7 +132,7 @@
 				<div
 					class="flex items-center gap-2 border border-border bg-background px-3 py-2 text-sm text-muted-foreground"
 				>
-					<CheckCircle2 class="size-4 shrink-0 text-red-400" />
+					<CheckCircle2 class="size-4 shrink-0 text-primary" />
 					Email verified! Please sign in.
 				</div>
 			{/if}
@@ -204,7 +207,7 @@
 			</Button>
 
 			<p class="text-center text-xs text-muted-foreground">
-				No account? <a href={registerHref} class="text-red-400 hover:text-red-300">Create one</a>
+				No account? <a href={registerHref} class="text-primary hover:text-primary/80">Create one</a>
 			</p>
 		</div>
 	</div>

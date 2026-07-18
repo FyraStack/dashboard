@@ -20,6 +20,7 @@ import { sendSecurityAlertEmail } from '$lib/server/email-notifications';
 import { updateProjectCustomer } from '$lib/server/billing/autumn';
 import { getRuntimeEnv } from '$lib/server/env';
 import { ulid } from '$lib/server/id';
+import { dashboardBrand } from '$lib/branding';
 
 const PENDING_PASSKEY_COOKIE = 'pending_passkey_2fa';
 const PENDING_PASSKEY_HINT_COOKIE = 'pending_passkey_2fa_hint';
@@ -121,7 +122,7 @@ function buildAuth() {
 	const baseURL = dev ? getRequestEvent().url.origin : env.ORIGIN;
 
 	return betterAuth({
-		appName: 'Stack',
+		appName: dashboardBrand.title,
 		baseURL,
 		secret: env.BETTER_AUTH_SECRET,
 		database: drizzleAdapter(db, { provider: 'pg' }),

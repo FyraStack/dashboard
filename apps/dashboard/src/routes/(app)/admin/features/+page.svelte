@@ -35,6 +35,7 @@
 		colocation: Server,
 		firewall: Shield,
 		images: Image,
+		managedHosts: Server,
 		volumes: HardDrive,
 		vpsConsole: Terminal,
 		vpsLogs: FileText,

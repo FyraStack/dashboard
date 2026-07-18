@@ -8,6 +8,7 @@
 	import Check from '~icons/lucide/check';
 	import Copy from '~icons/nucleo/copy';
 	import ShieldCheck from '~icons/nucleo/shield-check';
+	import { dashboardBrand } from '$lib/branding';
 
 	type Props = {
 		open?: boolean;
@@ -62,7 +63,7 @@
 		verifyError = '';
 		const { data, error } = await authClient.twoFactor.enable({
 			password: setupPassword,
-			issuer: 'Fyra Stack'
+			issuer: dashboardBrand.title
 		});
 		setupSubmitting = false;
 		if (error) {

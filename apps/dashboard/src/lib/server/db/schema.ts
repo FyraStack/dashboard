@@ -7,6 +7,7 @@ import {
 	integer,
 	numeric,
 	date,
+	jsonb,
 	index,
 	uniqueIndex,
 	inet,
@@ -26,6 +27,21 @@ export const vmIsaEnum = pgEnum('vm_isa', ['x86', 'arm', 'risc-v']);
 export const vmBackendEnum = pgEnum('vm_backend', ['proxmox']);
 
 export const vmStatusEnum = pgEnum('vm_status', ['provisioning', 'ready', 'error', 'deleting']);
+
+export const managedHostKindEnum = pgEnum('managed_host_kind', ['stack_vps', 'external', 'local']);
+
+export const managedHostConnectionModeEnum = pgEnum('managed_host_connection_mode', [
+	'direct_http',
+	'websocket',
+	'vsock_gateway',
+	'offline'
+]);
+
+export const managedHostConnectionStateEnum = pgEnum('managed_host_connection_state', [
+	'online',
+	'offline',
+	'unknown'
+]);
 
 export const billingSyncStatusEnum = pgEnum('billing_sync_status', [
 	'pending',
@@ -102,9 +118,62 @@ export const vmsRelations = relations(vms, ({ one, many }) => ({
 		references: [vmTypes.id]
 	}),
 	volumes: many(volumes),
+	managedHosts: many(managedHosts),
 	paymentPeriods: many(paymentPeriods),
 	ipAssignments: many(ipAssignments),
 	ipamAllocations: many(ipamAllocations)
+}));
+
+// Managed Hosts
+
+export const managedHosts = pgTable(
+	'managed_hosts',
+	{
+		id: ulidPk(),
+		displayName: text('display_name').notNull(),
+		ownerProjectId: ulidFk('owner_project_id')
+			.notNull()
+			.references(() => organization.id),
+		hostKind: managedHostKindEnum('host_kind').notNull().default('external'),
+		linkedVmId: ulidFk('linked_vm_id').references(() => vms.id),
+		connectionMode: managedHostConnectionModeEnum('connection_mode')
+			.notNull()
+			.default('direct_http'),
+		connectionState: managedHostConnectionStateEnum('connection_state')
+			.notNull()
+			.default('unknown'),
+		agentUrl: text('agent_url'),
+		bearerToken: text('bearer_token'),
+		lastSeenAt: bigint('last_seen_at', { mode: 'number' }),
+		agentVersion: text('agent_version'),
+		hostname: text('hostname'),
+		os: text('os'),
+		arch: text('arch'),
+		capabilities: jsonb('capabilities').$type<Record<string, unknown> | null>(),
+		lastError: text('last_error'),
+		createdAt: bigint('created_at', { mode: 'number' })
+			.notNull()
+			.default(sql`(extract(epoch from now()) * 1000)::bigint`),
+		updatedAt: bigint('updated_at', { mode: 'number' })
+			.notNull()
+			.default(sql`(extract(epoch from now()) * 1000)::bigint`)
+	},
+	(table) => [
+		index('managed_hosts_owner_project_id_index').on(table.ownerProjectId),
+		index('managed_hosts_linked_vm_id_index').on(table.linkedVmId),
+		index('managed_hosts_connection_state_index').on(table.connectionState)
+	]
+);
+
+export const managedHostsRelations = relations(managedHosts, ({ one }) => ({
+	project: one(organization, {
+		fields: [managedHosts.ownerProjectId],
+		references: [organization.id]
+	}),
+	vm: one(vms, {
+		fields: [managedHosts.linkedVmId],
+		references: [vms.id]
+	})
 }));
 
 // Volumes

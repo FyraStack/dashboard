@@ -24,6 +24,7 @@ declare global {
 			ctx: ExecutionContext;
 			env: {
 				ORIGIN: string;
+				PUBLIC_DASHBOARD_BRAND?: string;
 				BETTER_AUTH_SECRET: string;
 				VYOS_API_URL?: string;
 				VYOS_API_KEY?: string;
@@ -73,6 +74,7 @@ declare global {
 				colocation: boolean;
 				firewall: boolean;
 				images: boolean;
+				managedHosts: boolean;
 				volumes: boolean;
 			};
 		}

@@ -20,6 +20,7 @@
 	import { toast } from 'svelte-sonner';
 	import { getErrorMessage } from '$lib/utils';
 	import { isProjectRole, projectRoleLabels } from '$lib/auth/organization-permissions';
+	import { dashboardBrand, pageTitle } from '$lib/branding';
 
 	type Project = { id: string; projectName: string; role: string };
 
@@ -48,7 +49,7 @@
 			newProjectName = '';
 			createOpen = false;
 			await authClient.organization.setActive({ organizationId: res.id });
-			await goto(`/projects/${res.id}/servers`);
+			await goto(`/projects/${res.id}/${dashboardBrand.defaultProjectPath}`);
 		} catch (err) {
 			createProjectError = getErrorMessage(err, 'Project could not be created.');
 		} finally {
@@ -56,7 +57,7 @@
 		}
 	}
 
-	async function openProject(project: Project, path = 'servers') {
+	async function openProject(project: Project, path: string = dashboardBrand.defaultProjectPath) {
 		await authClient.organization.setActive({ organizationId: project.id });
 		await goto(`/projects/${project.id}/${path}`);
 	}
@@ -109,7 +110,7 @@
 </script>
 
 <svelte:head>
-	<title>Projects / Stack</title>
+	<title>{pageTitle('Projects')}</title>
 </svelte:head>
 
 <div class="flex min-h-0 flex-1 flex-col overflow-auto bg-background/30">
@@ -172,7 +173,7 @@
 								</div>
 								<div class="flex items-center gap-3 text-sm text-muted-foreground">
 									<ArrowRight
-										class="size-4 text-muted-foreground transition-colors group-hover:text-red-300"
+										class="size-4 text-muted-foreground transition-colors group-hover:text-primary"
 									/>
 								</div>
 							</button>

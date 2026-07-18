@@ -4,6 +4,7 @@ import {
 	text,
 	timestamp,
 	boolean,
+	bigint,
 	integer,
 	index,
 	uniqueIndex
@@ -142,7 +143,8 @@ export const organization = pgTable(
 		createdAt: timestamp('created_at').notNull(),
 		metadata: text('metadata'),
 		billingExempt: boolean('billing_exempt').default(false).notNull(),
-		disabled: boolean('disabled').default(false).notNull()
+		disabled: boolean('disabled').default(false).notNull(),
+		deletedAt: bigint('deleted_at', { mode: 'number' })
 	},
 	(table) => [uniqueIndex('organization_slug_uidx').on(table.slug)]
 );

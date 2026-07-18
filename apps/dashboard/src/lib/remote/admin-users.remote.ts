@@ -24,7 +24,7 @@ import {
 } from '$lib/server/db/schema';
 import { updateProjectCustomer } from '$lib/server/billing/autumn';
 import { sendRenderedEmail } from '$lib/server/email';
-import { deleteOrganizationResources } from '$lib/server/project-deletion';
+import { softDeleteOrganizationResources } from '$lib/server/project-deletion';
 
 export type UserSession = {
 	id: string;
@@ -142,7 +142,7 @@ async function settleUserOrganizations(db: ReturnType<typeof initDrizzle>, targe
 			continue;
 		}
 
-		await deleteOrganizationResources(db, membership.organizationId);
+		await softDeleteOrganizationResources(db, membership.organizationId);
 	}
 }
 

@@ -1,7 +1,7 @@
 import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { and, count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, isNull } from 'drizzle-orm';
 import AdminProjectDeletionCodeEmail from '$lib/emails/admin-project-deletion-code.svelte';
 import {
 	ADMIN_VERIFICATION_CODE_TTL_MS,
@@ -27,7 +27,7 @@ import {
 	volumes
 } from '$lib/server/db/schema';
 import { sendRenderedEmail } from '$lib/server/email';
-import { deleteOrganizationResources } from '$lib/server/project-deletion';
+import { softDeleteOrganizationResources } from '$lib/server/project-deletion';
 import { provisionVm } from '$lib/server/vm-provisioning';
 
 export type AdminProjectBillingStatus = 'configured' | 'past_due' | 'suspended' | 'none';
@@ -82,6 +82,7 @@ export const listAdminProjects = query(async (): Promise<AdminProject[]> => {
 				disabled: organization.disabled
 			})
 			.from(organization)
+			.where(isNull(organization.deletedAt))
 			.orderBy(desc(organization.createdAt)),
 		db
 			.select({
@@ -315,7 +316,7 @@ export const deleteProjectWithVerification = command(deleteProjectParams, async 
 	if (!target) error(404, 'Project not found');
 
 	await consumeAdminVerification(db, adminUser.id, params.projectId, params.method, params.code);
-	await deleteOrganizationResources(db, params.projectId);
+	await softDeleteOrganizationResources(db, params.projectId);
 
 	return { projectId: params.projectId, name: target.name };
 });

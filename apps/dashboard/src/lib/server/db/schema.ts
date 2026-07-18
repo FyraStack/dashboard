@@ -27,7 +27,12 @@ export const vmBackendEnum = pgEnum('vm_backend', ['proxmox']);
 
 export const vmStatusEnum = pgEnum('vm_status', ['provisioning', 'ready', 'error', 'deleting']);
 
-export const billingSyncStatusEnum = pgEnum('billing_sync_status', ['pending', 'synced', 'failed']);
+export const billingSyncStatusEnum = pgEnum('billing_sync_status', [
+	'pending',
+	'synced',
+	'failed',
+	'abandoned'
+]);
 
 export const billingResourceTypeEnum = pgEnum('billing_resource_type', ['vm', 'volume']);
 

@@ -19,7 +19,12 @@ function cachedLookup<T>(key: string, compute: () => Promise<T>): Promise<T> {
 	return lookup;
 }
 
-type ProjectAccess = { projectId: string; role: string | null; disabled: boolean } | null;
+type ProjectAccess = {
+	projectId: string;
+	role: string | null;
+	disabled: boolean;
+	deletedAt: number | null;
+} | null;
 
 function loadProjectAccess(db: any, userId: string, projectId: string): Promise<ProjectAccess> {
 	return cachedLookup(`project-access:${userId}:${projectId}`, async () => {
@@ -27,7 +32,8 @@ function loadProjectAccess(db: any, userId: string, projectId: string): Promise<
 			.select({
 				projectId: organization.id,
 				role: member.role,
-				disabled: organization.disabled
+				disabled: organization.disabled,
+				deletedAt: organization.deletedAt
 			})
 			.from(organization)
 			.leftJoin(member, and(eq(member.organizationId, organization.id), eq(member.userId, userId)))
@@ -65,7 +71,7 @@ export async function requireProjectAccess(
 ): Promise<void> {
 	const projectAccess = await loadProjectAccess(db, userId, projectId);
 
-	if (!projectAccess) {
+	if (!projectAccess || projectAccess.deletedAt != null) {
 		error(404, `Project "${projectId}" not found`);
 	}
 

@@ -31,6 +31,15 @@ export type ManagedHost = {
 	updatedAt: number;
 };
 
+export type ManagedHostPodmanResource = 'containers' | 'images' | 'volumes' | 'networks';
+
+export type ManagedHostPodmanResult = {
+	command: string | null;
+	data: unknown[];
+	stdout: string;
+	stderr: string;
+};
+
 function requireUser() {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
@@ -118,6 +127,101 @@ async function refreshHostCapabilities(host: typeof managedHosts.$inferSelect) {
 		capabilities: isRecord(capabilities.payload) ? capabilities.payload : null,
 		system: isRecord(system?.payload) ? system.payload : null
 	};
+}
+
+function mapPodmanResponse(response: AgentResponse): ManagedHostPodmanResult {
+	if (!response.ok) {
+		throw new Error(response.error || 'Podman command failed');
+	}
+
+	const payload = isRecord(response.payload) ? response.payload : {};
+	const data = Array.isArray(payload.data) ? payload.data : [];
+
+	return {
+		command: typeof payload.command === 'string' ? payload.command : null,
+		data,
+		stdout: typeof payload.stdout === 'string' ? payload.stdout : '',
+		stderr: typeof payload.stderr === 'string' ? payload.stderr : ''
+	};
+}
+
+function fixturePodmanResult(resource: ManagedHostPodmanResource): ManagedHostPodmanResult {
+	const fixtures: Record<ManagedHostPodmanResource, unknown[]> = {
+		containers: [
+			{
+				Id: '8f9a1d2c3b4a',
+				Names: ['demo-web'],
+				Image: 'ghcr.io/example/demo-web:latest',
+				State: 'running',
+				Status: 'Up 2 hours'
+			},
+			{
+				Id: '1a2b3c4d5e6f',
+				Names: ['demo-worker'],
+				Image: 'ghcr.io/example/demo-worker:latest',
+				State: 'exited',
+				Status: 'Exited 0 yesterday'
+			}
+		],
+		images: [
+			{
+				Id: 'sha256:111122223333',
+				Repository: 'ghcr.io/example/demo-web',
+				Tag: 'latest',
+				Size: '182 MB'
+			}
+		],
+		volumes: [
+			{
+				Name: 'demo-data',
+				Driver: 'local',
+				Mountpoint: '/var/lib/containers/storage/volumes/demo-data/_data'
+			}
+		],
+		networks: [
+			{
+				Name: 'podman',
+				Driver: 'bridge',
+				NetworkInterface: 'podman0'
+			}
+		]
+	};
+
+	return {
+		command: `podman ${resource}`,
+		data: fixtures[resource],
+		stdout: '',
+		stderr: ''
+	};
+}
+
+async function dispatchHostCommand(
+	host: typeof managedHosts.$inferSelect,
+	command: { module: string; action: string; payload: Record<string, unknown> }
+) {
+	const client = createTetraClient({
+		connectionMode: host.connectionMode,
+		agentUrl: host.agentUrl,
+		bearerToken: host.bearerToken
+	});
+	return client.dispatch(command);
+}
+
+async function markHostDispatchResult(
+	db: ReturnType<typeof initDrizzle>,
+	host: typeof managedHosts.$inferSelect,
+	response: AgentResponse
+) {
+	const now = Date.now();
+	await db
+		.update(managedHosts)
+		.set({
+			connectionState: 'online',
+			lastSeenAt: now,
+			lastError: response.ok ? null : response.error || null,
+			updatedAt: now
+		})
+		.where(and(eq(managedHosts.id, host.id), eq(managedHosts.ownerProjectId, host.ownerProjectId)));
 }
 
 const listParams = type({ projectId: 'string' });
@@ -258,26 +362,101 @@ export const dispatchManagedHostCommand = command(dispatchParams, async (params)
 		error(400, 'Payload must be valid JSON');
 	}
 
-	const client = createTetraClient({
-		connectionMode: host.connectionMode,
-		agentUrl: host.agentUrl,
-		bearerToken: host.bearerToken
-	});
-	const response = await client.dispatch({
+	const response = await dispatchHostCommand(host, {
 		module: params.module.trim(),
 		action: params.action.trim(),
 		payload
 	});
 
-	await db
-		.update(managedHosts)
-		.set({
-			connectionState: 'online',
-			lastSeenAt: Date.now(),
-			lastError: response.ok ? null : response.error || null,
-			updatedAt: Date.now()
-		})
-		.where(and(eq(managedHosts.id, host.id), eq(managedHosts.ownerProjectId, host.ownerProjectId)));
+	await markHostDispatchResult(db, host, response);
 
+	return response;
+});
+
+const podmanListParams = type({
+	hostId: 'string',
+	resource: 'string'
+});
+export const listManagedHostPodman = command(
+	podmanListParams,
+	async (params): Promise<ManagedHostPodmanResult> => {
+		if (!['containers', 'images', 'volumes', 'networks'].includes(params.resource)) {
+			error(400, 'Unsupported Podman resource');
+		}
+
+		const resource = params.resource as ManagedHostPodmanResource;
+		if (accessibilityFixtureEnabled) return fixturePodmanResult(resource);
+
+		const user = requireUser();
+		const { db, host } = await loadManagedHost(params.hostId);
+		await requireProjectAccess(db, user.id, host.ownerProjectId);
+
+		const response = await dispatchHostCommand(host, {
+			module: 'podman',
+			action: resource,
+			payload: {}
+		});
+		await markHostDispatchResult(db, host, response);
+		return mapPodmanResponse(response);
+	}
+);
+
+const podmanLogsParams = type({
+	hostId: 'string',
+	name: 'string',
+	lines: 'number'
+});
+export const getManagedHostPodmanLogs = command(podmanLogsParams, async (params) => {
+	if (accessibilityFixtureEnabled) return '2026-01-01T00:00:00Z demo-web started\n';
+
+	const user = requireUser();
+	const { db, host } = await loadManagedHost(params.hostId);
+	await requireProjectAccess(db, user.id, host.ownerProjectId);
+
+	const response = await dispatchHostCommand(host, {
+		module: 'podman',
+		action: 'logs',
+		payload: {
+			name: params.name,
+			lines: Math.max(1, Math.min(1000, Math.trunc(params.lines)))
+		}
+	});
+	await markHostDispatchResult(db, host, response);
+
+	if (!response.ok) throw new Error(response.error || 'Failed to load container logs');
+	const payload = isRecord(response.payload) ? response.payload : {};
+	return typeof payload.stdout === 'string' ? payload.stdout : '';
+});
+
+const podmanActionParams = type({
+	hostId: 'string',
+	name: 'string',
+	action: 'string'
+});
+export const runManagedHostPodmanContainerAction = command(podmanActionParams, async (params) => {
+	if (!['start', 'stop', 'restart', 'remove'].includes(params.action)) {
+		error(400, 'Unsupported Podman container action');
+	}
+
+	if (accessibilityFixtureEnabled) {
+		return {
+			id: 'fixture-podman-action',
+			ok: true,
+			payload: { command: `podman ${params.action} ${params.name}`, status: 0 }
+		} satisfies AgentResponse;
+	}
+
+	const user = requireUser();
+	const { db, host } = await loadManagedHost(params.hostId);
+	await requireProjectAccess(db, user.id, host.ownerProjectId, 'admin');
+
+	const response = await dispatchHostCommand(host, {
+		module: 'podman',
+		action: params.action,
+		payload: { name: params.name }
+	});
+	await markHostDispatchResult(db, host, response);
+
+	if (!response.ok) throw new Error(response.error || 'Podman container action failed');
 	return response;
 });

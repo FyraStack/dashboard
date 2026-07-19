@@ -22,7 +22,9 @@
 	const isCreatePage = $derived(currentPath === `${hostsPath}/create`);
 	const listOpen = $derived(mobileListOpen || isHostsIndex);
 	const selectedHostId = $derived(
-		!isCreatePage && currentPath.startsWith(`${hostsPath}/`) ? currentPath.split('/').pop() : null
+		!isCreatePage && currentPath.startsWith(`${hostsPath}/`)
+			? currentPath.slice(`${hostsPath}/`.length).split('/')[0]
+			: null
 	);
 
 	$effect(() => {

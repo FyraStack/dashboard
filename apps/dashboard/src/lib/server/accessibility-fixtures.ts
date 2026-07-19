@@ -71,7 +71,24 @@ export const accessibilityFixtureManagedHosts = [
 		hostname: 'a11y-host-01',
 		os: 'Ultramarine Linux',
 		arch: 'x86_64',
-		capabilities: { settings: ['get_system'], host: ['health'] },
+		capabilities: {
+			modules: [
+				{
+					name: 'settings',
+					feature: 'settings',
+					description: 'Inspect host settings.',
+					status: 'available',
+					actions: ['get_system']
+				},
+				{
+					name: 'podman',
+					feature: 'podman',
+					description: 'Inspect and manage Podman resources.',
+					status: 'available',
+					actions: ['containers', 'images', 'volumes', 'networks', 'logs', 'start', 'stop', 'restart']
+				}
+			]
+		},
 		lastError: null,
 		createdAt: now.getTime(),
 		updatedAt: now.getTime()

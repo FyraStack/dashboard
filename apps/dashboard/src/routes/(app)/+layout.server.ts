@@ -4,6 +4,11 @@ import { listProjects } from '$lib/remote/projects.remote';
 import { getFeatureFlags } from '$lib/server/feature-flags';
 import { hasAdminRole } from '$lib/server/auth-context';
 import { instrument } from '$lib/server/observability';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureFeatureFlags,
+	accessibilityFixtureProjects
+} from '$lib/server/accessibility-fixtures';
 
 export const load: LayoutServerLoad = async ({ locals, url, depends }) => {
 	depends('app:projects');
@@ -14,11 +19,13 @@ export const load: LayoutServerLoad = async ({ locals, url, depends }) => {
 		throw redirect(303, '/login');
 	}
 
-	const [projects, featureFlags] = await instrument(
-		'layout.app.load.dependencies',
-		() => Promise.all([listProjects(), getFeatureFlags()]),
-		{ 'url.pathname': pathname }
-	);
+	const [projects, featureFlags] = accessibilityFixtureEnabled
+		? [accessibilityFixtureProjects, accessibilityFixtureFeatureFlags]
+		: await instrument(
+				'layout.app.load.dependencies',
+				() => Promise.all([listProjects(), getFeatureFlags()]),
+				{ 'url.pathname': pathname }
+			);
 	const requestedProjectId = url.searchParams.get('projectId');
 	const pathMatch = pathname.match(/^\/projects\/([^/]+)/);
 	const activeProjectId = requestedProjectId ?? pathMatch?.[1] ?? locals.activeProjectId;

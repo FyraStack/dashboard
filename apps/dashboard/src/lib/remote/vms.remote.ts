@@ -16,6 +16,10 @@ import { isProjectBillingExempt, requireProjectBillingActive } from '$lib/server
 import { queueVmDeletion } from '$lib/server/vm-deletion';
 import { provisionVm } from '$lib/server/vm-provisioning';
 import { instrument, timingLog } from '$lib/server/observability';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureServers
+} from '$lib/server/accessibility-fixtures';
 
 type VmRow = {
 	id: string;
@@ -185,6 +189,7 @@ const listParams = type({ projectId: 'string' });
 export const listVms = query(listParams, async (params) => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
+	if (accessibilityFixtureEnabled) return accessibilityFixtureServers;
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId);
@@ -226,6 +231,11 @@ export const getVm = query(getParams, async (params) => {
 	timingLog('remote.vms.getVm.enter', { 'vm.id': params.vmId });
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
+	if (accessibilityFixtureEnabled) {
+		const server = accessibilityFixtureServers.find((item) => item.id === params.vmId);
+		if (!server) error(404, `VM "${params.vmId}" not found`);
+		return server;
+	}
 
 	const db = initDrizzle();
 	const result = await db.execute(sql`
@@ -316,6 +326,12 @@ export const getVmMetricsHistory = query(metricsHistoryParams, async (params) =>
 	});
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
+	if (accessibilityFixtureEnabled) {
+		return [
+			{ time: Date.now() - 120_000, cpu: 0.18, memory: 0.41, bandwidth: 2048, diskIo: 256 },
+			{ time: Date.now() - 60_000, cpu: 0.2, memory: 0.42, bandwidth: 4096, diskIo: 512 }
+		];
+	}
 
 	const db = initDrizzle();
 	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
@@ -368,6 +384,18 @@ export const listVmStatuses = query(statusParams, async (params) => {
 	timingLog('remote.vms.listVmStatuses.enter', { 'project.id': params.projectId });
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureServers.map((server) => ({
+			id: server.id,
+			status: 'running' as const,
+			liveStatus: server.live.status,
+			uptime: server.live.uptime,
+			memory: server.live.memory,
+			disk: server.live.disk,
+			networkInterfaces: server.live.networkInterfaces,
+			metrics: server.live.metrics
+		}));
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId);

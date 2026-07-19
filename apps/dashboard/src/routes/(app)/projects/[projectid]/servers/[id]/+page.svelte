@@ -182,9 +182,9 @@
 	];
 
 	const sevColors: Record<string, string> = {
-		info: 'text-blue-400',
-		warn: 'text-amber-400',
-		error: 'text-red-400'
+		info: 'text-blue-700 dark:text-blue-400',
+		warn: 'text-amber-700 dark:text-amber-400',
+		error: 'text-red-700 dark:text-red-400'
 	};
 
 	function isLiveDetail(label: string) {
@@ -197,6 +197,8 @@
 		setTimeout(() => (copied = ''), 1500);
 	}
 </script>
+
+<h1 class="sr-only">Server Overview</h1>
 
 <div class="grid shrink-0 grid-cols-2 gap-px border-b border-border bg-muted lg:grid-cols-4">
 	{#each charts as chart (chart.label)}
@@ -330,7 +332,8 @@
 								href="https://fyrastack.com/docs/vps/ssh"
 								target="_blank"
 								rel="noopener noreferrer"
-								class="text-red-400 transition-colors hover:text-red-300">SSH</a
+								class="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
+								>SSH</a
 							> in the meantime.
 						</p>
 					{/if}
@@ -409,7 +412,8 @@
 							href="https://fyrastack.com/docs/vps/ssh"
 							target="_blank"
 							rel="noopener noreferrer"
-							class="text-red-400 transition-colors hover:text-red-300">SSH</a
+							class="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
+							>SSH</a
 						> in the meantime.
 					</p>
 				{/if}

@@ -186,6 +186,7 @@
 <div class="flex h-full w-full flex-col overflow-hidden">
 	<div class="flex-1 overflow-auto">
 		<div class="max-w-2xl px-6 py-6">
+			<h1 class="sr-only">Project Settings</h1>
 			<div class="flex flex-col gap-6">
 				<!-- Project Name -->
 				<div class="rounded-xs border border-border/60 p-5">
@@ -196,7 +197,12 @@
 						</p>
 					</div>
 					<div class="flex flex-col gap-3">
-						<Input bind:value={projectName} class="font-medium" disabled={!canManageMembers} />
+						<Input
+							bind:value={projectName}
+							aria-label="Project name"
+							class="font-medium"
+							disabled={!canManageMembers}
+						/>
 						<Button
 							size="sm"
 							onclick={saveName}
@@ -326,6 +332,7 @@
 							<Input
 								bind:value={deleteConfirm}
 								placeholder={data.project.projectName}
+								aria-label="Confirm project name"
 								class="border-red-900/50"
 							/>
 							<Button

@@ -7,6 +7,8 @@
 		"dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
+		"test:accessibility": "playwright test",
+		"test:accessibility:ci": "playwright install --with-deps chrome && playwright test",
 		"cf:dev": "pnpm run build && wrangler dev -c wrangler.local.jsonc --local-protocol http",
 		"cf:dev:remote": "pnpm run build && wrangler dev --remote",
 		"cf:deploy": "wrangler deploy --env=\"\"",
@@ -24,6 +26,8 @@
 		"auth:schema": "pnpm dlx @better-auth/cli@1.4.22 generate --config auth.config.ts --output src/lib/server/db/auth.schema.ts --yes"
 	},
 	"devDependencies": {
+		"@axe-core/playwright": "^4.11.0",
+		"@better-auth/cli": "^1.4.22",
 		"@better-svelte-email/cli": "^2.1.1",
 		"@cloudflare/workers-types": "^5.20260717.1",
 		"@fontsource-variable/geist": "^5.2.9",
@@ -31,6 +35,7 @@
 		"@iconify-json/lucide": "^1.2.117",
 		"@icons-pack/svelte-simple-icons": "^7.2.0",
 		"@internationalized/date": "^3.12.2",
+		"@playwright/test": "^1.57.0",
 		"@sveltejs/adapter-cloudflare": "^7.2.9",
 		"@sveltejs/kit": "^2.69.3",
 		"@sveltejs/vite-plugin-svelte": "^7.2.0",

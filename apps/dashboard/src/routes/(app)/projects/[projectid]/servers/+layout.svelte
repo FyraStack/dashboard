@@ -262,6 +262,7 @@
 				<Button
 					variant="outline"
 					size="sm"
+					aria-label="Create server"
 					class="relative h-8 w-8 border-red-500/50 p-0 text-red-700 hover:border-red-500 hover:bg-red-100 hover:text-foreground lg:h-6 lg:w-6 dark:text-red-400 dark:hover:bg-red-950"
 					onclick={() => goto(`/projects/${page.params.projectid}/servers/create`)}
 				>

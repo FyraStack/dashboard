@@ -1,12 +1,14 @@
+import { PUBLIC_DASHBOARD_BRAND } from '$env/static/public';
+
 export type DashboardBrandId = 'stack' | 'ultramarine';
 
-const requestedBrand = import.meta.env.PUBLIC_DASHBOARD_BRAND?.toLowerCase();
+const requestedBrand = PUBLIC_DASHBOARD_BRAND?.toLowerCase();
 export const dashboardBrandId: DashboardBrandId =
 	requestedBrand === 'ultramarine' ? 'ultramarine' : 'stack';
 
 export const dashboardBrand = {
 	id: dashboardBrandId,
-	name: dashboardBrandId === 'ultramarine' ? 'Ultramarine' : 'Stack',
+	name: dashboardBrandId === 'ultramarine' ? 'Ultramarine Server' : 'Stack',
 	title: dashboardBrandId === 'ultramarine' ? 'Ultramarine Server' : 'Stack',
 	logo: dashboardBrandId === 'ultramarine' ? '/ultramarine-logo.svg' : '/logo.svg',
 	favicon: dashboardBrandId === 'ultramarine' ? '/ultramarine-favicon.ico' : '/favicon.ico',

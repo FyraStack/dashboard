@@ -13,3 +13,5 @@ bun.lockb
 /static/
 /drizzle/
 .factory/
+/test-results/
+/playwright-report/

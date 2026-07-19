@@ -371,7 +371,7 @@
 					</button>
 				{/if}
 				<a href={resolve('/')} class="flex shrink-0 items-center gap-2">
-					<img src={dashboardBrand.logo} alt={dashboardBrand.name} class="h-5 w-5" />
+					<img src={dashboardBrand.logo} alt="" class="h-5 w-5" />
 					<span class="text-sm font-semibold tracking-tight text-foreground">
 						{dashboardBrand.name}
 					</span>
@@ -442,7 +442,7 @@
 					<Search class="h-3 w-3" />
 					<span class="hidden sm:inline">Search...</span>
 					<kbd
-						class="ml-2 hidden border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline-block"
+						class="ml-2 hidden border border-border bg-muted px-1.5 py-0.5 text-[10px] text-foreground sm:inline-block"
 						>⌘K</kbd
 					>
 				</button>
@@ -458,7 +458,7 @@
 						<p class="truncate text-xs leading-tight text-muted-foreground">{data.user?.email}</p>
 					</div>
 					<Avatar.Root class="h-8 w-8 shrink-0 border border-border">
-						<Avatar.Fallback class="bg-muted text-xs text-muted-foreground"
+						<Avatar.Fallback class="bg-muted text-xs text-foreground"
 							>{(data.user?.name ?? '??')
 								.split(' ')
 								.map((n: string) => n[0])
@@ -472,9 +472,9 @@
 		</header>
 
 		{#if isRootPage || isAdminPage}
-			<div class="flex flex-1 overflow-hidden">
+			<main class="flex flex-1 overflow-hidden">
 				{@render children()}
-			</div>
+			</main>
 		{:else}
 			<div class="flex flex-1 overflow-hidden">
 				<aside
@@ -506,9 +506,9 @@
 					{/each}
 				</aside>
 
-				<div class="flex flex-1 overflow-hidden">
+				<main class="flex flex-1 overflow-hidden">
 					{@render children()}
-				</div>
+				</main>
 			</div>
 		{/if}
 	</div>

@@ -93,7 +93,7 @@
 	}
 </script>
 
-<div class="flex h-full flex-col">
+<div class="flex h-full w-full flex-col">
 	<div class="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
 		<div>
 			<h1 class="text-base font-semibold text-foreground">Managed Hosts</h1>

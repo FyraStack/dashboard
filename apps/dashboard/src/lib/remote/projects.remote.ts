@@ -12,6 +12,11 @@ import {
 	ensureProjectCustomer,
 	updateProjectCustomer
 } from '$lib/server/billing/autumn';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureProjectDetails,
+	accessibilityFixtureProjects
+} from '$lib/server/accessibility-fixtures';
 import { softDeleteOrganizationResources } from '$lib/server/project-deletion';
 
 type ListResult = {
@@ -133,6 +138,7 @@ async function getCachedProjectsForUser(userId: string): Promise<ListResult> {
 export const listProjects = query(async () => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
+	if (accessibilityFixtureEnabled) return accessibilityFixtureProjects;
 
 	return getCachedProjectsForUser(event.locals.user.id);
 });
@@ -141,6 +147,9 @@ const getParams = type({ projectId: 'string' });
 export const getProject = query(getParams, async (params): Promise<GetResult> => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
+	if (accessibilityFixtureEnabled && params.projectId === accessibilityFixtureProjectDetails.id) {
+		return accessibilityFixtureProjectDetails;
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId);

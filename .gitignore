@@ -1,5 +1,6 @@
 # Dependencies
 node_modules
+.pnpm-store
 
 # Build output
 .svelte-kit
@@ -26,6 +27,11 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Playwright
+test-results
+playwright-report
+blob-report
 
 # traces for local dev
 Trace-*.json

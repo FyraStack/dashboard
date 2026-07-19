@@ -21,6 +21,11 @@ export const pages = [
 	{ label: 'host overview', path: '/projects/accessibility-project/hosts' },
 	{ label: 'host registration', path: '/projects/accessibility-project/hosts/create' },
 	{ label: 'host detail', path: '/projects/accessibility-project/hosts/accessibility-host' },
+	{ label: 'host podman', path: '/projects/accessibility-project/hosts/accessibility-host/podman' },
+	{
+		label: 'host podman container',
+		path: '/projects/accessibility-project/hosts/accessibility-host/podman/demo-web'
+	},
 	{ label: 'project settings', path: '/projects/accessibility-project/settings' }
 ];
 

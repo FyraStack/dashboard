@@ -25,10 +25,16 @@
 	}
 </script>
 
-<div class="min-h-0 flex-1 overflow-auto bg-background">
+<!-- svelte-ignore a11y_no_noninteractive_tabindex - Axe requires keyboard access for this scrollable region. -->
+<div
+	class="min-h-0 flex-1 overflow-auto bg-background"
+	role="region"
+	aria-label="Host overview"
+	tabindex="0"
+>
 	<div class="grid border-b border-border bg-background lg:grid-cols-[320px_1fr]">
 		<section class="border-b border-border p-5 lg:border-r lg:border-b-0">
-			<h2 class="text-sm font-semibold text-foreground">Host Details</h2>
+			<h1 class="text-sm font-semibold text-foreground">Host Details</h1>
 			<p class="mt-1 text-xs text-muted-foreground">
 				Current dashboard state for this Tetra agent.
 			</p>
@@ -43,7 +49,9 @@
 			</div>
 
 			{#if host.lastError}
-				<div class="mt-5 border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+				<div
+					class="mt-5 border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive"
+				>
 					{host.lastError}
 				</div>
 			{/if}
@@ -58,7 +66,11 @@
 					</p>
 				</div>
 			</div>
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex - Axe requires keyboard access for this scrollable code region. -->
 			<pre
+				role="region"
+				aria-label="Host capabilities JSON"
+				tabindex="0"
 				class="mt-4 max-h-[34rem] overflow-auto border border-border bg-muted/30 p-4 text-xs leading-relaxed text-foreground">{formatJson(
 					host.capabilities
 				)}</pre>

@@ -17,6 +17,9 @@
 
 Details, one-time machine setup, and caveats: [dev/README.md](dev/README.md)
 
+For UI-only work on macOS or without the local database/backend stack, use the
+fixture mode documented in [dev/README.md](dev/README.md#fixture-ui-mode).
+
 ### secrets
 
 - Required:

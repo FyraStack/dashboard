@@ -40,6 +40,21 @@ export type ManagedHostPodmanResult = {
 	stderr: string;
 };
 
+export type ManagedHostPodmanContainerDetail = {
+	name: string;
+	id: string | null;
+	image: string | null;
+	state: string | null;
+	status: string | null;
+	createdAt: string | null;
+	env: string[];
+	binds: string[];
+	ports: string[];
+	labels: Record<string, string>;
+	rawInspect: unknown;
+	logs: string;
+};
+
 function requireUser() {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
@@ -61,7 +76,14 @@ function getStringField(value: Record<string, unknown> | null | undefined, keys:
 
 function getSystemOs(system: Record<string, unknown> | null | undefined, fallback: string | null) {
 	return (
-		getStringField(system, ['pretty_name', 'prettyName', 'distro', 'distribution', 'os_name', 'osName']) ??
+		getStringField(system, [
+			'pretty_name',
+			'prettyName',
+			'distro',
+			'distribution',
+			'os_name',
+			'osName'
+		]) ??
 		getStringField(system, ['id', 'os']) ??
 		fallback
 	);
@@ -195,6 +217,129 @@ function fixturePodmanResult(resource: ManagedHostPodmanResource): ManagedHostPo
 	};
 }
 
+function fixturePodmanContainerDetail(name: string): ManagedHostPodmanContainerDetail {
+	const isWorker = name === 'demo-worker';
+
+	return {
+		name,
+		id: isWorker ? '1a2b3c4d5e6f' : '8f9a1d2c3b4a',
+		image: isWorker ? 'ghcr.io/example/demo-worker:latest' : 'ghcr.io/example/demo-web:latest',
+		state: isWorker ? 'exited' : 'running',
+		status: isWorker ? 'Exited 0 yesterday' : 'Up 2 hours',
+		createdAt: '2026-01-01T00:00:00.000Z',
+		env: ['NODE_ENV=production', 'APP_PORT=8080', 'LOG_LEVEL=info'],
+		binds: ['/srv/demo/config:/etc/demo:ro', 'demo-data:/var/lib/demo:Z'],
+		ports: ['8080/tcp -> 0.0.0.0:8080', '8443/tcp -> 0.0.0.0:8443'],
+		labels: {
+			'app.stack.fixture': 'true',
+			'io.containers.autoupdate': 'registry'
+		},
+		rawInspect: {
+			Name: `/${name}`,
+			Id: isWorker ? '1a2b3c4d5e6f' : '8f9a1d2c3b4a',
+			Config: {
+				Image: isWorker ? 'ghcr.io/example/demo-worker:latest' : 'ghcr.io/example/demo-web:latest',
+				Env: ['NODE_ENV=production', 'APP_PORT=8080', 'LOG_LEVEL=info'],
+				Labels: {
+					'app.stack.fixture': 'true',
+					'io.containers.autoupdate': 'registry'
+				}
+			},
+			State: { Status: isWorker ? 'exited' : 'running' },
+			HostConfig: {
+				Binds: ['/srv/demo/config:/etc/demo:ro', 'demo-data:/var/lib/demo:Z']
+			},
+			NetworkSettings: {
+				Ports: {
+					'8080/tcp': [{ HostIp: '0.0.0.0', HostPort: '8080' }],
+					'8443/tcp': [{ HostIp: '0.0.0.0', HostPort: '8443' }]
+				}
+			}
+		},
+		logs: isWorker
+			? '2026-01-01T00:00:00Z worker booted\n2026-01-01T00:00:02Z queue drained\n'
+			: '2026-01-01T00:00:00Z demo-web started\n2026-01-01T00:00:01Z listening on :8080\n'
+	};
+}
+
+function firstRecord(value: unknown): Record<string, unknown> {
+	if (Array.isArray(value) && isRecord(value[0])) return value[0];
+	if (isRecord(value)) return value;
+	return {};
+}
+
+function stringArray(value: unknown): string[] {
+	return Array.isArray(value)
+		? value.filter((item): item is string => typeof item === 'string')
+		: [];
+}
+
+function nestedRecord(value: Record<string, unknown>, key: string): Record<string, unknown> {
+	return isRecord(value[key]) ? value[key] : {};
+}
+
+function mapLabels(value: unknown): Record<string, string> {
+	if (!isRecord(value)) return {};
+	return Object.fromEntries(
+		Object.entries(value)
+			.filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+			.sort(([a], [b]) => a.localeCompare(b))
+	);
+}
+
+function mapPortBindings(value: unknown): string[] {
+	if (!isRecord(value)) return [];
+
+	return Object.entries(value).flatMap(([containerPort, bindings]) => {
+		if (!Array.isArray(bindings) || bindings.length === 0) return [`${containerPort} -> unpublished`];
+
+		return bindings.filter(isRecord).map((binding) => {
+			const hostIp = typeof binding.HostIp === 'string' && binding.HostIp ? binding.HostIp : '0.0.0.0';
+			const hostPort =
+				typeof binding.HostPort === 'string' && binding.HostPort ? binding.HostPort : 'auto';
+			return `${containerPort} -> ${hostIp}:${hostPort}`;
+		});
+	});
+}
+
+function mapContainerDetail(
+	name: string,
+	inspectPayload: unknown,
+	logs: string
+): ManagedHostPodmanContainerDetail {
+	const inspect = firstRecord(inspectPayload);
+	const config = nestedRecord(inspect, 'Config');
+	const hostConfig = nestedRecord(inspect, 'HostConfig');
+	const state = nestedRecord(inspect, 'State');
+	const networkSettings = nestedRecord(inspect, 'NetworkSettings');
+	const rawName = typeof inspect.Name === 'string' ? inspect.Name.replace(/^\/+/, '') : name;
+
+	return {
+		name: rawName || name,
+		id: typeof inspect.Id === 'string' ? inspect.Id : null,
+		image:
+			typeof config.Image === 'string'
+				? config.Image
+				: typeof inspect.ImageName === 'string'
+					? inspect.ImageName
+					: null,
+		state:
+			typeof state.Status === 'string'
+				? state.Status
+				: typeof inspect.State === 'string'
+					? inspect.State
+					: null,
+		status: typeof inspect.Status === 'string' ? inspect.Status : null,
+		createdAt: typeof inspect.Created === 'string' ? inspect.Created : null,
+		env: stringArray(config.Env),
+		binds: stringArray(hostConfig.Binds),
+		ports: mapPortBindings(networkSettings.Ports ?? hostConfig.PortBindings),
+		labels: mapLabels(config.Labels),
+		rawInspect: inspectPayload,
+		logs
+	};
+}
+
 async function dispatchHostCommand(
 	host: typeof managedHosts.$inferSelect,
 	command: { module: string; action: string; payload: Record<string, unknown> }
@@ -228,7 +373,9 @@ const listParams = type({ projectId: 'string' });
 export const listManagedHosts = query(listParams, async (params): Promise<ManagedHost[]> => {
 	const user = requireUser();
 	if (accessibilityFixtureEnabled) {
-		return accessibilityFixtureManagedHosts.filter((host) => host.ownerProjectId === params.projectId);
+		return accessibilityFixtureManagedHosts.filter(
+			(host) => host.ownerProjectId === params.projectId
+		);
 	}
 
 	const db = initDrizzle();
@@ -407,7 +554,7 @@ const podmanLogsParams = type({
 	lines: 'number'
 });
 export const getManagedHostPodmanLogs = command(podmanLogsParams, async (params) => {
-	if (accessibilityFixtureEnabled) return '2026-01-01T00:00:00Z demo-web started\n';
+	if (accessibilityFixtureEnabled) return fixturePodmanContainerDetail(params.name).logs;
 
 	const user = requireUser();
 	const { db, host } = await loadManagedHost(params.hostId);
@@ -427,6 +574,46 @@ export const getManagedHostPodmanLogs = command(podmanLogsParams, async (params)
 	const payload = isRecord(response.payload) ? response.payload : {};
 	return typeof payload.stdout === 'string' ? payload.stdout : '';
 });
+
+export const getManagedHostPodmanContainer = command(
+	podmanLogsParams,
+	async (params): Promise<ManagedHostPodmanContainerDetail> => {
+		const lines = Math.max(1, Math.min(1000, Math.trunc(params.lines)));
+		if (accessibilityFixtureEnabled) return fixturePodmanContainerDetail(params.name);
+
+		const user = requireUser();
+		const { db, host } = await loadManagedHost(params.hostId);
+		await requireProjectAccess(db, user.id, host.ownerProjectId);
+
+		const inspectResponse = await dispatchHostCommand(host, {
+			module: 'podman',
+			action: 'inspect',
+			payload: { name: params.name }
+		});
+		await markHostDispatchResult(db, host, inspectResponse);
+		if (!inspectResponse.ok) {
+			throw new Error(inspectResponse.error || 'Failed to inspect container');
+		}
+
+		const logsResponse = await dispatchHostCommand(host, {
+			module: 'podman',
+			action: 'logs',
+			payload: { name: params.name, lines }
+		});
+		await markHostDispatchResult(db, host, logsResponse);
+		if (!logsResponse.ok) {
+			throw new Error(logsResponse.error || 'Failed to load container logs');
+		}
+
+		const inspectPayload = isRecord(inspectResponse.payload)
+			? inspectResponse.payload.data
+			: inspectResponse.payload;
+		const logsPayload = isRecord(logsResponse.payload) ? logsResponse.payload : {};
+		const logs = typeof logsPayload.stdout === 'string' ? logsPayload.stdout : '';
+
+		return mapContainerDetail(params.name, inspectPayload, logs);
+	}
+);
 
 const podmanActionParams = type({
 	hostId: 'string',

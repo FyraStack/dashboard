@@ -30,7 +30,9 @@
 
 	<div class="flex flex-1 items-center justify-center p-6 text-center">
 		<div class="max-w-md">
-			<div class="mx-auto flex size-10 items-center justify-center border border-border bg-muted/40">
+			<div
+				class="mx-auto flex size-10 items-center justify-center border border-border bg-muted/40"
+			>
 				<Server class="size-5 text-muted-foreground" />
 			</div>
 			<h2 class="mt-5 text-sm font-semibold text-foreground">
@@ -40,9 +42,9 @@
 				{#if hosts.length === 0}
 					Register a Tetra agent to start testing host discovery and command dispatch.
 				{:else}
-					There {hosts.length === 1 ? 'is' : 'are'} {hosts.length} managed {hosts.length === 1
-						? 'host'
-						: 'hosts'} available. Pick one from the list on the left to view its details.
+					There {hosts.length === 1 ? 'is' : 'are'}
+					{hosts.length} managed {hosts.length === 1 ? 'host' : 'hosts'} available. Pick one from the
+					list on the left to view its details.
 				{/if}
 			</p>
 

@@ -85,7 +85,17 @@ export const accessibilityFixtureManagedHosts = [
 					feature: 'podman',
 					description: 'Inspect and manage Podman resources.',
 					status: 'available',
-					actions: ['containers', 'images', 'volumes', 'networks', 'logs', 'start', 'stop', 'restart']
+					actions: [
+						'containers',
+						'inspect',
+						'images',
+						'volumes',
+						'networks',
+						'logs',
+						'start',
+						'stop',
+						'restart'
+					]
 				}
 			]
 		},

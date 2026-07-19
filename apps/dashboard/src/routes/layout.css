@@ -70,17 +70,17 @@
 }
 
 :root[data-brand='ultramarine'] {
-	--gray-50: #fafafa;
-	--gray-100: #f4f4f5;
-	--gray-200: #e4e4e7;
-	--gray-300: #d5d5d7;
-	--gray-400: #a2a2a9;
-	--gray-500: #85858b;
-	--gray-600: #53535a;
-	--gray-700: #404045;
-	--gray-800: #27272a;
-	--gray-900: #18181a;
-	--gray-950: #09090b;
+	--gray-50: #fefefe;
+	--gray-100: #e6e7e7;
+	--gray-200: #c8cbd8;
+	--gray-300: #ceced0;
+	--gray-400: #b5b6b8;
+	--gray-500: #9d9da0;
+	--gray-600: #6b6c71;
+	--gray-700: #2d3146;
+	--gray-800: #202331;
+	--gray-900: #151720;
+	--gray-950: #0d0e14;
 	--um-accent-50: #c5cae9;
 	--um-accent-100: #a7b6d2;
 	--um-accent-200: #8f94be;

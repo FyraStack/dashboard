@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { confirmDestructive } from '$lib/confirm.svelte';
 	import {
-		getManagedHostPodmanLogs,
 		listManagedHostPodman,
 		runManagedHostPodmanContainerAction,
 		type ManagedHost
@@ -25,9 +26,6 @@
 	let podmanLoading = $state(false);
 	let podmanError = $state('');
 	let podmanActionName = $state('');
-	let podmanLogsName = $state('');
-	let podmanLogs = $state('');
-	let podmanLogsLoading = $state(false);
 	let loadedHostId = $state<string | null>(null);
 
 	const podmanResources: { id: PodmanResource; label: string }[] = [
@@ -76,8 +74,6 @@
 			podmanResource = resource;
 			podmanData = result.data;
 			podmanCommand = result.command;
-			podmanLogs = '';
-			podmanLogsName = '';
 		} catch (err) {
 			podmanError = getErrorMessage(err, 'Failed to load Podman resources.');
 		} finally {
@@ -109,28 +105,29 @@
 		}
 	}
 
-	async function loadContainerLogs(name: string) {
-		if (podmanLogsLoading) return;
-		podmanLogsLoading = true;
-		podmanError = '';
-		podmanLogsName = name;
-		try {
-			podmanLogs = await getManagedHostPodmanLogs({ hostId: host.id, name, lines: 100 });
-		} catch (err) {
-			podmanError = getErrorMessage(err, 'Failed to load container logs.');
-		} finally {
-			podmanLogsLoading = false;
-		}
+	function containerPath(name: string, section?: 'logs') {
+		const path = `/projects/${page.params.projectid}/hosts/${host.id}/podman/${encodeURIComponent(name)}`;
+		return section ? `${path}#${section}` : path;
+	}
+
+	function openContainer(name: string, section?: 'logs') {
+		goto(containerPath(name, section));
 	}
 </script>
 
 <section class="min-h-0 flex-1 overflow-auto bg-background p-5">
 	<div class="flex flex-wrap items-center justify-between gap-4">
 		<div>
-			<h2 class="text-sm font-semibold text-foreground">Podman</h2>
+			<h1 class="text-sm font-semibold text-foreground">Podman</h1>
 			<p class="mt-1 text-xs text-muted-foreground">Inspect and manage containers on this host.</p>
 		</div>
-		<Button variant="outline" size="sm" class="gap-2" onclick={() => refreshPodman()} disabled={podmanLoading}>
+		<Button
+			variant="outline"
+			size="sm"
+			class="gap-2"
+			onclick={() => refreshPodman()}
+			disabled={podmanLoading}
+		>
 			{#if podmanLoading}
 				<Loader2 class="size-3.5 animate-spin" />
 			{:else}
@@ -152,10 +149,6 @@
 			</Button>
 		{/each}
 	</div>
-
-	{#if podmanCommand}
-		<p class="mt-3 font-mono text-xs text-muted-foreground">{podmanCommand}</p>
-	{/if}
 
 	{#if podmanError}
 		<div class="mt-4 border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
@@ -231,7 +224,7 @@
 											<Button
 												variant="outline"
 												size="sm"
-												class="h-7 px-2 text-[11px] text-destructive"
+												class="h-7 px-2 text-[11px] text-destructive dark:text-red-300"
 												onclick={() => runContainerAction('remove', name)}
 												disabled={!!podmanActionName}
 											>
@@ -241,8 +234,15 @@
 												variant="outline"
 												size="sm"
 												class="h-7 px-2 text-[11px]"
-												onclick={() => loadContainerLogs(name)}
-												disabled={podmanLogsLoading}
+												onclick={() => openContainer(name)}
+											>
+												Edit
+											</Button>
+											<Button
+												variant="outline"
+												size="sm"
+												class="h-7 px-2 text-[11px]"
+												onclick={() => openContainer(name, 'logs')}
 											>
 												Logs
 											</Button>
@@ -277,17 +277,4 @@
 			</div>
 		{/if}
 	</div>
-
-	{#if podmanLogsName}
-		<div class="mt-4">
-			<div class="flex items-center justify-between gap-3">
-				<h3 class="text-xs font-semibold text-foreground">Logs: {podmanLogsName}</h3>
-				{#if podmanLogsLoading}
-					<Loader2 class="size-3.5 animate-spin text-muted-foreground" />
-				{/if}
-			</div>
-			<pre
-				class="mt-2 max-h-72 overflow-auto border border-border bg-muted/30 p-4 text-xs leading-relaxed text-foreground">{podmanLogs}</pre>
-		</div>
-	{/if}
 </section>

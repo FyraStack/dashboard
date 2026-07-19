@@ -62,7 +62,9 @@
 			? 'max-h-[38dvh]'
 			: ''}"
 	>
-		<div class="flex h-12 shrink-0 items-center justify-between border-b border-border px-4 lg:h-10">
+		<div
+			class="flex h-12 shrink-0 items-center justify-between border-b border-border px-4 lg:h-10"
+		>
 			<div class="flex min-w-0 items-center">
 				<span class="text-base font-semibold text-foreground lg:text-sm">Hosts</span>
 				<Badge variant="secondary" class="ml-2 text-xs lg:text-[10px]">{hosts.length}</Badge>

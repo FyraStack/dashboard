@@ -37,7 +37,9 @@
 	});
 
 	let activeTab = $derived.by<HostTab>(() => {
-		const tab = page.url.pathname.split('/').pop();
+		const hostPath = `/projects/${page.params.projectid}/hosts/${host.id}`;
+		if (page.url.pathname === hostPath) return 'overview';
+		const tab = page.url.pathname.slice(`${hostPath}/`.length).split('/')[0];
 		return hostTabs.some((entry) => entry.id === tab) ? (tab as HostTab) : 'overview';
 	});
 
@@ -102,13 +104,20 @@
 		</span>
 	</div>
 	<div class="flex shrink-0 items-center gap-1.5">
-		<Button variant="outline" size="sm" class="h-7 gap-1.5 px-2.5 text-xs sm:px-3" onclick={refresh} disabled={refreshing || deleting}>
+		<Button
+			variant="outline"
+			size="sm"
+			class="h-7 gap-1.5 px-2.5 text-xs sm:px-3"
+			onclick={refresh}
+			disabled={refreshing || deleting}
+		>
 			{#if refreshing}
 				<Loader2 class="h-3 w-3 animate-spin" />
 			{:else}
 				<RefreshCw class="h-3 w-3" />
 			{/if}
 			<span class="hidden sm:inline">Refresh</span>
+			<span class="sr-only sm:hidden">Refresh host</span>
 		</Button>
 		<Button
 			variant="outline"
@@ -123,6 +132,7 @@
 				<Trash2 class="h-3 w-3" />
 			{/if}
 			<span class="hidden sm:inline">Delete</span>
+			<span class="sr-only sm:hidden">Delete host</span>
 		</Button>
 	</div>
 </div>

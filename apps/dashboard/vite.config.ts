@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => {
 	}
 
 	return {
+		envPrefix: ['VITE_', 'PUBLIC_'],
 		plugins: [
 			tailwindcss(),
 			sveltekit(),

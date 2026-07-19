@@ -56,6 +56,28 @@ export const accessibilityFixtureFeatureFlags: FeatureFlags = {
 
 export const accessibilityFixtureProjects = [accessibilityFixtureProject];
 
+export const accessibilityFixtureManagedHosts = [
+	{
+		id: 'accessibility-host',
+		displayName: 'a11y-host-01',
+		ownerProjectId: accessibilityFixtureProject.id,
+		hostKind: 'external' as const,
+		linkedVmId: null,
+		connectionMode: 'direct_http' as const,
+		connectionState: 'online' as const,
+		agentUrl: 'http://127.0.0.1:7777',
+		lastSeenAt: now.getTime(),
+		agentVersion: 'fixture',
+		hostname: 'a11y-host-01',
+		os: 'Ultramarine Linux',
+		arch: 'x86_64',
+		capabilities: { settings: ['get_system'], host: ['health'] },
+		lastError: null,
+		createdAt: now.getTime(),
+		updatedAt: now.getTime()
+	}
+];
+
 export const accessibilityFixtureProjectDetails = {
 	id: accessibilityFixtureProject.id,
 	projectName: accessibilityFixtureProject.projectName,

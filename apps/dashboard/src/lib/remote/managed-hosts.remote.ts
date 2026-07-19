@@ -6,6 +6,10 @@ import { requireProjectAccess } from '$lib/server/auth-context';
 import { initDrizzle } from '$lib/server/db';
 import { managedHosts } from '$lib/server/db/schema';
 import { createTetraClient, type AgentResponse } from '$lib/server/tetra/client';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureManagedHosts
+} from '$lib/server/accessibility-fixtures';
 
 export type ManagedHost = {
 	id: string;
@@ -35,6 +39,23 @@ function requireUser() {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getStringField(value: Record<string, unknown> | null | undefined, keys: string[]) {
+	for (const key of keys) {
+		const field = value?.[key];
+		if (typeof field === 'string' && field.trim()) return field.trim();
+	}
+
+	return null;
+}
+
+function getSystemOs(system: Record<string, unknown> | null | undefined, fallback: string | null) {
+	return (
+		getStringField(system, ['pretty_name', 'prettyName', 'distro', 'distribution', 'os_name', 'osName']) ??
+		getStringField(system, ['id', 'os']) ??
+		fallback
+	);
 }
 
 function mapHost(row: typeof managedHosts.$inferSelect): ManagedHost {
@@ -102,6 +123,10 @@ async function refreshHostCapabilities(host: typeof managedHosts.$inferSelect) {
 const listParams = type({ projectId: 'string' });
 export const listManagedHosts = query(listParams, async (params): Promise<ManagedHost[]> => {
 	const user = requireUser();
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureManagedHosts.filter((host) => host.ownerProjectId === params.projectId);
+	}
+
 	const db = initDrizzle();
 	await requireProjectAccess(db, user.id, params.projectId);
 
@@ -115,6 +140,12 @@ export const listManagedHosts = query(listParams, async (params): Promise<Manage
 
 const getParams = type({ hostId: 'string' });
 export const getManagedHost = query(getParams, async (params): Promise<ManagedHost> => {
+	if (accessibilityFixtureEnabled) {
+		const host = accessibilityFixtureManagedHosts.find((item) => item.id === params.hostId);
+		if (!host) error(404, 'Managed host not found');
+		return host;
+	}
+
 	const { host } = await loadManagedHost(params.hostId);
 	return mapHost(host);
 });
@@ -158,6 +189,16 @@ export const createManagedHost = command(createParams, async (params): Promise<M
 	return mapHost(host);
 });
 
+export const deleteManagedHost = command(getParams, async (params) => {
+	if (accessibilityFixtureEnabled) return;
+
+	const user = requireUser();
+	const { db, host } = await loadManagedHost(params.hostId);
+	await requireProjectAccess(db, user.id, host.ownerProjectId, 'admin');
+
+	await db.delete(managedHosts).where(eq(managedHosts.id, host.id));
+});
+
 export const refreshManagedHostCapabilities = command(
 	getParams,
 	async (params): Promise<ManagedHost> => {
@@ -172,7 +213,7 @@ export const refreshManagedHostCapabilities = command(
 					connectionState: 'online',
 					lastSeenAt: now,
 					capabilities: result.capabilities,
-					os: typeof result.system?.os === 'string' ? result.system.os : host.os,
+					os: getSystemOs(result.system, host.os),
 					arch: typeof result.system?.arch === 'string' ? result.system.arch : host.arch,
 					lastError: null,
 					updatedAt: now

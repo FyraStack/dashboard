@@ -1,8 +1,6 @@
-import { PUBLIC_DASHBOARD_BRAND } from '$env/static/public';
-
 export type DashboardBrandId = 'stack' | 'ultramarine';
 
-const requestedBrand = PUBLIC_DASHBOARD_BRAND?.toLowerCase();
+const requestedBrand = import.meta.env.PUBLIC_DASHBOARD_BRAND?.toLowerCase();
 export const dashboardBrandId: DashboardBrandId =
 	requestedBrand === 'ultramarine' ? 'ultramarine' : 'stack';
 

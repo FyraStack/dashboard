@@ -1,216 +1,75 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { untrack } from 'svelte';
-	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import {
-		createManagedHost,
-		refreshManagedHostCapabilities,
-		type ManagedHost
-	} from '$lib/remote/managed-hosts.remote';
-	import { getErrorMessage } from '$lib/utils';
-	import Loader2 from '~icons/lucide/loader-2';
+	import type { ManagedHost } from '$lib/remote/managed-hosts.remote';
 	import Plus from '~icons/lucide/plus';
-	import RefreshCw from '~icons/lucide/refresh-cw';
 	import Server from '~icons/nucleo/server';
 
 	type PageData = {
-		hosts: ManagedHost[];
+		hosts?: ManagedHost[];
 	};
 
 	let { data }: { data: PageData } = $props();
-	let hosts = $state<ManagedHost[]>(untrack(() => data.hosts ?? []));
-	let displayName = $state('');
-	let agentUrl = $state('http://127.0.0.1:7777');
-	let bearerToken = $state('');
-	let actionError = $state('');
-	let creating = $state(false);
-	let refreshingIds = $state<string[]>([]);
-
-	function formatRelative(value: number | null) {
-		if (!value) return 'Never';
-		const seconds = Math.max(1, Math.floor((Date.now() - value) / 1000));
-		if (seconds < 60) return `${seconds}s ago`;
-		const minutes = Math.floor(seconds / 60);
-		if (minutes < 60) return `${minutes}m ago`;
-		const hours = Math.floor(minutes / 60);
-		if (hours < 48) return `${hours}h ago`;
-		return new Date(value).toLocaleString();
-	}
-
-	function stateVariant(state: ManagedHost['connectionState']) {
-		if (state === 'online') return 'default';
-		if (state === 'offline') return 'destructive';
-		return 'secondary';
-	}
-
-	function upsertHost(host: ManagedHost) {
-		const index = hosts.findIndex((item) => item.id === host.id);
-		if (index === -1) {
-			hosts = [host, ...hosts];
-			return;
-		}
-		hosts[index] = host;
-	}
-
-	async function createHost() {
-		const projectId = page.params.projectid;
-		if (!projectId || creating) return;
-		actionError = '';
-		creating = true;
-
-		try {
-			const host = await createManagedHost({
-				projectId,
-				displayName,
-				agentUrl,
-				bearerToken: bearerToken.trim() || undefined
-			});
-			hosts = [host, ...hosts];
-			displayName = '';
-			bearerToken = '';
-		} catch (err) {
-			actionError = getErrorMessage(err, 'Failed to register managed host.');
-		} finally {
-			creating = false;
-		}
-	}
-
-	async function refreshHost(hostId: string) {
-		if (refreshingIds.includes(hostId)) return;
-		actionError = '';
-		refreshingIds = [...refreshingIds, hostId];
-		try {
-			upsertHost(await refreshManagedHostCapabilities({ hostId }));
-		} catch (err) {
-			actionError = getErrorMessage(err, 'Failed to refresh managed host.');
-		} finally {
-			refreshingIds = refreshingIds.filter((id) => id !== hostId);
-		}
-	}
+	let hosts = $derived(data.hosts ?? []);
+	let onlineHosts = $derived(hosts.filter((host) => host.connectionState === 'online').length);
+	let offlineHosts = $derived(hosts.filter((host) => host.connectionState === 'offline').length);
+	let unknownHosts = $derived(hosts.filter((host) => host.connectionState === 'unknown').length);
 </script>
 
-<div class="flex h-full w-full flex-col">
-	<div class="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
-		<div>
+<div class="flex h-full min-h-0 flex-col bg-background">
+	<div class="border-b border-border px-5 py-4">
+		<div class="flex items-center gap-2">
+			<Server class="size-4 text-muted-foreground" />
 			<h1 class="text-base font-semibold text-foreground">Managed Hosts</h1>
-			<p class="mt-1 text-xs text-muted-foreground">
-				Register Tetra agents and inspect host capabilities.
-			</p>
 		</div>
+		<p class="mt-1 text-xs text-muted-foreground">
+			Select a host from the list to inspect capabilities and dispatch Tetra commands.
+		</p>
 	</div>
 
-	<div class="grid min-h-0 flex-1 grid-cols-1 gap-px bg-border lg:grid-cols-[360px_1fr]">
-		<section class="bg-background p-5">
-			<div class="space-y-4">
-				<div>
-					<h2 class="text-sm font-semibold text-foreground">Register Host</h2>
-					<p class="mt-1 text-xs text-muted-foreground">
-						Use a Tetra dev HTTP agent while the production WSS broker is being built.
-					</p>
-				</div>
-
-				<div class="space-y-2">
-					<Label for="host-name">Name</Label>
-					<Input id="host-name" bind:value={displayName} placeholder="fedora-server" />
-				</div>
-
-				<div class="space-y-2">
-					<Label for="agent-url">Agent URL</Label>
-					<Input id="agent-url" bind:value={agentUrl} placeholder="http://100.x.y.z:7777" />
-				</div>
-
-				<div class="space-y-2">
-					<Label for="bearer-token">Bearer token</Label>
-					<Input
-						id="bearer-token"
-						type="password"
-						bind:value={bearerToken}
-						placeholder="Optional"
-					/>
-				</div>
-
-				{#if actionError}
-					<p class="border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-						{actionError}
-					</p>
-				{/if}
-
-				<Button
-					class="w-full gap-2"
-					onclick={createHost}
-					disabled={creating || !displayName.trim()}
-				>
-					{#if creating}
-						<Loader2 class="size-4 animate-spin" />
-					{:else}
-						<Plus class="size-4" />
-					{/if}
-					Register
-				</Button>
+	<div class="flex flex-1 items-center justify-center p-6 text-center">
+		<div class="max-w-md">
+			<div class="mx-auto flex size-10 items-center justify-center border border-border bg-muted/40">
+				<Server class="size-5 text-muted-foreground" />
 			</div>
-		</section>
+			<h2 class="mt-5 text-sm font-semibold text-foreground">
+				{hosts.length === 0 ? 'No managed hosts yet' : 'Choose a host'}
+			</h2>
+			<p class="mt-2 text-sm text-muted-foreground">
+				{#if hosts.length === 0}
+					Register a Tetra agent to start testing host discovery and command dispatch.
+				{:else}
+					There {hosts.length === 1 ? 'is' : 'are'} {hosts.length} managed {hosts.length === 1
+						? 'host'
+						: 'hosts'} available. Pick one from the list on the left to view its details.
+				{/if}
+			</p>
 
-		<section class="min-h-0 overflow-auto bg-background">
-			{#if hosts.length === 0}
-				<div class="flex h-full min-h-96 items-center justify-center p-6 text-center">
-					<div class="max-w-80 border border-dashed border-border p-8">
-						<Server class="mx-auto size-6 text-muted-foreground" />
-						<p class="mt-4 text-sm font-medium text-foreground">No managed hosts</p>
-						<p class="mt-1 text-xs text-muted-foreground">
-							Register a Tetra agent to start testing host discovery.
-						</p>
+			{#if hosts.length > 0}
+				<div class="mt-5 grid grid-cols-3 border border-border text-left">
+					<div class="border-r border-border p-3">
+						<p class="text-xs text-muted-foreground">Online</p>
+						<p class="mt-1 text-lg font-semibold text-foreground">{onlineHosts}</p>
+					</div>
+					<div class="border-r border-border p-3">
+						<p class="text-xs text-muted-foreground">Offline</p>
+						<p class="mt-1 text-lg font-semibold text-foreground">{offlineHosts}</p>
+					</div>
+					<div class="p-3">
+						<p class="text-xs text-muted-foreground">Unknown</p>
+						<p class="mt-1 text-lg font-semibold text-foreground">{unknownHosts}</p>
 					</div>
 				</div>
-			{:else}
-				<div class="divide-y divide-border">
-					{#each hosts as host (host.id)}
-						<div class="grid gap-4 p-5 md:grid-cols-[1fr_auto]">
-							<button
-								type="button"
-								class="min-w-0 text-left"
-								onclick={() => goto(`/projects/${page.params.projectid}/hosts/${host.id}`)}
-							>
-								<div class="flex flex-wrap items-center gap-2">
-									<span class="font-medium text-foreground">{host.displayName}</span>
-									<Badge variant={stateVariant(host.connectionState)}>
-										{host.connectionState}
-									</Badge>
-								</div>
-								<div class="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
-									<span>Mode: {host.connectionMode}</span>
-									<span>Last seen: {formatRelative(host.lastSeenAt)}</span>
-									<span>OS: {host.os ?? 'Unknown'}</span>
-									<span>Arch: {host.arch ?? 'Unknown'}</span>
-								</div>
-								{#if host.lastError}
-									<p class="mt-2 text-xs text-destructive">{host.lastError}</p>
-								{/if}
-							</button>
-
-							<div class="flex items-start gap-2">
-								<Button
-									variant="outline"
-									size="sm"
-									class="gap-2"
-									onclick={() => refreshHost(host.id)}
-									disabled={refreshingIds.includes(host.id)}
-								>
-									{#if refreshingIds.includes(host.id)}
-										<Loader2 class="size-3.5 animate-spin" />
-									{:else}
-										<RefreshCw class="size-3.5" />
-									{/if}
-									Refresh
-								</Button>
-							</div>
-						</div>
-					{/each}
-				</div>
 			{/if}
-		</section>
+
+			<Button
+				class="mt-6 gap-2"
+				onclick={() => goto(`/projects/${page.params.projectid}/hosts/create`)}
+			>
+				<Plus class="size-4" />
+				Register Host
+			</Button>
+		</div>
 	</div>
 </div>

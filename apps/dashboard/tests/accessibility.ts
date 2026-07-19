@@ -18,6 +18,9 @@ export const pages = [
 	{ label: 'project dashboard', path: '/' },
 	{ label: 'server list', path: '/projects/accessibility-project/servers' },
 	{ label: 'server detail', path: '/projects/accessibility-project/servers/accessibility-server' },
+	{ label: 'host overview', path: '/projects/accessibility-project/hosts' },
+	{ label: 'host registration', path: '/projects/accessibility-project/hosts/create' },
+	{ label: 'host detail', path: '/projects/accessibility-project/hosts/accessibility-host' },
 	{ label: 'project settings', path: '/projects/accessibility-project/settings' }
 ];
 

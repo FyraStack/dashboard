@@ -18,9 +18,12 @@
 	import QuadletEditor from '../lib/QuadletEditor.svelte';
 	import {
 		buildRecipeDetail,
+		defaultComposeOptions,
 		defaultNginxSiteOptions,
 		defaultNextcloudOptions,
 		quadletRecipeOptions,
+		validateComposeOptions,
+		type ComposeOptions,
 		type NextcloudOptions,
 		type NginxSiteOptions,
 		type QuadletRecipeOption
@@ -38,15 +41,21 @@
 	let selectedRecipe = $state<'blank' | QuadletRecipeOption['id'] | null>(null);
 	let nginxOptions = $state<NginxSiteOptions>(defaultNginxSiteOptions());
 	let nextcloudOptions = $state<NextcloudOptions>(defaultNextcloudOptions());
+	let composeOptions = $state<ComposeOptions>(defaultComposeOptions());
 	let showGeneratedConfiguration = $state(false);
 	let saving = $state(false);
 	let actionError = $state('');
+	const composeError = $derived(
+		selectedRecipe === 'compose' ? validateComposeOptions(composeOptions) : ''
+	);
 	const recipeDetail = $derived(
 		selectedRecipe === null || selectedRecipe === 'blank'
 			? null
 			: selectedRecipe === 'nginx-site'
 				? buildRecipeDetail(selectedRecipe, initialScope, nginxOptions)
-				: buildRecipeDetail(selectedRecipe, initialScope, nextcloudOptions)
+				: selectedRecipe === 'nextcloud'
+					? buildRecipeDetail(selectedRecipe, initialScope, nextcloudOptions)
+					: buildRecipeDetail(selectedRecipe, initialScope, composeOptions)
 	);
 
 	function updateNginxOption<Key extends keyof NginxSiteOptions>(
@@ -63,13 +72,20 @@
 		nextcloudOptions = { ...nextcloudOptions, [key]: value };
 	}
 
+	function updateComposeOption<Key extends keyof ComposeOptions>(
+		key: Key,
+		value: ComposeOptions[Key]
+	) {
+		composeOptions = { ...composeOptions, [key]: value };
+	}
+
 	function selectRecipe(recipe: 'blank' | QuadletRecipeOption['id']) {
 		selectedRecipe = recipe;
 		showGeneratedConfiguration = false;
 	}
 
 	async function saveRecipeApp() {
-		if (saving || !recipeDetail) return;
+		if (saving || !recipeDetail || composeError) return;
 		saving = true;
 		actionError = '';
 		try {
@@ -341,6 +357,40 @@
 										updateNextcloudOption('enableRedis', checked)}
 								/>
 							</div>
+						{:else if selectedRecipe === 'compose'}
+							<div class="space-y-2">
+								<Label for="compose-app-id">App ID</Label>
+								<Input
+									id="compose-app-id"
+									value={composeOptions.appId}
+									oninput={(event) => updateComposeOption('appId', event.currentTarget.value)}
+								/>
+							</div>
+
+							<div class="space-y-2">
+								<Label for="compose-yaml">Compose specification</Label>
+								<Textarea
+									id="compose-yaml"
+									class="min-h-96 font-mono text-xs leading-relaxed"
+									value={composeOptions.composeYaml}
+									oninput={(event) =>
+										updateComposeOption('composeYaml', event.currentTarget.value)}
+								/>
+							</div>
+
+							{#if composeError}
+								<div class="border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+									{composeError}
+								</div>
+							{:else}
+								<div class="border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+									<p>
+										Services are converted to container Quadlets. Named volumes and networks become
+										managed Quadlet resources, and relative bind paths are rooted under the mutable
+										app bundle directory.
+									</p>
+								</div>
+							{/if}
 						{/if}
 
 						<div class="border border-border bg-muted/20 p-3">
@@ -360,7 +410,7 @@
 							{/if}
 						</div>
 
-						<Button class="w-full gap-2" onclick={saveRecipeApp} disabled={saving}>
+						<Button class="w-full gap-2" onclick={saveRecipeApp} disabled={saving || !!composeError}>
 							{#if saving}
 								<Loader2 class="size-3.5 animate-spin" />
 							{/if}

@@ -3,6 +3,7 @@ import type {
 	ManagedHostQuadletResource,
 	ManagedHostQuadletScope
 } from '$lib/remote/managed-hosts.remote';
+import { parse as parseYaml } from 'yaml';
 
 export type NginxSiteOptions = {
 	appId: string;
@@ -27,8 +28,13 @@ export type NextcloudOptions = {
 	overwriteProtocol: 'http' | 'https';
 };
 
+export type ComposeOptions = {
+	appId: string;
+	composeYaml: string;
+};
+
 export type QuadletRecipeOption = {
-	id: 'nginx-site' | 'nextcloud';
+	id: 'nginx-site' | 'nextcloud' | 'compose';
 	name: string;
 	description: string;
 	category: string;
@@ -51,19 +57,27 @@ export const quadletRecipeOptions: QuadletRecipeOption[] = [
 		name: 'Nextcloud',
 		description: 'Run Nextcloud with MariaDB, optional Redis, managed volumes, and web defaults.',
 		category: 'Apps'
+	},
+	{
+		id: 'compose',
+		name: 'Compose specification',
+		description: 'Paste a Compose file and generate equivalent Quadlet container resources.',
+		category: 'Import'
 	}
 ];
 
 export function buildRecipeDetail(
 	recipeId: QuadletRecipeOption['id'],
 	scope: ManagedHostQuadletScope,
-	options: NginxSiteOptions | NextcloudOptions
+	options: NginxSiteOptions | NextcloudOptions | ComposeOptions
 ): RecipeDetail {
 	switch (recipeId) {
 		case 'nginx-site':
 			return buildNginxSiteRecipe(scope, options as NginxSiteOptions);
 		case 'nextcloud':
 			return buildNextcloudRecipe(scope, options as NextcloudOptions);
+		case 'compose':
+			return buildComposeRecipe(scope, options as ComposeOptions);
 	}
 }
 
@@ -92,6 +106,31 @@ export function defaultNextcloudOptions(): NextcloudOptions {
 		trustedProxies: '',
 		overwriteProtocol: 'https'
 	};
+}
+
+export function defaultComposeOptions(): ComposeOptions {
+	return {
+		appId: 'compose-app',
+		composeYaml: `services:
+  web:
+    image: docker.io/library/nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./html:/usr/share/nginx/html:ro
+    restart: unless-stopped
+`
+	};
+}
+
+export function validateComposeOptions(options: ComposeOptions): string {
+	try {
+		const compose = parseCompose(options.composeYaml);
+		if (compose.error) return compose.error;
+		return '';
+	} catch (err) {
+		return err instanceof Error ? err.message : 'Compose YAML could not be parsed.';
+	}
 }
 
 function buildNginxSiteRecipe(
@@ -142,6 +181,137 @@ WantedBy=default.target
 					`server {\n  listen 80;\n  server_name ${serverName};\n  root /usr/share/nginx/html;\n  index index.html;\n}\n`
 			}
 		]
+	};
+}
+
+function buildComposeRecipe(
+	scope: ManagedHostQuadletScope,
+	options: ComposeOptions
+): RecipeDetail {
+	const appId = normalizeAppId(options.appId, 'compose-app');
+	const filesBaseDir = bundleDir(scope, appId);
+	const parsed = parseCompose(options.composeYaml);
+	if (parsed.error || !parsed.compose) {
+		const filename = `${appId}-compose.container`;
+		return {
+			scope,
+			recipeName: 'Compose specification',
+			baseDir: quadletBaseDir(scope),
+			filesBaseDir,
+			filename,
+			contents: '',
+			resources: [],
+			files: [{ filename: 'compose.yaml', contents: options.composeYaml.trimEnd() + '\n' }]
+		};
+	}
+
+	const resources: ManagedHostQuadletResource[] = [];
+	const serviceEntries = Object.entries(parsed.compose.services);
+	const serviceNames = new Set(serviceEntries.map(([name]) => name));
+	const namedVolumes = new Set<string>(Object.keys(parsed.compose.volumes ?? {}));
+	const namedNetworks = new Set<string>(Object.keys(parsed.compose.networks ?? {}));
+	const useDefaultNetwork =
+		serviceEntries.length > 1 && serviceEntries.every(([, service]) => !service.networks);
+
+	for (const [, service] of serviceEntries) {
+		for (const volume of service.volumes ?? []) {
+			const source = volumeSourceName(volume);
+			if (source && !isRelativePath(source) && !isAbsolutePath(source)) namedVolumes.add(source);
+		}
+		for (const network of serviceNetworkNames(service.networks)) {
+			namedNetworks.add(network);
+		}
+	}
+
+	if (useDefaultNetwork) namedNetworks.add('default');
+
+	for (const volume of namedVolumes) {
+		const volumeId = normalizeAppId(volume, 'data');
+		resources.push({
+			filename: `${appId}-${volumeId}.volume`,
+			contents: `[Volume]
+VolumeName=${appId}-${volumeId}
+`
+		});
+	}
+
+	for (const network of namedNetworks) {
+		const networkId = normalizeAppId(network, 'default');
+		resources.push({
+			filename: `${appId}-${networkId}.network`,
+			contents: `[Network]
+NetworkName=${appId}-${networkId}
+Driver=bridge
+`
+		});
+	}
+
+	for (const [name, service] of serviceEntries) {
+		const serviceId = normalizeAppId(name, 'service');
+		const dependencies = serviceDependencyNames(service.depends_on).filter((dependency) =>
+			serviceNames.has(dependency)
+		);
+		const unitDependencies = dependencies
+			.map((dependency) => `${appId}-${normalizeAppId(dependency, 'service')}.service`)
+			.join(' ');
+		const serviceNetworks = serviceNetworkNames(service.networks);
+		const networks = serviceNetworks.length
+			? serviceNetworks
+			: useDefaultNetwork
+				? ['default']
+				: [];
+		const restart = serviceRestartPolicy(service.restart);
+		const containerLines = [
+			`ContainerName=${appId}-${serviceId}`,
+			`Image=${service.image}`,
+			...arrayLines('PublishPort', service.ports?.map(formatPort).filter(Boolean) ?? []),
+			...arrayLines(
+				'Volume',
+				(service.volumes ?? []).map((volume) => formatVolume(volume, appId, filesBaseDir)).filter(Boolean)
+			),
+			...arrayLines(
+				'Environment',
+				environmentLines(service.environment).concat(service.env_file?.map((file) => `env_file=${file}`) ?? [])
+			),
+			...arrayLines(
+				'Network',
+				networks.map((network) => `${appId}-${normalizeAppId(network, 'default')}.network`)
+			),
+			...arrayLines('Label', labelLines(service.labels)),
+			service.user ? `User=${service.user}` : '',
+			service.working_dir ? `WorkingDir=${service.working_dir}` : '',
+			service.entrypoint ? `Entrypoint=${stringOrList(service.entrypoint)}` : '',
+			service.command ? `Exec=${stringOrList(service.command)}` : ''
+		].filter(Boolean);
+
+		const contents = `[Unit]
+Description=${appId} ${name}
+${unitDependencies ? `Requires=${unitDependencies}\nAfter=${unitDependencies}\n` : ''}
+[Container]
+${containerLines.join('\n')}
+
+[Service]
+Restart=${restart}
+
+[Install]
+WantedBy=default.target
+`;
+		resources.push({ filename: `${appId}-${serviceId}.container`, contents });
+	}
+
+	const filename = resources.find((resource) => resource.filename.endsWith('.container'))?.filename
+		?? `${appId}.container`;
+	const contents = resources.find((resource) => resource.filename === filename)?.contents ?? '';
+
+	return {
+		scope,
+		recipeName: 'Compose specification',
+		baseDir: quadletBaseDir(scope),
+		filesBaseDir,
+		filename,
+		contents,
+		resources,
+		files: [{ filename: 'compose.yaml', contents: options.composeYaml.trimEnd() + '\n' }]
 	};
 }
 
@@ -270,6 +440,222 @@ WantedBy=default.target
 	};
 }
 
+type ComposeSpec = {
+	services: Record<string, ComposeService>;
+	volumes?: Record<string, unknown>;
+	networks?: Record<string, unknown>;
+};
+
+type ComposeService = {
+	image?: string;
+	build?: unknown;
+	command?: string | string[];
+	entrypoint?: string | string[];
+	environment?: Record<string, unknown> | string[];
+	env_file?: string[];
+	ports?: ComposePort[];
+	volumes?: ComposeVolume[];
+	networks?: string[] | Record<string, unknown>;
+	depends_on?: string[] | Record<string, unknown>;
+	labels?: Record<string, unknown> | string[];
+	restart?: string;
+	user?: string;
+	working_dir?: string;
+};
+
+type ComposePort =
+	| string
+	| {
+			target?: number | string;
+			published?: number | string;
+			protocol?: string;
+	  };
+
+type ComposeVolume =
+	| string
+	| {
+			type?: string;
+			source?: string;
+			target?: string;
+			read_only?: boolean;
+	  };
+
+function parseCompose(text: string): { compose?: ComposeSpec; error: string } {
+	if (!text.trim()) return { error: 'Paste a Compose specification.' };
+	const value = parseYaml(text) as unknown;
+	if (!isRecord(value)) return { error: 'Compose YAML must be a mapping.' };
+	if (!isRecord(value.services) || Object.keys(value.services).length === 0) {
+		return { error: 'Compose YAML must define at least one service.' };
+	}
+
+	const services: Record<string, ComposeService> = {};
+	for (const [name, service] of Object.entries(value.services)) {
+		if (!isRecord(service)) return { error: `Service "${name}" must be a mapping.` };
+		if (typeof service.image !== 'string' || !service.image.trim()) {
+			return {
+				error: `Service "${name}" needs an image. Compose build-only services are not converted yet.`
+			};
+		}
+		services[name] = {
+			image: service.image.trim(),
+			build: service.build,
+			command: stringOrStringArray(service.command),
+			entrypoint: stringOrStringArray(service.entrypoint),
+			environment: environmentValue(service.environment),
+			env_file: stringArray(service.env_file),
+			ports: portArray(service.ports),
+			volumes: volumeArray(service.volumes),
+			networks: networksValue(service.networks),
+			depends_on: dependsOnValue(service.depends_on),
+			labels: labelsValue(service.labels),
+			restart: typeof service.restart === 'string' ? service.restart : undefined,
+			user: typeof service.user === 'string' ? service.user : undefined,
+			working_dir: typeof service.working_dir === 'string' ? service.working_dir : undefined
+		};
+	}
+
+	return {
+		error: '',
+		compose: {
+			services,
+			volumes: isRecord(value.volumes) ? value.volumes : {},
+			networks: isRecord(value.networks) ? value.networks : {}
+		}
+	};
+}
+
+function formatPort(port: ComposePort) {
+	if (typeof port === 'string') return port;
+	const target = port.target ? String(port.target) : '';
+	const published = port.published ? String(port.published) : '';
+	if (!target) return '';
+	const protocol = port.protocol && port.protocol !== 'tcp' ? `/${port.protocol}` : '';
+	return `${published ? `${published}:` : ''}${target}${protocol}`;
+}
+
+function formatVolume(volume: ComposeVolume, appId: string, filesBaseDir: string) {
+	if (typeof volume === 'string') {
+		const parts = volume.split(':');
+		if (parts.length < 2) return volume;
+		const [source, target, ...rest] = parts;
+		return `${formatVolumeSource(source, appId, filesBaseDir)}:${target}${rest.length ? `:${rest.join(':')}` : ''}`;
+	}
+
+	if (!volume.target) return '';
+	const source = volume.source ? formatVolumeSource(volume.source, appId, filesBaseDir) : '';
+	const mode = volume.read_only ? ':ro' : '';
+	return source ? `${source}:${volume.target}${mode}` : volume.target;
+}
+
+function formatVolumeSource(source: string, appId: string, filesBaseDir: string) {
+	if (isRelativePath(source)) return `${filesBaseDir}/${source.replace(/^\.?\//, '')}`;
+	if (isAbsolutePath(source)) return source;
+	return `${appId}-${normalizeAppId(source, 'data')}.volume`;
+}
+
+function volumeSourceName(volume: ComposeVolume) {
+	if (typeof volume === 'string') {
+		const [source] = volume.split(':');
+		return source;
+	}
+	return volume.source;
+}
+
+function environmentLines(environment: ComposeService['environment']) {
+	if (Array.isArray(environment)) return environment;
+	if (!environment) return [];
+	return Object.entries(environment).map(([key, value]) => `${key}=${value ?? ''}`);
+}
+
+function labelLines(labels: ComposeService['labels']) {
+	if (Array.isArray(labels)) return labels;
+	if (!labels) return [];
+	return Object.entries(labels).map(([key, value]) => `${key}=${value ?? ''}`);
+}
+
+function serviceNetworkNames(networks: ComposeService['networks']) {
+	if (Array.isArray(networks)) return networks;
+	if (isRecord(networks)) return Object.keys(networks);
+	return [];
+}
+
+function serviceDependencyNames(dependsOn: ComposeService['depends_on']) {
+	if (Array.isArray(dependsOn)) return dependsOn;
+	if (isRecord(dependsOn)) return Object.keys(dependsOn);
+	return [];
+}
+
+function serviceRestartPolicy(restart: string | undefined) {
+	switch (restart) {
+		case 'no':
+			return 'no';
+		case 'on-failure':
+			return 'on-failure';
+		case 'always':
+		case 'unless-stopped':
+		default:
+			return 'always';
+	}
+}
+
+function arrayLines(key: string, values: string[]) {
+	return values.filter(Boolean).map((value) => `${key}=${value}`);
+}
+
+function stringOrList(value: string | string[]) {
+	return Array.isArray(value) ? value.join(' ') : value;
+}
+
+function stringOrStringArray(value: unknown) {
+	if (typeof value === 'string') return value;
+	if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return value;
+	return undefined;
+}
+
+function stringArray(value: unknown) {
+	if (typeof value === 'string') return [value];
+	if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return value;
+	return undefined;
+}
+
+function portArray(value: unknown) {
+	if (!Array.isArray(value)) return undefined;
+	return value.filter((item): item is ComposePort => typeof item === 'string' || isRecord(item));
+}
+
+function volumeArray(value: unknown) {
+	if (!Array.isArray(value)) return undefined;
+	return value.filter((item): item is ComposeVolume => typeof item === 'string' || isRecord(item));
+}
+
+function environmentValue(value: unknown) {
+	if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return value;
+	if (isRecord(value)) return value;
+	return undefined;
+}
+
+function labelsValue(value: unknown) {
+	if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return value;
+	if (isRecord(value)) return value;
+	return undefined;
+}
+
+function networksValue(value: unknown) {
+	if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return value;
+	if (isRecord(value)) return value;
+	return undefined;
+}
+
+function dependsOnValue(value: unknown) {
+	if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return value;
+	if (isRecord(value)) return value;
+	return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function quadletBaseDir(scope: ManagedHostQuadletScope) {
 	return scope === 'system' ? '/etc/containers/systemd' : '/home/a11y/.config/containers/systemd';
 }
@@ -297,6 +683,14 @@ function clampPort(value: number, fallback: number) {
 
 function safeEnv(value: string, fallback: string) {
 	return value.trim().replace(/\s+/g, '_') || fallback;
+}
+
+function isRelativePath(value: string) {
+	return value.startsWith('./') || value.startsWith('../');
+}
+
+function isAbsolutePath(value: string) {
+	return value.startsWith('/');
 }
 
 function escapeHtml(value: string) {

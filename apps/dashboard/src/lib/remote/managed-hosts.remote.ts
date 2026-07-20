@@ -55,6 +55,34 @@ export type ManagedHostPodmanContainerDetail = {
 	logs: string;
 };
 
+export type ManagedHostQuadletScope = 'user' | 'system';
+
+export type ManagedHostQuadletFile = {
+	filename: string;
+	path: string | null;
+	quadlet: boolean;
+};
+
+export type ManagedHostQuadletList = {
+	baseDir: string | null;
+	filesBaseDir: string | null;
+	files: ManagedHostQuadletFile[];
+};
+
+export type ManagedHostQuadletCompanionFile = {
+	filename: string;
+	contents: string;
+};
+
+export type ManagedHostQuadletDetail = {
+	scope: ManagedHostQuadletScope;
+	baseDir: string | null;
+	filesBaseDir: string | null;
+	filename: string;
+	contents: string;
+	files: ManagedHostQuadletCompanionFile[];
+};
+
 function requireUser() {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
@@ -262,6 +290,58 @@ function fixturePodmanContainerDetail(name: string): ManagedHostPodmanContainerD
 	};
 }
 
+function fixtureQuadletFiles(): ManagedHostQuadletFile[] {
+	return [
+		{
+			filename: 'demo-web.container',
+			path: '/home/a11y/.config/containers/systemd/demo-web.container',
+			quadlet: true
+		},
+		{
+			filename: 'demo-web/index.html',
+			path: '/home/a11y/.local/share/tetra/quadlets/demo-web/index.html',
+			quadlet: false
+		},
+		{
+			filename: 'demo-web/default.conf',
+			path: '/home/a11y/.local/share/tetra/quadlets/demo-web/default.conf',
+			quadlet: false
+		}
+	];
+}
+
+function fixtureQuadletDetail(
+	filename: string,
+	scope: ManagedHostQuadletScope
+): ManagedHostQuadletDetail {
+	const filesBaseDir =
+		scope === 'system'
+			? '/var/lib/tetra/quadlets/demo-web'
+			: '/home/a11y/.local/share/tetra/quadlets/demo-web';
+	return {
+		scope,
+		baseDir:
+			scope === 'system'
+				? '/etc/containers/systemd'
+				: '/home/a11y/.config/containers/systemd',
+		filesBaseDir,
+		filename,
+		contents:
+			`[Unit]\nDescription=Demo web site\n\n[Container]\nImage=docker.io/library/nginx:alpine\nContainerName=demo-web\nPublishPort=8080:80\nVolume=${filesBaseDir}:/usr/share/nginx/html:ro\nVolume=${filesBaseDir}/default.conf:/etc/nginx/conf.d/default.conf:ro\n\n[Service]\nRestart=always\n\n[Install]\nWantedBy=default.target\n`,
+		files: [
+			{
+				filename: 'index.html',
+				contents: '<!doctype html>\n<title>Demo Web</title>\n<h1>Hello from a Quadlet companion file</h1>\n'
+			},
+			{
+				filename: 'default.conf',
+				contents:
+					'server {\n  listen 80;\n  server_name _;\n  root /usr/share/nginx/html;\n  index index.html;\n}\n'
+			}
+		]
+	};
+}
+
 function firstRecord(value: unknown): Record<string, unknown> {
 	if (Array.isArray(value) && isRecord(value[0])) return value[0];
 	if (isRecord(value)) return value;
@@ -338,6 +418,53 @@ function mapContainerDetail(
 		rawInspect: inspectPayload,
 		logs
 	};
+}
+
+function mapQuadletFile(value: unknown): ManagedHostQuadletFile | null {
+	if (!isRecord(value)) return null;
+	const filename = typeof value.filename === 'string' ? value.filename : null;
+	if (!filename) return null;
+	return {
+		filename,
+		path: typeof value.path === 'string' ? value.path : null,
+		quadlet: value.quadlet === true
+	};
+}
+
+function mapQuadletList(response: AgentResponse): ManagedHostQuadletList {
+	if (!response.ok) {
+		throw new Error(response.error || 'Failed to list Quadlet files');
+	}
+
+	const payload = isRecord(response.payload) ? response.payload : {};
+	const files = Array.isArray(payload.files)
+		? payload.files.map(mapQuadletFile).filter((file): file is ManagedHostQuadletFile => !!file)
+		: [];
+
+	return {
+		baseDir: typeof payload.base_dir === 'string' ? payload.base_dir : null,
+		filesBaseDir: typeof payload.files_base_dir === 'string' ? payload.files_base_dir : null,
+		files: files.sort((left, right) => left.filename.localeCompare(right.filename))
+	};
+}
+
+function mapQuadletRead(response: AgentResponse, filename: string) {
+	if (!response.ok) throw new Error(response.error || `Failed to read ${filename}`);
+	const payload = isRecord(response.payload) ? response.payload : {};
+	return {
+		baseDir: typeof payload.base_dir === 'string' ? payload.base_dir : null,
+		filename: typeof payload.filename === 'string' ? payload.filename : filename,
+		contents: typeof payload.contents === 'string' ? payload.contents : ''
+	};
+}
+
+function quadletBundleName(filename: string) {
+	return filename.replace(/^.*\//, '').replace(/\.(container|kube|network|pod|volume)$/, '');
+}
+
+function companionFilenameForEditor(filename: string, bundleName: string) {
+	const prefix = `${bundleName}/`;
+	return filename.startsWith(prefix) ? filename.slice(prefix.length) : filename;
 }
 
 async function dispatchHostCommand(
@@ -645,5 +772,185 @@ export const runManagedHostPodmanContainerAction = command(podmanActionParams, a
 	await markHostDispatchResult(db, host, response);
 
 	if (!response.ok) throw new Error(response.error || 'Podman container action failed');
+	return response;
+});
+
+const quadletScopeValues = ['user', 'system'] as const;
+
+function normalizeQuadletScope(scope: string): ManagedHostQuadletScope {
+	if (quadletScopeValues.includes(scope as ManagedHostQuadletScope)) {
+		return scope as ManagedHostQuadletScope;
+	}
+	error(400, 'Unsupported Quadlet scope');
+}
+
+function parseCompanionFiles(filesJson: string): ManagedHostQuadletCompanionFile[] {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(filesJson);
+	} catch {
+		error(400, 'Companion files must be valid JSON');
+	}
+
+	if (!Array.isArray(parsed)) error(400, 'Companion files must be a JSON array');
+	return parsed.map((item, index) => {
+		if (!isRecord(item)) error(400, `Companion file ${index + 1} must be an object`);
+		const filename = typeof item.filename === 'string' ? item.filename.trim() : '';
+		const contents = typeof item.contents === 'string' ? item.contents : '';
+		if (!filename) error(400, `Companion file ${index + 1} needs a filename`);
+		return { filename, contents };
+	});
+}
+
+const quadletListParams = type({
+	hostId: 'string',
+	scope: 'string'
+});
+
+export const listManagedHostQuadlets = command(
+	quadletListParams,
+	async (params): Promise<ManagedHostQuadletList> => {
+		const scope = normalizeQuadletScope(params.scope);
+		if (accessibilityFixtureEnabled) {
+			return {
+				baseDir:
+					scope === 'system'
+						? '/etc/containers/systemd'
+						: '/home/a11y/.config/containers/systemd',
+				filesBaseDir:
+					scope === 'system' ? '/var/lib/tetra/quadlets' : '/home/a11y/.local/share/tetra/quadlets',
+				files: fixtureQuadletFiles()
+			};
+		}
+
+		const user = requireUser();
+		const { db, host } = await loadManagedHost(params.hostId);
+		await requireProjectAccess(db, user.id, host.ownerProjectId);
+
+		const response = await dispatchHostCommand(host, {
+			module: 'quadlets',
+			action: 'list_files',
+			payload: { scope }
+		});
+		await markHostDispatchResult(db, host, response);
+		return mapQuadletList(response);
+	}
+);
+
+const quadletReadParams = type({
+	hostId: 'string',
+	scope: 'string',
+	filename: 'string'
+});
+
+export const getManagedHostQuadlet = command(
+	quadletReadParams,
+	async (params): Promise<ManagedHostQuadletDetail> => {
+		const scope = normalizeQuadletScope(params.scope);
+		const filename = params.filename.trim();
+		if (!filename) error(400, 'Quadlet filename is required');
+		if (accessibilityFixtureEnabled) return fixtureQuadletDetail(filename, scope);
+
+		const user = requireUser();
+		const { db, host } = await loadManagedHost(params.hostId);
+		await requireProjectAccess(db, user.id, host.ownerProjectId);
+
+		const listResponse = await dispatchHostCommand(host, {
+			module: 'quadlets',
+			action: 'list_files',
+			payload: { scope }
+		});
+		await markHostDispatchResult(db, host, listResponse);
+		const list = mapQuadletList(listResponse);
+
+		const readResponse = await dispatchHostCommand(host, {
+			module: 'quadlets',
+			action: 'read',
+			payload: { scope, filename }
+		});
+		await markHostDispatchResult(db, host, readResponse);
+		const quadlet = mapQuadletRead(readResponse, filename);
+		const bundleName = quadletBundleName(filename);
+
+		const companionFiles: ManagedHostQuadletCompanionFile[] = [];
+		for (const file of list.files.filter(
+			(item) => !item.quadlet && item.filename.startsWith(`${bundleName}/`)
+		)) {
+			const fileResponse = await dispatchHostCommand(host, {
+				module: 'quadlets',
+				action: 'read',
+				payload: { scope, filename: file.filename, companion: true }
+			});
+			await markHostDispatchResult(db, host, fileResponse);
+			companionFiles.push({
+				filename: companionFilenameForEditor(file.filename, bundleName),
+				contents: mapQuadletRead(fileResponse, file.filename).contents
+			});
+		}
+
+		return {
+			scope,
+			baseDir: list.baseDir ?? quadlet.baseDir,
+			filesBaseDir: list.filesBaseDir ? `${list.filesBaseDir}/${bundleName}` : null,
+			filename: quadlet.filename,
+			contents: quadlet.contents,
+			files: companionFiles
+		};
+	}
+);
+
+const quadletSaveParams = type({
+	hostId: 'string',
+	scope: 'string',
+	filename: 'string',
+	contents: 'string',
+	filesJson: 'string'
+});
+
+export const saveManagedHostQuadlet = command(quadletSaveParams, async (params) => {
+	const scope = normalizeQuadletScope(params.scope);
+	const filename = params.filename.trim();
+	const contents = params.contents.trimEnd() + '\n';
+	const files = parseCompanionFiles(params.filesJson);
+	if (!filename) error(400, 'Quadlet filename is required');
+	if (!contents.trim()) error(400, 'Quadlet contents are required');
+
+	if (accessibilityFixtureEnabled) {
+		return {
+			id: 'fixture-quadlet-install',
+			ok: true,
+			payload: {
+				base_dir:
+					scope === 'system'
+						? '/etc/containers/systemd'
+						: '/home/a11y/.config/containers/systemd',
+				files_base_dir:
+					scope === 'system'
+						? `/var/lib/tetra/quadlets/${quadletBundleName(filename)}`
+						: `/home/a11y/.local/share/tetra/quadlets/${quadletBundleName(filename)}`,
+				installed: [{ filename }],
+				files,
+				written: true,
+				dry_run: false
+			}
+		} satisfies AgentResponse;
+	}
+
+	const user = requireUser();
+	const { db, host } = await loadManagedHost(params.hostId);
+	await requireProjectAccess(db, user.id, host.ownerProjectId, 'admin');
+
+	const response = await dispatchHostCommand(host, {
+		module: 'quadlets',
+		action: 'install',
+		payload: {
+			scope,
+			resources: [{ filename, contents }],
+			files
+		}
+	});
+	await markHostDispatchResult(db, host, response);
+
+	if (!response.ok) throw new Error(response.error || 'Failed to save Quadlet bundle');
 	return response;
 });

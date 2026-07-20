@@ -96,6 +96,13 @@ export const accessibilityFixtureManagedHosts = [
 						'stop',
 						'restart'
 					]
+				},
+				{
+					name: 'quadlets',
+					feature: 'quadlets',
+					description: 'Manage Quadlet files and companion resources.',
+					status: 'available',
+					actions: ['list', 'list_files', 'read', 'write', 'delete', 'validate', 'install']
 				}
 			]
 		},

@@ -37,7 +37,12 @@ on macOS.
 
 Fixture mode is enabled by `ACCESSIBILITY_FIXTURES=1`. It installs a fake
 authenticated admin session, a fake project, one fake VM, one fake managed host,
-and managed-host Podman fixture data.
+managed-host Podman fixture data, and a Quadlet bundle with nginx companion
+files.
+
+The Quadlet fixture mirrors the production storage split: unit files live in
+the Podman Quadlet directory, while companion files live in a mutable data root
+such as `/var/lib/tetra/quadlets/<bundle>` for system-scope Quadlets.
 
 From the repo root:
 
@@ -59,6 +64,10 @@ Useful fixture URLs:
   `http://127.0.0.1:5173/projects/accessibility-project/hosts/accessibility-host/podman`
 - Managed host Podman container detail:
   `http://127.0.0.1:5173/projects/accessibility-project/hosts/accessibility-host/podman/demo-web`
+- Managed host Quadlets tab:
+  `http://127.0.0.1:5173/projects/accessibility-project/hosts/accessibility-host/quadlets`
+- Managed host Quadlet detail:
+  `http://127.0.0.1:5173/projects/accessibility-project/hosts/accessibility-host/quadlets/demo-web.container`
 - Managed host raw dispatch tab:
   `http://127.0.0.1:5173/projects/accessibility-project/hosts/accessibility-host/dispatch`
 - Fixture VM:

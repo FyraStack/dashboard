@@ -20,6 +20,7 @@
 	type HostTabHref =
 		| `/projects/${string}/hosts/${string}`
 		| `/projects/${string}/hosts/${string}/podman`
+		| `/projects/${string}/hosts/${string}/quadlets`
 		| `/projects/${string}/hosts/${string}/dispatch`;
 
 	type LayoutData = {

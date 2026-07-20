@@ -8,11 +8,13 @@ export type VpcFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise
 let insecureFetchPromise: Promise<typeof globalThis.fetch> | undefined;
 
 function insecureNodeFetch(): Promise<typeof globalThis.fetch> {
-	insecureFetchPromise ??= import('undici').then(({ Agent, fetch: undiciFetch }) => {
+	insecureFetchPromise ??= import('undici').then(({ Agent }) => {
 		const tlsTolerantAgent = new Agent({ connect: { rejectUnauthorized: false } });
-		const tlsTolerantFetch: typeof undiciFetch = (input, init) =>
-			undiciFetch(input, { ...init, dispatcher: tlsTolerantAgent });
-		return tlsTolerantFetch as unknown as typeof globalThis.fetch;
+		return ((input, init) =>
+			fetch(input, {
+				...init,
+				dispatcher: tlsTolerantAgent
+			} as RequestInit)) as typeof globalThis.fetch;
 	});
 	return insecureFetchPromise;
 }

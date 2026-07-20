@@ -12,10 +12,10 @@ overrides:
   '@sveltejs/adapter-cloudflare': 7.2.9
   svelte: 5.56.4
   vite: 8.1.0
-  better-auth: 1.6.22
-  '@better-auth/core': 1.6.22
-  '@better-auth/passkey': 1.6.22
-  '@better-auth/telemetry': 1.6.22
+  better-auth: 1.6.23
+  '@better-auth/core': 1.6.23
+  '@better-auth/passkey': 1.6.23
+  '@better-auth/telemetry': 1.6.23
   undici: 7.28.0
   autumn-js: 1.2.33
   '@types/node': 25.9.4

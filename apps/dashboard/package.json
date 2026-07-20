@@ -42,7 +42,7 @@
 		"@tailwindcss/vite": "4.3.2",
 		"@types/node": "25.9.4",
 		"@types/pg": "^8.20.0",
-		"better-auth": "1.6.22",
+		"better-auth": "1.6.23",
 		"bits-ui": "2.18.1",
 		"clsx": "^2.1.1",
 		"drizzle-kit": "^0.31.10",
@@ -67,9 +67,9 @@
 		"wrangler": "4.105.0"
 	},
 	"dependencies": {
-		"@better-auth/core": "1.6.22",
-		"@better-auth/passkey": "1.6.22",
-		"@better-auth/telemetry": "1.6.22",
+		"@better-auth/core": "1.6.23",
+		"@better-auth/passkey": "1.6.23",
+		"@better-auth/telemetry": "1.6.23",
 		"@better-auth/utils": "0.4.2",
 		"@better-svelte-email/components": "2.1.1",
 		"@better-svelte-email/server": "2.1.1",

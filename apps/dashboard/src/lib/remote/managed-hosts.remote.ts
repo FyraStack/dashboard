@@ -74,6 +74,11 @@ export type ManagedHostQuadletCompanionFile = {
 	contents: string;
 };
 
+export type ManagedHostQuadletResource = {
+	filename: string;
+	contents: string;
+};
+
 export type ManagedHostQuadletDetail = {
 	scope: ManagedHostQuadletScope;
 	baseDir: string | null;
@@ -802,6 +807,25 @@ function parseCompanionFiles(filesJson: string): ManagedHostQuadletCompanionFile
 	});
 }
 
+function parseQuadletResources(resourcesJson: string): ManagedHostQuadletResource[] {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(resourcesJson);
+	} catch {
+		error(400, 'Quadlet resources must be valid JSON');
+	}
+
+	if (!Array.isArray(parsed)) error(400, 'Quadlet resources must be a JSON array');
+	return parsed.map((item, index) => {
+		if (!isRecord(item)) error(400, `Quadlet resource ${index + 1} must be an object`);
+		const filename = typeof item.filename === 'string' ? item.filename.trim() : '';
+		const contents = typeof item.contents === 'string' ? item.contents.trimEnd() + '\n' : '';
+		if (!filename) error(400, `Quadlet resource ${index + 1} needs a filename`);
+		if (!contents.trim()) error(400, `Quadlet resource ${index + 1} needs contents`);
+		return { filename, contents };
+	});
+}
+
 const quadletListParams = type({
 	hostId: 'string',
 	scope: 'string'
@@ -904,7 +928,8 @@ const quadletSaveParams = type({
 	scope: 'string',
 	filename: 'string',
 	contents: 'string',
-	filesJson: 'string'
+	filesJson: 'string',
+	resourcesJson: 'string?'
 });
 
 export const saveManagedHostQuadlet = command(quadletSaveParams, async (params) => {
@@ -912,8 +937,14 @@ export const saveManagedHostQuadlet = command(quadletSaveParams, async (params) 
 	const filename = params.filename.trim();
 	const contents = params.contents.trimEnd() + '\n';
 	const files = parseCompanionFiles(params.filesJson);
+	const resources = params.resourcesJson
+		? parseQuadletResources(params.resourcesJson)
+		: [{ filename, contents }];
 	if (!filename) error(400, 'Quadlet filename is required');
 	if (!contents.trim()) error(400, 'Quadlet contents are required');
+	if (!resources.some((resource) => resource.filename === filename)) {
+		resources.unshift({ filename, contents });
+	}
 
 	if (accessibilityFixtureEnabled) {
 		return {
@@ -928,7 +959,7 @@ export const saveManagedHostQuadlet = command(quadletSaveParams, async (params) 
 					scope === 'system'
 						? `/var/lib/tetra/quadlets/${quadletBundleName(filename)}`
 						: `/home/a11y/.local/share/tetra/quadlets/${quadletBundleName(filename)}`,
-				installed: [{ filename }],
+				installed: resources.map((resource) => ({ filename: resource.filename })),
 				files,
 				written: true,
 				dry_run: false
@@ -945,7 +976,7 @@ export const saveManagedHostQuadlet = command(quadletSaveParams, async (params) 
 		action: 'install',
 		payload: {
 			scope,
-			resources: [{ filename, contents }],
+			resources,
 			files
 		}
 	});

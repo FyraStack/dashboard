@@ -68,6 +68,8 @@ Useful fixture URLs:
   `http://127.0.0.1:5173/projects/accessibility-project/hosts/accessibility-host/quadlets`
 - Managed host Quadlet detail:
   `http://127.0.0.1:5173/projects/accessibility-project/hosts/accessibility-host/quadlets/demo-web.container`
+- Managed host Quadlet create from recipe:
+  `http://127.0.0.1:5173/projects/accessibility-project/hosts/accessibility-host/quadlets/create`
 - Managed host raw dispatch tab:
   `http://127.0.0.1:5173/projects/accessibility-project/hosts/accessibility-host/dispatch`
 - Fixture VM:

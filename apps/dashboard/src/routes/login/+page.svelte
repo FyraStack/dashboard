@@ -169,6 +169,15 @@
 						Sign in
 					{/if}
 				</Button>
+
+				<div class="flex justify-center">
+					<a
+						href="/forgot-password"
+						class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+					>
+						Forgot password?
+					</a>
+				</div>
 			</form>
 
 			<div class="flex items-center gap-2">

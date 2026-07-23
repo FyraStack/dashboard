@@ -467,12 +467,12 @@ export class ProxmoxBackend implements VmBackend {
 			() => this.client.getNetworkInterfaces(node, vmid),
 			{ 'proxmox.node': node, 'proxmox.vmid': vmid }
 		);
-		const networkInterfaces: VmInfo['networkInterfaces'] = {};
-		for (const iface of ifaces) {
-			networkInterfaces[iface.name] = {
-				ipAddresses: iface['ip-addresses']?.map((a) => a['ip-address'])
-			};
-		}
+		const networkInterfaces: VmInfo['networkInterfaces'] = Object.fromEntries(
+			ifaces.map((iface) => [
+				iface.name,
+				{ ipAddresses: iface['ip-addresses']?.map((a) => a['ip-address']) }
+			])
+		);
 		return networkInterfaces;
 	}
 

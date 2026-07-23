@@ -412,8 +412,11 @@ export class ProxmoxClient {
 	// Guest agent
 
 	async getNetworkInterfaces(node: string, vmid: number): Promise<PveAgentNetworkInterface[]> {
-		const res = await this.api
-			.get(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/agent/network-get-interfaces`)
+    const res = await this.api
+      // diable retry for fetching network interfaces
+      // causes performance issues on querying VM network interfaces, ky retries 3x then gives up anyway
+      // so we give up early after first attempt
+			.get(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/agent/network-get-interfaces`, { retry: 0 })
 			.json<PveResponse<{ result: PveAgentNetworkInterface[] }>>();
 		return res.data.result;
 	}

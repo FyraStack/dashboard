@@ -5,6 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -17,6 +18,8 @@
 		'Alpine 3.20'
 	];
 </script>
+
+<PageTitle title="Rebuild" />
 
 <div class="max-w-xl space-y-5 p-5">
 	<div>

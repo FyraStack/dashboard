@@ -8,6 +8,7 @@
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
 	import Search from '~icons/nucleo/search';
 	import Trash2 from '~icons/nucleo/trash';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -72,6 +73,8 @@
 		logSearch = '';
 	}
 </script>
+
+<PageTitle title="Logs" />
 
 <div class="flex h-8 shrink-0 items-center justify-between border-b border-border px-4">
 	<div class="flex items-center gap-2">

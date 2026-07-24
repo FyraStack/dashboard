@@ -19,6 +19,7 @@
 	import Search from '~icons/nucleo/search';
 	import Trash2 from '~icons/nucleo/trash';
 	import Upload from '~icons/nucleo/upload';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 
 	let { data } = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -94,6 +95,8 @@
 		return image.versions[0];
 	}
 </script>
+
+<PageTitle title="Images" />
 
 <div class="flex flex-1 flex-col overflow-hidden">
 	{#if mountedImage}

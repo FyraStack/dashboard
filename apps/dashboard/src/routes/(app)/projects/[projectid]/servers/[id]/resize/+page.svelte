@@ -2,6 +2,7 @@
 <script lang="ts">
 	import { getServerWithFallback } from '$lib/state/servers.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 
 	let { data } = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -12,6 +13,8 @@
 		{ name: 'STACK-MD', vcpu: 8, ram: '16GB', disk: '320GB', price: '$34/mo' }
 	];
 </script>
+
+<PageTitle title="Resize" />
 
 <div class="space-y-4 p-5">
 	<p class="border border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground">

@@ -1,3 +1,4 @@
+<!-- check:allow-missing-head -->
 <script lang="ts">
 	import type { PageProps } from './$types';
 	import { goto, invalidate } from '$app/navigation';
@@ -10,7 +11,6 @@
 	import ComingSoon from '$lib/components/coming-soon.svelte';
 	import { confirmDestructive } from '$lib/confirm.svelte';
 	import { deleteVm } from '$lib/remote/vms.remote';
-	import PageTitle from '$lib/components/PageTitle.svelte';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -41,8 +41,6 @@
 		}
 	}
 </script>
-
-<PageTitle title="Server Settings" />
 
 <div class="max-w-xl space-y-5 p-5">
 	<div>

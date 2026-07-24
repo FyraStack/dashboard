@@ -1,3 +1,4 @@
+<!-- check:allow-missing-head -->
 <script lang="ts">
 	import type { PageProps } from './$types';
 	import { Button } from '$lib/components/ui/button';
@@ -8,7 +9,6 @@
 	import Terminal from '~icons/nucleo/terminal';
 	import Trash2 from '~icons/nucleo/trash';
 	import { getServerWithFallback, serversState } from '$lib/state/servers.svelte';
-	import PageTitle from '$lib/components/PageTitle.svelte';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -198,8 +198,6 @@
 		setTimeout(() => (copied = ''), 1500);
 	}
 </script>
-
-<PageTitle title="Overview" />
 
 <h1 class="sr-only">Server Overview</h1>
 

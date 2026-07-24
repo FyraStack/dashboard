@@ -1,10 +1,10 @@
+<!-- check:allow-missing-head -->
 <script lang="ts">
 	import { getServerWithFallback } from '$lib/state/servers.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import ComingSoon from '$lib/components/coming-soon.svelte';
 	import Camera from '~icons/nucleo/camera';
 	import Trash2 from '~icons/nucleo/trash';
-	import PageTitle from '$lib/components/PageTitle.svelte';
 
 	let { data } = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -13,8 +13,6 @@
 		{ id: 'snap-002', name: 'weekly-backup', size: '3.8 GB', date: '2026-03-29' }
 	]);
 </script>
-
-<PageTitle title="Snapshots" />
 
 <div class="overflow-auto">
 	<div class="flex items-center justify-between px-5 py-3">

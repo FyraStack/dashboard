@@ -1,7 +1,7 @@
+<!-- check:allow-missing-head -->
 <script lang="ts">
 	import { getServerWithFallback } from '$lib/state/servers.svelte';
 	import { Badge } from '$lib/components/ui/badge';
-	import PageTitle from '$lib/components/PageTitle.svelte';
 
 	let { data } = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -11,8 +11,6 @@
 		{ id: 'bk-003', date: '2026-04-03 03:00', size: '3.8 GB', status: 'completed' }
 	];
 </script>
-
-<PageTitle title="Backups" />
 
 <div class="overflow-auto">
 	<div class="px-5 py-3">

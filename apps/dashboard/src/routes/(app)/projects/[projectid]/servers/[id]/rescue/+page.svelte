@@ -1,14 +1,12 @@
+<!-- check:allow-missing-head -->
 <script lang="ts">
 	import { getServerWithFallback } from '$lib/state/servers.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Switch } from '$lib/components/ui/switch';
-	import PageTitle from '$lib/components/PageTitle.svelte';
 
 	let { data } = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
 </script>
-
-<PageTitle title="Rescue" />
 
 <div class="max-w-xl space-y-5 p-5">
 	<div>

@@ -110,8 +110,12 @@
 				>
 			</div>
 			<div class="flex items-center gap-1">
-				<Button aria-label="Edit IPv6 reverse DNS" variant="ghost" size="sm" class="h-7 w-7 p-0"
-					><Pencil class="h-3 w-3" /></Button
+				<Button
+					aria-label="Edit IPv6 reverse DNS"
+					variant="ghost"
+					size="sm"
+					class="h-7 w-7 p-0"
+					disabled><Pencil class="h-3 w-3" /></Button
 				><Button
 					aria-label="Delete IPv6 address"
 					variant="ghost"

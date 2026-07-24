@@ -631,6 +631,7 @@
 											variant="ghost"
 											size="sm"
 											class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+											disabled={Boolean(saving)}
 										>
 											{#if saving}
 												<Loader2 class="h-3.5 w-3.5 animate-spin" />

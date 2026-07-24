@@ -621,6 +621,7 @@
 							<Button
 								variant="outline"
 								class="h-9 w-full justify-between border-border/50 bg-muted/40 text-xs text-foreground hover:bg-muted"
+								disabled={isAdminSaving}
 							>
 								<span class="flex items-center gap-2">
 									<RoleIcon class="h-3.5 w-3.5 text-muted-foreground" />

@@ -152,7 +152,7 @@
 						<div class="group relative border-b border-border/80 last:border-b-0">
 							<button
 								type="button"
-								class="grid w-full gap-4 p-4 text-left transition-colors hover:bg-background/70 sm:grid-cols-[1fr_auto] sm:items-center"
+								class="grid w-full cursor-pointer gap-4 p-4 text-left transition-colors hover:bg-background/70 sm:grid-cols-[1fr_auto] sm:items-center"
 								onclick={() => openProject(project)}
 							>
 								<div class="flex min-w-0 items-center gap-4">
@@ -185,7 +185,7 @@
 								</DropdownMenu.Trigger>
 								<DropdownMenu.Content align="end" class="w-44 border-border bg-background">
 									<DropdownMenu.Item
-										class="gap-2 text-sm text-muted-foreground focus:bg-muted focus:text-foreground"
+										class="gap-2 text-sm text-muted-foreground"
 										onclick={() => openProject(project, 'settings')}
 									>
 										<Settings class="size-4" />
@@ -193,7 +193,8 @@
 									</DropdownMenu.Item>
 									<DropdownMenu.Separator class="bg-muted" />
 									<DropdownMenu.Item
-										class="gap-2 text-sm text-red-400 focus:bg-red-950/40 focus:text-red-300"
+										variant="destructive"
+										class="gap-2 text-sm"
 										onclick={() => openDeleteDialog(project)}
 									>
 										<Trash2 class="size-4" />

@@ -42,7 +42,7 @@
 		return 'Stopped';
 	}
 
-	const REFRESH_INTERVAL_MS = 15000;
+	const REFRESH_INTERVAL_MS = 30000;
 
 	const initialServers = $derived(data.servers ?? []);
 	let projectId = $derived(data.projectId ?? null);

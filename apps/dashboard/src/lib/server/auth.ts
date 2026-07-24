@@ -5,7 +5,6 @@ import { deleteSessionCookie, expireCookie } from 'better-auth/cookies';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
 import { passkey } from '@better-auth/passkey';
-import { autumn } from 'autumn-js/better-auth';
 import { and, count, eq, gt } from 'drizzle-orm';
 import { dev } from '$app/environment';
 import { getRequestEvent } from '$app/server';
@@ -17,7 +16,6 @@ import { initDrizzle, type Database } from '$lib/server/db';
 import { member, user as userTable, verification } from '$lib/server/db/schema';
 import { sendRenderedEmail } from '$lib/server/email';
 import { sendSecurityAlertEmail } from '$lib/server/email-notifications';
-import { updateProjectCustomer } from '$lib/server/billing/autumn';
 import { getRuntimeEnv } from '$lib/server/env';
 import { ulid } from '$lib/server/id';
 
@@ -102,6 +100,7 @@ const lazyDb = new Proxy({} as Database, {
 });
 
 async function resyncOwnedProjectBilling(userId: string) {
+	const { updateProjectCustomer } = await import('$lib/server/billing/autumn');
 	const db = initDrizzle();
 	const owned = await db
 		.select({ organizationId: member.organizationId })
@@ -423,9 +422,6 @@ function buildAuth() {
 					);
 				}
 			}),
-			...(env.AUTUMN_ENABLED !== 'false' && env.AUTUMN_SECRET
-				? [autumn({ customerScope: 'organization', secretKey: env.AUTUMN_SECRET })]
-				: []),
 			sveltekitCookies(getRequestEvent)
 		]
 	});

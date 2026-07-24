@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { authClient } from '$lib/auth-client';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -36,9 +37,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Two-Factor Authentication / Stack</title>
-</svelte:head>
+<PageTitle title="Two-Factor Authentication" />
 
 <div class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">

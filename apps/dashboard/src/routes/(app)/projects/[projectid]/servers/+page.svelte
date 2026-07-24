@@ -6,6 +6,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { serversState } from '$lib/state/servers.svelte';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 
 	const shouldShowEmptyState = $derived(
 		!serversState.loading &&
@@ -13,6 +14,8 @@
 			serversState.servers.length === 0
 	);
 </script>
+
+<PageTitle title="Machines" />
 
 {#if shouldShowEmptyState}
 	<div class="flex h-full flex-col items-center justify-center text-muted-foreground">

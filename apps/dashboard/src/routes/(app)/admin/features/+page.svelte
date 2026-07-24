@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import {
 		featureFlagKeys,
 		featureFlagLabels,
@@ -67,6 +68,8 @@
 		admin.toggleFeatureFlag(flag, !admin.featureFlags[flag]);
 	}
 </script>
+
+<PageTitle title="Features" />
 
 <div class="flex-1 overflow-auto">
 	<div class="flex flex-col gap-5 p-5">

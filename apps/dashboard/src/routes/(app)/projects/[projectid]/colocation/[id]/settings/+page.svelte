@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import Check from '~icons/lucide/check';
@@ -21,6 +22,8 @@
 		editingName = true;
 	}
 </script>
+
+<PageTitle title="Colocation Settings" />
 
 {#if colo.selectedUnit}
 	<div class="flex-1 overflow-auto">

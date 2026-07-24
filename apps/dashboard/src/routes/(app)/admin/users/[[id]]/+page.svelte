@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -281,9 +282,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Users</title>
-</svelte:head>
+<PageTitle title="Users" />
 
 <div class="flex-1 overflow-auto">
 	<div class="flex flex-col gap-5 p-5">

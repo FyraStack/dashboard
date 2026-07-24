@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { imageTypeColors } from '$lib/data/images';
@@ -97,6 +98,8 @@
 		return image.isa || 'x86';
 	}
 </script>
+
+<PageTitle title="Images" />
 
 <div class="flex flex-1 flex-col overflow-hidden">
 	<div class="flex h-10 shrink-0 items-center justify-between border-b border-border px-5">

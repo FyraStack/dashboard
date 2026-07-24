@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { authClient } from '$lib/auth-client';
 	import { Button } from '$lib/components/ui/button';
 	import Loader2 from '~icons/lucide/loader-2';
@@ -43,9 +44,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Verify with Passkey / Stack</title>
-</svelte:head>
+<PageTitle title="Verify with Passkey" />
 
 <div class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">

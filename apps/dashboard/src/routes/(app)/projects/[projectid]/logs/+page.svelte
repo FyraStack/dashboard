@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
@@ -190,6 +191,8 @@
 		{ value: 'debug', label: 'Debug' }
 	];
 </script>
+
+<PageTitle title="Logs" />
 
 <div class="flex flex-1 flex-col overflow-hidden lg:flex-row">
 	<!-- Server selector panel -->

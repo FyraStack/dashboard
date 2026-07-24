@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -336,9 +337,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Emails</title>
-</svelte:head>
+<PageTitle title="Emails" />
 
 <div class="flex-1 overflow-auto">
 	<div class="mx-auto flex w-full max-w-3xl flex-col gap-6 p-5">

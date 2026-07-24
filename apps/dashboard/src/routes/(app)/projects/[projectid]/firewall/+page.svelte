@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
@@ -179,6 +180,8 @@
 		}
 	}
 </script>
+
+<PageTitle title="Firewall" />
 
 <div class="flex flex-1 flex-col overflow-hidden">
 	<div class="border-b border-border bg-background/40 px-5 py-2 text-xs text-muted-foreground">

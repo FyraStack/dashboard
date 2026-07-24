@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import Check from '~icons/lucide/check';
 	import Copy from '~icons/nucleo/copy';
@@ -66,6 +67,8 @@
 		}
 	}
 </script>
+
+<PageTitle title="IPMI" />
 
 {#if colo.selectedUnit}
 	<div class="flex-1 overflow-auto">

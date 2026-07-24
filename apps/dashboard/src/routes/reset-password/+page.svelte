@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { authClient } from '$lib/auth-client';
@@ -43,9 +44,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Reset password / Stack</title>
-</svelte:head>
+<PageTitle title="Reset password" />
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">

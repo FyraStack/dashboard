@@ -3,6 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 
 	const isNotFound = $derived(page.status === 404);
 	const isServerError = $derived(page.status >= 500);

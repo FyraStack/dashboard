@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import Icon from '$lib/components/icon.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -183,6 +184,8 @@
 		deletingImageIds = deletingImageIds.filter((item) => item !== id);
 	}
 </script>
+
+<PageTitle title="Colocation Images" />
 
 {#if colo.selectedUnit}
 	<div class="flex flex-1 flex-col overflow-hidden">

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
@@ -59,6 +60,8 @@
 		admin.vtReorder(index, event.key === 'ArrowUp' ? index - 1 : index + 1);
 	}
 </script>
+
+<PageTitle title="VM Types" />
 
 <div class="flex-1 overflow-auto">
 	<div class="flex items-center justify-end border-b border-border/60 px-5 py-2">

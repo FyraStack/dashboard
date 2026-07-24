@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { authClient } from '$lib/auth-client';
 	import Loader2 from '~icons/lucide/loader-2';
@@ -77,9 +78,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Register / Stack</title>
-</svelte:head>
+<PageTitle title="Register" />
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">

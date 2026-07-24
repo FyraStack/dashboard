@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -438,9 +439,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Projects</title>
-</svelte:head>
+<PageTitle title="Projects" />
 
 {#snippet projectDetail(project: AdminProject)}
 	{@const vmsForProject = projectVms(project.id)}

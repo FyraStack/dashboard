@@ -11,6 +11,7 @@
 	import Copy from '~icons/nucleo/copy';
 	import Pencil from '~icons/nucleo/pencil';
 	import Trash2 from '~icons/nucleo/trash';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -28,6 +29,8 @@
 		setTimeout(() => (copied = ''), 1500);
 	}
 </script>
+
+<PageTitle title="Networking" />
 
 <div class="flex-1 divide-y divide-border/50 overflow-auto">
 	<div class="px-5 py-3">

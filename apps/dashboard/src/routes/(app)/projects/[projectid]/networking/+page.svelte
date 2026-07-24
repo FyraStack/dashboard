@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
@@ -109,6 +110,8 @@
 		networks = networks.filter((n) => n.id !== id);
 	}
 </script>
+
+<PageTitle title="Networking" />
 
 <div class="flex flex-1 flex-col overflow-hidden">
 	<!-- Header -->

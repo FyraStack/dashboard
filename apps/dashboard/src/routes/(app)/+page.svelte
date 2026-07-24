@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto, invalidate } from '$app/navigation';
 	import { authClient } from '$lib/auth-client';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
@@ -108,9 +109,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Projects / Stack</title>
-</svelte:head>
+<PageTitle title="Projects" />
 
 <div class="flex min-h-0 flex-1 flex-col overflow-auto bg-background/30">
 	<div class="mx-auto flex w-full max-w-7xl flex-1 flex-col px-6 py-8 sm:px-8 lg:px-10">

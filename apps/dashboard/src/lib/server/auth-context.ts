@@ -3,6 +3,11 @@ import { and, eq } from 'drizzle-orm';
 import { getRequestEvent } from '$app/server';
 import { hasProjectRole, type PermissionLevel } from '$lib/auth/organization-permissions';
 import { member, organization, user } from '$lib/server/db/schema';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureProject,
+	accessibilityFixtureUser
+} from '$lib/server/accessibility-fixtures';
 
 export function hasAdminRole(role: string | null | undefined): boolean {
 	return role?.split(',').includes('admin') ?? false;
@@ -45,6 +50,8 @@ function loadProjectAccess(db: any, userId: string, projectId: string): Promise<
 }
 
 export async function requireAdmin(db: any, userId: string): Promise<void> {
+	if (accessibilityFixtureEnabled && userId === accessibilityFixtureUser.id) return;
+
 	const isAdmin = await cachedLookup(`is-admin:${userId}`, async () => {
 		const currentUser = await db.query.user.findFirst({
 			where: eq(user.id, userId)
@@ -69,6 +76,10 @@ export async function requireProjectAccess(
 	projectId: string,
 	minLevel: PermissionLevel | 'owner' = 'read'
 ): Promise<void> {
+	if (accessibilityFixtureEnabled && userId === accessibilityFixtureUser.id) {
+		if (projectId === accessibilityFixtureProject.id) return;
+	}
+
 	const projectAccess = await loadProjectAccess(db, userId, projectId);
 
 	if (!projectAccess || projectAccess.deletedAt != null) {
@@ -89,6 +100,10 @@ export async function getProjectMemberRole(
 	userId: string,
 	projectId: string
 ): Promise<string | null> {
+	if (accessibilityFixtureEnabled && userId === accessibilityFixtureUser.id) {
+		if (projectId === accessibilityFixtureProject.id) return 'owner';
+	}
+
 	const projectAccess = await loadProjectAccess(db, userId, projectId);
 	return projectAccess?.role ?? null;
 }

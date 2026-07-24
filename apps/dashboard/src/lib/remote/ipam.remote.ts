@@ -6,6 +6,10 @@ import { initDrizzle } from '$lib/server/db';
 import { ipamAllocations, ipamPrefixes } from '$lib/server/db/schema';
 import { requireAdmin } from '$lib/server/auth-context';
 import { listIpamPrefixesWithStats, normalizeIpamPrefixInput } from '$lib/server/ipam';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureIpamPrefixes
+} from '$lib/server/accessibility-fixtures';
 
 async function requireCurrentAdmin() {
 	const event = getRequestEvent();
@@ -18,6 +22,7 @@ async function requireCurrentAdmin() {
 }
 
 export const listIpamPrefixes = query(async () => {
+	if (accessibilityFixtureEnabled) return accessibilityFixtureIpamPrefixes;
 	const db = await requireCurrentAdmin();
 	return listIpamPrefixesWithStats(db);
 });

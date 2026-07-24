@@ -5,6 +5,10 @@ import { asc, desc, eq } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
 import { vmTypes } from '$lib/server/db/schema';
 import { requireAdmin } from '$lib/server/auth-context';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureVmTypes
+} from '$lib/server/accessibility-fixtures';
 
 type VmTypeRow = {
 	id: string;
@@ -21,6 +25,8 @@ type VmTypeRow = {
 export const listVmTypes = query(async () => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
+
+	if (accessibilityFixtureEnabled) return accessibilityFixtureVmTypes;
 
 	const db = initDrizzle();
 	const rows = await db.query.vmTypes.findMany({

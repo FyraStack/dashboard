@@ -152,7 +152,7 @@
 						<div class="group relative border-b border-border/80 last:border-b-0">
 							<button
 								type="button"
-								class="grid w-full cursor-pointer gap-4 p-4 text-left transition-colors hover:bg-background/70 sm:grid-cols-[1fr_auto] sm:items-center"
+								class="grid w-full gap-4 p-4 text-left transition-colors hover:bg-background/70 sm:grid-cols-[1fr_auto] sm:items-center"
 								onclick={() => openProject(project)}
 							>
 								<div class="flex min-w-0 items-center gap-4">
@@ -205,7 +205,7 @@
 						</div>
 					{/each}
 					<button
-						class="flex w-full cursor-pointer items-center gap-4 p-4 text-left transition-colors hover:bg-background/70"
+						class="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-background/70"
 						onclick={openCreateDialog}
 					>
 						<span

@@ -23,6 +23,34 @@ const authPages = ['/login', '/register', '/signup', '/forgot-password'];
 
 const moduleLoadedAt = performance.now();
 let isFirstRequestOnIsolate = true;
+let authPrewarmScheduled = false;
+
+function scheduleAuthPrewarm(
+	event: Parameters<Handle>[0]['event'],
+	requestAttrs: Record<string, string | number | boolean | undefined>
+) {
+	if (authPrewarmScheduled) return;
+	authPrewarmScheduled = true;
+
+	const ctx = event.platform?.ctx;
+	if (!ctx) return;
+
+	ctx.waitUntil(
+		instrument(
+			'auth.prewarm',
+			async () => {
+				const [{ initAuth }] = await Promise.all([
+					import('$lib/server/auth'),
+					import('better-auth/svelte-kit')
+				]);
+				initAuth();
+			},
+			requestAttrs
+		).catch((error) => {
+			console.warn('Auth prewarm failed', error);
+		})
+	);
+}
 
 async function runFullAuth(
 	event: Parameters<Handle>[0]['event'],
@@ -127,6 +155,7 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 			requestAttrs
 		);
 	} finally {
+		scheduleAuthPrewarm(event, requestAttrs);
 		timingLog('request.closeRequestDb.schedule', requestAttrs);
 		closeRequestDb(event);
 		timingLog('request.handle.exit', requestAttrs);

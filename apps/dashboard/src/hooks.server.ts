@@ -9,8 +9,17 @@ import {
 	accessibilityFixtureUser
 } from '$lib/server/accessibility-fixtures';
 
-const publicRoutes = ['/health', '/login', '/register', '/signup', '/accept-invitation', '/api/'];
-const authPages = ['/login', '/register', '/signup'];
+const publicRoutes = [
+	'/health',
+	'/login',
+	'/register',
+	'/signup',
+	'/forgot-password',
+	'/reset-password',
+	'/accept-invitation',
+	'/api/'
+];
+const authPages = ['/login', '/register', '/signup', '/forgot-password'];
 
 const moduleLoadedAt = performance.now();
 let isFirstRequestOnIsolate = true;

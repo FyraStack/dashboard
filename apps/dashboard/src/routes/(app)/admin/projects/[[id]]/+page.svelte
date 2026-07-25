@@ -138,30 +138,56 @@
 
 	function vmStatusInfo(vm: AdminVm) {
 		if (vm.status === 'deleting')
-			return { label: 'deleting', class: 'border-red-500/20 bg-red-500/10 text-red-400' };
+			return {
+				label: 'deleting',
+				class:
+					'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
+			};
 		if (vm.status === 'error')
-			return { label: 'error', class: 'border-red-500/20 bg-red-500/10 text-red-400' };
+			return {
+				label: 'error',
+				class:
+					'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
+			};
 		if (vm.status === 'provisioning')
-			return { label: 'provisioning', class: 'border-sky-500/20 bg-sky-500/10 text-sky-400' };
+			return {
+				label: 'provisioning',
+				class:
+					'border-sky-300 bg-sky-100 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-400'
+			};
 		if (vm.liveStatus === 'running')
 			return {
 				label: 'running',
-				class: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
+				class:
+					'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400'
 			};
 		if (vm.liveStatus === 'paused')
-			return { label: 'paused', class: 'border-amber-500/20 bg-amber-500/10 text-amber-400' };
+			return {
+				label: 'paused',
+				class:
+					'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400'
+			};
 		return { label: 'stopped', class: 'border-ring/20 bg-muted/30 text-muted-foreground' };
 	}
 
 	function billingInfo(project: AdminProject) {
 		if (project.billingStatus === 'suspended')
-			return { label: 'suspended', class: 'border-red-500/20 bg-red-500/10 text-red-400' };
+			return {
+				label: 'suspended',
+				class:
+					'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
+			};
 		if (project.billingStatus === 'past_due')
-			return { label: 'past due', class: 'border-amber-500/20 bg-amber-500/10 text-amber-400' };
+			return {
+				label: 'past due',
+				class:
+					'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400'
+			};
 		if (project.billingStatus === 'configured')
 			return {
 				label: 'configured',
-				class: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
+				class:
+					'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400'
 			};
 		return { label: 'no billing', class: 'border-ring/20 bg-muted/30 text-muted-foreground' };
 	}
@@ -626,18 +652,15 @@
 									{info.label}
 								</span>
 								<DropdownMenu.Root>
-									<DropdownMenu.Trigger disabled={Boolean(saving)}>
-										<Button
-											variant="ghost"
-											size="sm"
-											class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-										>
-											{#if saving}
-												<Loader2 class="h-3.5 w-3.5 animate-spin" />
-											{:else}
-												<MoreHorizontal class="h-4 w-4" />
-											{/if}
-										</Button>
+									<DropdownMenu.Trigger
+										disabled={Boolean(saving)}
+										class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+									>
+										{#if saving}
+											<Loader2 class="h-3.5 w-3.5 animate-spin" />
+										{:else}
+											<MoreHorizontal class="h-4 w-4" />
+										{/if}
 									</DropdownMenu.Trigger>
 									<DropdownMenu.Content class="w-44 border-border bg-background" align="end">
 										<DropdownMenu.Item
@@ -844,17 +867,14 @@
 				/>
 			</div>
 			<DropdownMenu.Root>
-				<DropdownMenu.Trigger>
-					<Button
-						variant="outline"
-						size="sm"
-						class="h-8 gap-1.5 border-border/50 text-xs {ownerFilter === 'all'
-							? 'text-muted-foreground'
-							: 'text-foreground'} hover:bg-muted hover:text-foreground"
-					>
-						Owner: {ownerFilterLabel}
-						<ChevronDown class="h-3 w-3 text-muted-foreground" />
-					</Button>
+				<DropdownMenu.Trigger
+					class="flex h-8 items-center gap-1.5 rounded-md border border-border/50 px-3 text-xs transition-colors hover:bg-muted hover:text-foreground {ownerFilter ===
+					'all'
+						? 'text-muted-foreground'
+						: 'text-foreground'}"
+				>
+					Owner: {ownerFilterLabel}
+					<ChevronDown class="h-3 w-3 text-muted-foreground" />
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content class="max-h-72 w-56 overflow-y-auto border-border bg-background">
 					<DropdownMenu.Item
@@ -882,17 +902,14 @@
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 			<DropdownMenu.Root>
-				<DropdownMenu.Trigger>
-					<Button
-						variant="outline"
-						size="sm"
-						class="h-8 gap-1.5 border-border/50 text-xs {billingFilter === 'all'
-							? 'text-muted-foreground'
-							: 'text-foreground'} hover:bg-muted hover:text-foreground"
-					>
-						Billing: {billingFilterLabel}
-						<ChevronDown class="h-3 w-3 text-muted-foreground" />
-					</Button>
+				<DropdownMenu.Trigger
+					class="flex h-8 items-center gap-1.5 rounded-md border border-border/50 px-3 text-xs transition-colors hover:bg-muted hover:text-foreground {billingFilter ===
+					'all'
+						? 'text-muted-foreground'
+						: 'text-foreground'}"
+				>
+					Billing: {billingFilterLabel}
+					<ChevronDown class="h-3 w-3 text-muted-foreground" />
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content class="w-44 border-border bg-background">
 					<DropdownMenu.Item
@@ -924,7 +941,8 @@
 				<p class="text-sm">No projects found</p>
 			</div>
 		{:else}
-			<div class="overflow-x-auto rounded-md border border-border/60">
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<div class="overflow-x-auto rounded-md border border-border/60" tabindex="0">
 				<table class="w-full text-left text-xs">
 					<thead>
 						<tr
@@ -936,7 +954,9 @@
 							<th class="px-4 py-2.5 font-medium">Resources</th>
 							<th class="px-4 py-2.5 font-medium">Billing</th>
 							<th class="px-4 py-2.5 font-medium">Created</th>
-							<th class="px-4 py-2.5"></th>
+							<th class="px-4 py-2.5">
+								<span class="sr-only">Actions</span>
+							</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-border/50">
@@ -1142,17 +1162,13 @@
 				<div class="flex flex-col gap-1.5">
 					<Label>Plan</Label>
 					<DropdownMenu.Root>
-						<DropdownMenu.Trigger>
-							<Button
-								variant="outline"
-								size="sm"
-								class="h-8 w-full justify-between gap-1.5 border-border/50 text-xs {createVmTypeId
-									? 'text-foreground'
-									: 'text-muted-foreground'}"
-							>
-								<span class="truncate">{createVmTypeLabel}</span>
-								<ChevronDown class="h-3 w-3 shrink-0 text-muted-foreground" />
-							</Button>
+						<DropdownMenu.Trigger
+							class="flex h-8 w-full items-center justify-between gap-1.5 rounded-md border border-border/50 px-3 text-xs transition-colors hover:bg-muted hover:text-foreground {createVmTypeId
+								? 'text-foreground'
+								: 'text-muted-foreground'}"
+						>
+							<span class="truncate">{createVmTypeLabel}</span>
+							<ChevronDown class="h-3 w-3 shrink-0 text-muted-foreground" />
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content class="max-h-64 w-56 overflow-y-auto border-border bg-background">
 							{#each admin.vmTypes as vmType (vmType.id)}
@@ -1177,17 +1193,13 @@
 				<div class="flex flex-col gap-1.5">
 					<Label>Image</Label>
 					<DropdownMenu.Root>
-						<DropdownMenu.Trigger>
-							<Button
-								variant="outline"
-								size="sm"
-								class="h-8 w-full justify-between gap-1.5 border-border/50 text-xs {createVmImageId
-									? 'text-foreground'
-									: 'text-muted-foreground'}"
-							>
-								<span class="truncate">{createVmImageLabel}</span>
-								<ChevronDown class="h-3 w-3 shrink-0 text-muted-foreground" />
-							</Button>
+						<DropdownMenu.Trigger
+							class="flex h-8 w-full items-center justify-between gap-1.5 rounded-md border border-border/50 px-3 text-xs transition-colors hover:bg-muted hover:text-foreground {createVmImageId
+								? 'text-foreground'
+								: 'text-muted-foreground'}"
+						>
+							<span class="truncate">{createVmImageLabel}</span>
+							<ChevronDown class="h-3 w-3 shrink-0 text-muted-foreground" />
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content class="max-h-64 w-56 overflow-y-auto border-border bg-background">
 							<DropdownMenu.Item

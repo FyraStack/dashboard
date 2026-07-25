@@ -108,7 +108,7 @@
 		<table class="w-full whitespace-nowrap">
 			<thead
 				><tr class="border-b border-border">
-					<th class="w-8 px-3 py-3"></th>
+					<th class="w-8 px-3 py-3"><span class="sr-only">Drag handle</span></th>
 					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Image</th>
 					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Version</th>
 					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Type</th>
@@ -155,7 +155,9 @@
 								<div class="flex flex-col gap-1">
 									<span class="text-sm font-medium text-foreground">{img.name}</span>
 									{#if img.isOfficial}
-										<Badge variant="secondary" class="w-fit text-[10px] text-emerald-300"
+										<Badge
+											variant="secondary"
+											class="w-fit text-[10px] text-emerald-700 dark:text-emerald-300"
 											>Official</Badge
 										>
 									{/if}

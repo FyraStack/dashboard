@@ -25,6 +25,10 @@ import {
 import { updateProjectCustomer } from '$lib/server/billing/autumn';
 import { sendRenderedEmail } from '$lib/server/email';
 import { softDeleteOrganizationResources } from '$lib/server/project-deletion';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureAdminUsers
+} from '$lib/server/accessibility-fixtures';
 
 export type UserSession = {
 	id: string;
@@ -156,6 +160,7 @@ function makeCountMap(rows: { userId: string | null; count: number }[]) {
 }
 
 export const listAdminUsers = query(async (): Promise<AdminUser[]> => {
+	if (accessibilityFixtureEnabled) return accessibilityFixtureAdminUsers;
 	const { db } = await requireCurrentAdmin();
 
 	const users = await db

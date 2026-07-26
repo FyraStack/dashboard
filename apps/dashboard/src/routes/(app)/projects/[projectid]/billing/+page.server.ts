@@ -5,11 +5,23 @@ import { attachDefaultProjectPlan } from '$lib/server/billing/autumn';
 import { getProjectBillingOverview, refreshProjectBilling } from '$lib/server/billing/overview';
 import { runInBackground } from '$lib/server/background';
 import { initDrizzle } from '$lib/server/db';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureBillingOverview
+} from '$lib/server/accessibility-fixtures';
 
 export const load: PageServerLoad = async ({ locals, params, parent, url }) => {
 	if (!locals.user) error(401, 'Authentication required');
 
 	await parent();
+
+	if (accessibilityFixtureEnabled) {
+		return {
+			projectId: params.projectid,
+			canManageBilling: true,
+			billing: accessibilityFixtureBillingOverview
+		};
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, locals.user.id, params.projectid, 'admin');

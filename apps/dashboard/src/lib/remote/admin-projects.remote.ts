@@ -29,6 +29,10 @@ import {
 import { sendRenderedEmail } from '$lib/server/email';
 import { softDeleteOrganizationResources } from '$lib/server/project-deletion';
 import { provisionVm } from '$lib/server/vm-provisioning';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureAdminProjects
+} from '$lib/server/accessibility-fixtures';
 
 export type AdminProjectBillingStatus = 'configured' | 'past_due' | 'suspended' | 'none';
 
@@ -69,6 +73,7 @@ function makeCountMap(rows: { key: string | null; count: number }[]) {
 }
 
 export const listAdminProjects = query(async (): Promise<AdminProject[]> => {
+	if (accessibilityFixtureEnabled) return accessibilityFixtureAdminProjects;
 	const db = await requireCurrentAdmin();
 
 	const [orgs, owners, memberCounts, vmCounts, volumeCounts, billingCustomers] = await Promise.all([

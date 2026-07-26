@@ -99,13 +99,13 @@
 				<div class="flex items-center justify-between border-b border-border/50 px-4 py-3">
 					<div class="flex items-center gap-2.5">
 						<CatIcon class="h-4 w-4 shrink-0 text-muted-foreground" />
-						<h3 class="text-sm font-semibold text-foreground">
+						<h2 class="text-sm font-semibold text-foreground">
 							{featureFlagCategoryLabels[category as FeatureFlagCategory]}
-						</h3>
+						</h2>
 					</div>
 					<div
 						class="flex h-5 items-center rounded-full px-2 text-[10px] font-medium {catEnabled > 0
-							? 'bg-emerald-500/10 text-emerald-400'
+							? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300'
 							: 'bg-muted text-muted-foreground'}"
 					>
 						{#if catEnabled === flags.length}

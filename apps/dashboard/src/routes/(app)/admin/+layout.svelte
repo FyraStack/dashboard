@@ -73,6 +73,7 @@
 </script>
 
 <div class="flex flex-1 flex-col overflow-hidden">
+	<h1 class="sr-only">Admin</h1>
 	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-border">
 		{#each tabs as tab (tab.href)}
 			{@const active =

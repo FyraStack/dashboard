@@ -81,7 +81,7 @@
 		<table class="w-full whitespace-nowrap">
 			<thead
 				><tr class="border-b border-border">
-					<th class="w-8 px-3 py-3"></th>
+					<th class="w-8 px-3 py-3"><span class="sr-only">Drag handle</span></th>
 					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Name</th>
 					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">ISA</th>
 					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Cores</th>

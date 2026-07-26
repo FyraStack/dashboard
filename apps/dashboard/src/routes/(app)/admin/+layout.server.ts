@@ -9,6 +9,16 @@ import { listIpamPrefixes } from '$lib/remote/ipam.remote';
 import { initDrizzle } from '$lib/server/db';
 import { requireAdmin } from '$lib/server/auth-context';
 import { getFeatureFlags } from '$lib/server/feature-flags';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureVmTypes,
+	accessibilityFixtureImages,
+	accessibilityFixtureFeatureFlags,
+	accessibilityFixtureAdminUsers,
+	accessibilityFixtureIpamPrefixes,
+	accessibilityFixtureAdminVms,
+	accessibilityFixtureAdminProjects
+} from '$lib/server/accessibility-fixtures';
 
 export const load: LayoutServerLoad = async ({ depends }) => {
 	depends('app:feature-flags');
@@ -27,6 +37,26 @@ export const load: LayoutServerLoad = async ({ depends }) => {
 			ipamPrefixes: [],
 			adminVms: [],
 			adminProjects: []
+		};
+	}
+
+	if (accessibilityFixtureEnabled) {
+		const [vmTypes, images, adminUsers, ipamPrefixes, adminVms, adminProjects] = await Promise.all([
+			listVmTypes(),
+			listImages(),
+			listAdminUsers(),
+			listIpamPrefixes(),
+			listAllAdminVms(),
+			listAdminProjects()
+		]);
+		return {
+			vmTypes,
+			images,
+			featureFlags: accessibilityFixtureFeatureFlags,
+			adminUsers,
+			ipamPrefixes,
+			adminVms,
+			adminProjects
 		};
 	}
 

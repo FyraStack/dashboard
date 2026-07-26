@@ -7,6 +7,10 @@ import { initDrizzle } from '$lib/server/db';
 import { member, organization, user, vms, vmTypes } from '$lib/server/db/schema';
 import { getBackend, type VmInfo } from '$lib/server/backends';
 import { queueVmDeletion } from '$lib/server/vm-deletion';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureAdminVms
+} from '$lib/server/accessibility-fixtures';
 
 export type AdminVm = {
 	id: string;
@@ -50,6 +54,7 @@ async function requireCurrentAdmin() {
 }
 
 export const listAllAdminVms = query(async (): Promise<AdminVm[]> => {
+	if (accessibilityFixtureEnabled) return accessibilityFixtureAdminVms;
 	const db = await requireCurrentAdmin();
 
 	const [rows, owners] = await Promise.all([

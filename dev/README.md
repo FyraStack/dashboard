@@ -38,6 +38,26 @@ dev/pve/init-cluster.sh
 
 the above rotates `PROXMOX_TOKEN_SECRET`, so update `.env` with the newly printed value. `podman compose down -v` for a factory reset.
 
+## fixture UI mode (non-Linux)
+
+Use fixture mode when you only need to test Svelte UI changes and do not want
+to run Postgres, Proxmox, VyOS, etc. This is the easiest path on macOS.
+
+Fixture mode is enabled by `ACCESSIBILITY_FIXTURES=1`. It installs a fake
+authenticated admin session, a fake project, and one fake VM.
+
+From the repo root:
+
+```sh
+CI=true \
+ACCESSIBILITY_FIXTURES=1 \
+CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=postgres://fixture:fixture@127.0.0.1:5432/fixture \
+pnpm --filter stack-dashboard run dev --host 127.0.0.1 --port 5173
+```
+
+The Hyperdrive connection string only satisfies Cloudflare adapter local
+emulation. Fixture-backed routes do not connect to that database.
+
 ## Caveats
 
 - this currently only works on linux.

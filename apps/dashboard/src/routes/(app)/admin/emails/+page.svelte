@@ -368,6 +368,7 @@
 					bind:value={subject}
 					placeholder="Subject line"
 					disabled={sending}
+					aria-label="Subject"
 					class="h-9 w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
 				/>
 			</div>
@@ -469,6 +470,7 @@
 									event.currentTarget.value as AudienceField
 								))}
 							disabled={sending}
+							aria-label="Condition field"
 							class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
 						>
 							{#each Object.entries(audienceFieldDefs) as [value, def] (value)}
@@ -478,6 +480,7 @@
 						<select
 							bind:value={condition.op}
 							disabled={sending}
+							aria-label="Condition operator"
 							class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
 						>
 							{#each audienceFieldDefs[condition.field].ops as op (op.value)}
@@ -489,6 +492,7 @@
 								type="date"
 								bind:value={condition.value}
 								disabled={sending}
+								aria-label="Condition value"
 								class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
 							/>
 						{:else if condition.field === 'vmCount'}
@@ -497,12 +501,14 @@
 								min="0"
 								bind:value={condition.value}
 								disabled={sending}
+								aria-label="Condition value"
 								class="h-8 w-20 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
 							/>
 						{:else if condition.field === 'vmType'}
 							<select
 								bind:value={condition.value}
 								disabled={sending}
+								aria-label="Condition value"
 								class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
 							>
 								{#each vmTypeOptions as typeName (typeName)}
@@ -513,6 +519,7 @@
 							<select
 								bind:value={condition.value}
 								disabled={sending}
+								aria-label="Condition value"
 								class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
 							>
 								<option value="yes">yes</option>

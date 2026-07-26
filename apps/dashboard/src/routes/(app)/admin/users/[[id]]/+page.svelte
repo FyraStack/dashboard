@@ -185,14 +185,14 @@
 
 	function avatarColor(name: string) {
 		const colors = [
-			'bg-red-500/20 text-red-400',
-			'bg-emerald-500/20 text-emerald-400',
-			'bg-sky-500/20 text-sky-400',
-			'bg-amber-500/20 text-amber-400',
-			'bg-violet-500/20 text-violet-400',
-			'bg-rose-500/20 text-rose-400',
-			'bg-cyan-500/20 text-cyan-400',
-			'bg-orange-500/20 text-orange-400'
+			'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+			'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+			'bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-400',
+			'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400',
+			'bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-400',
+			'bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400',
+			'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/20 dark:text-cyan-400',
+			'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
 		];
 		let hash = 0;
 		for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -365,17 +365,14 @@
 					/>
 				</div>
 				<DropdownMenu.Root>
-					<DropdownMenu.Trigger>
-						<Button
-							variant="outline"
-							size="sm"
-							class="h-8 gap-1.5 border-border/50 text-xs {roleFilter === 'all'
-								? 'text-muted-foreground'
-								: 'text-foreground'} hover:bg-muted hover:text-foreground"
-						>
-							Role: {roleFilterLabel}
-							<ChevronDown class="h-3 w-3 text-muted-foreground" />
-						</Button>
+					<DropdownMenu.Trigger
+						class="flex h-8 items-center gap-1.5 rounded-md border border-border/50 px-3 text-xs transition-colors hover:bg-muted hover:text-foreground {roleFilter ===
+						'all'
+							? 'text-muted-foreground'
+							: 'text-foreground'}"
+					>
+						Role: {roleFilterLabel}
+						<ChevronDown class="h-3 w-3 text-muted-foreground" />
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content class="w-44 border-border bg-background">
 						<DropdownMenu.Item
@@ -400,17 +397,14 @@
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
 				<DropdownMenu.Root>
-					<DropdownMenu.Trigger>
-						<Button
-							variant="outline"
-							size="sm"
-							class="h-8 gap-1.5 border-border/50 text-xs {statusFilter === 'all'
-								? 'text-muted-foreground'
-								: 'text-foreground'} hover:bg-muted hover:text-foreground"
-						>
-							Status: {statusFilterLabel}
-							<ChevronDown class="h-3 w-3 text-muted-foreground" />
-						</Button>
+					<DropdownMenu.Trigger
+						class="flex h-8 items-center gap-1.5 rounded-md border border-border/50 px-3 text-xs transition-colors hover:bg-muted hover:text-foreground {statusFilter ===
+						'all'
+							? 'text-muted-foreground'
+							: 'text-foreground'}"
+					>
+						Status: {statusFilterLabel}
+						<ChevronDown class="h-3 w-3 text-muted-foreground" />
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content class="w-44 border-border bg-background">
 						<DropdownMenu.Item
@@ -441,7 +435,8 @@
 					<p class="text-sm">No users found</p>
 				</div>
 			{:else}
-				<div class="overflow-x-auto rounded-md border border-border/60">
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+				<div class="overflow-x-auto rounded-md border border-border/60" tabindex="0">
 					<table class="w-full text-left text-xs">
 						<thead>
 							<tr
@@ -452,7 +447,9 @@
 								<th class="px-4 py-2.5 font-medium">Status</th>
 								<th class="px-4 py-2.5 font-medium">Resources</th>
 								<th class="px-4 py-2.5 font-medium">Created</th>
-								<th class="px-4 py-2.5"></th>
+								<th class="px-4 py-2.5">
+									<span class="sr-only">Actions</span>
+								</th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-border/50">
@@ -488,7 +485,7 @@
 									<td class="px-4 py-2.5">
 										{#if account.isAdmin}
 											<span
-												class="inline-flex items-center gap-1 rounded-sm border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
+												class="inline-flex items-center gap-1 rounded-sm border border-red-300 bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400"
 											>
 												<Shield class="h-2.5 w-2.5" />Admin
 											</span>
@@ -504,7 +501,7 @@
 										<div class="flex flex-wrap items-center gap-1">
 											{#if account.emailVerified}
 												<span
-													class="inline-flex items-center gap-1 rounded-sm border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
+													class="inline-flex items-center gap-1 rounded-sm border border-emerald-300 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"
 												>
 													<Check class="h-2.5 w-2.5" />Verified
 												</span>
@@ -518,7 +515,7 @@
 											{/if}
 											{#if account.disabled}
 												<span
-													class="inline-flex items-center gap-1 rounded-sm border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
+													class="inline-flex items-center gap-1 rounded-sm border border-red-300 bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400"
 												>
 													<X class="h-2.5 w-2.5" />Disabled
 												</span>
@@ -617,21 +614,19 @@
 				<div class="flex flex-col gap-2">
 					<span class="text-xs font-medium text-muted-foreground">Role</span>
 					<DropdownMenu.Root>
-						<DropdownMenu.Trigger disabled={isAdminSaving}>
-							<Button
-								variant="outline"
-								class="h-9 w-full justify-between border-border/50 bg-muted/40 text-xs text-foreground hover:bg-muted"
-							>
-								<span class="flex items-center gap-2">
-									<RoleIcon class="h-3.5 w-3.5 text-muted-foreground" />
-									{u.isAdmin ? 'Admin' : 'User'}
-								</span>
-								{#if isAdminSaving}
-									<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
-								{:else}
-									<ChevronDown class="h-3 w-3 text-muted-foreground" />
-								{/if}
-							</Button>
+						<DropdownMenu.Trigger
+							disabled={isAdminSaving}
+							class="flex h-9 w-full items-center justify-between rounded-md border border-border/50 bg-muted/40 px-3 text-xs text-foreground transition-colors hover:bg-muted"
+						>
+							<span class="flex items-center gap-2">
+								<RoleIcon class="h-3.5 w-3.5 text-muted-foreground" />
+								{u.isAdmin ? 'Admin' : 'User'}
+							</span>
+							{#if isAdminSaving}
+								<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
+							{:else}
+								<ChevronDown class="h-3 w-3 text-muted-foreground" />
+							{/if}
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content class="w-56 border-border bg-background">
 							<DropdownMenu.Label class="text-xs text-muted-foreground"

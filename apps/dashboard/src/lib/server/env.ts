@@ -2,6 +2,7 @@ import type { Fetcher, KVNamespace, SendEmail } from '@cloudflare/workers-types'
 import { getRequestEvent } from '$app/server';
 import { dev } from '$app/environment';
 import { env as privateEnv } from '$env/dynamic/private';
+import { accessibilityFixtureEnabled } from '$lib/server/accessibility-fixtures';
 
 export type RuntimeEnv = {
 	ORIGIN: string;
@@ -34,7 +35,10 @@ export type RuntimeEnv = {
 };
 
 function required(name: keyof RuntimeEnv, value: string | undefined): string {
-	if (!value) throw new Error(`${name} is not set`);
+	if (!value) {
+		if (accessibilityFixtureEnabled) return `fixture-${name}`;
+		throw new Error(`${name} is not set`);
+	}
 
 	return value;
 }

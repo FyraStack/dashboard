@@ -6,6 +6,10 @@ import {
 } from './autumn';
 import { initDrizzle } from '$lib/server/db';
 import { billingMeters, billingUsageEvents, vmTypes } from '$lib/server/db/schema';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureBillingOverview
+} from '$lib/server/accessibility-fixtures';
 
 function statusLabel(status: Awaited<ReturnType<typeof getProjectBillingState>>['status']) {
 	if (status === 'active') return 'Ready';
@@ -24,6 +28,8 @@ export async function refreshProjectBilling(projectId: string) {
 }
 
 export async function getProjectBillingOverview(projectId: string) {
+	if (accessibilityFixtureEnabled) return accessibilityFixtureBillingOverview;
+
 	const db = initDrizzle();
 	const now = Date.now();
 	const billingState = await getProjectBillingState(projectId);

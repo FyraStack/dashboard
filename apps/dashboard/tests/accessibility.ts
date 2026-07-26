@@ -15,7 +15,16 @@ export const pages = [
 	{ label: 'project dashboard', path: '/' },
 	{ label: 'server list', path: '/projects/accessibility-project/servers' },
 	{ label: 'server detail', path: '/projects/accessibility-project/servers/accessibility-server' },
-	{ label: 'project settings', path: '/projects/accessibility-project/settings' }
+	{ label: 'project settings', path: '/projects/accessibility-project/settings' },
+	{ label: 'project billing', path: '/projects/accessibility-project/billing' },
+	{ label: 'admin users', path: '/admin/users' },
+	{ label: 'admin projects', path: '/admin/projects' },
+	{ label: 'admin vms', path: '/admin/vms' },
+	{ label: 'admin vm types', path: '/admin/vm-types' },
+	{ label: 'admin images', path: '/admin/images' },
+	{ label: 'admin ipam', path: '/admin/ipam' },
+	{ label: 'admin emails', path: '/admin/emails' },
+	{ label: 'admin features', path: '/admin/features' }
 ];
 
 export const test = base.extend<AxeFixture>({

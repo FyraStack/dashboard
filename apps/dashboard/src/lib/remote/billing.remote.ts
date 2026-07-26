@@ -10,6 +10,10 @@ import {
 import { getProjectBillingOverview, refreshProjectBilling } from '$lib/server/billing/overview';
 import { runInBackground } from '$lib/server/background';
 import { initDrizzle } from '$lib/server/db';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureBillingOverview
+} from '$lib/server/accessibility-fixtures';
 
 const projectParams = type({ projectId: 'string' });
 const setupParams = type({ projectId: 'string', returnTo: 'string?', discountCode: 'string?' });
@@ -23,6 +27,8 @@ function safeReturnPath(value: string | undefined, fallback: string) {
 export const getProjectBilling = query(projectParams, async (params) => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
+
+	if (accessibilityFixtureEnabled) return accessibilityFixtureBillingOverview;
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'admin');

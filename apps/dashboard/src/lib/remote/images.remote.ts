@@ -6,6 +6,10 @@ import { initDrizzle } from '$lib/server/db';
 import { baseImages } from '$lib/server/db/schema';
 import { getBackend } from '$lib/server/backends';
 import { requireAdmin } from '$lib/server/auth-context';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureImages
+} from '$lib/server/accessibility-fixtures';
 
 type ImageRow = {
 	id: string;
@@ -52,6 +56,8 @@ async function getUploadedImage(volid: string) {
 export const listImages = query(async () => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
+
+	if (accessibilityFixtureEnabled) return accessibilityFixtureImages;
 
 	const db = initDrizzle();
 	const rows = await db.query.baseImages.findMany({

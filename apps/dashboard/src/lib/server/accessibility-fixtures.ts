@@ -116,3 +116,149 @@ export const accessibilityFixtureServers = [
 		}
 	}
 ];
+
+export const accessibilityFixtureBillingOverview = {
+	customer: null,
+	status: 'active' as const,
+	statusLabel: 'Ready',
+	planLabel: 'Project billing',
+	setupRequired: false,
+	syncError: null,
+	lastUpdatedAt: now.getTime(),
+	activeResourceCount: 1,
+	activeResources: [
+		{
+			id: 'starter',
+			label: 'Starter',
+			resourceType: 'vm' as const,
+			count: 1,
+			hours: 720,
+			cost: 36.0
+		}
+	]
+};
+
+export const accessibilityFixtureAdminUsers = [
+	{
+		id: accessibilityFixtureUser.id,
+		name: accessibilityFixtureUser.name,
+		email: accessibilityFixtureUser.email,
+		image: accessibilityFixtureUser.image,
+		emailVerified: accessibilityFixtureUser.emailVerified,
+		role: accessibilityFixtureUser.role,
+		isAdmin: accessibilityFixtureUser.isAdmin,
+		disabled: false,
+		billingExempt: false,
+		twoFactorEnabled: false,
+		createdAt: now,
+		updatedAt: now,
+		sessionCount: 1,
+		accountCount: 1,
+		orgCount: 1,
+		sshKeyCount: 0,
+		apiTokenCount: 0,
+		passkeyCount: 0
+	}
+];
+
+export const accessibilityFixtureAdminProjects = [
+	{
+		id: accessibilityFixtureProject.id,
+		name: accessibilityFixtureProject.projectName,
+		slug: 'accessibility-project',
+		createdAt: now.getTime(),
+		ownerId: accessibilityFixtureUser.id,
+		ownerName: accessibilityFixtureUser.name,
+		ownerEmail: accessibilityFixtureUser.email,
+		ownerBillingExempt: false,
+		memberCount: 2,
+		vmCount: 1,
+		volumeCount: 0,
+		billingStatus: 'configured' as const,
+		billingExempt: false,
+		disabled: false
+	}
+];
+
+export const accessibilityFixtureAdminVms = [
+	{
+		id: accessibilityFixtureServers[0].id,
+		name: accessibilityFixtureServers[0].name,
+		proxmoxId: accessibilityFixtureServers[0].proxmoxId,
+		proxmoxNode: accessibilityFixtureServers[0].live.proxmoxNode,
+		active: accessibilityFixtureServers[0].active,
+		status: accessibilityFixtureServers[0].status,
+		statusError: null,
+		liveStatus: accessibilityFixtureServers[0].live.status,
+		uptime: accessibilityFixtureServers[0].live.uptime,
+		cpuUsage: accessibilityFixtureServers[0].live.metrics.cpu,
+		memoryUsageBytes: accessibilityFixtureServers[0].live.memory,
+		memoryTotalBytes: accessibilityFixtureServers[0].live.memory,
+		createdAt: now.getTime(),
+		deletedAt: null,
+		lastKnownAt: now.getTime(),
+		lastKnownIpv4: accessibilityFixtureServers[0].live.networkInterfaces.eth0.ipAddresses[0],
+		lastKnownIpv6: accessibilityFixtureServers[0].live.networkInterfaces.eth0.ipAddresses[1],
+		projectId: accessibilityFixtureProject.id,
+		projectName: accessibilityFixtureProject.projectName,
+		projectBillingExempt: false,
+		ownerName: accessibilityFixtureUser.name,
+		ownerEmail: accessibilityFixtureUser.email,
+		ownerBillingExempt: false,
+		vmTypeName: accessibilityFixtureServers[0].vmType.name,
+		vmTypeCores: accessibilityFixtureServers[0].vmType.cores,
+		vmTypeRamCapacity: accessibilityFixtureServers[0].vmType.ramCapacity,
+		vmTypeStorageAmount: accessibilityFixtureServers[0].vmType.storageAmount,
+		vmTypeRate: '0.05'
+	}
+];
+
+export const accessibilityFixtureIpamPrefixes = [
+	{
+		id: 'accessibility-prefix-v4',
+		name: 'Test IPv4',
+		cidr: '192.0.2.0/24',
+		family: 'ipv4' as const,
+		disabled: false,
+		ipv6UseTransitAddress: false,
+		whitelistStart: null,
+		whitelistEnd: null,
+		gatewayAddress: '192.0.2.1',
+		allocated: 2,
+		capacity: '254',
+		available: '252',
+		hasCapacity: true
+	}
+];
+
+export const accessibilityFixtureVmTypes = [
+	{
+		id: 'starter',
+		name: 'Starter',
+		isa: 'x86',
+		cores: 2,
+		ramCapacity: 4,
+		storageAmount: 50,
+		rate: '0.05',
+		cap: '50.00',
+		autumnFeatureId: 'starter'
+	}
+];
+
+export const accessibilityFixtureImages = [
+	{
+		id: 'ubuntu-2404',
+		name: 'Ubuntu',
+		version: '24.04 LTS',
+		description: 'Ubuntu 24.04 LTS',
+		icon: 'ubuntu',
+		color: 'bg-orange-500',
+		isOfficial: true,
+		logoSvg: null,
+		accentColor: '#E95420',
+		imageType: 'qcow2',
+		secureBoot: false,
+		filePath: 'local:iso/ubuntu-24.04.qcow2',
+		isa: 'x86'
+	}
+];

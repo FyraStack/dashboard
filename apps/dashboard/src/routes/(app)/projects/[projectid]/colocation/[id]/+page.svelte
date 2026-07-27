@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { getColocationContext } from '../colocation-context.svelte';
 
 	const colo = getColocationContext();
@@ -66,6 +67,8 @@
 		return budget > 0 ? (draw / budget) * 100 : 0;
 	});
 </script>
+
+<PageTitle title="Colocation" />
 
 {#if colo.selectedUnit}
 	<div class="flex min-h-0 flex-1 flex-col overflow-auto">

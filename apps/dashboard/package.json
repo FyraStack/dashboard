@@ -15,7 +15,7 @@
 		"cf:deploy:preview": "pnpm run build && wrangler deploy --env preview",
 		"email:dev": "bse dev -c src/routes/layout.css",
 		"prepare": "svelte-kit sync || echo ''",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --tsgo-experimental-api",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --tsgo-experimental-api && node scripts/check-svelte-head.js",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check .",
 		"format": "prettier --write .",

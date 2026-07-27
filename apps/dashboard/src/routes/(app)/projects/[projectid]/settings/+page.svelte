@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto, invalidate } from '$app/navigation';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -179,9 +180,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Project Settings / Stack</title>
-</svelte:head>
+<PageTitle title="Project Settings" />
 
 <div class="flex h-full w-full flex-col overflow-hidden">
 	<div class="flex-1 overflow-auto">

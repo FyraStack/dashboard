@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
@@ -231,6 +232,8 @@
 		}
 	}
 </script>
+
+<PageTitle title="Volumes" />
 
 <div class="flex flex-1 flex-col overflow-hidden">
 	<!-- Header -->

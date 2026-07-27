@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { untrack } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
@@ -222,7 +223,12 @@
 				? currentPath.split('/').pop()
 				: null
 	);
+	const selectedServer = $derived(
+		selectedServerId ? serversState.servers.find((s) => s.id === selectedServerId) : null
+	);
 </script>
+
+<PageTitle title={selectedServer?.name ?? 'Machines'} />
 
 <div class="flex h-full w-full flex-col overflow-hidden lg:flex-row">
 	<div

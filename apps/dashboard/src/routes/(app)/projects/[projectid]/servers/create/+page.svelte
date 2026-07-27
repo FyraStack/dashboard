@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
@@ -378,9 +379,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Create Server / Stack</title>
-</svelte:head>
+<PageTitle title="Create Server" />
 
 <div class="flex h-full flex-col overflow-hidden">
 	<BillingSetupDialog

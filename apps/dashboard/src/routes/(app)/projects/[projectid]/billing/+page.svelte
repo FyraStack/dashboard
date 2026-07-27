@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import BillingSetupDialog from '$lib/components/billing-setup-dialog.svelte';
 	import { openBillingPortal } from '$lib/remote/billing.remote';
 	import { getErrorMessage } from '$lib/utils';
@@ -133,11 +134,9 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Billing / Stack</title>
-</svelte:head>
+<PageTitle title="Billing" />
 
-<div class="flex flex-1 flex-col overflow-hidden">
+<div class="flex flex-1 flex-col overflow-auto">
 	<BillingSetupDialog
 		bind:open={billingSetupOpen}
 		{projectId}

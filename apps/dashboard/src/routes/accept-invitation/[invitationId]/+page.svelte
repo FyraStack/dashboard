@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { authClient } from '$lib/auth-client';
 	import AlertCircle from '~icons/nucleo/alert-circle';
@@ -49,9 +50,7 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Invitation / Stack</title>
-</svelte:head>
+<PageTitle title="Invitation" />
 
 <div class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -70,6 +71,8 @@
 		if (unitIps) ips[colo.selectedUnitId] = unitIps.filter((_, i) => i !== idx);
 	}
 </script>
+
+<PageTitle title="Colocation Networking" />
 
 {#if colo.selectedUnit}
 	<div class="flex-1 overflow-auto">

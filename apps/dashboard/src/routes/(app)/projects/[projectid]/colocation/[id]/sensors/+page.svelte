@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '$lib/components/PageTitle.svelte';
 	import Activity from '~icons/nucleo/activity';
 	import Cpu from '~icons/nucleo/cpu';
 	import Fan from '~icons/nucleo/wind';
@@ -34,6 +35,8 @@
 		return budget > 0 ? (draw / budget) * 100 : 0;
 	});
 </script>
+
+<PageTitle title="Sensors" />
 
 {#if colo.selectedUnit}
 	<div class="flex-1 overflow-auto">

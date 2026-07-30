@@ -41,3 +41,6 @@ dev/vyos/.cache
 
 # local wireguard config
 dev/fyra-wg.conf
+
+# local PVE cluster CA, extracted by dev/pve/init-cluster.sh
+dev/pve-root-ca.pem

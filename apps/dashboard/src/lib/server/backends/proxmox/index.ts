@@ -13,6 +13,7 @@ import type {
 	BackendImageImportTarget,
 	BackendImageImportParams,
 	VmBackend,
+	VmConsoleSession,
 	VmInfo,
 	VmCreateParams,
 	VmCreateResult,
@@ -301,7 +302,9 @@ export class ProxmoxBackend implements VmBackend {
 		}
 
 		const directFetch =
-			this.options.snippetsEndpointVerifySsl === false ? insecureDirectFetch : globalThis.fetch;
+			this.options.snippetsEndpointVerifySsl === false
+				? insecureDirectFetch
+				: globalThis.fetch.bind(globalThis);
 		const snippetFetch = createVpcFetch(
 			this.options.snippetsVpc ? [this.options.snippetsVpc] : [],
 			directFetch
@@ -737,5 +740,16 @@ export class ProxmoxBackend implements VmBackend {
 		const { node, vmid } = await this.resolve(id, proxmoxId);
 		const upid = await this.client.rebootVm(node, vmid);
 		await this.client.waitForTask(node, upid);
+	}
+
+	async openConsole(
+		id: string,
+		proxmoxId?: number,
+		options: Pick<VmLookupOptions, 'proxmoxNode'> = {}
+	): Promise<VmConsoleSession> {
+		const { node, vmid } =
+			this.resolveFromHint(proxmoxId, options.proxmoxNode) ?? (await this.resolve(id, proxmoxId));
+		const { socket, sendInput, initialData } = await this.client.openTermProxy(node, vmid);
+		return { socket, sendInput, initialData };
 	}
 }

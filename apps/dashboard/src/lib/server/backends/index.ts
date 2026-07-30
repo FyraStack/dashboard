@@ -10,6 +10,7 @@ export type {
 	BackendImageImportTarget,
 	BackendImageImportParams,
 	VmBackend,
+	VmConsoleSession,
 	VmInfo,
 	VmMetricsHistorySample,
 	VmMetricsTimeframe,

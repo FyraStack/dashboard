@@ -165,6 +165,13 @@ export interface PveStorageContent {
 	ctime?: number;
 }
 
+export interface PveTermProxyTicket {
+	user: string;
+	ticket: string;
+	port: string;
+	upid: string;
+}
+
 export interface PveAgentNetworkInterface {
 	name: string;
 	'hardware-address'?: string;

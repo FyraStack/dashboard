@@ -1,6 +1,6 @@
 import ky, { HTTPError, type KyInstance } from 'ky';
-import type { Fetcher } from '@cloudflare/workers-types';
-import { createVpcFetch, insecureDirectFetch } from '$lib/server/vpc';
+import type { Fetcher, WebSocket } from '@cloudflare/workers-types';
+import { createVpcFetch, insecureDirectFetch, type VpcFetch } from '$lib/server/vpc';
 import type {
 	PveResponse,
 	PveNode,
@@ -14,7 +14,8 @@ import type {
 	PveNextId,
 	PveCreateQemuParams,
 	PveClusterResource,
-	PveAgentNetworkInterface
+	PveAgentNetworkInterface,
+	PveTermProxyTicket
 } from './types';
 
 export interface ProxmoxClientConfig {
@@ -27,22 +28,31 @@ export interface ProxmoxClientConfig {
 
 export class ProxmoxClient {
 	private api: KyInstance;
+	private rawFetch: VpcFetch;
+	private authHeader: string;
+	private apiBaseUrl: string;
 
 	constructor(config: ProxmoxClientConfig) {
 		const { baseUrl, tokenId, tokenSecret, verifySsl = true, vpc } = config;
 
 		const usingInsecureDirectFetch = !vpc && !verifySsl;
-		const directFetch = usingInsecureDirectFetch ? insecureDirectFetch : globalThis.fetch;
+		const directFetch = usingInsecureDirectFetch
+			? insecureDirectFetch
+			: globalThis.fetch.bind(globalThis);
+
+		this.authHeader = `PVEAPIToken=${tokenId}=${tokenSecret}`;
+		this.apiBaseUrl = `${baseUrl.replace(/\/+$/, '')}/api2/json`;
+		this.rawFetch = createVpcFetch(vpc ? [vpc] : [], directFetch);
 
 		this.api = ky.create({
-			prefix: `${baseUrl.replace(/\/+$/, '')}/api2/json`,
+			prefix: this.apiBaseUrl,
 			headers: {
-				Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}`,
+				Authorization: this.authHeader,
 				Accept: 'application/json',
 				...(usingInsecureDirectFetch ? { 'Accept-Encoding': 'identity' } : {})
 			},
 			timeout: 30_000,
-			fetch: createVpcFetch(vpc ? [vpc] : [], directFetch)
+			fetch: this.rawFetch
 		});
 	}
 
@@ -407,6 +417,101 @@ export class ProxmoxClient {
 			.get('cluster/resources', { searchParams })
 			.json<PveResponse<PveClusterResource[]>>();
 		return res.data;
+	}
+
+	// Terminal (xterm.js) console
+
+	async createTermProxyTicket(node: string, vmid: number): Promise<PveTermProxyTicket> {
+		const res = await this.api
+			.post(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/termproxy`)
+			.json<PveResponse<PveTermProxyTicket>>();
+		return res.data;
+	}
+
+	async openTermProxyWebSocket(
+		node: string,
+		vmid: number,
+		ticket: PveTermProxyTicket
+	): Promise<WebSocket> {
+		const url =
+			`${this.apiBaseUrl}/nodes/${encodeURIComponent(node)}/qemu/${vmid}/vncwebsocket` +
+			`?port=${encodeURIComponent(ticket.port)}&vncticket=${encodeURIComponent(ticket.ticket)}`;
+
+		const response = await this.rawFetch(url, {
+			headers: {
+				Authorization: this.authHeader,
+				Upgrade: 'websocket'
+			}
+		});
+
+		const ws = (response as unknown as { webSocket: WebSocket | null }).webSocket;
+		if (!ws) {
+			throw new Error(
+				`Proxmox termproxy websocket upgrade failed for node "${node}" vmid ${vmid}`
+			);
+		}
+
+		ws.accept();
+		ws.binaryType = 'arraybuffer';
+		return ws;
+	}
+
+	private decodeTermProxyMessage(data: unknown): string {
+		if (typeof data === 'string') return data;
+		if (data instanceof ArrayBuffer) return new TextDecoder().decode(data);
+		if (ArrayBuffer.isView(data)) return new TextDecoder().decode(data as Uint8Array);
+		return String(data);
+	}
+
+	private authenticateTermProxy(socket: WebSocket, ticket: PveTermProxyTicket): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const cleanup = () => {
+				socket.removeEventListener('message', onMessage);
+				socket.removeEventListener('close', onClose);
+			};
+			const onMessage = (event: { data: unknown }) => {
+				cleanup();
+				const text = this.decodeTermProxyMessage(event.data);
+				if (!text.startsWith('OK')) {
+					reject(new Error(`Proxmox termproxy authentication failed: ${text.slice(0, 200)}`));
+					return;
+				}
+				resolve(text.slice(2));
+			};
+			const onClose = () => {
+				cleanup();
+				reject(new Error('Proxmox termproxy connection closed before authentication'));
+			};
+
+			socket.addEventListener('message', onMessage);
+			socket.addEventListener('close', onClose);
+			socket.send(`${ticket.user}:${ticket.ticket}\n`);
+		});
+	}
+
+	private sendTermProxyInput(socket: WebSocket, data: string): void {
+		const byteLength = new TextEncoder().encode(data).length;
+		socket.send(`0:${byteLength}:${data}`);
+	}
+
+	async openTermProxy(
+		node: string,
+		vmid: number
+	): Promise<{
+		ticket: PveTermProxyTicket;
+		socket: WebSocket;
+		sendInput: (data: string) => void;
+		initialData: string;
+	}> {
+		const ticket = await this.createTermProxyTicket(node, vmid);
+		const socket = await this.openTermProxyWebSocket(node, vmid, ticket);
+		const initialData = await this.authenticateTermProxy(socket, ticket);
+		return {
+			ticket,
+			socket,
+			sendInput: (data: string) => this.sendTermProxyInput(socket, data),
+			initialData
+		};
 	}
 
 	// Guest agent

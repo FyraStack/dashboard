@@ -125,6 +125,8 @@ done
 until podman exec fyra-gw test -f /data/host.conf 2>/dev/null; do sleep 3; done
 podman exec fyra-gw cat /data/host.conf > "$(dirname "$0")/../fyra-wg.conf"
 
+podman exec fyra-pve1 cat /etc/pve/pve-root-ca.pem > "$(dirname "$0")/../pve-root-ca.pem"
+
 podman exec fyra-pve1 pveum user token remove root@pam stack >/dev/null 2>&1 || true
 secret=$(podman exec fyra-pve1 pveum user token add root@pam stack --privsep 0 --output-format json |
 	python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')
@@ -147,6 +149,9 @@ dashboard .env:
   PROXMOX_SNIPPETS_ENDPOINT_PASSWORD="dev"
   PROXMOX_SNIPPETS_STORAGE="stack-volumes"
   PROXMOX_SNIPPETS_ENDPOINT_VERIFY_SSL="false"
+
+wrote the cluster's internal CA to dev/pve-root-ca.pem; "pnpm dashboard dev" and "cf:dev" already
+point NODE_EXTRA_CA_CERTS at it so wrangler/workerd trusts the PVE nodes' certs.
 
 reach VM test IPs from the host:
   sudo dnf install wireguard-tools

@@ -4,7 +4,7 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "NODE_EXTRA_CA_CERTS=../../dev/pve-root-ca.pem nodemon --watch src --ext ts,js,svelte,json,css -d 1 --exec \"pnpm run build && wrangler dev -c wrangler.local.jsonc --local-protocol http --env-file .env\"",
+		"dev": "NODE_EXTRA_CA_CERTS=../../dev/pve-root-ca.pem nodemon --watch src --ext ts,js,svelte,json,css -d 1 --exec \"pnpm run build && wrangler dev -c wrangler.local.jsonc --local-protocol http --env-file .env --port 5173\"",
 		"dev:vite": "NODE_TLS_REJECT_UNAUTHORIZED=0 vite dev",
 		"build": "vite build",
 		"preview": "vite preview",

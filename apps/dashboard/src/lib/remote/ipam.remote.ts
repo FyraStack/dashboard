@@ -6,6 +6,7 @@ import { initDrizzle } from '$lib/server/db';
 import { ipamAllocations, ipamPrefixes } from '$lib/server/db/schema';
 import { requireAdmin } from '$lib/server/auth-context';
 import { listIpamPrefixesWithStats, normalizeIpamPrefixInput } from '$lib/server/ipam';
+import { getIpamPtrDefaults, saveIpamPtrDefaults } from '$lib/server/ptr-records';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureIpamPrefixes
@@ -33,6 +34,7 @@ const prefixParams = type({
 	whitelistStart: 'string?',
 	whitelistEnd: 'string?',
 	gatewayAddress: 'string?',
+	bunnyDnsZone: 'string?',
 	disabled: 'boolean?',
 	ipv6UseTransitAddress: 'boolean?'
 });
@@ -54,6 +56,7 @@ const updatePrefixParams = type({
 	whitelistStart: 'string?',
 	whitelistEnd: 'string?',
 	gatewayAddress: 'string?',
+	bunnyDnsZone: 'string?',
 	disabled: 'boolean?',
 	ipv6UseTransitAddress: 'boolean?'
 });
@@ -113,4 +116,23 @@ export const deleteIpamPrefix = command(deleteParams, async (params) => {
 	if (allocation) error(400, 'Prefixes with active allocations cannot be deleted');
 
 	await db.delete(ipamPrefixes).where(eq(ipamPrefixes.id, params.prefixId));
+});
+
+export const getIpamPtrDefaultFormats = query(async () => {
+	if (accessibilityFixtureEnabled) {
+		return { defaultPtrFormatIpv4: '', defaultPtrFormatIpv6: '' };
+	}
+	const db = await requireCurrentAdmin();
+	return getIpamPtrDefaults(db);
+});
+
+const ptrDefaultsParams = type({
+	defaultPtrFormatIpv4: 'string',
+	defaultPtrFormatIpv6: 'string'
+});
+
+export const updateIpamPtrDefaultFormats = command(ptrDefaultsParams, async (params) => {
+	const db = await requireCurrentAdmin();
+	await saveIpamPtrDefaults(db, params);
+	return getIpamPtrDefaults(db);
 });

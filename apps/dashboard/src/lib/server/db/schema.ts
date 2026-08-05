@@ -287,6 +287,7 @@ export const ipamPrefixes = pgTable(
 		whitelistStart: inet('whitelist_start'),
 		whitelistEnd: inet('whitelist_end'),
 		gatewayAddress: inet('gateway_address'),
+		bunnyDnsZone: text('bunny_dns_zone'),
 		createdAt: bigint('created_at', { mode: 'number' })
 			.notNull()
 			.default(sql`(extract(epoch from now()) * 1000)::bigint`)
@@ -329,7 +330,33 @@ export const ipamAllocations = pgTable(
 	]
 );
 
-export const ipamAllocationsRelations = relations(ipamAllocations, ({ one }) => ({
+export const ipamSettings = pgTable('ipam_settings', {
+	id: text('id').primaryKey(),
+	defaultPtrFormatIpv4: text('default_ptr_format_ipv4'),
+	defaultPtrFormatIpv6: text('default_ptr_format_ipv6')
+});
+
+export const ipamPtrRecords = pgTable(
+	'ipam_ptr_records',
+	{
+		id: ulidPk(),
+		ipamAllocationId: ulidFk('ipam_allocation_id')
+			.notNull()
+			.references(() => ipamAllocations.id, { onDelete: 'cascade' }),
+		address: inet('address').notNull(),
+		value: text('value').notNull(),
+		bunnyRecordId: bigint('bunny_record_id', { mode: 'number' }),
+		createdAt: bigint('created_at', { mode: 'number' })
+			.notNull()
+			.default(sql`(extract(epoch from now()) * 1000)::bigint`)
+	},
+	(table) => [
+		index('ipam_ptr_records_ipam_allocation_id_index').on(table.ipamAllocationId),
+		uniqueIndex('ipam_ptr_records_address_index').on(table.address)
+	]
+);
+
+export const ipamAllocationsRelations = relations(ipamAllocations, ({ one, many }) => ({
 	ipamPrefix: one(ipamPrefixes, {
 		fields: [ipamAllocations.ipamPrefixId],
 		references: [ipamPrefixes.id]
@@ -337,6 +364,14 @@ export const ipamAllocationsRelations = relations(ipamAllocations, ({ one }) => 
 	vm: one(vms, {
 		fields: [ipamAllocations.associatedVmId],
 		references: [vms.id]
+	}),
+	ptrRecords: many(ipamPtrRecords)
+}));
+
+export const ipamPtrRecordsRelations = relations(ipamPtrRecords, ({ one }) => ({
+	ipamAllocation: one(ipamAllocations, {
+		fields: [ipamPtrRecords.ipamAllocationId],
+		references: [ipamAllocations.id]
 	})
 }));
 

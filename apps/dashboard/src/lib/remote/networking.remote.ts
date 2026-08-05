@@ -1,77 +1,78 @@
 import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
-import { ipBlocks, ipAssignments, vms } from '$lib/server/db/schema';
+import { ipamAllocations, ipamPtrRecords, vms } from '$lib/server/db/schema';
 import { requireProjectAccess } from '$lib/server/auth-context';
+import { isBunnyConfigured } from '$lib/server/bunny';
+import { setPtrRecord } from '$lib/server/ptr-records';
 
-export const listIpBlocks = query(type({ projectId: 'string' }), async (params) => {
+async function requireVmAccess(vmId: string, level?: 'read_write' | 'admin') {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
 
 	const db = initDrizzle();
-	await requireProjectAccess(db, event.locals.user.id, params.projectId);
-
-	return db.query.ipBlocks.findMany();
-});
-
-const listAssignmentsParams = type({ vmId: 'string' });
-
-export const listAssignments = query(listAssignmentsParams, async (params) => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
-
-	const db = initDrizzle();
-	const vm = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
+	const vm = await db.query.vms.findFirst({ where: eq(vms.id, vmId) });
 	if (!vm) error(404, 'VM not found');
 	if (vm.ownerProjectId) {
-		await requireProjectAccess(db, event.locals.user.id, vm.ownerProjectId);
+		await requireProjectAccess(db, event.locals.user.id, vm.ownerProjectId, level);
 	}
 
-	return db.query.ipAssignments.findMany({
-		where: eq(ipAssignments.associatedVmId, params.vmId),
-		columns: { ip: true, ipBlockId: true }
+	return { db, vm };
+}
+
+const vmParams = type({ vmId: 'string' });
+
+export const getVmNetworking = query(vmParams, async (params) => {
+	const { db } = await requireVmAccess(params.vmId);
+
+	const allocations = await db.query.ipamAllocations.findMany({
+		where: eq(ipamAllocations.associatedVmId, params.vmId),
+		with: { ipamPrefix: true, ptrRecords: { orderBy: asc(ipamPtrRecords.address) } },
+		orderBy: asc(ipamAllocations.createdAt)
 	});
+
+	const bunnyConfigured = isBunnyConfigured();
+
+	return {
+		allocations: allocations.map((allocation) => ({
+			id: allocation.id,
+			family: allocation.family,
+			address: allocation.address,
+			prefix: allocation.prefix,
+			prefixLength: allocation.prefixLength,
+			gateway: allocation.ipamPrefix.gatewayAddress,
+			ptrEditable: bunnyConfigured && Boolean(allocation.ipamPrefix.bunnyDnsZone),
+			ptrRecords: allocation.ptrRecords.map((record) => ({
+				address: record.address,
+				value: record.value
+			}))
+		}))
+	};
 });
 
-const assignParams = type({ vmId: 'string', blockId: 'string', ip: 'string' });
-export const assignIp = command(assignParams, async (params) => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
-
-	const db = initDrizzle();
-	const vm = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
-	if (!vm) error(404, 'VM not found');
-	const block = await db.query.ipBlocks.findFirst({ where: eq(ipBlocks.id, params.blockId) });
-	if (!block) error(404, 'IP block not found');
-	if (vm.ownerProjectId) {
-		await requireProjectAccess(db, event.locals.user.id, vm.ownerProjectId, 'admin');
-	}
-
-	await db.insert(ipAssignments).values({
-		ip: params.ip,
-		ipBlockId: params.blockId,
-		associatedVmId: params.vmId
-	});
+const setPtrParams = type({
+	vmId: 'string',
+	allocationId: 'string',
+	address: 'string?',
+	value: 'string'
 });
 
-const unassignParams = type({ ip: 'string' });
-export const unassignIp = command(unassignParams, async (params) => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+export const setVmPtrRecord = command(setPtrParams, async (params) => {
+	const { db } = await requireVmAccess(params.vmId, 'read_write');
 
-	const db = initDrizzle();
-	const assignment = await db.query.ipAssignments.findFirst({
-		where: eq(ipAssignments.ip, params.ip)
+	const allocation = await db.query.ipamAllocations.findFirst({
+		where: eq(ipamAllocations.id, params.allocationId),
+		with: { ipamPrefix: true }
 	});
-	if (!assignment) error(404, 'Assignment not found');
-	if (!assignment.associatedVmId) error(400, 'Assignment has no associated VM');
-
-	const vm = await db.query.vms.findFirst({ where: eq(vms.id, assignment.associatedVmId) });
-	if (!vm) error(404, 'VM not found');
-	if (vm.ownerProjectId) {
-		await requireProjectAccess(db, event.locals.user.id, vm.ownerProjectId, 'admin');
+	if (!allocation || allocation.associatedVmId !== params.vmId) {
+		error(404, 'IP allocation not found');
 	}
-	await db.delete(ipAssignments).where(eq(ipAssignments.ip, params.ip));
+
+	const address = params.address?.trim() || allocation.address;
+	if (!address) error(400, 'An IP address inside the subnet is required');
+
+	const { ipamPrefix, ...rest } = allocation;
+	return setPtrRecord(db, { ...rest, sourcePrefix: ipamPrefix }, address, params.value);
 });

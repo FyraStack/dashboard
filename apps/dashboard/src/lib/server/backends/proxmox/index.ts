@@ -546,7 +546,7 @@ export class ProxmoxBackend implements VmBackend {
 
 		const firewallIpSetEntries = uniqueFirewallIpSetEntries(params);
 
-		await this.client.createQemuVm(node.node, {
+		const createUpid = await this.client.createQemuVm(node.node, {
 			vmid,
 			name: params.name,
 			cores: params.cores,
@@ -572,6 +572,7 @@ export class ProxmoxBackend implements VmBackend {
 			tags: `vmid-${params.id};projectid-${params.projectId};userid-${params.userId}`,
 			'ha-managed': 1
 		});
+		await this.client.waitForTask(node.node, createUpid);
 
 		await this.client.updateQemuFirewallOptions(node.node, vmid, {
 			enable: 1,

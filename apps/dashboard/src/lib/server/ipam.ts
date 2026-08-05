@@ -4,6 +4,8 @@ import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
 import { ipamAllocations, ipamPrefixes, vms } from '$lib/server/db/schema';
 import { isVyosConfigured, VyosClient } from '$lib/server/vyos';
+import { deletePtrRecords } from '$lib/server/ptr-records';
+import { isValidPtrHostname } from '$lib/ptr';
 
 export type IpFamily = 'ipv4' | 'ipv6';
 export type VmNetworkingMode = 'both' | 'ipv6';
@@ -21,6 +23,7 @@ export type IpamPrefixInput = {
 	whitelistStart?: string | null;
 	whitelistEnd?: string | null;
 	gatewayAddress?: string | null;
+	bunnyDnsZone?: string | null;
 	disabled?: boolean;
 	ipv6UseTransitAddress?: boolean;
 };
@@ -200,6 +203,11 @@ export function normalizeIpamPrefixInput(input: IpamPrefixInput) {
 		whitelistEnd = formatAddress(normalized.family, endValue);
 	}
 
+	const bunnyDnsZone = input.bunnyDnsZone?.trim().replace(/\.$/, '').toLowerCase() || null;
+	if (bunnyDnsZone && !isValidPtrHostname(bunnyDnsZone)) {
+		error(400, 'Bunny DNS zone must be a valid domain name');
+	}
+
 	return {
 		name: input.name.trim(),
 		cidr: normalized.cidr,
@@ -208,6 +216,7 @@ export function normalizeIpamPrefixInput(input: IpamPrefixInput) {
 		whitelistStart,
 		whitelistEnd,
 		gatewayAddress,
+		bunnyDnsZone,
 		disabled: input.disabled ?? false
 	};
 }
@@ -796,6 +805,9 @@ export async function allocateVmNetworking(
 export async function releaseVmNetworking(db: QueryableDb, vmId: string) {
 	const allocations = await vmAllocations(db, vmId);
 	await deleteVyosDelegatedRoute(allocations);
+	await deletePtrRecords(db, allocations).catch((err) => {
+		console.warn(`Failed to delete PTR records for VM ${vmId}`, err);
+	});
 	await db.delete(ipamAllocations).where(eq(ipamAllocations.associatedVmId, vmId));
 }
 

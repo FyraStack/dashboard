@@ -4,7 +4,6 @@
 	import { getServerWithFallback } from '$lib/state/servers.svelte';
 	import { setVmPtrRecord } from '$lib/remote/networking.remote';
 	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import * as InputGroup from '$lib/components/ui/input-group';
@@ -389,34 +388,6 @@
 			</div>
 		</div>
 	{/if}
-	<div class="px-5 py-3">
-		<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
-			>Firewall</span
-		>
-	</div>
-	<div class="flex items-center justify-between px-5 py-3">
-		<div>
-			<p class="text-sm font-medium text-foreground">web-servers</p>
-			<p class="mt-0.5 text-xs text-muted-foreground">3 inbound, 1 outbound rules</p>
-		</div>
-		<Badge
-			variant="outline"
-			class="border-emerald-300 bg-emerald-100 text-[10px] text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"
-			>Active</Badge
-		>
-	</div>
-	<div class="px-5 py-3">
-		<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
-			>Private Network</span
-		>
-	</div>
-	<div class="flex items-center justify-between px-5 py-3">
-		<div>
-			<p class="text-sm font-medium text-foreground">internal-net</p>
-			<p class="mt-0.5 font-mono text-xs text-muted-foreground">10.132.0.0/16</p>
-		</div>
-		<Badge variant="secondary" class="text-[10px]">Attached</Badge>
-	</div>
 </div>
 
 <Dialog.Root bind:open={subnetDialogOpen}>

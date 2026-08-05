@@ -9,10 +9,13 @@
 	import {
 		createIpamPrefix,
 		deleteIpamPrefix,
+		getIpamPtrDefaultFormats,
 		listIpamPrefixes,
 		setIpamPrefixDisabled,
-		updateIpamPrefix
+		updateIpamPrefix,
+		updateIpamPtrDefaultFormats
 	} from '$lib/remote/ipam.remote';
+	import { reverseDnsZoneForCidr } from '$lib/ptr';
 	import { AdminState, type AdminPageData, type IpamPrefix } from '$lib/state/admin.svelte';
 	import { getErrorMessage, runQuery } from '$lib/utils';
 	import { confirmDestructive } from '$lib/confirm.svelte';
@@ -42,8 +45,16 @@
 	let whitelistStart = $state('');
 	let whitelistEnd = $state('');
 	let gatewayAddress = $state('');
+	let bunnyDnsZone = $state('');
 	let disabled = $state(false);
 	let ipv6UseTransitAddress = $state(false);
+
+	let ptrDialogOpen = $state(false);
+	let ptrLoading = $state(false);
+	let ptrSaving = $state(false);
+	let ptrError = $state('');
+	let ptrFormatIpv4 = $state('');
+	let ptrFormatIpv6 = $state('');
 
 	const userCount = $derived(admin.adminUsers.length);
 	const enabledCount = $derived(featureFlagKeys.filter((key) => admin.featureFlags[key]).length);
@@ -69,6 +80,7 @@
 		whitelistStart = '';
 		whitelistEnd = '';
 		gatewayAddress = '';
+		bunnyDnsZone = '';
 		disabled = false;
 		ipv6UseTransitAddress = false;
 		formError = '';
@@ -82,6 +94,7 @@
 		whitelistStart = prefix.whitelistStart ?? '';
 		whitelistEnd = prefix.whitelistEnd ?? '';
 		gatewayAddress = prefix.gatewayAddress ?? '';
+		bunnyDnsZone = prefix.bunnyDnsZone ?? '';
 		disabled = prefix.disabled;
 		ipv6UseTransitAddress = prefix.ipv6UseTransitAddress;
 		formError = '';
@@ -105,6 +118,7 @@
 			whitelistStart: whitelistStart.trim(),
 			whitelistEnd: whitelistEnd.trim(),
 			gatewayAddress: isIpv6Prefix ? '' : gatewayAddress.trim(),
+			bunnyDnsZone: bunnyDnsZone.trim(),
 			disabled,
 			ipv6UseTransitAddress: isIpv6Prefix && ipv6UseTransitAddress
 		};
@@ -139,6 +153,43 @@
 		}
 	}
 
+	function autoFillBunnyZone() {
+		const generated = reverseDnsZoneForCidr(cidr.trim());
+		if (generated) bunnyDnsZone = generated;
+	}
+
+	async function openPtrDefaults() {
+		ptrError = '';
+		ptrDialogOpen = true;
+		ptrLoading = true;
+		try {
+			const defaults = await runQuery(getIpamPtrDefaultFormats());
+			ptrFormatIpv4 = defaults.defaultPtrFormatIpv4;
+			ptrFormatIpv6 = defaults.defaultPtrFormatIpv6;
+		} catch (err) {
+			ptrError = getErrorMessage(err, 'Failed to load PTR defaults');
+		} finally {
+			ptrLoading = false;
+		}
+	}
+
+	async function savePtrDefaults() {
+		ptrSaving = true;
+		ptrError = '';
+		try {
+			await updateIpamPtrDefaultFormats({
+				defaultPtrFormatIpv4: ptrFormatIpv4.trim(),
+				defaultPtrFormatIpv6: ptrFormatIpv6.trim()
+			});
+			ptrDialogOpen = false;
+			toast.success('Default PTR formats saved');
+		} catch (err) {
+			ptrError = getErrorMessage(err, 'Failed to save PTR defaults');
+		} finally {
+			ptrSaving = false;
+		}
+	}
+
 	async function removePrefix(prefix: IpamPrefix) {
 		const ok = await confirmDestructive({
 			title: 'Delete prefix',
@@ -167,7 +218,10 @@
 			<span class="text-muted-foreground">IPv6</span>
 			<span class="font-medium text-foreground">{ipv6Count}</span>
 		</div>
-		<div class="ml-auto">
+		<div class="ml-auto flex items-center gap-2">
+			<Button variant="outline" size="sm" class="h-7 gap-1.5 text-xs" onclick={openPtrDefaults}>
+				Default PTR Format
+			</Button>
 			<Button size="sm" class="h-7 gap-1.5 text-xs" onclick={openCreate}>
 				<Plus class="h-3 w-3" /> Add Prefix
 			</Button>
@@ -191,6 +245,7 @@
 					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Family</th>
 					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Gateway</th>
 					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Mode</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">DNS Zone</th>
 					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Available</th>
 					<th class="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th>
 				</tr>
@@ -221,6 +276,9 @@
 										: '/64 prefixes'
 									: '/32 addresses'}
 							</Badge>
+						</td>
+						<td class="px-5 py-3 font-mono text-xs text-muted-foreground">
+							{prefix.bunnyDnsZone ?? '-'}
 						</td>
 						<td class="px-5 py-3 text-sm text-muted-foreground">
 							<span class="tabular-nums">{formatCount(prefix.available)}</span>
@@ -293,6 +351,29 @@
 					<Input id="ipam-gateway-address" bind:value={gatewayAddress} placeholder="203.0.113.1" />
 				</div>
 			{/if}
+			<div class="grid gap-2">
+				<Label for="ipam-bunny-zone">Bunny DNS Zone</Label>
+				<div class="flex items-center gap-2">
+					<Input
+						id="ipam-bunny-zone"
+						bind:value={bunnyDnsZone}
+						placeholder="252.155.23.in-addr.arpa"
+						class="flex-1"
+					/>
+					<Button
+						variant="outline"
+						size="sm"
+						class="h-9 px-3 text-xs"
+						disabled={!cidr.trim()}
+						onclick={autoFillBunnyZone}
+					>
+						Auto
+					</Button>
+				</div>
+				<p class="text-xs text-muted-foreground">
+					Reverse DNS zone in Bunny.net for this block. Leave empty to disable PTR records.
+				</p>
+			</div>
 			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 				<div class="grid gap-2">
 					<Label for="ipam-whitelist-start">Whitelist Start</Label>
@@ -336,6 +417,64 @@
 					(!isIpv6Prefix && !gatewayAddress.trim())}
 			>
 				{#if saving}
+					<Loader2 class="mr-2 h-3 w-3 animate-spin" />
+				{/if}
+				Save
+			</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={ptrDialogOpen}>
+	<Dialog.Content class="border-border bg-background sm:max-w-lg">
+		<Dialog.Header>
+			<Dialog.Title>Default PTR Format</Dialog.Title>
+			<Dialog.Description>
+				Applied automatically when a server is created. Ignored for blocks without a Bunny DNS zone,
+				or when the format is empty.
+			</Dialog.Description>
+		</Dialog.Header>
+		<div class="grid gap-4 py-4">
+			{#if ptrError}
+				<div
+					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
+				>
+					<AlertTriangle class="size-4 shrink-0" />{ptrError}
+				</div>
+			{/if}
+			<div class="grid gap-2">
+				<Label for="ipam-ptr-ipv4">IPv4 Format</Label>
+				<Input
+					id="ipam-ptr-ipv4"
+					bind:value={ptrFormatIpv4}
+					placeholder="ip-{'{octet1}'}-{'{octet2}'}-{'{octet3}'}-{'{octet4}'}.fyra.zone"
+					disabled={ptrLoading}
+				/>
+				<p class="text-xs text-muted-foreground">
+					Placeholders: <span class="font-mono">{'{octet1}'}</span> through
+					<span class="font-mono">{'{octet4}'}</span>
+				</p>
+			</div>
+			<div class="grid gap-2">
+				<Label for="ipam-ptr-ipv6">IPv6 Format</Label>
+				<Input
+					id="ipam-ptr-ipv6"
+					bind:value={ptrFormatIpv6}
+					placeholder="ip-{'{group7}'}-{'{group8}'}.fyra.zone"
+					disabled={ptrLoading}
+				/>
+				<p class="text-xs text-muted-foreground">
+					Placeholders: <span class="font-mono">{'{group1}'}</span> through
+					<span class="font-mono">{'{group8}'}</span> (expanded hextets)
+				</p>
+			</div>
+		</div>
+		<Dialog.Footer>
+			<Button variant="outline" onclick={() => (ptrDialogOpen = false)} disabled={ptrSaving}>
+				Cancel
+			</Button>
+			<Button onclick={savePtrDefaults} disabled={ptrSaving || ptrLoading}>
+				{#if ptrSaving}
 					<Loader2 class="mr-2 h-3 w-3 animate-spin" />
 				{/if}
 				Save

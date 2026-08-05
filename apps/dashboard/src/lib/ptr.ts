@@ -111,25 +111,33 @@ export function reverseDnsNameForIp(address: string): string | null {
 	return `${octets.reverse().join('.')}.in-addr.arpa`;
 }
 
+function ptrTemplatePlaceholders(address: string): Map<string, string> | null {
+	if (isIpv6(address)) {
+		const groups = expandIpv6Groups(address);
+		if (!groups) return null;
+		return new Map(
+			groups.flatMap((group, index) => [
+				[`{group${index + 1}}`, group],
+				[`{octet${index + 1}}`, group]
+			])
+		);
+	}
+
+	const octets = parseIpv4Octets(address);
+	if (!octets) return null;
+	return new Map(octets.map((octet, index) => [`{octet${index + 1}}`, String(octet)]));
+}
+
 export function applyPtrTemplate(template: string, address: string): string | null {
 	const trimmed = template.trim();
 	if (!trimmed) return null;
 
+	const placeholders = ptrTemplatePlaceholders(address);
+	if (!placeholders) return null;
+
 	let result = trimmed;
-	if (isIpv6(address)) {
-		const groups = expandIpv6Groups(address);
-		if (!groups) return null;
-		groups.forEach((group, index) => {
-			result = result
-				.replaceAll(`{group${index + 1}}`, group)
-				.replaceAll(`{octet${index + 1}}`, group);
-		});
-	} else {
-		const octets = parseIpv4Octets(address);
-		if (!octets) return null;
-		octets.forEach((octet, index) => {
-			result = result.replaceAll(`{octet${index + 1}}`, String(octet));
-		});
+	for (const [placeholder, value] of placeholders) {
+		result = result.replaceAll(placeholder, value);
 	}
 
 	return isValidPtrHostname(result) ? result : null;

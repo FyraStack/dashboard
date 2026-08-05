@@ -7,8 +7,9 @@ import { ipamAllocations, ipamPtrRecords, vms } from '$lib/server/db/schema';
 import { requireProjectAccess } from '$lib/server/auth-context';
 import { isBunnyConfigured } from '$lib/server/bunny';
 import { setPtrRecord } from '$lib/server/ptr-records';
+import type { PermissionLevel } from '$lib/auth/organization-permissions';
 
-async function requireVmAccess(vmId: string, level?: 'read_write' | 'admin') {
+async function requireVmAccess(vmId: string, level?: PermissionLevel) {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
 

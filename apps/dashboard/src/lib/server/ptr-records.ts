@@ -127,21 +127,32 @@ export async function setPtrRecord(
 			else throw err;
 		}
 	}
+	let createdRecordId: number | null = null;
 	if (bunnyRecordId == null) {
 		const created = await client.createPtrRecord(zone.Id, recordName, value);
 		bunnyRecordId = created.Id;
+		createdRecordId = created.Id;
 	}
 
-	const [row] = await db
-		.insert(ipamPtrRecords)
-		.values({ ipamAllocationId: allocation.id, address, value, bunnyRecordId })
-		.onConflictDoUpdate({
-			target: ipamPtrRecords.address,
-			set: { value, bunnyRecordId }
-		})
-		.returning();
+	try {
+		const [row] = await db
+			.insert(ipamPtrRecords)
+			.values({ ipamAllocationId: allocation.id, address, value, bunnyRecordId })
+			.onConflictDoUpdate({
+				target: ipamPtrRecords.address,
+				set: { value, bunnyRecordId }
+			})
+			.returning();
 
-	return { address: row.address, value: row.value };
+		return { address: row.address, value: row.value };
+	} catch (err) {
+		if (createdRecordId != null) {
+			await client.deleteRecord(zone.Id, createdRecordId).catch((cleanupErr) => {
+				console.warn(`Failed to roll back Bunny PTR record for ${address}`, cleanupErr);
+			});
+		}
+		throw err;
+	}
 }
 
 export async function clearPtrRecord(db: QueryableDb, allocation: PtrAllocation, address: string) {

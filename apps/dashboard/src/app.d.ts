@@ -31,6 +31,7 @@ declare global {
 				VYOS_USE_VPC?: string;
 				VYOS_VPC_01?: Fetcher;
 				VYOS_VPC_02?: Fetcher;
+				BUNNY_API_KEY?: string;
 				EMAIL?: SendEmail;
 				EMAIL_FROM_ADDRESS: string;
 				EMAIL_FROM_NAME: string;

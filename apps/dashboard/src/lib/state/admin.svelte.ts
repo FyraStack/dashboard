@@ -110,6 +110,7 @@ export type IpamPrefix = {
 	whitelistStart: string | null;
 	whitelistEnd: string | null;
 	gatewayAddress: string | null;
+	bunnyDnsZone: string | null;
 	allocated: number;
 	capacity: string;
 	available: string;

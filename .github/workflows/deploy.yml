@@ -13,19 +13,30 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up PNPM
+        uses: pnpm/setup@4700d737c3d7a2e7199f3d42a920f0bf7f34e411 # v2.0.1
         with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run check
-      - run: pnpm run lint
-      - run: pnpm -r build
-      - run: pnpm --filter stack-dashboard run cf:deploy
+          cache: true
+          runtime: node@lts
+
+      - name: Check
+        run: pnpm run check
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Build
+        run: pnpm -r build
+
+      - name: Deploy dashboard
+        run: pnpm --filter stack-dashboard run cf:deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      - run: pnpm --filter stack-dashboard-cron run cf:deploy
+
+      - name: Deploy dashboard cron
+        run: pnpm --filter stack-dashboard-cron run cf:deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

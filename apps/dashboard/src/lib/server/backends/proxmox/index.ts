@@ -142,10 +142,22 @@ function cloudInitNetworkConfig(params: VmCreateParams, macAddress: string) {
 				]
 			: []),
 		...(params.networkConfig?.ipv6
-			? [{ to: '::/0', via: config.vmNetwork.ipv6DefaultGateway, 'on-link': true }]
+			? [
+					{ to: '::/0', via: config.vmNetwork.ipv6DefaultGateway, 'on-link': true },
+					...(params.networkConfig.nat64Prefix
+						? [
+								{
+									to: params.networkConfig.nat64Prefix,
+									via: config.vmNetwork.ipv6DefaultGateway,
+									'on-link': true
+								}
+							]
+						: [])
+				]
 			: [])
 	];
 
+	const nat64Dns64Server = params.networkConfig?.nat64Dns64Server;
 	const yamlContents = stringifyYaml({
 		version: 2,
 		ethernets: {
@@ -156,7 +168,11 @@ function cloudInitNetworkConfig(params: VmCreateParams, macAddress: string) {
 				dhcp6: false,
 				addresses,
 				routes,
-				nameservers: { addresses: config.vmNetwork.nameservers }
+				nameservers: {
+					addresses: nat64Dns64Server
+						? [nat64Dns64Server, ...config.vmNetwork.nameservers]
+						: config.vmNetwork.nameservers
+				}
 			}
 		}
 	});

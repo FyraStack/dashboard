@@ -8,9 +8,10 @@
 	import Terminal from '~icons/nucleo/terminal';
 	import Trash2 from '~icons/nucleo/trash';
 	import { getServerWithFallback, serversState } from '$lib/state/servers.svelte';
-
+	import VmConsole from './lib/vm-console.svelte';
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
+
 	let copied = $state('');
 	let liveLoaded = $derived(selectedServer.liveLoaded || serversState.firstStatusRefreshComplete);
 
@@ -158,12 +159,6 @@
 		];
 	});
 
-	const terminalLines = [
-		{ type: 'prompt' as const, text: 'ls /var/log' },
-		{ type: 'output' as const, text: 'www.log  gamer.log  uwaa.log  fyra.log  chicago.log' },
-		{ type: 'cursor' as const, text: '' }
-	];
-
 	const currentLogs = [
 		{
 			id: 'log-1',
@@ -304,11 +299,11 @@
 			<Terminal class="h-3 w-3 text-muted-foreground" />
 			<span class="text-xs font-semibold text-muted-foreground">Console</span>
 		</div>
-		<div
-			class="min-h-[180px] flex-1 bg-background p-4 font-mono text-sm leading-relaxed text-muted-foreground"
-		>
+		<div class="min-h-[180px] flex-1">
 			{#if !data.featureFlags.vpsConsole}
-				<div class="flex h-full min-h-[148px] flex-col items-center justify-center gap-3">
+				<div
+					class="flex h-full min-h-[148px] flex-col items-center justify-center gap-3 bg-background p-4 font-mono text-sm leading-relaxed text-muted-foreground"
+				>
 					<Terminal class="h-8 w-8 text-muted-foreground/60" />
 					<div class="text-center">
 						<p class="text-sm font-medium text-muted-foreground">Coming soon</p>
@@ -339,27 +334,33 @@
 					{/if}
 				</div>
 			{:else if selectedServer.status === 'running'}
-				{#each terminalLines as line (line.type + line.text)}
-					{#if line.type === 'prompt'}
-						<div>
-							<span class="text-muted-foreground">user@{selectedServer.name}~:</span>
-							{line.text}
-						</div>
-					{:else if line.type === 'output'}
-						<div class="text-muted-foreground">{line.text}</div>
-					{:else}
-						<div>
-							<span class="text-muted-foreground">user@{selectedServer.name}~:</span>
-							<span class="inline-block h-4 w-1.5 animate-pulse bg-muted-foreground"></span>
-						</div>
-					{/if}
-				{/each}
+				<div class="flex h-full min-h-[180px] flex-col">
+					{#key selectedServer.id}
+						<VmConsole
+							vmId={selectedServer.id}
+							serverName={selectedServer.name}
+							interactive={true}
+						/>
+					{/key}
+				</div>
 			{:else if selectedServer.status === 'restarting'}
-				<div class="text-amber-500">Restarting server...</div>
+				<div
+					class="flex h-full items-center justify-center bg-background p-4 font-mono text-sm text-amber-500"
+				>
+					Restarting server...
+				</div>
 			{:else if selectedServer.status === 'unknown'}
-				<div class="text-muted-foreground">Server status unavailable. Reconnecting...</div>
+				<div
+					class="flex h-full items-center justify-center bg-background p-4 font-mono text-sm text-muted-foreground"
+				>
+					Server status unavailable. Reconnecting...
+				</div>
 			{:else}
-				<div class="text-muted-foreground">Server is offline. Start the server to connect.</div>
+				<div
+					class="flex h-full items-center justify-center bg-background p-4 font-mono text-sm text-muted-foreground"
+				>
+					Server is offline. Start the server to connect.
+				</div>
 			{/if}
 		</div>
 	</div>

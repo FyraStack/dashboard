@@ -1,3 +1,5 @@
+import type { WebSocket } from '@cloudflare/workers-types';
+
 export type VmStatus = 'running' | 'stopped' | 'paused' | 'unknown';
 
 export interface VmInfo {
@@ -99,6 +101,12 @@ export interface VmLookupOptions {
 	includeNetworkInterfaces?: boolean;
 }
 
+export interface VmConsoleSession {
+	socket: WebSocket;
+	sendInput: (data: string) => void;
+	initialData: string;
+}
+
 export interface VmBackend {
 	readonly name: string;
 	ping(): Promise<void>;
@@ -128,4 +136,9 @@ export interface VmBackend {
 		node: string,
 		upid: string
 	): Promise<{ status: 'running' | 'stopped'; exitstatus?: string }>;
+	openConsole?(
+		id: string,
+		proxmoxId?: number,
+		options?: Pick<VmLookupOptions, 'proxmoxNode'>
+	): Promise<VmConsoleSession>;
 }

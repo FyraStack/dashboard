@@ -78,7 +78,7 @@ export class VyosClient {
 
 		this.apiKey = config.apiKey;
 
-		const directFetch = config.verifySsl ? globalThis.fetch : insecureDirectFetch;
+		const directFetch = config.verifySsl ? globalThis.fetch.bind(globalThis) : insecureDirectFetch;
 
 		this.api = ky.create({
 			prefix: `${config.apiUrl}`,

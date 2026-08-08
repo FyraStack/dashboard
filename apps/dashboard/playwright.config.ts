@@ -16,7 +16,7 @@ export default defineConfig({
 			}
 		},
 		{
-			name: 'Mobile Chrome',
+			name: 'Mobile Chromium',
 			use: {
 				...devices['Pixel 5'],
 				launchOptions: { executablePath: chromiumExecutable },

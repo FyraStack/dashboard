@@ -47,7 +47,8 @@
 		<Dialog.Header>
 			<Dialog.Title>Add Passkey</Dialog.Title>
 			<Dialog.Description>
-				Register a passkey for passwordless sign-in. Your browser will prompt you to authenticate.
+				Use a passkey for passwordless sign-in or as a second factor after your password. Your
+				browser will prompt you to authenticate.
 			</Dialog.Description>
 		</Dialog.Header>
 

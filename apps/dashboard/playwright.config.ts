@@ -1,16 +1,17 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const isCI = !!process.env['CI'];
+const isCI = Boolean(process.env.CI);
+const chromiumExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
 
 export default defineConfig({
 	forbidOnly: isCI,
 	fullyParallel: true,
 	projects: [
 		{
-			name: 'Chrome',
+			name: 'Chromium',
 			use: {
 				...devices['Desktop Chrome'],
-				channel: isCI ? 'chrome' : undefined,
+				launchOptions: { executablePath: chromiumExecutable },
 				headless: true
 			}
 		},
@@ -18,7 +19,7 @@ export default defineConfig({
 			name: 'Mobile Chrome',
 			use: {
 				...devices['Pixel 5'],
-				channel: isCI ? 'chrome' : undefined,
+				launchOptions: { executablePath: chromiumExecutable },
 				headless: true
 			}
 		}

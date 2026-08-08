@@ -1,5 +1,5 @@
 <script lang="ts">
-	import QRCode from 'qrcode-svg';
+	import QRCode from 'qrcode';
 	import { authClient } from '$lib/auth-client';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -28,20 +28,32 @@
 	let copiedSecret = $state(false);
 	let copiedBackup = $state(false);
 
-	let qrSvg = $derived(
-		totpUri
-			? new QRCode({
-					content: totpUri,
-					width: 180,
-					height: 180,
-					padding: 0,
-					color: '#fafafa',
-					background: '#27272a',
-					ecl: 'M'
-				}).svg()
-			: ''
-	);
-	let qrCodeSrc = $derived(qrSvg ? `data:image/svg+xml;utf8,${encodeURIComponent(qrSvg)}` : '');
+	let qrCodeSrc = $state('');
+
+	$effect(() => {
+		const uri = totpUri;
+		if (!uri) {
+			qrCodeSrc = '';
+			return;
+		}
+
+		let cancelled = false;
+		void QRCode.toDataURL(uri, {
+			width: 180,
+			margin: 0,
+			color: {
+				dark: '#fafafa',
+				light: '#27272a'
+			},
+			errorCorrectionLevel: 'M'
+		}).then((src) => {
+			if (!cancelled) qrCodeSrc = src;
+		});
+
+		return () => {
+			cancelled = true;
+		};
+	});
 	let normalizedVerifyCode = $derived(verifyCode.replace(/\D/g, ''));
 	const invalidCodeMessage =
 		'Invalid code. Use the newest scanned Fyra entry and make sure your device time is set automatically.';

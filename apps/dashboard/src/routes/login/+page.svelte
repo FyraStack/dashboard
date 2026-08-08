@@ -69,15 +69,14 @@
 
 		if (loginData?.twoFactorRedirect) {
 			const methods = loginData.twoFactorMethods;
-			const missingMethodsMeansTotp = !methods || methods.includes('totp');
 
-			if (missingMethodsMeansTotp) {
-				goto(twoFactorHref('totp'));
+			if (methods?.includes('passkey')) {
+				goto(twoFactorHref('passkey'));
 				return;
 			}
 
-			if (methods.includes('passkey')) {
-				goto(twoFactorHref('passkey'));
+			if (!methods || methods.includes('totp')) {
+				goto(twoFactorHref('totp'));
 				return;
 			}
 		}

@@ -2,6 +2,7 @@ import { and, eq, sum } from 'drizzle-orm';
 import {
 	ensureProjectCustomer,
 	getProjectBillingState,
+	getProjectCreditsBalance,
 	invalidateProjectBillingState
 } from './autumn';
 import { initDrizzle } from '$lib/server/db';
@@ -32,7 +33,10 @@ export async function getProjectBillingOverview(projectId: string) {
 
 	const db = initDrizzle();
 	const now = Date.now();
-	const billingState = await getProjectBillingState(projectId);
+	const [billingState, credits] = await Promise.all([
+		getProjectBillingState(projectId),
+		getProjectCreditsBalance(projectId)
+	]);
 
 	const activeMeters = await db
 		.select({
@@ -105,6 +109,7 @@ export async function getProjectBillingOverview(projectId: string) {
 		syncError: billingState.syncError,
 		lastUpdatedAt: now,
 		activeResourceCount: activeMeters.length,
-		activeResources
+		activeResources,
+		credits
 	};
 }

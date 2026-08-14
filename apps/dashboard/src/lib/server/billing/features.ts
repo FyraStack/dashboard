@@ -18,8 +18,8 @@ export function hoursBetween(start: number, end: number) {
 	return Math.max(0, (end - start) / 3_600_000);
 }
 
-export function usageQuantity(units: number | string, periodStart: number, periodEnd: number) {
-	const quantity = Number(units) * hoursBetween(periodStart, periodEnd);
+export function billedQuantity(units: number | string, billableHours: number) {
+	const quantity = Number(units) * Math.max(0, billableHours);
 
 	return Number(quantity.toFixed(6));
 }

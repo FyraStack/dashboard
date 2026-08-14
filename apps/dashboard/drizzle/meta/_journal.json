@@ -204,6 +204,13 @@
       "when": 1785817075068,
       "tag": "0028_flashy_sleeper",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1786341821469,
+      "tag": "0029_boring_sersi",
+      "breakpoints": true
     }
   ]
 }

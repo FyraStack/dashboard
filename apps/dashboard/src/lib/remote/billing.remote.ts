@@ -4,6 +4,7 @@ import { type } from 'arktype';
 import { requireProjectAccess } from '$lib/server/auth-context';
 import {
 	openProjectBillingPortal,
+	purchaseProjectCredits,
 	setupProjectPayment,
 	validateProjectDiscountCode
 } from '$lib/server/billing/autumn';
@@ -17,6 +18,9 @@ import {
 
 const projectParams = type({ projectId: 'string' });
 const setupParams = type({ projectId: 'string', returnTo: 'string?', discountCode: 'string?' });
+const purchaseCreditsParams = type({ projectId: 'string', credits: 'number.integer > 0' });
+
+const MAX_CREDITS_PER_PURCHASE = 1_000_000;
 
 function safeReturnPath(value: string | undefined, fallback: string) {
 	if (!value || !value.startsWith('/') || value.startsWith('//')) return fallback;
@@ -48,6 +52,25 @@ export const openBillingPortal = command(projectParams, async (params) => {
 		params.projectId,
 		`${event.url.origin}/projects/${params.projectId}/billing`
 	);
+
+	return { url };
+});
+
+export const purchaseCredits = command(purchaseCreditsParams, async (params) => {
+	const event = getRequestEvent();
+	if (!event?.locals.user) error(401, 'Authentication required');
+	if (params.credits > MAX_CREDITS_PER_PURCHASE) {
+		error(
+			400,
+			`Credit purchases are limited to ${MAX_CREDITS_PER_PURCHASE.toLocaleString('en')} credits at a time.`
+		);
+	}
+
+	const db = initDrizzle();
+	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'owner');
+
+	const successUrl = `${event.url.origin}/projects/${params.projectId}/billing?billing_credits=complete`;
+	const url = await purchaseProjectCredits(params.projectId, params.credits, successUrl);
 
 	return { url };
 });

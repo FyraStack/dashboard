@@ -1,10 +1,16 @@
 import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { and, desc, eq, gt, lte } from 'drizzle-orm';
+import { and, desc, eq, gt, isNotNull, lt, lte, sql } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/auth-context';
 import { initDrizzle } from '$lib/server/db';
-import { billingUsageEvents, organization, vms, vmTypes } from '$lib/server/db/schema';
+import {
+	billingMeters,
+	billingUsageEvents,
+	organization,
+	vms,
+	vmTypes
+} from '$lib/server/db/schema';
 import { syncUsageEvent } from '$lib/server/billing/metering';
 
 export type VmBillingUsage = {
@@ -172,6 +178,21 @@ export const reverseVmBillingUsage = command(reverseParams, async (params) => {
 		.onConflictDoNothing({ target: billingUsageEvents.idempotencyKey })
 		.returning();
 	if (!event) error(409, 'An identical reversal was already recorded');
+
+	await db
+		.update(billingMeters)
+		.set({
+			hoursThisPeriod: sql`greatest(0, ${billingMeters.hoursThisPeriod} - ${usage.reversibleHours})`
+		})
+		.where(
+			and(
+				eq(billingMeters.resourceType, 'vm'),
+				eq(billingMeters.resourceId, params.vmId),
+				eq(billingMeters.active, true),
+				isNotNull(billingMeters.capPeriodStart),
+				lt(billingMeters.capPeriodStart, params.periodEnd)
+			)
+		);
 
 	const syncStatus = await syncUsageEvent(event.id);
 

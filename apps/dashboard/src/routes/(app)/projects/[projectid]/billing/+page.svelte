@@ -1,7 +1,9 @@
 <script lang="ts">
 	import BillingSetupDialog from '$lib/components/billing-setup-dialog.svelte';
+	import BuyCreditsDialog from '$lib/components/buy-credits-dialog.svelte';
 	import { openBillingPortal } from '$lib/remote/billing.remote';
 	import { getErrorMessage } from '$lib/utils';
+	import DollarSign from '~icons/nucleo/dollar-sign';
 	import Cpu from '~icons/nucleo/cpu';
 	import CreditCard from '~icons/nucleo/credit-card';
 	import HardDrive from '~icons/nucleo/hard-drive';
@@ -27,9 +29,18 @@
 		unit?: string;
 	};
 
+	type CreditsDetails = {
+		remaining?: number;
+		usage?: number;
+		overageUsage?: number;
+		estimatedOverageCost?: number | null;
+		prepaidPrice?: { amount: number | null; billingUnits: number } | null;
+	};
+
 	type BillingDetails = Record<string, unknown> & {
 		activeResourceCount?: number;
 		activeResources?: ActiveResource[];
+		credits?: CreditsDetails | null;
 		customer?: CustomerDetails | null;
 		lastUpdatedAt?: DateValue;
 		setupRequired?: boolean;
@@ -39,6 +50,7 @@
 	let { data } = $props();
 
 	let billingSetupOpen = $state(false);
+	let buyCreditsOpen = $state(false);
 	let portalLoading = $state(false);
 	let actionError = $state('');
 
@@ -58,6 +70,14 @@
 		activeResources.reduce((total, r) => total + (typeof r.cost === 'number' ? r.cost : 0), 0)
 	);
 	const hasCost = $derived(activeResources.some((r) => typeof r.cost === 'number'));
+	const credits = $derived(billing?.credits ?? null);
+	const canBuyCredits = $derived(Boolean(credits) && canManageBilling && billingReady);
+
+	function formatCredits(value: number | undefined) {
+		return new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(
+			typeof value === 'number' ? value : 0
+		);
+	}
 
 	function readString(source: Record<string, unknown> | null | undefined, key: string) {
 		const value = source?.[key];
@@ -146,6 +166,13 @@
 		mode="billing-page"
 		returnTo={`/projects/${projectId}/billing`}
 	/>
+	{#if credits}
+		<BuyCreditsDialog
+			bind:open={buyCreditsOpen}
+			{projectId}
+			prepaidPrice={credits.prepaidPrice ?? null}
+		/>
+	{/if}
 
 	<div class="flex h-12 shrink-0 items-center border-b border-border px-5">
 		<div class="flex items-center gap-2">
@@ -230,6 +257,38 @@
 							{hasCost ? formatCost(totalCost) : '-'}
 						</p>
 					</div>
+					{#if credits}
+						<div class="rounded-md border border-border/60 bg-background/40 p-3.5">
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									{#snippet child({ props })}
+										<div {...props} class="flex w-fit cursor-help items-center gap-2">
+											<DollarSign class="size-4 text-amber-400" />
+											<p
+												class="text-[0.625rem] font-medium tracking-wide text-muted-foreground uppercase"
+											>
+												Credits
+											</p>
+										</div>
+									{/snippet}
+								</Tooltip.Trigger>
+								<Tooltip.Content side="top">
+									<p class="max-w-[16rem]">
+										Prepaid credits remaining. Usage draws these down first; anything beyond is
+										billed pay-as-you-go at the end of the cycle.
+									</p>
+								</Tooltip.Content>
+							</Tooltip.Root>
+							<p class="mt-1 text-sm font-semibold text-foreground tabular-nums">
+								{formatCredits(credits.remaining)}
+							</p>
+							{#if typeof credits.estimatedOverageCost === 'number' && credits.estimatedOverageCost > 0}
+								<p class="mt-0.5 text-xs text-muted-foreground tabular-nums">
+									{formatCost(credits.estimatedOverageCost)} pay-as-you-go this cycle
+								</p>
+							{/if}
+						</div>
+					{/if}
 				</div>
 
 				<div class="mt-6">
@@ -249,6 +308,15 @@
 									? 'Open billing portal'
 									: 'Set up billing'}
 						</button>
+						{#if canBuyCredits}
+							<button
+								class="flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/50"
+								onclick={() => (buyCreditsOpen = true)}
+							>
+								<DollarSign class="size-4 text-muted-foreground" />
+								Buy credits
+							</button>
+						{/if}
 					</div>
 				</div>
 			</div>

@@ -1,23 +1,3 @@
-/**
- * A read-only mirror of the public schema for analytics/BI tools such as Metabase.
- * Basically you can think of this as the same as public, but with fields redacted for privacy and security reasons.
- * When setting this up, please make sure to set up a role which ONLY has read-only access to this schema.
- *
- * Here's an example:
- * -- Add LOGIN and a password when you set this up for real, otherwise nothing can connect.
- * CREATE ROLE analytics_role;
- * -- In newer versions of postgres, the following revoke shouldn't be necessary, but it doesn't hurt.
- * REVOKE ALL ON SCHEMA public FROM analytics_role;
- * -- Grants only read-only access to analytics_role.
- * GRANT USAGE ON SCHEMA analytics TO analytics_role;
- * GRANT SELECT ON ALL TABLES IN SCHEMA analytics TO analytics_role;
- * -- If we create new tables in this schema in the future, we want the role to be able to access them.
- * -- Run this one as the role that runs migrations: it attaches to whoever executes it, so running
- * -- it as an admin instead means later views silently never become readable.
- * -- You can think of this as modifying the default permission set your migration role uses when creating tables in the schema.
- * ALTER DEFAULT PRIVILEGES IN SCHEMA analytics GRANT SELECT ON TABLES TO analytics_role;
- */
-
 import { pgSchema } from 'drizzle-orm/pg-core';
 import {
 	apiTokens,

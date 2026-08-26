@@ -8,8 +8,8 @@ import {
 	sendProjectSuspendedEmail
 } from '$lib/server/email-notifications';
 
-const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
-const GRACE_PERIOD_DAYS = 7;
+const GRACE_PERIOD_DAYS = 1000;
+const GRACE_PERIOD_MS = GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000;
 const PAST_DUE_STATUSES = new Set(['past_due', 'payment_required']);
 
 async function suspendProjectVms(projectId: string) {

@@ -7,15 +7,35 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import ComingSoon from '$lib/components/coming-soon.svelte';
 	import { confirmDestructive } from '$lib/confirm.svelte';
-	import { deleteVm } from '$lib/remote/vms.remote';
+	import { deleteVm, updateVmHostname } from '$lib/remote/vms.remote';
+	import { getErrorMessage } from '$lib/utils';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
-	let nameValue = $derived(selectedServer.name);
+	let nameValue = $state('');
+	let saving = $state(false);
+	$effect(() => {
+		if (!nameValue) nameValue = selectedServer.name;
+	});
 	let deleting = $state(false);
+	let settingsError = $state('');
 	let deleteError = $state('');
+
+	async function handleSave() {
+		const hostname = nameValue.trim();
+		if (!hostname || saving || hostname === selectedServer.name) return;
+		saving = true;
+		settingsError = '';
+		try {
+			await updateVmHostname({ vmId: selectedServer.id, hostname });
+			await invalidate('project:vms');
+		} catch (error) {
+			settingsError = getErrorMessage(error, 'Failed to update server hostname.');
+		} finally {
+			saving = false;
+		}
+	}
 
 	async function handleDelete() {
 		if (deleting) return;
@@ -49,11 +69,14 @@
 		</p>
 	</div>
 	<div class="space-y-2">
-		<Label for="server-name-input">Server Name</Label><Input
+		<Label for="server-name-input">Server hostname</Label><Input
 			id="server-name-input"
 			bind:value={nameValue}
-			disabled
+			disabled={saving || selectedServer.status === 'deleting'}
 		/>
+		<p class="text-xs text-muted-foreground">
+			This updates the guest hostname and the server name shown in the dashboard.
+		</p>
 	</div>
 	<div class="space-y-2">
 		<Label for="server-id-input">Server ID</Label><Input
@@ -63,12 +86,23 @@
 			class="font-mono"
 		/>
 	</div>
+	{#if settingsError}
+		<p class="text-xs text-red-400">{settingsError}</p>
+	{/if}
 	{#if deleteError}
 		<p class="text-xs text-red-400">{deleteError}</p>
 	{/if}
 	<div class="flex items-center gap-2">
-		<Button size="sm" disabled>Save Changes</Button>
-		<ComingSoon />
+		<Button
+			size="sm"
+			disabled={saving ||
+				selectedServer.status === 'deleting' ||
+				!nameValue.trim() ||
+				nameValue.trim() === selectedServer.name}
+			onclick={handleSave}
+		>
+			{saving ? 'Saving...' : 'Save Changes'}
+		</Button>
 	</div>
 	<div class="border-t border-border pt-4">
 		<Button

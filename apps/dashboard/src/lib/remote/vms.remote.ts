@@ -15,6 +15,7 @@ import { requireProjectAccess } from '$lib/server/auth-context';
 import { isProjectBillingExempt, requireProjectBillingActive } from '$lib/server/billing/autumn';
 import { queueVmDeletion } from '$lib/server/vm-deletion';
 import { provisionVm } from '$lib/server/vm-provisioning';
+import { isValidPtrHostname } from '$lib/ptr';
 import { instrument, timingLog } from '$lib/server/observability';
 import {
 	accessibilityFixtureEnabled,
@@ -576,6 +577,27 @@ export const createVm = command(createParams, async (params) => {
 		sshPublicKeys: publicKeys,
 		password: params.password
 	});
+});
+
+const updateHostnameParams = type({ vmId: 'string', hostname: 'string' });
+export const updateVmHostname = command(updateHostnameParams, async (params) => {
+	const event = getRequestEvent();
+	if (!event?.locals.user) error(401, 'Authentication required');
+
+	const db = initDrizzle();
+	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
+	if (!row) error(404, `VM "${params.vmId}" not found`);
+	if (!row.active) error(400, 'Cannot rename an inactive VM');
+	if (!row.ownerProjectId) error(400, 'VM is not attached to a project');
+	await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
+
+	const hostname = params.hostname.trim();
+	if (!isValidPtrHostname(hostname)) error(400, 'Hostname must be a valid hostname');
+
+	const backend = getBackend(row.backend);
+	await backend.updateVmHostname(row.id, hostname, row.proxmoxId ?? undefined);
+	await db.update(vms).set({ name: hostname }).where(eq(vms.id, row.id));
+	return { id: row.id, name: hostname };
 });
 
 const deleteParams = type({ vmId: 'string' });

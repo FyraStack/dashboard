@@ -12,6 +12,7 @@ import { createBillingMeter } from '$lib/server/billing/metering';
 import { closeRequestDb, initDrizzle, type Database } from '$lib/server/db';
 import { baseImages, vms, vmTypes } from '$lib/server/db/schema';
 import { allocateVmNetworking, generateMacAddress, releaseVmNetworking } from '$lib/server/ipam';
+import { applyDefaultPtrRecords } from '$lib/server/ptr-records';
 
 export type ProvisionVmInput = {
 	projectId: string;
@@ -183,6 +184,11 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 			lastKnownIpv6: ipv6Allocation?.address ?? null
 		})
 		.where(eq(vms.id, vmId));
+
+	runInBackground(
+		applyDefaultPtrRecords(db, networkingAllocations),
+		`apply default PTR records for VM ${vmId}`
+	);
 	if (featureId) {
 		await createBillingMeter({
 			projectId: input.projectId,

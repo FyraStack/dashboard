@@ -32,3 +32,4 @@ Details, one-time machine setup, and caveats: [dev/README.md](dev/README.md)
   - Google
   - Internal cron secret
   - Cloudflare email key
+  - Bunny.net API key

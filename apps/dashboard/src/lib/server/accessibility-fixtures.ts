@@ -224,6 +224,7 @@ export const accessibilityFixtureIpamPrefixes = [
 		whitelistStart: null,
 		whitelistEnd: null,
 		gatewayAddress: '192.0.2.1',
+		bunnyDnsZone: null,
 		allocated: 2,
 		capacity: '254',
 		available: '252',

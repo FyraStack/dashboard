@@ -1,10 +1,10 @@
 import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { initDrizzle, type Database } from '$lib/server/db';
 import { runInBackground } from '$lib/server/background';
-import { vms, vmTypes, sshKeys } from '$lib/server/db/schema';
+import { vms, vmTypes, sshKeys, ipamAllocations } from '$lib/server/db/schema';
 import {
 	getBackend,
 	type VmBackend,
@@ -54,9 +54,7 @@ function getKnownNetworkInterfaces(row: VmRow): VmInfo['networkInterfaces'] | un
 	};
 }
 
-function getKnownLive(row: VmRow): VmInfo | null {
-	if (!row.lastKnownStatus && !row.lastKnownIpv4 && !row.lastKnownIpv6) return null;
-
+function baseKnownLive(row: VmRow): VmInfo {
 	return {
 		id: row.name,
 		proxmoxId: row.proxmoxId ?? undefined,
@@ -70,6 +68,30 @@ function getKnownLive(row: VmRow): VmInfo | null {
 		networkInterfaces: getKnownNetworkInterfaces(row),
 		metrics: undefined
 	};
+}
+
+function getKnownLive(row: VmRow): VmInfo | null {
+	if (!row.lastKnownStatus && !row.lastKnownIpv4 && !row.lastKnownIpv6) return null;
+	return baseKnownLive(row);
+}
+
+async function getAssignedIps(db: Database, vmIds: string[]): Promise<Map<string, string[]>> {
+	const assigned = new Map<string, string[]>();
+	if (vmIds.length === 0) return assigned;
+
+	const rows = await db.query.ipamAllocations.findMany({
+		where: inArray(ipamAllocations.associatedVmId, vmIds),
+		columns: { associatedVmId: true, address: true }
+	});
+
+	for (const row of rows) {
+		if (!row.address) continue;
+		const addresses = assigned.get(row.associatedVmId) ?? [];
+		addresses.push(row.address);
+		assigned.set(row.associatedVmId, addresses);
+	}
+
+	return assigned;
 }
 
 function mergeKnownLive(row: VmRow, live: VmInfo | null): VmInfo | null {
@@ -91,7 +113,18 @@ function getNetworkIpSnapshot(networkInterfaces: VmInfo['networkInterfaces'] | u
 	};
 }
 
-function mapVmRow(row: VmRow, live: VmInfo | null) {
+function mapVmRow(row: VmRow, liveInput: VmInfo | null, assignedIps?: string[]) {
+	let live = mergeKnownLive(row, liveInput);
+	if (assignedIps?.length) {
+		live = {
+			...(live ?? baseKnownLive(row)),
+			networkInterfaces: {
+				assigned: { ipAddresses: assignedIps },
+				...(live?.networkInterfaces ?? {})
+			}
+		};
+	}
+
 	return {
 		id: row.id,
 		name: row.name,
@@ -110,7 +143,7 @@ function mapVmRow(row: VmRow, live: VmInfo | null) {
 					storageAmount: row.vmTypeStorageAmount ?? 0
 				}
 			: null,
-		live: mergeKnownLive(row, live)
+		live
 	};
 }
 
@@ -221,8 +254,12 @@ export const listVms = query(listParams, async (params) => {
 		where ${vms.ownerProjectId} = ${params.projectId}
 	`);
 	const rows = result.rows as VmRow[];
+	const assignedIps = await getAssignedIps(
+		db,
+		rows.map((row) => row.id)
+	);
 
-	return rows.map((row) => mapVmRow(row, null));
+	return rows.map((row) => mapVmRow(row, null, assignedIps.get(row.id)));
 });
 
 const getParams = type({ vmId: 'string' });
@@ -276,6 +313,8 @@ export const getVm = query(getParams, async (params) => {
 		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId);
 	}
 
+	const assignedIps = await getAssignedIps(db, [row.id]);
+
 	let live: VmInfo | null = null;
 	try {
 		const backend = getBackend(row.backend);
@@ -311,7 +350,7 @@ export const getVm = query(getParams, async (params) => {
 		'vm.id': params.vmId,
 		duration_ms: Math.round((performance.now() - started) * 100) / 100
 	});
-	return mapVmRow(row, live);
+	return mapVmRow(row, live, assignedIps.get(row.id));
 });
 
 const metricsHistoryParams = type({
@@ -464,6 +503,11 @@ export const listVmStatuses = query(statusParams, async (params) => {
 		}
 	}
 
+	const assignedIps = await getAssignedIps(
+		db,
+		rows.map((row) => row.id)
+	);
+
 	const persistable: { id: string; live: VmInfo }[] = [];
 	const statuses = rows.map((row) => {
 		const live =
@@ -471,7 +515,7 @@ export const listVmStatuses = query(statusParams, async (params) => {
 			liveById.get(row.id) ??
 			null;
 		if (live) persistable.push({ id: row.id, live });
-		const mapped = mapVmRow(row, live);
+		const mapped = mapVmRow(row, live, assignedIps.get(row.id));
 		return {
 			id: mapped.id,
 			status: toDashboardStatus(row.status, mapped.live?.status),

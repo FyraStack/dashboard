@@ -1,6 +1,6 @@
 {
-  "id": "c6afabf0-439d-40df-b743-ed76ee468dc5",
-  "prevId": "fa8d27a2-da3c-42f8-87e7-8436f32155d6",
+  "id": "aeacfc9b-f1de-4a1f-8daa-b95563d80009",
+  "prevId": "c6afabf0-439d-40df-b743-ed76ee468dc5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -220,6 +220,25 @@
           "type": "bigint",
           "primaryKey": false,
           "notNull": true
+        },
+        "cap_period_start": {
+          "name": "cap_period_start",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cap_period_end": {
+          "name": "cap_period_end",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hours_this_period": {
+          "name": "hours_this_period",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
         },
         "active": {
           "name": "active",

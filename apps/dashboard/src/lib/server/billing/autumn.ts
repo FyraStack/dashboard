@@ -494,17 +494,10 @@ export function purchaseProjectCredits(projectId: string, credits: number) {
 
 		await ensureProjectCustomer(projectId);
 
-		const client = createAutumnClient();
-		const customer = await client.customers.get({ customerId: projectId });
-		const prepaid = customer.balances?.[featureId]?.breakdown?.find(
-			(item) => item.price?.billingMethod === 'prepaid'
-		);
-		const currentQuantity = (prepaid?.includedGrant ?? 0) + (prepaid?.prepaidGrant ?? 0);
-
-		const response = await client.billing.update({
+		const response = await createAutumnClient().billing.update({
 			customerId: projectId,
 			planId,
-			featureQuantities: [{ featureId, quantity: currentQuantity + credits }],
+			featureQuantities: [{ featureId, quantity: credits }],
 			redirectMode: 'if_required'
 		});
 

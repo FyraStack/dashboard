@@ -69,8 +69,7 @@ export const purchaseCredits = command(purchaseCreditsParams, async (params) => 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'owner');
 
-	const successUrl = `${event.url.origin}/projects/${params.projectId}/billing?billing_credits=complete`;
-	const url = await purchaseProjectCredits(params.projectId, params.credits, successUrl);
+	const url = await purchaseProjectCredits(params.projectId, params.credits);
 
 	return { url };
 });

@@ -468,29 +468,49 @@ export async function getProjectCreditsBalance(projectId: string) {
 	}
 }
 
-export async function purchaseProjectCredits(
-	projectId: string,
-	credits: number,
-	successUrl: string
-) {
-	const featureId = creditsFeatureId();
-	const planId = defaultPlanId();
-	if (!isBillingConfigured() || !featureId || !planId) {
-		error(501, 'Credit purchases are not configured in this environment.');
-	}
+const creditPurchaseLocks = new Map<string, Promise<void>>();
 
-	await ensureProjectCustomer(projectId);
-
-	const response = await createAutumnClient().billing.attach({
-		customerId: projectId,
-		planId,
-		featureQuantities: [{ featureId, quantity: credits }],
-		redirectMode: 'if_required',
-		successUrl
+function withProjectCreditPurchaseLock<T>(projectId: string, task: () => Promise<T>): Promise<T> {
+	const previous = creditPurchaseLocks.get(projectId) ?? Promise.resolve();
+	const result = previous.then(task);
+	const settled = result.then(
+		() => undefined,
+		() => undefined
+	);
+	creditPurchaseLocks.set(projectId, settled);
+	settled.then(() => {
+		if (creditPurchaseLocks.get(projectId) === settled) creditPurchaseLocks.delete(projectId);
 	});
+	return result;
+}
 
-	invalidateProjectBillingState(projectId);
-	return response.paymentUrl ?? null;
+export function purchaseProjectCredits(projectId: string, credits: number) {
+	return withProjectCreditPurchaseLock(projectId, async () => {
+		const featureId = creditsFeatureId();
+		const planId = defaultPlanId();
+		if (!isBillingConfigured() || !featureId || !planId) {
+			error(501, 'Credit purchases are not configured in this environment.');
+		}
+
+		await ensureProjectCustomer(projectId);
+
+		const client = createAutumnClient();
+		const customer = await client.customers.get({ customerId: projectId });
+		const prepaid = customer.balances?.[featureId]?.breakdown?.find(
+			(item) => item.price?.billingMethod === 'prepaid'
+		);
+		const currentQuantity = (prepaid?.includedGrant ?? 0) + (prepaid?.prepaidGrant ?? 0);
+
+		const response = await client.billing.update({
+			customerId: projectId,
+			planId,
+			featureQuantities: [{ featureId, quantity: currentQuantity + credits }],
+			redirectMode: 'if_required'
+		});
+
+		invalidateProjectBillingState(projectId);
+		return response.paymentUrl ?? null;
+	});
 }
 
 export async function getProjectBillingPeriodAnchor(projectId: string) {

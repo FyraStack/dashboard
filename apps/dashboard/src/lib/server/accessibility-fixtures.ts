@@ -135,7 +135,8 @@ export const accessibilityFixtureBillingOverview = {
 			hours: 720,
 			cost: 36.0
 		}
-	]
+	],
+	invoices: []
 };
 
 export const accessibilityFixtureAdminUsers = [

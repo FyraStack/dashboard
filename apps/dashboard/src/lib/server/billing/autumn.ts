@@ -506,6 +506,28 @@ export function purchaseProjectCredits(projectId: string, credits: number) {
 	});
 }
 
+export async function getProjectInvoices(projectId: string) {
+	if (!isBillingConfigured()) return [];
+
+	try {
+		const customer = await createAutumnClient().customers.get({
+			customerId: projectId,
+			expand: ['invoices']
+		});
+
+		return (customer.invoices ?? []).map((invoice) => ({
+			stripeId: invoice.stripeId,
+			status: invoice.status,
+			total: invoice.total,
+			currency: invoice.currency,
+			createdAt: invoice.createdAt,
+			hostedInvoiceUrl: invoice.hostedInvoiceUrl ?? null
+		}));
+	} catch {
+		return [];
+	}
+}
+
 export async function getProjectBillingPeriodAnchor(projectId: string) {
 	if (!isBillingConfigured()) return null;
 

@@ -36,11 +36,21 @@
 		prepaidPrice?: { amount: number | null; billingUnits: number } | null;
 	};
 
+	type InvoiceDetails = {
+		stripeId: string;
+		status: string;
+		total: number;
+		currency: string;
+		createdAt: number;
+		hostedInvoiceUrl: string | null;
+	};
+
 	type BillingDetails = Record<string, unknown> & {
 		activeResourceCount?: number;
 		activeResources?: ActiveResource[];
 		credits?: CreditsDetails | null;
 		customer?: CustomerDetails | null;
+		invoices?: InvoiceDetails[];
 		lastUpdatedAt?: DateValue;
 		setupRequired?: boolean;
 		status?: string;
@@ -70,6 +80,9 @@
 	);
 	const hasCost = $derived(activeResources.some((r) => typeof r.cost === 'number'));
 	const credits = $derived(billing?.credits ?? null);
+	const invoices = $derived(
+		[...(billing?.invoices ?? [])].sort((a, b) => b.createdAt - a.createdAt)
+	);
 	const canBuyCredits = $derived(Boolean(credits) && canManageBilling && billingReady);
 	const creditRate = $derived(
 		credits?.prepaidPrice?.amount != null && credits.prepaidPrice.billingUnits > 0
@@ -96,6 +109,28 @@
 	function formatCost(value: number | null | undefined) {
 		if (typeof value !== 'number') return null;
 		return new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' }).format(value);
+	}
+
+	function formatInvoiceDate(timestamp: number) {
+		return new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(timestamp));
+	}
+
+	function formatInvoiceTotal(invoice: InvoiceDetails) {
+		try {
+			return new Intl.NumberFormat('en', {
+				style: 'currency',
+				currency: invoice.currency.toUpperCase()
+			}).format(invoice.total);
+		} catch {
+			return `${invoice.total} ${invoice.currency.toUpperCase()}`;
+		}
+	}
+
+	function invoiceStatusClasses(status: string) {
+		const s = status.toLowerCase();
+		if (s === 'paid') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400';
+		if (s === 'open' || s === 'draft') return 'bg-amber-500/10 text-amber-700 dark:text-amber-400';
+		return 'bg-muted/60 text-muted-foreground';
 	}
 
 	function friendlyLabel(value: unknown, fallback: string) {
@@ -243,10 +278,7 @@
 
 		<div class="mx-auto max-w-6xl px-6 py-8">
 			<div class="flex flex-wrap items-end justify-between gap-4">
-				<div>
-					<h1 class="text-xl font-semibold text-foreground">Billing</h1>
-					<p class="mt-1 text-sm text-muted-foreground">Usage and costs for this project</p>
-				</div>
+				<h1 class="text-xl font-semibold text-foreground">Billing</h1>
 				<div class="flex items-center gap-2">
 					{#if canBuyCredits}
 						<button
@@ -322,10 +354,78 @@
 
 			<div class="mt-10">
 				<h2 class="text-sm font-semibold text-foreground">Active resources</h2>
-				<p class="mt-0.5 text-xs text-muted-foreground">
-					Currently contributing to your project bill
-				</p>
 				{@render resourceRows()}
+			</div>
+
+			<div class="mt-10">
+				<h2 class="text-sm font-semibold text-foreground">Invoices</h2>
+				{#if invoices.length}
+					<div class="-mx-6 -my-2 mt-2 overflow-x-auto whitespace-nowrap">
+						<div class="inline-block min-w-full px-6 py-2 align-middle">
+							<table class="w-full">
+								<thead>
+									<tr>
+										<th
+											class="py-2 text-left text-xs font-medium whitespace-nowrap text-muted-foreground"
+										>
+											Date
+										</th>
+										<th
+											class="py-2 text-left text-xs font-medium whitespace-nowrap text-muted-foreground"
+										>
+											Status
+										</th>
+										<th
+											class="py-2 text-right text-xs font-medium whitespace-nowrap text-muted-foreground"
+										>
+											Amount
+										</th>
+										<th class="py-2">
+											<span class="sr-only">View invoice</span>
+										</th>
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-border/40">
+									{#each invoices as invoice (invoice.stripeId)}
+										<tr>
+											<td class="py-3 pr-4 text-sm text-foreground">
+												{formatInvoiceDate(invoice.createdAt)}
+											</td>
+											<td class="py-3 pr-4">
+												<span
+													class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {invoiceStatusClasses(
+														invoice.status
+													)}"
+												>
+													{friendlyLabel(invoice.status, 'Unknown')}
+												</span>
+											</td>
+											<td class="py-3 text-right text-sm text-foreground tabular-nums">
+												{formatInvoiceTotal(invoice)}
+											</td>
+											<td class="py-3 pl-4 text-right text-sm">
+												{#if invoice.hostedInvoiceUrl}
+													<a
+														href={invoice.hostedInvoiceUrl}
+														target="_blank"
+														rel="noreferrer"
+														class="font-medium text-foreground hover:underline"
+													>
+														View
+													</a>
+												{/if}
+											</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				{:else}
+					<div class="mt-4 rounded-md border border-border/60 bg-background/30 p-8 text-center">
+						<p class="text-sm text-muted-foreground">No invoices yet.</p>
+					</div>
+				{/if}
 			</div>
 		</div>
 	</div>

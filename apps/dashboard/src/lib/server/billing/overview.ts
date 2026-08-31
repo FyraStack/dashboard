@@ -3,6 +3,7 @@ import {
 	ensureProjectCustomer,
 	getProjectBillingState,
 	getProjectCreditsBalance,
+	getProjectInvoices,
 	invalidateProjectBillingState
 } from './autumn';
 import { initDrizzle } from '$lib/server/db';
@@ -33,9 +34,10 @@ export async function getProjectBillingOverview(projectId: string) {
 
 	const db = initDrizzle();
 	const now = Date.now();
-	const [billingState, credits] = await Promise.all([
+	const [billingState, credits, invoices] = await Promise.all([
 		getProjectBillingState(projectId),
-		getProjectCreditsBalance(projectId)
+		getProjectCreditsBalance(projectId),
+		getProjectInvoices(projectId)
 	]);
 
 	const activeMeters = await db
@@ -110,6 +112,7 @@ export async function getProjectBillingOverview(projectId: string) {
 		lastUpdatedAt: now,
 		activeResourceCount: activeMeters.length,
 		activeResources,
-		credits
+		credits,
+		invoices
 	};
 }

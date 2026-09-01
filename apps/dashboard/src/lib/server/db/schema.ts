@@ -196,6 +196,9 @@ export const billingMeters = pgTable(
 		featureId: text('feature_id').notNull(),
 		units: numeric('units').notNull(),
 		lastMeteredAt: bigint('last_metered_at', { mode: 'number' }).notNull(),
+		capPeriodStart: bigint('cap_period_start', { mode: 'number' }),
+		capPeriodEnd: bigint('cap_period_end', { mode: 'number' }),
+		hoursThisPeriod: numeric('hours_this_period').notNull().default('0'),
 		active: boolean('active').notNull().default(true),
 		createdAt: bigint('created_at', { mode: 'number' }).notNull(),
 		endedAt: bigint('ended_at', { mode: 'number' })

@@ -24,6 +24,9 @@ jobs:
       - run: pnpm run check
       - run: pnpm run lint
       - run: pnpm -r build
+      - run: pnpm --filter stack-dashboard run db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - run: pnpm --filter stack-dashboard run cf:deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

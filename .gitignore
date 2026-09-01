@@ -41,3 +41,4 @@ dev/vyos/.cache
 
 # local wireguard config
 dev/fyra-wg.conf
+core.*

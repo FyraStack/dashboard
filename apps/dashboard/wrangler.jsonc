@@ -18,6 +18,7 @@
 		"EMAIL_FROM_ADDRESS": "no-reply@fyrastack.com",
 		"EMAIL_FROM_NAME": "Fyra Stack",
 		"EMAIL_REPLY_TO": "support@fyralabs.com",
+		"AUTUMN_ENABLED": "false",
 		"AUTUMN_DEFAULT_PLAN_ID": "stack",
 		"AUTUMN_SERVER_ENTITY_FEATURE_ID": "active_servers",
 		"VYOS_API_URL": "https://vyos-01.example",

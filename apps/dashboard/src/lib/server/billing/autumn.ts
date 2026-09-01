@@ -38,6 +38,10 @@ function defaultPlanId() {
 	return getRuntimeEnv().AUTUMN_DEFAULT_PLAN_ID;
 }
 
+export function creditsFeatureId() {
+	return getRuntimeEnv().AUTUMN_CREDITS_FEATURE_ID || null;
+}
+
 function isActiveSubscription(subscription: {
 	planId?: string | null;
 	status?: string | null;
@@ -426,6 +430,115 @@ export async function requireProjectBillingActive(projectId: string) {
 	if (state.status !== 'active' && state.status !== 'provider_unavailable') {
 		error(402, 'This project does not have active billing.');
 	}
+}
+
+export async function getProjectCreditsBalance(projectId: string) {
+	const featureId = creditsFeatureId();
+	if (!featureId || !isBillingConfigured()) return null;
+
+	try {
+		const customer = await createAutumnClient().customers.get({ customerId: projectId });
+		const balance = customer.balances?.[featureId];
+		if (!balance) return null;
+
+		const breakdowns = balance.breakdown ?? [];
+		const overage = breakdowns.find((item) => item.price?.billingMethod === 'usage_based');
+		const prepaid = breakdowns.find((item) => item.price?.billingMethod === 'prepaid');
+		const overageRate =
+			overage?.price?.amount != null && overage.price.billingUnits > 0
+				? overage.price.amount / overage.price.billingUnits
+				: null;
+		const overageUsage = overage?.usage ?? 0;
+
+		return {
+			featureId,
+			remaining: balance.remaining ?? 0,
+			usage: balance.usage ?? 0,
+			overageUsage,
+			overageRate,
+			estimatedOverageCost:
+				overageRate != null ? Number((overageUsage * overageRate).toFixed(2)) : null,
+			prepaidPrice: prepaid?.price
+				? { amount: prepaid.price.amount ?? null, billingUnits: prepaid.price.billingUnits }
+				: null,
+			nextResetAt: balance.nextResetAt ?? null
+		};
+	} catch {
+		return null;
+	}
+}
+
+const creditPurchaseLocks = new Map<string, Promise<void>>();
+
+function withProjectCreditPurchaseLock<T>(projectId: string, task: () => Promise<T>): Promise<T> {
+	const previous = creditPurchaseLocks.get(projectId) ?? Promise.resolve();
+	const result = previous.then(task);
+	const settled = result.then(
+		() => undefined,
+		() => undefined
+	);
+	creditPurchaseLocks.set(projectId, settled);
+	settled.then(() => {
+		if (creditPurchaseLocks.get(projectId) === settled) creditPurchaseLocks.delete(projectId);
+	});
+	return result;
+}
+
+export function purchaseProjectCredits(projectId: string, credits: number) {
+	return withProjectCreditPurchaseLock(projectId, async () => {
+		const featureId = creditsFeatureId();
+		const planId = defaultPlanId();
+		if (!isBillingConfigured() || !featureId || !planId) {
+			error(501, 'Credit purchases are not configured in this environment.');
+		}
+
+		await ensureProjectCustomer(projectId);
+
+		const response = await createAutumnClient().billing.update({
+			customerId: projectId,
+			planId,
+			featureQuantities: [{ featureId, quantity: credits }],
+			redirectMode: 'if_required'
+		});
+
+		invalidateProjectBillingState(projectId);
+		return response.paymentUrl ?? null;
+	});
+}
+
+export async function getProjectInvoices(projectId: string) {
+	if (!isBillingConfigured()) return [];
+
+	try {
+		const customer = await createAutumnClient().customers.get({
+			customerId: projectId,
+			expand: ['invoices']
+		});
+
+		return (customer.invoices ?? []).map((invoice) => ({
+			stripeId: invoice.stripeId,
+			status: invoice.status,
+			total: invoice.total,
+			currency: invoice.currency,
+			createdAt: invoice.createdAt,
+			hostedInvoiceUrl: invoice.hostedInvoiceUrl ?? null
+		}));
+	} catch {
+		return [];
+	}
+}
+
+export async function getProjectBillingPeriodAnchor(projectId: string) {
+	if (!isBillingConfigured()) return null;
+
+	const planId = defaultPlanId();
+	if (!planId) return null;
+
+	const customer = await createAutumnClient().customers.get({ customerId: projectId });
+	const subscription = customer.subscriptions.find((item) => item.planId === planId);
+	if (!subscription?.currentPeriodStart || !subscription.currentPeriodEnd) return null;
+
+	return { start: subscription.currentPeriodStart, end: subscription.currentPeriodEnd };
 }
 
 export async function openProjectBillingPortal(projectId: string, returnUrl: string) {

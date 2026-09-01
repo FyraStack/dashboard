@@ -35,14 +35,53 @@ export function calendarMonthPeriod(at: number): CapPeriod {
 	};
 }
 
+const DAY_MS = 86_400_000;
+const AVERAGE_MONTH_MS = 30.44 * DAY_MS;
+
+function isMonthlyLength(length: number) {
+	return length >= 28 * DAY_MS && length <= 31 * DAY_MS;
+}
+
+function addUtcMonths(at: number, months: number) {
+	const date = new Date(at);
+	const day = date.getUTCDate();
+	const shifted = new Date(
+		Date.UTC(
+			date.getUTCFullYear(),
+			date.getUTCMonth() + months,
+			1,
+			date.getUTCHours(),
+			date.getUTCMinutes(),
+			date.getUTCSeconds(),
+			date.getUTCMilliseconds()
+		)
+	);
+	const lastDay = new Date(
+		Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, 0)
+	).getUTCDate();
+	shifted.setUTCDate(Math.min(day, lastDay));
+	return shifted.getTime();
+}
+
 export function billingCyclePeriod(anchor: CapPeriod, at: number): CapPeriod {
 	const length = anchor.end - anchor.start;
 	if (length <= 0) return calendarMonthPeriod(at);
+	if (at >= anchor.start && at < anchor.end) return { start: anchor.start, end: anchor.end };
 
-	const cycles = Math.floor((at - anchor.start) / length);
-	const start = anchor.start + cycles * length;
+	if (!isMonthlyLength(length)) {
+		const cycles = Math.floor((at - anchor.start) / length);
+		const start = anchor.start + cycles * length;
+		return { start, end: start + length };
+	}
 
-	return { start, end: start + length };
+	let cycles = Math.round((at - anchor.start) / AVERAGE_MONTH_MS);
+	while (addUtcMonths(anchor.start, cycles) > at) cycles -= 1;
+	while (addUtcMonths(anchor.start, cycles + 1) <= at) cycles += 1;
+
+	return {
+		start: addUtcMonths(anchor.start, cycles),
+		end: addUtcMonths(anchor.start, cycles + 1)
+	};
 }
 
 export function sliceCapUsage(input: {

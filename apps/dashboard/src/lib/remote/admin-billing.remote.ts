@@ -1,7 +1,7 @@
 import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { and, desc, eq, gt, isNotNull, lt, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, lte, sql } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/auth-context';
 import { initDrizzle } from '$lib/server/db';
 import {
@@ -11,6 +11,7 @@ import {
 	vms,
 	vmTypes
 } from '$lib/server/db/schema';
+import { capHoursFor } from '$lib/server/billing/caps';
 import { syncUsageEvent } from '$lib/server/billing/metering';
 
 export type VmBillingUsage = {
@@ -150,6 +151,24 @@ export const reverseVmBillingUsage = command(reverseParams, async (params) => {
 	if (!usage.featureId) error(400, 'This VM has no billing feature to reverse against');
 	if (!usage.projectId) error(400, 'This VM has no project to credit');
 
+	const meter = await db.query.billingMeters.findFirst({
+		where: and(
+			eq(billingMeters.resourceType, 'vm'),
+			eq(billingMeters.resourceId, params.vmId),
+			eq(billingMeters.active, true)
+		)
+	});
+	const currentPeriodStart = Math.max(params.periodStart, meter?.capPeriodStart ?? Infinity);
+	const currentPeriodEnd = Math.min(params.periodEnd, meter?.capPeriodEnd ?? -Infinity);
+	const currentPeriodUsage =
+		currentPeriodStart < currentPeriodEnd
+			? await computeVmUsage(db, params.vmId, currentPeriodStart, currentPeriodEnd)
+			: null;
+	const currentPeriodReversibleHours = Math.min(
+		usage.reversibleHours,
+		currentPeriodUsage?.reversibleHours ?? 0
+	);
+
 	const now = Date.now();
 	const idempotencyKey = [
 		'reversal',
@@ -179,20 +198,40 @@ export const reverseVmBillingUsage = command(reverseParams, async (params) => {
 		.returning();
 	if (!event) error(409, 'An identical reversal was already recorded');
 
-	await db
-		.update(billingMeters)
-		.set({
-			hoursThisPeriod: sql`greatest(0, ${billingMeters.hoursThisPeriod} - ${usage.reversibleHours})`
-		})
-		.where(
-			and(
-				eq(billingMeters.resourceType, 'vm'),
-				eq(billingMeters.resourceId, params.vmId),
-				eq(billingMeters.active, true),
-				isNotNull(billingMeters.capPeriodStart),
-				lt(billingMeters.capPeriodStart, params.periodEnd)
-			)
-		);
+	if (
+		meter?.capPeriodStart != null &&
+		meter.capPeriodEnd != null &&
+		currentPeriodReversibleHours > 0
+	) {
+		const meterUnits = Number(meter.units);
+		const reversedMeterHours =
+			Number.isFinite(meterUnits) && meterUnits > 0
+				? currentPeriodReversibleHours / meterUnits
+				: currentPeriodReversibleHours;
+		const [vmType] = await db
+			.select({ rate: vmTypes.rate, cap: vmTypes.cap })
+			.from(vms)
+			.innerJoin(vmTypes, eq(vmTypes.id, vms.vmTypeId))
+			.where(eq(vms.id, params.vmId))
+			.limit(1);
+		const capHours = capHoursFor(vmType?.rate, vmType?.cap);
+		const billableCounter = Number.isFinite(capHours)
+			? sql`least(${billingMeters.hoursThisPeriod}, ${capHours})`
+			: sql`${billingMeters.hoursThisPeriod}`;
+
+		await db
+			.update(billingMeters)
+			.set({
+				hoursThisPeriod: sql`greatest(0, ${billableCounter} - ${reversedMeterHours})`
+			})
+			.where(
+				and(
+					eq(billingMeters.id, meter.id),
+					eq(billingMeters.capPeriodStart, meter.capPeriodStart),
+					eq(billingMeters.capPeriodEnd, meter.capPeriodEnd)
+				)
+			);
+	}
 
 	const syncStatus = await syncUsageEvent(event.id);
 

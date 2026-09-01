@@ -534,15 +534,11 @@ export async function getProjectBillingPeriodAnchor(projectId: string) {
 	const planId = defaultPlanId();
 	if (!planId) return null;
 
-	try {
-		const customer = await createAutumnClient().customers.get({ customerId: projectId });
-		const subscription = customer.subscriptions.find((item) => item.planId === planId);
-		if (!subscription?.currentPeriodStart || !subscription.currentPeriodEnd) return null;
+	const customer = await createAutumnClient().customers.get({ customerId: projectId });
+	const subscription = customer.subscriptions.find((item) => item.planId === planId);
+	if (!subscription?.currentPeriodStart || !subscription.currentPeriodEnd) return null;
 
-		return { start: subscription.currentPeriodStart, end: subscription.currentPeriodEnd };
-	} catch {
-		return null;
-	}
+	return { start: subscription.currentPeriodStart, end: subscription.currentPeriodEnd };
 }
 
 export async function openProjectBillingPortal(projectId: string, returnUrl: string) {

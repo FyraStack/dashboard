@@ -35,7 +35,9 @@
 
 	const amount = $derived(Number.parseFloat(amountInput));
 	const amountValid = $derived(Number.isFinite(amount) && amount > 0);
-	const packs = $derived(packPrice != null && amountValid ? Math.ceil(amount / packPrice) : 0);
+	const packs = $derived(
+		packPrice != null && amountValid ? Math.ceil(amount / packPrice - 1e-6) : 0
+	);
 	const credits = $derived(packs * billingUnits);
 	const billedNow = $derived(packPrice != null ? packs * packPrice : 0);
 	const roundedUp = $derived(amountValid && packPrice != null && billedNow > amount);

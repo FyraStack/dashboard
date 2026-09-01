@@ -73,20 +73,28 @@ async function recordMeterUsage(
 	const db = initDrizzle();
 	if (now <= meter.lastMeteredAt) return [];
 
-	const { segments, state } = sliceCapUsage({
-		from: meter.lastMeteredAt,
-		to: now,
-		capHours,
-		state: meter,
-		periodAt
-	});
-
-	const values = segments
-		.map((segment) => segmentEventValues(meter, segment, now))
-		.filter((value) => value != null);
-
 	return db.transaction(async (tx) => {
-		const claimed = await tx
+		const [locked] = await tx
+			.select()
+			.from(billingMeters)
+			.where(and(eq(billingMeters.id, meter.id), eq(billingMeters.active, true)))
+			.for('update');
+
+		if (!locked || now <= locked.lastMeteredAt) return [];
+
+		const { segments, state } = sliceCapUsage({
+			from: locked.lastMeteredAt,
+			to: now,
+			capHours,
+			state: locked,
+			periodAt
+		});
+
+		const values = segments
+			.map((segment) => segmentEventValues(locked, segment, now))
+			.filter((value) => value != null);
+
+		await tx
 			.update(billingMeters)
 			.set({
 				lastMeteredAt: now,
@@ -94,12 +102,9 @@ async function recordMeterUsage(
 				capPeriodEnd: state.capPeriodEnd,
 				hoursThisPeriod: state.hoursThisPeriod.toFixed(6)
 			})
-			.where(
-				and(eq(billingMeters.id, meter.id), eq(billingMeters.lastMeteredAt, meter.lastMeteredAt))
-			)
-			.returning({ id: billingMeters.id });
+			.where(eq(billingMeters.id, meter.id));
 
-		if (claimed.length === 0 || values.length === 0) return [];
+		if (values.length === 0) return [];
 
 		return tx
 			.insert(billingUsageEvents)

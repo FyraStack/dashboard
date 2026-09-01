@@ -56,7 +56,7 @@ export async function softDeleteOrganizationResources(
 			console.warn(`Failed to meter VM ${vm.id} during project delete`, err);
 			return null;
 		});
-		if (!metered?.event || metered.syncStatus === 'synced') {
+		if (!metered || metered.events.length === 0 || metered.syncStatus === 'synced') {
 			await deleteProjectServerEntity(organizationId, vm.id).catch((err) => {
 				console.warn(`Failed to delete Autumn entity for VM ${vm.id}`, err);
 			});

@@ -96,7 +96,10 @@ async function deleteVmResources(row: DeletableVm): Promise<void> {
 			console.warn(`Failed to meter VM ${row.id} during deletion`, err);
 			return null;
 		});
-		if (row.ownerProjectId && (!metered?.event || metered.syncStatus === 'synced')) {
+		if (
+			row.ownerProjectId &&
+			(!metered || metered.events.length === 0 || metered.syncStatus === 'synced')
+		) {
 			await deleteProjectServerEntity(row.ownerProjectId, row.id).catch((err) => {
 				console.warn(`Failed to delete Autumn entity for VM ${row.id}`, err);
 			});

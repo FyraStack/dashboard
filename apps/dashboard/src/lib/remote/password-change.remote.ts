@@ -23,8 +23,15 @@ function passwordChangePasskeyIdentifier(userId: string) {
 
 function generateCode() {
 	const max = 10 ** CODE_LENGTH;
-	const value = crypto.getRandomValues(new Uint32Array(1))[0] % max;
-	return value.toString().padStart(CODE_LENGTH, '0');
+	const range = 2 ** 32;
+	const limit = range - (range % max);
+	const values = new Uint32Array(1);
+
+	do {
+		crypto.getRandomValues(values);
+	} while (values[0] >= limit);
+
+	return (values[0] % max).toString().padStart(CODE_LENGTH, '0');
 }
 
 async function hashCode(userId: string, code: string) {

@@ -76,6 +76,7 @@ type ProxmoxBackendOptions = {
 };
 
 type CloudInitVendorConfigParams = {
+	hostname?: string;
 	enableSshPasswordAuth?: boolean;
 };
 
@@ -95,6 +96,7 @@ function firstIpv6AddressInPrefix(prefix: string) {
 
 function cloudInitVendorConfig(params: CloudInitVendorConfigParams) {
 	const yamlContents = `#cloud-config\n${stringifyYaml({
+		...(params.hostname ? { hostname: params.hostname, manage_etc_hosts: true } : {}),
 		write_files: [
 			{
 				path: '/etc/sysctl.d/99-ipv6-forwarding.conf',
@@ -540,7 +542,10 @@ export class ProxmoxBackend implements VmBackend {
 			),
 			this.uploadSnippet(
 				cloudInitVendorConfigFilename,
-				cloudInitVendorConfig({ enableSshPasswordAuth: Boolean(params.password) })
+				cloudInitVendorConfig({
+					hostname: params.name,
+					enableSshPasswordAuth: Boolean(params.password)
+				})
 			)
 		]);
 
@@ -642,6 +647,28 @@ export class ProxmoxBackend implements VmBackend {
 			macAddress,
 			taskId: String(vmid)
 		};
+	}
+
+	async updateVmHostname(id: string, hostname: string, proxmoxId?: number): Promise<void> {
+		clearProxmoxReadCaches();
+		const { node, vmid } = await this.resolve(id, proxmoxId);
+		const storage = await this.snippetStorage(node);
+		const filename = `stack-${vmid}-hostname.yaml`;
+		await this.uploadSnippet(
+			filename,
+			`#cloud-config\\n${stringifyYaml({ hostname, manage_etc_hosts: true })}`
+		);
+
+		const currentConfig = await this.client.getQemuConfig(node, vmid);
+		const customConfigs = (currentConfig.cicustom ?? '')
+			.split(',')
+			.map((entry) => entry.trim())
+			.filter((entry) => entry && !entry.startsWith('user='));
+		customConfigs.push(`user=${storage}:snippets/${filename}`);
+		const upid = await this.client.updateQemuConfigAsync(node, vmid, {
+			cicustom: customConfigs.join(',')
+		});
+		await this.client.waitForTask(node, upid);
 	}
 
 	async deleteVm(id: string, proxmoxId?: number): Promise<void> {

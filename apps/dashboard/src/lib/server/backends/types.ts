@@ -116,6 +116,7 @@ export interface VmBackend {
 		options?: Pick<VmLookupOptions, 'proxmoxNode'>
 	): Promise<VmMetricsHistorySample[]>;
 	createVm(params: VmCreateParams): Promise<VmCreateResult>;
+	updateVmHostname(id: string, hostname: string, proxmoxId?: number): Promise<void>;
 	deleteVm(id: string, proxmoxId?: number): Promise<void>;
 	startVm(id: string, proxmoxId?: number): Promise<void>;
 	stopVm(id: string, proxmoxId?: number): Promise<void>;

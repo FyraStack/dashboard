@@ -10,6 +10,9 @@
 	"triggers": {
 		"crons": ["*/15 * * * *"]
 	},
+	"vars": {
+		"BILLING_DISABLED": "false"
+	},
 	"services": [
 		{
 			"binding": "DASHBOARD",
@@ -23,6 +26,9 @@
 			},
 			"triggers": {
 				"crons": []
+			},
+			"vars": {
+				"BILLING_DISABLED": "false"
 			},
 			"services": [
 				{

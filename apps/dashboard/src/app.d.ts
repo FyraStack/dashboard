@@ -40,7 +40,6 @@ declare global {
 				CLOUDFLARE_ACCOUNT_ID?: string;
 				CLOUDFLARE_API_TOKEN?: string;
 				CLOUDFLARE_EMAIL_API_TOKEN?: string;
-				BILLING_DISABLED?: string;
 				AUTUMN_ENABLED?: string;
 				AUTUMN_SECRET?: string;
 				AUTUMN_DEFAULT_PLAN_ID?: string;

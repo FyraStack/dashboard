@@ -24,7 +24,6 @@
 		"EMAIL_FROM_ADDRESS": "no-reply@example.com",
 		"EMAIL_FROM_NAME": "Fyra Stack",
 		"EMAIL_REPLY_TO": "support@example.com",
-		"BILLING_DISABLED": "false",
 		"AUTUMN_DEFAULT_PLAN_ID": "stack",
 		"AUTUMN_SERVER_ENTITY_FEATURE_ID": "active_servers",
 		"AUTUMN_CREDITS_FEATURE_ID": "",

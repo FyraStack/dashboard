@@ -13,6 +13,7 @@ import { closeRequestDb, initDrizzle, type Database } from '$lib/server/db';
 import { baseImages, vms, vmTypes } from '$lib/server/db/schema';
 import { allocateVmNetworking, generateMacAddress, releaseVmNetworking } from '$lib/server/ipam';
 import { applyDefaultPtrRecords } from '$lib/server/ptr-records';
+import { config } from '$lib/server/config';
 
 export type ProvisionVmInput = {
 	projectId: string;
@@ -126,6 +127,13 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 					: {}),
 				...(ipv6PrefixNetworkAllocation?.prefix
 					? { ipv6Prefix: ipv6PrefixNetworkAllocation.prefix }
+					: {}),
+				...(!ipv4NetworkAllocation &&
+				(ipv6TransitNetworkAllocation?.address || ipv6PrefixNetworkAllocation?.prefix)
+					? {
+							nat64Prefix: config.vmNetwork.nat64Prefix,
+							nat64Dns64Server: config.vmNetwork.nat64Dns64Server
+						}
 					: {})
 			},
 			sshKeys: input.sshPublicKeys ?? [],

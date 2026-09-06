@@ -142,10 +142,22 @@ function cloudInitNetworkConfig(params: VmCreateParams, macAddress: string) {
 				]
 			: []),
 		...(params.networkConfig?.ipv6
-			? [{ to: '::/0', via: config.vmNetwork.ipv6DefaultGateway, 'on-link': true }]
+			? [
+					{ to: '::/0', via: config.vmNetwork.ipv6DefaultGateway, 'on-link': true },
+					...(params.networkConfig.nat64Prefix
+						? [
+								{
+									to: params.networkConfig.nat64Prefix,
+									via: config.vmNetwork.ipv6DefaultGateway,
+									'on-link': true
+								}
+							]
+						: [])
+				]
 			: [])
 	];
 
+	const nat64Dns64Server = params.networkConfig?.nat64Dns64Server;
 	const yamlContents = stringifyYaml({
 		version: 2,
 		ethernets: {
@@ -156,7 +168,11 @@ function cloudInitNetworkConfig(params: VmCreateParams, macAddress: string) {
 				dhcp6: false,
 				addresses,
 				routes,
-				nameservers: { addresses: config.vmNetwork.nameservers }
+				nameservers: {
+					addresses: nat64Dns64Server
+						? [nat64Dns64Server, ...config.vmNetwork.nameservers]
+						: config.vmNetwork.nameservers
+				}
 			}
 		}
 	});
@@ -559,7 +575,9 @@ export class ProxmoxBackend implements VmBackend {
 			efidisk0: `${pvePool}:0,efitype=4m,pre-enrolled-keys=${(params.secureBoot ?? true) ? 1 : 0}`,
 			tpmstate0: `${pvePool}:0,version=v2.0`,
 			scsihw: 'virtio-scsi-single',
-			...(params.imageSource ? {} : { virtio0: `${pvePool}:${params.diskGb}` }),
+			...(params.imageSource
+				? {}
+				: { virtio0: `${pvePool}:${params.diskGb},cache=writeback,iothread=1` }),
 			ide2: `${pvePool}:cloudinit`,
 			net0: `virtio=${macAddress},bridge=${config.proxmox.vmBridge},firewall=1,rate=${config.proxmox.vmNetRateMbps}`,
 			pool: config.proxmox.tenantPool,
@@ -602,7 +620,7 @@ export class ProxmoxBackend implements VmBackend {
 
 		if (params.imageSource) {
 			const importUpid = await this.client.updateQemuConfigAsync(node.node, vmid, {
-				virtio0: `${pvePool}:0,import-from=${params.imageSource}`
+				virtio0: `${pvePool}:0,import-from=${params.imageSource},cache=writeback,iothread=1`
 			});
 
 			const provisioning = this.client

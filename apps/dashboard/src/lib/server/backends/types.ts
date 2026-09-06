@@ -63,6 +63,8 @@ export interface VmNetworkConfig {
 	ipv4?: { address: string; prefixLength: number; gateway: string };
 	ipv6?: { address: string; prefixLength: number };
 	ipv6Prefix?: string;
+	nat64Prefix?: string;
+	nat64Dns64Server?: string;
 	firewallIpSet?: string[];
 }
 

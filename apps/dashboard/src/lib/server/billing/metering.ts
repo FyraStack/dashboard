@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
 import {
 	billingMeters,
@@ -8,7 +8,7 @@ import {
 	vmTypes,
 	type billingResourceTypeEnum
 } from '$lib/server/db/schema';
-import { billedQuantity, requireVmFeatureId, usageIdempotencyKey } from './features';
+import { billedQuantity, hoursBetween, requireVmFeatureId, usageIdempotencyKey } from './features';
 import {
 	billingCyclePeriod,
 	calendarMonthPeriod,
@@ -33,6 +33,18 @@ type BillingMeter = typeof billingMeters.$inferSelect;
 type BillingUsageEvent = typeof billingUsageEvents.$inferSelect;
 
 const CAPPED_USAGE_NOTE = 'Clamped to the monthly price cap';
+const MAX_METERING_GAP_MS = 48 * 3_600_000;
+
+function meteringWindowStart(meter: Pick<BillingMeter, 'id' | 'lastMeteredAt'>, now: number) {
+	const earliest = now - MAX_METERING_GAP_MS;
+	if (meter.lastMeteredAt >= earliest) return meter.lastMeteredAt;
+
+	const skippedHours = hoursBetween(meter.lastMeteredAt, earliest).toFixed(2);
+	console.error(
+		`Billing meter ${meter.id} was last metered ${skippedHours}h beyond the catch-up limit; skipping unbilled hours before ${new Date(earliest).toISOString()}`
+	);
+	return earliest;
+}
 
 type SegmentInsert = Pick<
 	BillingMeter,
@@ -83,7 +95,7 @@ async function recordMeterUsage(
 		if (!locked || now <= locked.lastMeteredAt) return [];
 
 		const { segments, state } = sliceCapUsage({
-			from: locked.lastMeteredAt,
+			from: meteringWindowStart(locked, now),
 			to: now,
 			capHours,
 			state: locked,
@@ -175,9 +187,12 @@ export async function reconcileMissingMeters(now = Date.now(), limit = 100, proj
 				resourceId: vm.id,
 				featureId: requireVmFeatureId(vm.vmType),
 				units: 1,
-				now: vm.createdAt
+				now
 			});
 			created += 1;
+			console.error(
+				`Reseeded missing billing meter for VM ${vm.id} (project ${vm.ownerProjectId}, created ${new Date(vm.createdAt).toISOString()}); metering resumes from now`
+			);
 		} catch (err) {
 			console.warn(`Skipping billing meter reconciliation for VM ${vm.id}`, err);
 		}
@@ -186,17 +201,28 @@ export async function reconcileMissingMeters(now = Date.now(), limit = 100, proj
 	return { created };
 }
 
-async function meterCapContext(meter: BillingMeter) {
+async function vmTypeBilledByMeter(meter: Pick<BillingMeter, 'featureId' | 'resourceId'>) {
 	const db = initDrizzle();
+	const [byFeature] = await db
+		.select({ rate: vmTypes.rate, cap: vmTypes.cap })
+		.from(vmTypes)
+		.where(eq(vmTypes.autumnFeatureId, meter.featureId))
+		.limit(1);
+	if (byFeature) return byFeature;
 
+	const [byVm] = await db
+		.select({ rate: vmTypes.rate, cap: vmTypes.cap })
+		.from(vms)
+		.innerJoin(vmTypes, eq(vmTypes.id, vms.vmTypeId))
+		.where(eq(vms.id, meter.resourceId))
+		.limit(1);
+	return byVm;
+}
+
+async function meterCapContext(meter: BillingMeter) {
 	let capHours = Infinity;
 	if (meter.resourceType === 'vm') {
-		const [vmType] = await db
-			.select({ rate: vmTypes.rate, cap: vmTypes.cap })
-			.from(vms)
-			.innerJoin(vmTypes, eq(vmTypes.id, vms.vmTypeId))
-			.where(eq(vms.id, meter.resourceId))
-			.limit(1);
+		const vmType = await vmTypeBilledByMeter(meter);
 		capHours = capHoursFor(vmType?.rate, vmType?.cap);
 	}
 
@@ -239,7 +265,7 @@ export async function meterResourceThrough(
 		if (!locked) return [];
 
 		const { segments, state } = sliceCapUsage({
-			from: locked.lastMeteredAt,
+			from: meteringWindowStart(locked, Math.max(now, locked.lastMeteredAt)),
 			to: Math.max(now, locked.lastMeteredAt),
 			capHours,
 			state: locked,
@@ -281,6 +307,65 @@ export async function meterResourceThrough(
 	}
 
 	return { events, syncStatus };
+}
+
+async function rotateMeterFeature(
+	meter: BillingMeter,
+	now: number,
+	nextFeatureId: string,
+	anchorFor: (projectId: string) => Promise<CapPeriod | null>
+) {
+	const db = initDrizzle();
+	const previousType = await vmTypeBilledByMeter(meter);
+	const capHours = capHoursFor(previousType?.rate, previousType?.cap);
+	const anchor = Number.isFinite(capHours) ? await anchorFor(meter.projectId) : null;
+	const periodAt = makePeriodAt(anchor);
+	const closeAt = Math.max(now, meter.lastMeteredAt);
+
+	console.error(
+		`Billing meter ${meter.id} for VM ${meter.resourceId} changed feature ${meter.featureId} -> ${nextFeatureId}; closing out the old rate and restarting the cap`
+	);
+
+	return db.transaction(async (tx) => {
+		const [locked] = await tx
+			.select()
+			.from(billingMeters)
+			.where(and(eq(billingMeters.id, meter.id), eq(billingMeters.active, true)))
+			.for('update');
+
+		if (!locked || locked.featureId !== meter.featureId) return [];
+
+		const { segments } = sliceCapUsage({
+			from: meteringWindowStart(locked, closeAt),
+			to: closeAt,
+			capHours,
+			state: locked,
+			periodAt
+		});
+
+		const values = segments
+			.map((segment) => segmentEventValues(locked, segment, closeAt))
+			.filter((value) => value != null);
+
+		await tx
+			.update(billingMeters)
+			.set({
+				featureId: nextFeatureId,
+				lastMeteredAt: closeAt,
+				capPeriodStart: null,
+				capPeriodEnd: null,
+				hoursThisPeriod: '0'
+			})
+			.where(eq(billingMeters.id, meter.id));
+
+		if (values.length === 0) return [];
+
+		return tx
+			.insert(billingUsageEvents)
+			.values(values)
+			.onConflictDoNothing({ target: billingUsageEvents.idempotencyKey })
+			.returning();
+	});
 }
 
 export async function reconcileOrphanedMeters(now = Date.now(), limit = 100) {
@@ -361,7 +446,12 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 	await reconcileMissingMeters(now, limit);
 
 	const meters = await db
-		.select({ meter: billingMeters, rate: vmTypes.rate, cap: vmTypes.cap })
+		.select({
+			meter: billingMeters,
+			rate: vmTypes.rate,
+			cap: vmTypes.cap,
+			currentFeatureId: vmTypes.autumnFeatureId
+		})
 		.from(billingMeters)
 		.leftJoin(vms, eq(vms.id, billingMeters.resourceId))
 		.leftJoin(vmTypes, eq(vmTypes.id, vms.vmTypeId))
@@ -369,7 +459,13 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 			and(
 				eq(billingMeters.resourceType, 'vm'),
 				eq(billingMeters.active, true),
-				lt(billingMeters.lastMeteredAt, now)
+				or(
+					lt(billingMeters.lastMeteredAt, now),
+					and(
+						isNotNull(vmTypes.autumnFeatureId),
+						ne(vmTypes.autumnFeatureId, billingMeters.featureId)
+					)
+				)
 			)
 		)
 		.orderBy(asc(billingMeters.lastMeteredAt))
@@ -386,7 +482,13 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 	};
 
 	let events = 0;
-	await runBounded(meters, METER_CONCURRENCY, async ({ meter, rate, cap }) => {
+	await runBounded(meters, METER_CONCURRENCY, async ({ meter, rate, cap, currentFeatureId }) => {
+		if (currentFeatureId && currentFeatureId !== meter.featureId) {
+			const inserted = await rotateMeterFeature(meter, now, currentFeatureId, anchorFor);
+			events += inserted.length;
+			return;
+		}
+
 		const capHours = capHoursFor(rate, cap);
 		const anchor = Number.isFinite(capHours) ? await anchorFor(meter.projectId) : null;
 		const inserted = await recordMeterUsage(meter, now, capHours, makePeriodAt(anchor));

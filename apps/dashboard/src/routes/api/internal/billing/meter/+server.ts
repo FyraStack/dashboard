@@ -15,11 +15,17 @@ import { enforceProjectBillingGrace } from '$lib/server/billing/enforcement';
 import { getRuntimeEnv } from '$lib/server/env';
 
 export const POST: RequestHandler = async ({ request }) => {
-	const secret = getRuntimeEnv().INTERNAL_CRON_SECRET;
+	const env = getRuntimeEnv();
+	const secret = env.INTERNAL_CRON_SECRET;
 	if (!secret) error(503, 'Internal cron is not configured');
 
 	const authorization = request.headers.get('authorization');
 	if (authorization !== `Bearer ${secret}`) error(401, 'Unauthorized');
+
+	if (env.BILLING_DISABLED === 'true') {
+		console.warn('Billing cron skipped: BILLING_DISABLED is true');
+		return json({ disabled: true });
+	}
 
 	if (!isBillingConfigured()) error(503, 'Billing is not configured');
 

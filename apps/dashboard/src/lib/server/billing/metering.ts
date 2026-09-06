@@ -8,7 +8,7 @@ import {
 	vmTypes,
 	type billingResourceTypeEnum
 } from '$lib/server/db/schema';
-import { billedQuantity, requireVmFeatureId, usageIdempotencyKey } from './features';
+import { billedQuantity, hoursBetween, requireVmFeatureId, usageIdempotencyKey } from './features';
 import {
 	billingCyclePeriod,
 	calendarMonthPeriod,
@@ -33,6 +33,18 @@ type BillingMeter = typeof billingMeters.$inferSelect;
 type BillingUsageEvent = typeof billingUsageEvents.$inferSelect;
 
 const CAPPED_USAGE_NOTE = 'Clamped to the monthly price cap';
+const MAX_METERING_GAP_MS = 48 * 3_600_000;
+
+function meteringWindowStart(meter: Pick<BillingMeter, 'id' | 'lastMeteredAt'>, now: number) {
+	const earliest = now - MAX_METERING_GAP_MS;
+	if (meter.lastMeteredAt >= earliest) return meter.lastMeteredAt;
+
+	const skippedHours = hoursBetween(meter.lastMeteredAt, earliest).toFixed(2);
+	console.error(
+		`Billing meter ${meter.id} was last metered ${skippedHours}h beyond the catch-up limit; skipping unbilled hours before ${new Date(earliest).toISOString()}`
+	);
+	return earliest;
+}
 
 type SegmentInsert = Pick<
 	BillingMeter,
@@ -83,7 +95,7 @@ async function recordMeterUsage(
 		if (!locked || now <= locked.lastMeteredAt) return [];
 
 		const { segments, state } = sliceCapUsage({
-			from: locked.lastMeteredAt,
+			from: meteringWindowStart(locked, now),
 			to: now,
 			capHours,
 			state: locked,
@@ -175,9 +187,12 @@ export async function reconcileMissingMeters(now = Date.now(), limit = 100, proj
 				resourceId: vm.id,
 				featureId: requireVmFeatureId(vm.vmType),
 				units: 1,
-				now: vm.createdAt
+				now
 			});
 			created += 1;
+			console.error(
+				`Reseeded missing billing meter for VM ${vm.id} (project ${vm.ownerProjectId}, created ${new Date(vm.createdAt).toISOString()}); metering resumes from now`
+			);
 		} catch (err) {
 			console.warn(`Skipping billing meter reconciliation for VM ${vm.id}`, err);
 		}
@@ -239,7 +254,7 @@ export async function meterResourceThrough(
 		if (!locked) return [];
 
 		const { segments, state } = sliceCapUsage({
-			from: locked.lastMeteredAt,
+			from: meteringWindowStart(locked, Math.max(now, locked.lastMeteredAt)),
 			to: Math.max(now, locked.lastMeteredAt),
 			capHours,
 			state: locked,

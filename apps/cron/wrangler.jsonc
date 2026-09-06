@@ -11,7 +11,7 @@
 		"crons": ["*/15 * * * *"]
 	},
 	"vars": {
-		"BILLING_DISABLED": "false"
+		"BILLING_DISABLED": "true"
 	},
 	"services": [
 		{

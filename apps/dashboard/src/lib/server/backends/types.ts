@@ -101,6 +101,12 @@ export interface VmLookupOptions {
 	includeNetworkInterfaces?: boolean;
 }
 
+export interface VmResizeParams {
+	cores: number;
+	memoryMb: number;
+	diskGb: number;
+}
+
 export interface VmBackend {
 	readonly name: string;
 	ping(): Promise<void>;
@@ -118,6 +124,7 @@ export interface VmBackend {
 		options?: Pick<VmLookupOptions, 'proxmoxNode'>
 	): Promise<VmMetricsHistorySample[]>;
 	createVm(params: VmCreateParams): Promise<VmCreateResult>;
+	resizeVm(id: string, proxmoxId: number | undefined, params: VmResizeParams): Promise<void>;
 	deleteVm(id: string, proxmoxId?: number): Promise<void>;
 	startVm(id: string, proxmoxId?: number): Promise<void>;
 	stopVm(id: string, proxmoxId?: number): Promise<void>;

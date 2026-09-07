@@ -757,4 +757,65 @@ export class ProxmoxBackend implements VmBackend {
 		const upid = await this.client.rebootVm(node, vmid);
 		await this.client.waitForTask(node, upid);
 	}
+
+	async resizeVm(
+		id: string,
+		proxmoxId: number | undefined,
+		params: { cores: number; memoryMb: number; diskGb: number }
+	): Promise<void> {
+		clearProxmoxReadCaches();
+		try {
+			const { node, vmid } = await this.resolve(id, proxmoxId);
+			const config = await this.client.getQemuConfig(node, vmid);
+
+			const updates: Record<string, unknown> = {};
+			if (params.cores !== config.cores) updates.cores = params.cores;
+			if (params.memoryMb !== config.memory) updates.memory = params.memoryMb;
+			if (Object.keys(updates).length > 0) {
+				await this.client.updateQemuConfig(node, vmid, updates);
+			}
+
+			const diskKey = this.bootDiskKey(config);
+			const currentDiskGb = this.parseDiskSizeGb(config[diskKey]);
+			if (currentDiskGb != null && params.diskGb < currentDiskGb - 1e-9) {
+				throw new Error(`Disk cannot be shrunk from ${currentDiskGb}GB to ${params.diskGb}GB`);
+			}
+			if (currentDiskGb == null || params.diskGb > currentDiskGb + 1e-9) {
+				await this.client.resizeDisk(node, vmid, diskKey, `${params.diskGb}G`);
+			}
+		} finally {
+			clearProxmoxReadCaches();
+		}
+	}
+
+	private bootDiskKey(config: Record<string, unknown>): string {
+		if (typeof config['virtio0'] === 'string') return 'virtio0';
+		const diskKey = Object.keys(config).find(
+			(key) => /^(virtio|scsi|sata|ide)\d+$/.test(key) && typeof config[key] === 'string'
+		);
+		if (!diskKey) throw new Error('No disk found on VM config (expected virtio0)');
+		return diskKey;
+	}
+
+	private parseDiskSizeGb(value: unknown): number | null {
+		if (typeof value !== 'string') return null;
+		const match = value.match(/size=([\d.]+)([KMGT]?)/i);
+		if (!match) return null;
+		const amount = Number.parseFloat(match[1]);
+		if (!Number.isFinite(amount)) return null;
+		const unit = (match[2] ?? 'G').toUpperCase();
+		switch (unit) {
+			case 'K':
+				return amount / (1024 * 1024);
+			case 'M':
+				return amount / 1024;
+			case 'G':
+			case '':
+				return amount;
+			case 'T':
+				return amount * 1024;
+			default:
+				return null;
+		}
+	}
 }

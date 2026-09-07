@@ -12,7 +12,11 @@ import {
 	type VmMetricsTimeframe
 } from '$lib/server/backends';
 import { requireProjectAccess } from '$lib/server/auth-context';
-import { isProjectBillingExempt, requireProjectBillingActive } from '$lib/server/billing/autumn';
+import {
+	isProjectBillingExempt,
+	requireProjectBillingActive,
+	isBillingConfigured
+} from '$lib/server/billing/autumn';
 import { queueVmDeletion } from '$lib/server/vm-deletion';
 import { provisionVm } from '$lib/server/vm-provisioning';
 import { instrument, timingLog } from '$lib/server/observability';
@@ -619,3 +623,58 @@ export const startVm = command(powerParams, async (p) => powerAction(p.vmId, 'st
 export const stopVm = command(powerParams, async (p) => powerAction(p.vmId, 'stopVm'));
 export const killVm = command(powerParams, async (p) => powerAction(p.vmId, 'killVm'));
 export const rebootVm = command(powerParams, async (p) => powerAction(p.vmId, 'rebootVm'));
+
+const resizeParams = type({ vmId: 'string', vmTypeId: 'string' });
+export const resizeVm = command(resizeParams, async (params) => {
+	const event = getRequestEvent();
+	if (!event?.locals.user) error(401, 'Authentication required');
+	if (accessibilityFixtureEnabled) return { id: params.vmId, vmTypeId: params.vmTypeId };
+
+	const db = initDrizzle();
+	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
+	if (!row) error(404, `VM "${params.vmId}" not found`);
+	if (!row.active) error(409, `VM "${row.name}" is not active`);
+	if (row.status === 'deleting') error(409, `VM "${row.name}" is being deleted`);
+	if (row.status === 'provisioning') error(409, `VM "${row.name}" is still provisioning`);
+	if (row.ownerProjectId) {
+		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
+		const billingExempt = await isProjectBillingExempt(row.ownerProjectId);
+		if (!billingExempt) await requireProjectBillingActive(row.ownerProjectId);
+	}
+
+	const target = await db.query.vmTypes.findFirst({
+		where: eq(vmTypes.id, params.vmTypeId)
+	});
+	if (!target) error(400, `VM type "${params.vmTypeId}" not found`);
+	if (target.id === row.vmTypeId) error(400, `VM is already on plan "${target.name}"`);
+	if (isBillingConfigured() && !target.autumnFeatureId)
+		error(400, `VM type "${target.name}" is missing an Autumn feature ID`);
+
+	const current = await db.query.vmTypes.findFirst({
+		where: eq(vmTypes.id, row.vmTypeId)
+	});
+	if (current && target.storageAmount < current.storageAmount) {
+		error(
+			400,
+			`Disk cannot be shrunk from ${current.storageAmount}GB to ${target.storageAmount}GB`
+		);
+	}
+
+	const backend = getBackend(row.backend);
+	try {
+		await backend.resizeVm(row.id, row.proxmoxId ?? undefined, {
+			cores: target.cores,
+			memoryMb: target.ramCapacity,
+			diskGb: target.storageAmount
+		});
+	} catch (err) {
+		if (err instanceof Error && err.message.includes('Disk cannot be shrunk')) {
+			error(400, err.message);
+		}
+		throw err;
+	}
+
+	await db.update(vms).set({ vmTypeId: target.id }).where(eq(vms.id, row.id));
+
+	return { id: row.id, vmTypeId: target.id };
+});

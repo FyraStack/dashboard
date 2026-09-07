@@ -25,8 +25,8 @@
 		"EMAIL_FROM_NAME": "Fyra Stack",
 		"EMAIL_REPLY_TO": "support@example.com",
 		"AUTUMN_DEFAULT_PLAN_ID": "stack",
-		"AUTUMN_SERVER_ENTITY_FEATURE_ID": "active_servers",
-		"AUTUMN_CREDITS_FEATURE_ID": "",
+		"AUTUMN_SERVER_ENTITY_FEATURE_ID": "vms",
+		"AUTUMN_CREDITS_FEATURE_ID": "credits",
 		"VYOS_USE_VPC": "false",
 		"PROXMOX_USE_VPC": "false",
 		"PROXMOX_SNIPPETS_USE_VPC": "false"

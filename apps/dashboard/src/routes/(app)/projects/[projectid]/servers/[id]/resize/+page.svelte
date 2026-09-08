@@ -28,9 +28,16 @@
 		return plan?.name === selectedServer.plan;
 	}
 
-	function isShrink(planStorage: number): boolean {
-		if (currentVmType) return planStorage < currentVmType.storageAmount;
-		return false;
+	function getDowngradeReasons(plan: { cores: number; ramCapacity: number; storageAmount: number }): string[] {
+		if (!currentVmType) return [];
+		const reasons: string[] = [];
+		if (plan.cores < currentVmType.cores)
+			reasons.push(`CPU (${currentVmType.cores} → ${plan.cores} vCPU)`);
+		if (plan.ramCapacity < currentVmType.ramCapacity)
+			reasons.push(`RAM (${formatRam(currentVmType.ramCapacity)} → ${formatRam(plan.ramCapacity)})`);
+		if (plan.storageAmount < currentVmType.storageAmount)
+			reasons.push(`disk (${currentVmType.storageAmount}GB → ${plan.storageAmount}GB)`);
+		return reasons;
 	}
 
 	async function handleResize(plan: {
@@ -41,10 +48,10 @@
 		storageAmount: number;
 		cap: string;
 	}) {
-		if (resizingId || isCurrent(plan.id) || isShrink(plan.storageAmount)) return;
+		if (resizingId || isCurrent(plan.id) || getDowngradeReasons(plan).length > 0) return;
 		const ok = await confirmDestructive({
 			title: `Resize to ${plan.name}?`,
-			description: `This changes ${selectedServer.name} to ${plan.cores} vCPU, ${formatRam(plan.ramCapacity)} RAM, ${plan.storageAmount}GB disk. CPU and memory changes may require a reboot to take effect. Disk can only grow and cannot be undone — expand the filesystem inside the guest afterwards.`,
+			description: `This changes ${selectedServer.name} to ${plan.cores} vCPU, ${formatRam(plan.ramCapacity)} RAM, ${plan.storageAmount}GB disk. You cannot resize your server to a smaller size. For a resize to take effect, you will need to restart your server. You will need to manually expand your filesystem after a server resize.`,
 			confirmLabel: `Resize to ${plan.name}`
 		});
 		if (!ok) return;
@@ -77,8 +84,7 @@
 		</p>
 	</div>
 	<p class="border border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground">
-		CPU and memory changes may require a reboot to take effect. Disk can only be grown, never shrunk
-		— expand the filesystem inside the guest afterwards.
+		You cannot resize your server to a smaller size. For a resize to take effect, you will need to restart your server. You will need to manually expand your filesystem after a server resize.
 	</p>
 	{#if resizeError}
 		<p
@@ -95,8 +101,12 @@
 		<div class="grid gap-3 md:grid-cols-2">
 			{#each vmTypes as plan (plan.id)}
 				{@const current = isCurrent(plan.id)}
-				{@const shrink = !current && isShrink(plan.storageAmount)}
-				<div class="border border-border bg-background/40 p-4 {current ? 'border-red-500' : ''}">
+				{@const downgrade = !current && getDowngradeReasons(plan).length > 0}
+				<div
+					class="border border-border bg-background/40 p-4 {current ? 'border-red-500' : ''} {downgrade
+						? 'pointer-events-none opacity-40'
+						: ''}"
+				>
 					<div class="flex items-center justify-between">
 						<h3 class="text-sm font-semibold text-foreground">{plan.name}</h3>
 						<span class="text-sm text-muted-foreground">${plan.cap}/mo</span>
@@ -104,17 +114,12 @@
 					<p class="mt-2 text-xs text-muted-foreground">
 						{plan.cores} vCPU • {formatRam(plan.ramCapacity)} RAM • {plan.storageAmount}GB disk
 					</p>
-					{#if shrink}
-						<p class="mt-2 text-xs text-amber-600 dark:text-amber-400">
-							Disk shrink not supported — cannot go below {currentVmType?.storageAmount}GB.
-						</p>
-					{/if}
 					<Button
 						variant="outline"
 						size="sm"
 						class="mt-4 h-7 text-xs"
 						disabled={current ||
-							shrink ||
+							downgrade ||
 							resizingId !== null ||
 							selectedServer.status === 'provisioning' ||
 							selectedServer.status === 'deleting'}
@@ -124,6 +129,8 @@
 							<Loader2 class="mr-1.5 h-3 w-3 animate-spin" />Resizing...
 						{:else if current}
 							Current Plan
+						{:else if downgrade}
+							Not Supported
 						{:else}
 							Resize
 						{/if}

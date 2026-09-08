@@ -653,11 +653,17 @@ export const resizeVm = command(resizeParams, async (params) => {
 	const current = await db.query.vmTypes.findFirst({
 		where: eq(vmTypes.id, row.vmTypeId)
 	});
-	if (current && target.storageAmount < current.storageAmount) {
-		error(
-			400,
-			`Disk cannot be shrunk from ${current.storageAmount}GB to ${target.storageAmount}GB`
-		);
+	if (current) {
+		const downgraded: string[] = [];
+		if (target.cores < current.cores)
+			downgraded.push(`CPU (${current.cores} → ${target.cores} vCPU)`);
+		if (target.ramCapacity < current.ramCapacity)
+			downgraded.push(`RAM (${current.ramCapacity}MB → ${target.ramCapacity}MB)`);
+		if (target.storageAmount < current.storageAmount)
+			downgraded.push(`disk (${current.storageAmount}GB → ${target.storageAmount}GB)`);
+		if (downgraded.length > 0) {
+			error(400, `Cannot resize to a smaller plan (${downgraded.join(', ')})`);
+		}
 	}
 
 	const backend = getBackend(row.backend);

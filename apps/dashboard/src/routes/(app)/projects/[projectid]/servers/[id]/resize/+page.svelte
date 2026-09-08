@@ -24,20 +24,16 @@
 
 	function isCurrent(planId: string): boolean {
 		if (currentVmTypeId) return planId === currentVmTypeId;
-		const plan = vmTypes.find((t) => t.id === planId);
-		return plan?.name === selectedServer.plan;
+		return vmTypes.find((t) => t.id === planId)?.name === selectedServer.plan;
 	}
 
-	function getDowngradeReasons(plan: { cores: number; ramCapacity: number; storageAmount: number }): string[] {
-		if (!currentVmType) return [];
-		const reasons: string[] = [];
-		if (plan.cores < currentVmType.cores)
-			reasons.push(`CPU (${currentVmType.cores} → ${plan.cores} vCPU)`);
-		if (plan.ramCapacity < currentVmType.ramCapacity)
-			reasons.push(`RAM (${formatRam(currentVmType.ramCapacity)} → ${formatRam(plan.ramCapacity)})`);
-		if (plan.storageAmount < currentVmType.storageAmount)
-			reasons.push(`disk (${currentVmType.storageAmount}GB → ${plan.storageAmount}GB)`);
-		return reasons;
+	function isDowngrade(plan: { cores: number; ramCapacity: number; storageAmount: number }): boolean {
+		return (
+			!!currentVmType &&
+			(plan.cores < currentVmType.cores ||
+				plan.ramCapacity < currentVmType.ramCapacity ||
+				plan.storageAmount < currentVmType.storageAmount)
+		);
 	}
 
 	async function handleResize(plan: {
@@ -48,7 +44,7 @@
 		storageAmount: number;
 		cap: string;
 	}) {
-		if (resizingId || isCurrent(plan.id) || getDowngradeReasons(plan).length > 0) return;
+		if (resizingId || isCurrent(plan.id) || isDowngrade(plan)) return;
 		const ok = await confirmDestructive({
 			title: `Resize to ${plan.name}?`,
 			description: `This changes ${selectedServer.name} to ${plan.cores} vCPU, ${formatRam(plan.ramCapacity)} RAM, ${plan.storageAmount}GB disk. You cannot resize your server to a smaller size. For a resize to take effect, you will need to restart your server. You will need to manually expand your filesystem after a server resize.`,
@@ -101,7 +97,7 @@
 		<div class="grid gap-3 md:grid-cols-2">
 			{#each vmTypes as plan (plan.id)}
 				{@const current = isCurrent(plan.id)}
-				{@const downgrade = !current && getDowngradeReasons(plan).length > 0}
+				{@const downgrade = !current && isDowngrade(plan)}
 				<div
 					class="border border-border bg-background/40 p-4 {current ? 'border-red-500' : ''} {downgrade
 						? 'pointer-events-none opacity-40'

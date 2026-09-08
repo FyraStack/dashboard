@@ -799,23 +799,9 @@ export class ProxmoxBackend implements VmBackend {
 
 	private parseDiskSizeGb(value: unknown): number | null {
 		if (typeof value !== 'string') return null;
-		const match = value.match(/size=([\d.]+)([KMGT]?)/i);
+		const match = value.match(/size=([\d.]+)G/i);
 		if (!match) return null;
 		const amount = Number.parseFloat(match[1]);
-		if (!Number.isFinite(amount)) return null;
-		const unit = (match[2] ?? 'G').toUpperCase();
-		switch (unit) {
-			case 'K':
-				return amount / (1024 * 1024);
-			case 'M':
-				return amount / 1024;
-			case 'G':
-			case '':
-				return amount;
-			case 'T':
-				return amount * 1024;
-			default:
-				return null;
-		}
+		return Number.isFinite(amount) ? amount : null;
 	}
 }

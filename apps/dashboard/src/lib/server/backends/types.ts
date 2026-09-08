@@ -107,6 +107,13 @@ export interface VmResizeParams {
 	diskGb: number;
 }
 
+export class VmResizeError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'VmResizeError';
+	}
+}
+
 export interface VmBackend {
 	readonly name: string;
 	ping(): Promise<void>;
@@ -124,7 +131,7 @@ export interface VmBackend {
 		options?: Pick<VmLookupOptions, 'proxmoxNode'>
 	): Promise<VmMetricsHistorySample[]>;
 	createVm(params: VmCreateParams): Promise<VmCreateResult>;
-	resizeVm(id: string, proxmoxId: number | undefined, params: VmResizeParams): Promise<void>;
+	resizeVm(id: string, params: VmResizeParams, proxmoxId?: number): Promise<void>;
 	deleteVm(id: string, proxmoxId?: number): Promise<void>;
 	startVm(id: string, proxmoxId?: number): Promise<void>;
 	stopVm(id: string, proxmoxId?: number): Promise<void>;

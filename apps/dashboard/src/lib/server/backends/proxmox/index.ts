@@ -19,8 +19,10 @@ import type {
 	VmStatus,
 	VmMetricsHistorySample,
 	VmMetricsTimeframe,
-	VmLookupOptions
+	VmLookupOptions,
+	VmResizeParams
 } from '../types';
+import { VmResizeError } from '../types';
 
 interface ResolvedVm {
 	node: string;
@@ -758,15 +760,23 @@ export class ProxmoxBackend implements VmBackend {
 		await this.client.waitForTask(node, upid);
 	}
 
-	async resizeVm(
-		id: string,
-		proxmoxId: number | undefined,
-		params: { cores: number; memoryMb: number; diskGb: number }
-	): Promise<void> {
+	async resizeVm(id: string, params: VmResizeParams, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		try {
 			const { node, vmid } = await this.resolve(id, proxmoxId);
 			const config = await this.client.getQemuConfig(node, vmid);
+			const currentDiskGb = parseDiskSizeGb(config.virtio0);
+			if (currentDiskGb == null) {
+				throw new VmResizeError(`Could not determine the current disk size of VM ${vmid}`);
+			}
+			if (params.diskGb < currentDiskGb) {
+				throw new VmResizeError(
+					`Disk cannot be shrunk from ${currentDiskGb}GB to ${params.diskGb}GB`
+				);
+			}
+			if (params.diskGb > currentDiskGb) {
+				await this.client.resizeDisk(node, vmid, 'virtio0', `${params.diskGb}G`);
+			}
 
 			const updates: Record<string, unknown> = {};
 			if (params.cores !== config.cores) updates.cores = params.cores;
@@ -774,34 +784,24 @@ export class ProxmoxBackend implements VmBackend {
 			if (Object.keys(updates).length > 0) {
 				await this.client.updateQemuConfig(node, vmid, updates);
 			}
-
-			const diskKey = this.bootDiskKey(config);
-			const currentDiskGb = this.parseDiskSizeGb(config[diskKey]);
-			if (currentDiskGb != null && params.diskGb < currentDiskGb - 1e-9) {
-				throw new Error(`Disk cannot be shrunk from ${currentDiskGb}GB to ${params.diskGb}GB`);
-			}
-			if (currentDiskGb == null || params.diskGb > currentDiskGb + 1e-9) {
-				await this.client.resizeDisk(node, vmid, diskKey, `${params.diskGb}G`);
-			}
 		} finally {
 			clearProxmoxReadCaches();
 		}
 	}
+}
 
-	private bootDiskKey(config: Record<string, unknown>): string {
-		if (typeof config['virtio0'] === 'string') return 'virtio0';
-		const diskKey = Object.keys(config).find(
-			(key) => /^(virtio|scsi|sata|ide)\d+$/.test(key) && typeof config[key] === 'string'
-		);
-		if (!diskKey) throw new Error('No disk found on VM config (expected virtio0)');
-		return diskKey;
-	}
+const diskSizeUnitsToGb: Record<string, number> = {
+	'': 1 / 1024 ** 3,
+	K: 1 / 1024 ** 2,
+	M: 1 / 1024,
+	G: 1,
+	T: 1024
+};
 
-	private parseDiskSizeGb(value: unknown): number | null {
-		if (typeof value !== 'string') return null;
-		const match = value.match(/size=([\d.]+)G/i);
-		if (!match) return null;
-		const amount = Number.parseFloat(match[1]);
-		return Number.isFinite(amount) ? amount : null;
-	}
+function parseDiskSizeGb(driveSpec: string | undefined): number | null {
+	const match = driveSpec?.match(/(?:^|,)size=(\d+(?:\.\d+)?)([KMGT]?)(?:,|$)/i);
+	if (!match) return null;
+	const amount = Number.parseFloat(match[1]);
+	const unit = match[2].toUpperCase();
+	return Number.isFinite(amount) ? amount * diskSizeUnitsToGb[unit] : null;
 }

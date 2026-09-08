@@ -7,6 +7,7 @@ import { runInBackground } from '$lib/server/background';
 import { vms, vmTypes, sshKeys, ipamAllocations } from '$lib/server/db/schema';
 import {
 	getBackend,
+	VmResizeError,
 	type VmBackend,
 	type VmInfo,
 	type VmMetricsTimeframe
@@ -19,6 +20,7 @@ import {
 } from '$lib/server/billing/autumn';
 import { queueVmDeletion } from '$lib/server/vm-deletion';
 import { provisionVm } from '$lib/server/vm-provisioning';
+import { findPlanDowngrades } from '$lib/vm-plans';
 import { instrument, timingLog } from '$lib/server/observability';
 import {
 	accessibilityFixtureEnabled,
@@ -628,10 +630,12 @@ const resizeParams = type({ vmId: 'string', vmTypeId: 'string' });
 export const resizeVm = command(resizeParams, async (params) => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) error(401, 'Authentication required');
-	if (accessibilityFixtureEnabled) return { id: params.vmId, vmTypeId: params.vmTypeId };
 
 	const db = initDrizzle();
-	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
+	const row = await db.query.vms.findFirst({
+		where: eq(vms.id, params.vmId),
+		with: { vmType: true }
+	});
 	if (!row) error(404, `VM "${params.vmId}" not found`);
 	if (!row.active) error(409, `VM "${row.name}" is not active`);
 	if (row.status === 'deleting') error(409, `VM "${row.name}" is being deleted`);
@@ -642,41 +646,26 @@ export const resizeVm = command(resizeParams, async (params) => {
 		if (!billingExempt) await requireProjectBillingActive(row.ownerProjectId);
 	}
 
-	const target = await db.query.vmTypes.findFirst({
-		where: eq(vmTypes.id, params.vmTypeId)
-	});
+	const target = await db.query.vmTypes.findFirst({ where: eq(vmTypes.id, params.vmTypeId) });
 	if (!target) error(400, `VM type "${params.vmTypeId}" not found`);
 	if (target.id === row.vmTypeId) error(400, `VM is already on plan "${target.name}"`);
 	if (isBillingConfigured() && !target.autumnFeatureId)
 		error(400, `VM type "${target.name}" is missing an Autumn feature ID`);
 
-	const current = await db.query.vmTypes.findFirst({
-		where: eq(vmTypes.id, row.vmTypeId)
-	});
-	if (current) {
-		const downgraded: string[] = [];
-		if (target.cores < current.cores)
-			downgraded.push(`CPU (${current.cores} → ${target.cores} vCPU)`);
-		if (target.ramCapacity < current.ramCapacity)
-			downgraded.push(`RAM (${current.ramCapacity}MB → ${target.ramCapacity}MB)`);
-		if (target.storageAmount < current.storageAmount)
-			downgraded.push(`disk (${current.storageAmount}GB → ${target.storageAmount}GB)`);
-		if (downgraded.length > 0) {
-			error(400, `Cannot resize to a smaller plan (${downgraded.join(', ')})`);
-		}
+	const downgrades = findPlanDowngrades(row.vmType, target);
+	if (downgrades.length > 0) {
+		error(400, `Cannot resize to a smaller plan (${downgrades.join(', ')})`);
 	}
 
 	const backend = getBackend(row.backend);
 	try {
-		await backend.resizeVm(row.id, row.proxmoxId ?? undefined, {
-			cores: target.cores,
-			memoryMb: target.ramCapacity,
-			diskGb: target.storageAmount
-		});
+		await backend.resizeVm(
+			row.id,
+			{ cores: target.cores, memoryMb: target.ramCapacity, diskGb: target.storageAmount },
+			row.proxmoxId ?? undefined
+		);
 	} catch (err) {
-		if (err instanceof Error && err.message.includes('Disk cannot be shrunk')) {
-			error(400, err.message);
-		}
+		if (err instanceof VmResizeError) error(400, err.message);
 		throw err;
 	}
 

@@ -46,6 +46,8 @@ export const load: LayoutLoad = async ({ params, parent, url }) => {
 
 	return {
 		server: server as ServerInfo,
-		serverId: params.id
+		serverId: params.id,
+		vmTypeId: vm.vmTypeId,
+		vmType: vm.vmType
 	};
 };

@@ -176,6 +176,23 @@ export class ProxmoxClient {
 		}
 	}
 
+	async updateQemuConfig(
+		node: string,
+		vmid: number,
+		params: Record<string, unknown>
+	): Promise<void> {
+		try {
+			await this.api
+				.put(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
+					body: this.toForm(params)
+				})
+				.json<PveResponse<null>>();
+		} catch (error) {
+			await this.logHttpError(`updateQemuConfig(${node}, ${vmid})`, error, params);
+			throw error;
+		}
+	}
+
 	async resizeDisk(node: string, vmid: number, disk: string, size: string): Promise<void> {
 		await this.api
 			.put(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/resize`, {

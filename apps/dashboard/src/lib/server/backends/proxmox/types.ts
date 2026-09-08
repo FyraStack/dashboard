@@ -39,6 +39,7 @@ export interface PveQemuConfig {
 	boot?: string;
 	scsihw?: string;
 	ide2?: string;
+	virtio0?: string;
 	scsi0?: string;
 	net0?: string;
 	cicustom?: string;

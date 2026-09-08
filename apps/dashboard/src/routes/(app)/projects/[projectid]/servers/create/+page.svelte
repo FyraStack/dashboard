@@ -534,7 +534,7 @@
 										<div class="flex items-center gap-2 border-b border-border/50 pb-2">
 											<span
 												class="text-xs font-semibold tracking-wider text-muted-foreground uppercase sm:text-[10px]"
-												>Database Images</span
+												>Other Images</span
 											>
 										</div>
 										<div class="mt-2 divide-y divide-border/30">

@@ -768,31 +768,84 @@ export class ProxmoxBackend implements VmBackend {
 		await this.client.waitForTask(node, upid);
 	}
 
-	private async ensureVmStopped(node: string, vmid: number): Promise<void> {
-		const status = await this.client.getQemuVm(node, vmid);
-		if (status.status === 'stopped') return;
-
-		let stopUpid: string;
-		try {
-			stopUpid = await this.client.stopVm(node, vmid, { overruleShutdown: true });
-		} catch (err) {
-			if (!(err instanceof HTTPError) || err.response.status !== 400) throw err;
-			stopUpid = await this.client.stopVm(node, vmid);
-		}
-		try {
-			await this.client.waitForTask(node, stopUpid);
-		} catch (err) {
-			const current = await this.client.getQemuVm(node, vmid);
-			if (current.status !== 'stopped') throw err;
-		}
-
-		const deadline = Date.now() + 60_000;
+	// Poll until the VM reaches the given power state. Used to observe the
+	// result of fire-and-forget HA operations, which return no task to wait on.
+	private async waitForVmState(
+		node: string,
+		vmid: number,
+		target: 'stopped' | 'running',
+		timeoutMs = 60_000
+	): Promise<void> {
+		const deadline = Date.now() + timeoutMs;
 		while (Date.now() < deadline) {
-			const current = await this.client.getQemuVm(node, vmid);
-			if (current.status === 'stopped') return;
+			if ((await this.client.getQemuVm(node, vmid)).status === target) return;
 			await new Promise((r) => setTimeout(r, 1_000));
 		}
-		throw new Error(`VM ${vmid} on node ${node} did not reach stopped state within 60s`);
+		throw new Error(
+			`VM ${vmid} on node ${node} did not reach ${target} state within ${timeoutMs}ms`
+		);
+	}
+
+	// A VM stuck in an HA error state can't be stopped normally — the stop routes
+	// through the HA manager and fails. Disabling HA breaks that state and stops
+	// the VM. updateHAResources is fire-and-forget (no UPID), so we poll for the
+	// VM to actually stop.
+	private async disableHaAndWaitStopped(node: string, vmid: number): Promise<void> {
+		await this.client.updateHAResources(`vm:${vmid}`, { state: 'disabled' });
+		await this.waitForVmState(node, vmid, 'stopped');
+	}
+
+	// Re-arm HA management at the given state and wait for the config to confirm.
+	// updateHAResources is fire-and-forget, so we poll the resource config. A
+	// timeout is non-fatal: the VM's power state is already correct, HA just
+	// hasn't caught up yet.
+	private async setHaStateAndWait(vmid: number, state: 'stopped' | 'started'): Promise<void> {
+		await this.client.updateHAResources(`vm:${vmid}`, { state });
+		const deadline = Date.now() + 30_000;
+		while (Date.now() < deadline) {
+			try {
+				const current = (await this.client.getHaResource(`vm:${vmid}`)).state;
+				// 'enabled' is the documented alias of 'started'
+				if (current === state || (state === 'started' && current === 'enabled')) return;
+			} catch {
+				// config may briefly be unreadable during the transition
+			}
+			await new Promise((r) => setTimeout(r, 1_000));
+		}
+		console.warn(`HA state for vm:${vmid} did not confirm ${state} within 30s`);
+	}
+
+	private async ensureVmStopped(node: string, vmid: number): Promise<void> {
+		if ((await this.client.getQemuVm(node, vmid)).status === 'stopped') return;
+
+		try {
+			let stopUpid: string;
+			try {
+				stopUpid = await this.client.stopVm(node, vmid, { overruleShutdown: true });
+			} catch (err) {
+				if (!(err instanceof HTTPError) || err.response.status !== 400) throw err;
+				stopUpid = await this.client.stopVm(node, vmid);
+			}
+			await this.client.waitForTask(node, stopUpid);
+		} catch (stopErr) {
+			if ((await this.client.getQemuVm(node, vmid)).status === 'stopped') return;
+			// Stuck HA state: disable HA to stop the VM. No need to re-arm HA —
+			// the VM is being deleted.
+			console.warn(
+				`ensureVmStopped: stop of VM ${vmid} on node ${node} failed, trying HA-disable fallback:`,
+				stopErr
+			);
+			try {
+				await this.disableHaAndWaitStopped(node, vmid);
+			} catch (haErr) {
+				throw new Error(
+					`stopping VM ${vmid} on node ${node} failed: ${stopErr}; HA-disable fallback also failed: ${haErr}`
+				);
+			}
+		}
+
+		// Safety net: confirm the VM is actually stopped before deleting.
+		await this.waitForVmState(node, vmid, 'stopped');
 	}
 
 	private async destroyVm(node: string, vmid: number): Promise<string | undefined> {
@@ -814,29 +867,86 @@ export class ProxmoxBackend implements VmBackend {
 	async startVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolve(id, proxmoxId);
-		const upid = await this.client.startVm(node, vmid);
-		await this.client.waitForTask(node, upid);
+		try {
+			const upid = await this.client.startVm(node, vmid);
+			await this.client.waitForTask(node, upid);
+			return;
+		} catch (err) {
+			if ((await this.client.getQemuVm(node, vmid)).status === 'running') return;
+			// Stuck VM: break the HA state (stops it), start it fresh, re-arm HA.
+			console.warn(
+				`startVm: start of VM ${vmid} on node ${node} failed, trying HA-disable fallback:`,
+				err
+			);
+			await this.disableHaAndWaitStopped(node, vmid);
+			const upid = await this.client.startVm(node, vmid);
+			await this.client.waitForTask(node, upid);
+			await this.setHaStateAndWait(vmid, 'started');
+		}
 	}
 
 	async stopVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolve(id, proxmoxId);
-		const upid = await this.client.shutdownVm(node, vmid);
-		await this.client.waitForTask(node, upid);
+		try {
+			const upid = await this.client.shutdownVm(node, vmid);
+			await this.client.waitForTask(node, upid);
+			return;
+		} catch (err) {
+			if ((await this.client.getQemuVm(node, vmid)).status === 'stopped') return;
+			// Stuck VM: the graceful shutdown routes through the HA manager and
+			// fails, so disable HA to stop it, then re-arm HA as stopped.
+			console.warn(
+				`stopVm: shutdown of VM ${vmid} on node ${node} failed, trying HA-disable fallback:`,
+				err
+			);
+			await this.disableHaAndWaitStopped(node, vmid);
+			await this.setHaStateAndWait(vmid, 'stopped');
+		}
 	}
 
 	async killVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolve(id, proxmoxId);
-		const upid = await this.client.stopVm(node, vmid);
-		await this.client.waitForTask(node, upid);
+		try {
+			const upid = await this.client.stopVm(node, vmid);
+			await this.client.waitForTask(node, upid);
+			return;
+		} catch (err) {
+			if ((await this.client.getQemuVm(node, vmid)).status === 'stopped') return;
+			// Stuck VM: the hard stop routes through the HA manager and fails, so
+			// disable HA to stop it, then re-arm HA as stopped.
+			console.warn(
+				`killVm: stop of VM ${vmid} on node ${node} failed, trying HA-disable fallback:`,
+				err
+			);
+			await this.disableHaAndWaitStopped(node, vmid);
+			await this.setHaStateAndWait(vmid, 'stopped');
+		}
 	}
 
 	async rebootVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolve(id, proxmoxId);
-		const upid = await this.client.rebootVm(node, vmid);
-		await this.client.waitForTask(node, upid);
+		try {
+			const upid = await this.client.rebootVm(node, vmid);
+			await this.client.waitForTask(node, upid);
+			return;
+		} catch (err) {
+			if ((await this.client.getQemuVm(node, vmid)).status === 'running') return;
+			// Stuck VM: a normal reboot routes through the HA manager and fails.
+			// Break the HA state (stops the VM), start it fresh, re-arm HA.
+			// If the VM is down, this degrades to a start — the reboot's target
+			// state is 'running', which the start achieves.
+			console.warn(
+				`rebootVm: reboot of VM ${vmid} on node ${node} failed, trying HA-disable fallback:`,
+				err
+			);
+			await this.disableHaAndWaitStopped(node, vmid);
+			const upid = await this.client.startVm(node, vmid);
+			await this.client.waitForTask(node, upid);
+			await this.setHaStateAndWait(vmid, 'started');
+		}
 	}
 
 	async resizeVm(id: string, params: VmResizeParams, proxmoxId?: number): Promise<void> {

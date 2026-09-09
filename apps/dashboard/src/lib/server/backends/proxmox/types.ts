@@ -158,6 +158,20 @@ export interface PveClusterResource {
 	uptime?: number;
 }
 
+export interface PveHaResource {
+	sid: string;
+	state: 'started' | 'stopped' | 'enabled' | 'disabled' | 'ignored';
+	type?: string;
+	group?: string;
+	comment?: string;
+	digest?: string;
+	max_relocate?: number;
+	max_restart?: number;
+	'auto-rebalance'?: boolean;
+	failback?: boolean;
+	[key: string]: unknown;
+}
+
 export interface PveStorageContent {
 	volid: string;
 	content: string;

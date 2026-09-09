@@ -4,6 +4,7 @@ import { error } from '@sveltejs/kit';
 import { initDrizzle } from '$lib/server/db';
 import { member, organization, projectBillingCustomers, user } from '$lib/server/db/schema';
 import { getRuntimeEnv } from '$lib/server/env';
+import type { CapPeriod } from './caps';
 
 export function isBillingConfigured() {
 	const env = getRuntimeEnv();
@@ -528,17 +529,34 @@ export async function getProjectInvoices(projectId: string) {
 	}
 }
 
-export async function getProjectBillingPeriodAnchor(projectId: string) {
-	if (!isBillingConfigured()) return null;
+export type ProjectBillingPeriodLookup =
+	{ customer: 'found'; anchor: CapPeriod | null } | { customer: 'missing' };
+
+export async function lookupProjectBillingPeriod(
+	projectId: string
+): Promise<ProjectBillingPeriodLookup> {
+	if (!isBillingConfigured()) return { customer: 'found', anchor: null };
+
+	let customer;
+	try {
+		customer = await createAutumnClient().customers.get({ customerId: projectId });
+	} catch (err) {
+		if (autumnStatus(err) === 404) return { customer: 'missing' };
+		throw err;
+	}
 
 	const planId = defaultPlanId();
-	if (!planId) return null;
+	const subscription = planId
+		? customer.subscriptions.find((item) => item.planId === planId)
+		: undefined;
+	if (!subscription?.currentPeriodStart || !subscription.currentPeriodEnd) {
+		return { customer: 'found', anchor: null };
+	}
 
-	const customer = await createAutumnClient().customers.get({ customerId: projectId });
-	const subscription = customer.subscriptions.find((item) => item.planId === planId);
-	if (!subscription?.currentPeriodStart || !subscription.currentPeriodEnd) return null;
-
-	return { start: subscription.currentPeriodStart, end: subscription.currentPeriodEnd };
+	return {
+		customer: 'found',
+		anchor: { start: subscription.currentPeriodStart, end: subscription.currentPeriodEnd }
+	};
 }
 
 export async function openProjectBillingPortal(projectId: string, returnUrl: string) {

@@ -6,7 +6,8 @@ import {
 	organization,
 	vms,
 	vmTypes,
-	type billingResourceTypeEnum
+	type billingResourceTypeEnum,
+	type vmStatusEnum
 } from '$lib/server/db/schema';
 import { billedQuantity, hoursBetween, requireVmFeatureId, usageIdempotencyKey } from './features';
 import {
@@ -23,12 +24,14 @@ import {
 	ensureProjectCustomer,
 	ensureProjectServerEntity,
 	formatAutumnError,
-	getProjectBillingPeriodAnchor,
 	isBillingConfigured,
-	isProjectBillingExempt
+	isProjectBillingExempt,
+	lookupProjectBillingPeriod,
+	type ProjectBillingPeriodLookup
 } from './autumn';
 
 type BillingResourceType = (typeof billingResourceTypeEnum.enumValues)[number];
+type VmStatus = (typeof vmStatusEnum.enumValues)[number];
 type BillingMeter = typeof billingMeters.$inferSelect;
 type BillingUsageEvent = typeof billingUsageEvents.$inferSelect;
 
@@ -224,13 +227,34 @@ async function meterCapContext(meter: BillingMeter) {
 	if (meter.resourceType === 'vm') {
 		const vmType = await vmTypeBilledByMeter(meter);
 		capHours = capHoursFor(vmType?.rate, vmType?.cap);
+
+		if (await vmMeterIsErrored(meter)) {
+			return { capHours, periodAt: makePeriodAt(null), billable: false };
+		}
 	}
 
-	const anchor = Number.isFinite(capHours)
-		? await getProjectBillingPeriodAnchor(meter.projectId)
-		: null;
+	const lookup = await lookupProjectBillingPeriod(meter.projectId);
+	if (lookup.customer === 'missing') {
+		logUnbillableProject(meter.projectId);
+		return { capHours, periodAt: makePeriodAt(null), billable: false };
+	}
 
-	return { capHours, periodAt: makePeriodAt(anchor) };
+	return { capHours, periodAt: makePeriodAt(lookup.anchor), billable: true };
+}
+
+async function vmMeterIsErrored(meter: Pick<BillingMeter, 'resourceId'>) {
+	const db = initDrizzle();
+	const vm = await db.query.vms.findFirst({
+		where: eq(vms.id, meter.resourceId),
+		columns: { status: true }
+	});
+	return vmIsErrored(vm?.status);
+}
+
+function logUnbillableProject(projectId: string) {
+	console.warn(
+		`Project ${projectId} has no billing customer; skipping usage for its meters until one exists`
+	);
 }
 
 function makePeriodAt(anchor: CapPeriod | null) {
@@ -253,7 +277,7 @@ export async function meterResourceThrough(
 
 	if (!meter) return null;
 
-	const { capHours, periodAt } = await meterCapContext(meter);
+	const { capHours, periodAt, billable } = await meterCapContext(meter);
 
 	const events = await db.transaction(async (tx) => {
 		const [locked] = await tx
@@ -272,9 +296,11 @@ export async function meterResourceThrough(
 			periodAt
 		});
 
-		const values = segments
-			.map((segment) => segmentEventValues(locked, segment, now))
-			.filter((value) => value != null);
+		const values = billable
+			? segments
+					.map((segment) => segmentEventValues(locked, segment, now))
+					.filter((value) => value != null)
+			: [];
 
 		const inserted =
 			values.length > 0
@@ -450,7 +476,8 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 			meter: billingMeters,
 			rate: vmTypes.rate,
 			cap: vmTypes.cap,
-			currentFeatureId: vmTypes.autumnFeatureId
+			currentFeatureId: vmTypes.autumnFeatureId,
+			vmStatus: vms.status
 		})
 		.from(billingMeters)
 		.leftJoin(vms, eq(vms.id, billingMeters.resourceId))
@@ -471,31 +498,58 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 		.orderBy(asc(billingMeters.lastMeteredAt))
 		.limit(limit);
 
-	const anchors = new Map<string, Promise<CapPeriod | null>>();
-	const anchorFor = (projectId: string) => {
-		let anchor = anchors.get(projectId);
-		if (!anchor) {
-			anchor = getProjectBillingPeriodAnchor(projectId);
-			anchors.set(projectId, anchor);
+	const lookups = new Map<string, Promise<ProjectBillingPeriodLookup>>();
+	const lookupFor = (projectId: string) => {
+		let lookup = lookups.get(projectId);
+		if (!lookup) {
+			lookup = lookupProjectBillingPeriod(projectId).then((result) => {
+				if (result.customer === 'missing') logUnbillableProject(projectId);
+				return result;
+			});
+			lookups.set(projectId, lookup);
 		}
-		return anchor;
+		return lookup;
+	};
+	const anchorFor = async (projectId: string) => {
+		const lookup = await lookupFor(projectId);
+		return lookup.customer === 'found' ? lookup.anchor : null;
 	};
 
 	let events = 0;
-	await runBounded(meters, METER_CONCURRENCY, async ({ meter, rate, cap, currentFeatureId }) => {
-		if (currentFeatureId && currentFeatureId !== meter.featureId) {
-			const inserted = await rotateMeterFeature(meter, now, currentFeatureId, anchorFor);
+	let skipped = { errored: 0, unbillable: 0 };
+	await runBounded(
+		meters,
+		METER_CONCURRENCY,
+		async ({ meter, rate, cap, currentFeatureId, vmStatus }) => {
+			if (vmIsErrored(vmStatus)) {
+				skipped.errored += 1;
+				return;
+			}
+
+			const lookup = await lookupFor(meter.projectId);
+			if (lookup.customer === 'missing') {
+				skipped.unbillable += 1;
+				return;
+			}
+
+			if (currentFeatureId && currentFeatureId !== meter.featureId) {
+				const inserted = await rotateMeterFeature(meter, now, currentFeatureId, anchorFor);
+				events += inserted.length;
+				return;
+			}
+
+			const capHours = capHoursFor(rate, cap);
+			const anchor = Number.isFinite(capHours) ? await anchorFor(meter.projectId) : null;
+			const inserted = await recordMeterUsage(meter, now, capHours, makePeriodAt(anchor));
 			events += inserted.length;
-			return;
 		}
+	);
 
-		const capHours = capHoursFor(rate, cap);
-		const anchor = Number.isFinite(capHours) ? await anchorFor(meter.projectId) : null;
-		const inserted = await recordMeterUsage(meter, now, capHours, makePeriodAt(anchor));
-		events += inserted.length;
-	});
+	return { meters: meters.length, events, skipped };
+}
 
-	return { meters: meters.length, events };
+function vmIsErrored(status: VmStatus | null | undefined) {
+	return status === 'error';
 }
 
 type ProjectTargetStatus = 'ok' | 'failed' | 'gone';

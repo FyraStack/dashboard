@@ -1,5 +1,5 @@
 import ky, { HTTPError } from 'ky';
-import { stringify as stringifyYaml } from 'yaml';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { Address6 } from 'ip-address';
 import type { Fetcher } from '@cloudflare/workers-types';
 
@@ -97,6 +97,7 @@ function firstIpv6AddressInPrefix(prefix: string) {
 
 function cloudInitVendorConfig(params: CloudInitVendorConfigParams) {
 	const yamlContents = `#cloud-config\n${stringifyYaml({
+		ssh_deletekeys: false,
 		write_files: [
 			{
 				path: '/etc/sysctl.d/99-ipv6-forwarding.conf',
@@ -121,6 +122,15 @@ function cloudInitVendorConfig(params: CloudInitVendorConfigParams) {
 	})}`;
 
 	return yamlContents;
+}
+
+function withSshHostKeysPreserved(vendorConfig: string) {
+	const config: unknown = parseYaml(vendorConfig);
+	if (!config || typeof config !== 'object' || Array.isArray(config)) {
+		throw new Error('Dashboard-managed cloud-init vendor data is not a YAML object');
+	}
+
+	return `#cloud-config\n${stringifyYaml({ ...config, ssh_deletekeys: false })}`;
 }
 
 function uniqueFirewallIpSetEntries(params: VmCreateParams) {
@@ -314,7 +324,7 @@ export class ProxmoxBackend implements VmBackend {
 
 		if (!endpointUrl || !username || !password) {
 			throw new Error(
-				'Custom cloud-init networking requires PROXMOX_SNIPPETS_ENDPOINT_URL, PROXMOX_SNIPPETS_ENDPOINT_USERNAME, and PROXMOX_SNIPPETS_ENDPOINT_PASSWORD'
+				'Custom cloud-init snippets require PROXMOX_SNIPPETS_ENDPOINT_URL, PROXMOX_SNIPPETS_ENDPOINT_USERNAME, and PROXMOX_SNIPPETS_ENDPOINT_PASSWORD'
 			);
 		}
 
@@ -345,6 +355,47 @@ export class ProxmoxBackend implements VmBackend {
 
 			const cause = err instanceof Error && err.cause ? `: ${String(err.cause)}` : '';
 			throw new Error(`Snippet endpoint upload failed for ${filename}: ${String(err)}${cause}`);
+		}
+	}
+
+	private async readSnippet(filename: string) {
+		const endpointUrl = this.options.snippetsEndpointUrl?.replace(/\/+$/, '');
+		const username = this.options.snippetsEndpointUsername;
+		const password = this.options.snippetsEndpointPassword;
+
+		if (!endpointUrl || !username || !password) {
+			throw new Error(
+				'Custom cloud-init snippets require PROXMOX_SNIPPETS_ENDPOINT_URL, PROXMOX_SNIPPETS_ENDPOINT_USERNAME, and PROXMOX_SNIPPETS_ENDPOINT_PASSWORD'
+			);
+		}
+
+		const directFetch =
+			this.options.snippetsEndpointVerifySsl === false ? insecureDirectFetch : globalThis.fetch;
+		const snippetFetch = createVpcFetch(
+			this.options.snippetsVpc ? [this.options.snippetsVpc] : [],
+			directFetch
+		);
+
+		try {
+			return await ky
+				.get(`${endpointUrl}/${encodeURIComponent(filename)}`, {
+					headers: {
+						Authorization: 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64')
+					},
+					timeout: 60_000,
+					fetch: snippetFetch
+				})
+				.text();
+		} catch (err) {
+			if (err instanceof HTTPError) {
+				const body = await err.response.text().catch(() => '<unreadable response body>');
+				throw new Error(
+					`Snippet endpoint read failed for ${filename}: ${err.response.status} ${err.response.statusText} - ${body}`
+				);
+			}
+
+			const cause = err instanceof Error && err.cause ? `: ${String(err.cause)}` : '';
+			throw new Error(`Snippet endpoint read failed for ${filename}: ${String(err)}${cause}`);
 		}
 	}
 
@@ -662,6 +713,34 @@ export class ProxmoxBackend implements VmBackend {
 			macAddress,
 			taskId: String(vmid)
 		};
+	}
+
+	async updateVmHostname(id: string, hostname: string, proxmoxId?: number): Promise<void> {
+		clearProxmoxReadCaches();
+		const { node, vmid } = await this.resolve(id, proxmoxId);
+		const storage = await this.snippetStorage(node);
+		const currentConfig = await this.client.getQemuConfig(node, vmid);
+		const customConfigs = (currentConfig.cicustom ?? '')
+			.split(',')
+			.map((entry) => entry.trim())
+			.filter(Boolean);
+		if (customConfigs.some((entry) => entry.startsWith('user='))) {
+			throw new Error('Cannot update hostname while the VM uses custom cloud-init user data');
+		}
+
+		const vendorFilename = `stack-${vmid}-vendor.yaml`;
+		if (!customConfigs.includes(`vendor=${storage}:snippets/${vendorFilename}`)) {
+			throw new Error(
+				'Cannot update hostname without the dashboard-managed cloud-init vendor data'
+			);
+		}
+
+		const vendorConfig = await this.readSnippet(vendorFilename);
+		await this.uploadSnippet(vendorFilename, withSshHostKeysPreserved(vendorConfig));
+
+		const upid = await this.client.updateQemuConfigAsync(node, vmid, { name: hostname });
+		await this.client.waitForTask(node, upid);
+		await this.client.regenerateCloudInit(node, vmid);
 	}
 
 	async deleteVm(id: string, proxmoxId?: number): Promise<void> {

@@ -21,6 +21,7 @@ import {
 import { queueVmDeletion } from '$lib/server/vm-deletion';
 import { provisionVm } from '$lib/server/vm-provisioning';
 import { findPlanDowngrades } from '$lib/vm-plans';
+import { isValidPtrHostname } from '$lib/ptr';
 import { instrument, timingLog } from '$lib/server/observability';
 import {
 	accessibilityFixtureEnabled,
@@ -582,6 +583,35 @@ export const createVm = command(createParams, async (params) => {
 		sshPublicKeys: publicKeys,
 		password: params.password
 	});
+});
+
+const renameParams = type({ vmId: 'string', name: 'string', updateHostname: 'boolean' });
+export const renameVm = command(renameParams, async (params) => {
+	const event = getRequestEvent();
+	if (!event?.locals.user) error(401, 'Authentication required');
+
+	const db = initDrizzle();
+	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
+	if (!row) error(404, `VM "${params.vmId}" not found`);
+	if (!row.active) error(409, `VM "${row.name}" is not active`);
+	if (row.status === 'deleting') error(409, `VM "${row.name}" is being deleted`);
+	if (row.status === 'provisioning') error(409, `VM "${row.name}" is still provisioning`);
+	if (!row.ownerProjectId) error(400, 'VM is not attached to a project');
+	await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
+
+	const name = params.name.trim();
+	if (!name) error(400, 'Server name is required');
+	if (params.updateHostname && !isValidPtrHostname(name)) {
+		error(400, 'Server name must be a valid hostname to update the guest hostname');
+	}
+
+	if (params.updateHostname) {
+		const backend = getBackend(row.backend);
+		await backend.updateVmHostname(row.id, name, row.proxmoxId ?? undefined);
+	}
+
+	await db.update(vms).set({ name }).where(eq(vms.id, row.id));
+	return { id: row.id, name };
 });
 
 const deleteParams = type({ vmId: 'string' });

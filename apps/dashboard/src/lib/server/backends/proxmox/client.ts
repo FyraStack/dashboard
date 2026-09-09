@@ -193,6 +193,14 @@ export class ProxmoxClient {
 		}
 	}
 
+	async regenerateCloudInit(node: string, vmid: number): Promise<void> {
+		await this.api
+			.put(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/cloudinit`, {
+				body: this.toForm({})
+			})
+			.json<PveResponse<null>>();
+	}
+
 	async resizeDisk(node: string, vmid: number, disk: string, size: string): Promise<void> {
 		await this.api
 			.put(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/resize`, {

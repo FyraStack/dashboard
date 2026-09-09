@@ -78,7 +78,6 @@ type ProxmoxBackendOptions = {
 };
 
 type CloudInitVendorConfigParams = {
-	hostname?: string;
 	enableSshPasswordAuth?: boolean;
 };
 
@@ -98,7 +97,7 @@ function firstIpv6AddressInPrefix(prefix: string) {
 
 function cloudInitVendorConfig(params: CloudInitVendorConfigParams) {
 	const yamlContents = `#cloud-config\n${stringifyYaml({
-		...(params.hostname ? { hostname: params.hostname, manage_etc_hosts: true } : {}),
+		ssh_deletekeys: false,
 		write_files: [
 			{
 				path: '/etc/sysctl.d/99-ipv6-forwarding.conf',
@@ -125,17 +124,13 @@ function cloudInitVendorConfig(params: CloudInitVendorConfigParams) {
 	return yamlContents;
 }
 
-function updateCloudInitVendorHostname(content: string, hostname: string) {
-	const config: unknown = parseYaml(content);
+function withSshHostKeysPreserved(vendorConfig: string) {
+	const config: unknown = parseYaml(vendorConfig);
 	if (!config || typeof config !== 'object' || Array.isArray(config)) {
 		throw new Error('Dashboard-managed cloud-init vendor data is not a YAML object');
 	}
 
-	return `#cloud-config\n${stringifyYaml({
-		...config,
-		hostname,
-		manage_etc_hosts: true
-	})}`;
+	return `#cloud-config\n${stringifyYaml({ ...config, ssh_deletekeys: false })}`;
 }
 
 function uniqueFirewallIpSetEntries(params: VmCreateParams) {
@@ -614,10 +609,7 @@ export class ProxmoxBackend implements VmBackend {
 			),
 			this.uploadSnippet(
 				cloudInitVendorConfigFilename,
-				cloudInitVendorConfig({
-					hostname: params.name,
-					enableSshPasswordAuth: Boolean(params.password)
-				})
+				cloudInitVendorConfig({ enableSshPasswordAuth: Boolean(params.password) })
 			)
 		]);
 
@@ -732,30 +724,22 @@ export class ProxmoxBackend implements VmBackend {
 			.split(',')
 			.map((entry) => entry.trim())
 			.filter(Boolean);
+		if (customConfigs.some((entry) => entry.startsWith('user='))) {
+			throw new Error('Cannot update hostname while the VM uses custom cloud-init user data');
+		}
+
 		const vendorFilename = `stack-${vmid}-vendor.yaml`;
-		const vendorVolid = `${storage}:snippets/${vendorFilename}`;
-		if (!customConfigs.includes(`vendor=${vendorVolid}`)) {
+		if (!customConfigs.includes(`vendor=${storage}:snippets/${vendorFilename}`)) {
 			throw new Error(
 				'Cannot update hostname without the dashboard-managed cloud-init vendor data'
 			);
 		}
 
 		const vendorConfig = await this.readSnippet(vendorFilename);
-		await this.uploadSnippet(vendorFilename, updateCloudInitVendorHostname(vendorConfig, hostname));
+		await this.uploadSnippet(vendorFilename, withSshHostKeysPreserved(vendorConfig));
 
-		// An earlier version used a custom user-data snippet for hostname updates. Remove only
-		// that dashboard-owned entry and leave operator-supplied user-data untouched.
-		const previousHostnameVolid = `${storage}:snippets/stack-${vmid}-hostname.yaml`;
-		const updatedCustomConfigs = customConfigs.filter(
-			(entry) => entry !== `user=${previousHostnameVolid}`
-		);
-		if (updatedCustomConfigs.length !== customConfigs.length) {
-			const upid = await this.client.updateQemuConfigAsync(node, vmid, {
-				cicustom: updatedCustomConfigs.join(',')
-			});
-			await this.client.waitForTask(node, upid);
-		}
-
+		const upid = await this.client.updateQemuConfigAsync(node, vmid, { name: hostname });
+		await this.client.waitForTask(node, upid);
 		await this.client.regenerateCloudInit(node, vmid);
 	}
 

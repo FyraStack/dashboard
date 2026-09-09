@@ -84,7 +84,7 @@
 			renameDialogOpen = false;
 			toast.success(
 				shouldUpdateHostname
-					? 'Server renamed. The hostname will update after the next boot.'
+					? 'Server renamed. The hostname will update after the next reboot.'
 					: 'Server renamed.'
 			);
 		} catch (error) {
@@ -227,7 +227,7 @@
 					>
 						Also set the VM hostname to <span class="font-mono text-foreground"
 							>{nameValue.trim()}</span
-						>. This takes effect after the next boot.
+						>. This takes effect after the next reboot and re-runs first-boot setup.
 					</p>
 				</div>
 				<Switch

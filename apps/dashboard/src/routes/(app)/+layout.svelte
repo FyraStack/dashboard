@@ -130,7 +130,7 @@
 		try {
 			selectedProjectId = projectId;
 			await authClient.organization.setActive({ organizationId: projectId });
-			await goto(resolve(`/projects/${projectId}/servers`));
+			await goto(resolve(`/projects/${projectId}/servers`), { invalidate: ['app:projects'] });
 		} catch (error) {
 			toast.error(getErrorMessage(error, 'Failed to switch project'));
 		} finally {

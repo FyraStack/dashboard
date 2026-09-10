@@ -20,7 +20,7 @@ export const load: LayoutServerLoad = async ({ params, parent, depends }) => {
 	});
 	const servers = vms
 		.filter((vm) => vm.active)
-		.map(toServerInfo)
+		.map((vm) => ({ ...toServerInfo(vm), vmTypeId: vm.vmTypeId, vmType: vm.vmType }))
 		.sort((a, b) => a.id.localeCompare(b.id));
 
 	return {

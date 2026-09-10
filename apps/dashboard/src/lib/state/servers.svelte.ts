@@ -7,7 +7,7 @@ export type ServerInfo = {
 	disk: string;
 	ip: string;
 	ipv6: string;
-	status: 'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'unknown';
+	status: 'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'error' | 'unknown';
 	agentConnected: boolean;
 	region: string;
 	created: string;
@@ -26,14 +26,52 @@ export type ServerInfo = {
 };
 
 export const serversState = $state({
+	projectId: null as string | null,
 	servers: [] as ServerInfo[],
 	loading: false,
 	statusRefreshing: false,
-	firstStatusRefreshComplete: false
+	firstStatusRefreshComplete: false,
+	refreshVersion: 0
 });
 
 export function sortServers(items: ServerInfo[]): ServerInfo[] {
 	return [...items].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+export function syncServers(projectId: string | null, incoming: ServerInfo[]): void {
+	const sameProject = serversState.projectId === projectId;
+	const currentById = new Map(
+		(sameProject ? serversState.servers : []).map((server) => [server.id, server])
+	);
+	serversState.servers = sortServers(
+		incoming.map((server) => {
+			const current = currentById.get(server.id);
+			if (!current?.liveLoaded) return server;
+
+			// List data contains cached snapshots. Keep fresher live values during invalidation.
+			return {
+				...server,
+				liveLoaded: true,
+				status:
+					server.status === 'deleting' || server.status === 'error'
+						? server.status
+						: current.status,
+				agentConnected: current.agentConnected,
+				ip: current.ip === '-' ? server.ip : current.ip,
+				ipv6: current.ipv6 === '-' ? server.ipv6 : current.ipv6,
+				uptime: current.uptime === '-' ? server.uptime : current.uptime,
+				metrics: current.metrics ?? server.metrics
+			};
+		})
+	);
+	serversState.projectId = projectId;
+	serversState.loading = false;
+	serversState.firstStatusRefreshComplete =
+		incoming.length === 0 || (sameProject && serversState.firstStatusRefreshComplete);
+}
+
+export function requestServerStatusRefresh(): void {
+	serversState.refreshVersion += 1;
 }
 
 export function getServer(id: string): ServerInfo | null {

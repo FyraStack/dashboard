@@ -10,10 +10,9 @@ import {
 	accessibilityFixtureProjects
 } from '$lib/server/accessibility-fixtures';
 
-export const load: LayoutServerLoad = async ({ locals, url, depends }) => {
+export const load: LayoutServerLoad = async ({ locals, depends }) => {
 	depends('app:projects');
 	depends('app:feature-flags');
-	const pathname = url.pathname;
 
 	if (!locals.user || !locals.session) {
 		throw redirect(303, '/login');
@@ -21,25 +20,15 @@ export const load: LayoutServerLoad = async ({ locals, url, depends }) => {
 
 	const [projects, featureFlags] = accessibilityFixtureEnabled
 		? [accessibilityFixtureProjects, accessibilityFixtureFeatureFlags]
-		: await instrument(
-				'layout.app.load.dependencies',
-				() => Promise.all([listProjects(), getFeatureFlags()]),
-				{ 'url.pathname': pathname }
+		: await instrument('layout.app.load.dependencies', () =>
+				Promise.all([listProjects(), getFeatureFlags()])
 			);
-	const requestedProjectId = url.searchParams.get('projectId');
-	const pathMatch = pathname.match(/^\/projects\/([^/]+)/);
-	const activeProjectId = requestedProjectId ?? pathMatch?.[1] ?? locals.activeProjectId;
-	const isOnRootPage = pathname === '/';
-	const currentProject = isOnRootPage
-		? null
-		: (projects.find((project) => project.id === activeProjectId) ??
-			(requestedProjectId ? null : (projects[0] ?? null)));
 
 	return {
 		user: locals.user,
 		isAdmin: hasAdminRole(locals.user.role) || locals.user.isAdmin || false,
 		projects,
-		currentProject,
+		activeProjectId: locals.activeProjectId ?? null,
 		featureFlags
 	};
 };

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
+	import { browser } from '$app/environment';
 	import { Button } from '$lib/components/ui/button';
 	import Check from '~icons/lucide/check';
 	import FileText from '~icons/nucleo/file-text';
@@ -8,11 +9,15 @@
 	import Terminal from '~icons/nucleo/terminal';
 	import Trash2 from '~icons/nucleo/trash';
 	import { getServerWithFallback, serversState } from '$lib/state/servers.svelte';
+	import { getVmMetricsHistory } from '$lib/remote/vms.remote';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
 	let copied = $state('');
 	let liveLoaded = $derived(selectedServer.liveLoaded || serversState.firstStatusRefreshComplete);
+	const metricsHistory = $derived(
+		browser ? getVmMetricsHistory({ vmId: data.serverId, timeframe: 'hour' }) : null
+	);
 
 	type ChartSample = {
 		time?: number;
@@ -91,7 +96,7 @@
 	});
 
 	let charts = $derived.by(() => {
-		const history = selectedServer.id === data.serverId ? (data.metricsHistory ?? []) : [];
+		const history = selectedServer.id === data.serverId ? (metricsHistory?.current ?? []) : [];
 		const liveSamples = liveChartSamplesByServer[selectedServer.id] ?? [];
 		const currentSample = serverMetricsSample();
 		const lastLiveSample = liveSamples.at(-1);

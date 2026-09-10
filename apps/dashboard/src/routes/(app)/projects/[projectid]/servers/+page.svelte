@@ -6,12 +6,15 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { serversState } from '$lib/state/servers.svelte';
+	import type { PageProps } from './$types';
 
-	const shouldShowEmptyState = $derived(
-		!serversState.loading &&
-			serversState.firstStatusRefreshComplete &&
-			serversState.servers.length === 0
+	let { data }: PageProps = $props();
+	const servers = $derived(
+		(serversState.projectId === data.projectId ? serversState.servers : data.servers).filter(
+			(server) => server.status !== 'deleting' && server.status !== 'error'
+		)
 	);
+	const shouldShowEmptyState = $derived(servers.length === 0);
 </script>
 
 {#if shouldShowEmptyState}

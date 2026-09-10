@@ -93,13 +93,9 @@
 							...server,
 							liveLoaded: true,
 							status:
-								next.status === 'deleting' || next.status === 'error'
-									? next.status
-									: next.status === 'running'
-										? 'running'
-										: server.status === 'provisioning' || server.status === 'restarting'
-											? server.status
-											: next.status,
+								server.status === 'restarting' && next.status !== 'running'
+									? 'restarting'
+									: next.status,
 							agentConnected: next.liveStatus === 'running',
 							ip:
 								getFirstIp(

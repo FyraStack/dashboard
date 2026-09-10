@@ -36,6 +36,8 @@ type CacheEntry<T> = {
 
 const CLUSTER_RESOURCES_TTL_MS = 2_000;
 const VM_STATUS_TTL_MS = 1_000;
+const RUNNING_CONFIRMATION_TIMEOUT_MS = 30_000;
+const RUNNING_CONFIRMATION_INTERVAL_MS = 1_000;
 const clusterResourcesCache = new Map<string, CacheEntry<PveClusterResource[]>>();
 const vmStatusCache = new Map<
 	string,
@@ -248,6 +250,19 @@ export class ProxmoxBackend implements VmBackend {
 		return getCached(clusterResourcesCache, type ?? 'all', CLUSTER_RESOURCES_TTL_MS, () =>
 			this.client.getClusterResources(type)
 		);
+	}
+
+	private async startAndAwaitRunning(node: string, vmid: number) {
+		const startUpid = await this.client.startVm(node, vmid);
+		await this.client.waitForTask(node, startUpid);
+		const deadline = Date.now() + RUNNING_CONFIRMATION_TIMEOUT_MS;
+		while (Date.now() < deadline) {
+			const resources = await this.client.getClusterResources('vm');
+			const current = resources.find((resource) => resource.vmid === vmid);
+			if (current?.status === 'running') break;
+			await new Promise((resolve) => setTimeout(resolve, RUNNING_CONFIRMATION_INTERVAL_MS));
+		}
+		clearProxmoxReadCaches();
 	}
 
 	private async getCachedQemuVm(node: string, vmid: number) {
@@ -682,8 +697,7 @@ export class ProxmoxBackend implements VmBackend {
 					if (params.diskGb > 0) {
 						await this.client.resizeDisk(node.node, vmid, 'virtio0', `${params.diskGb}G`);
 					}
-					const startUpid = await this.client.startVm(node.node, vmid);
-					await this.client.waitForTask(node.node, startUpid);
+					await this.startAndAwaitRunning(node.node, vmid);
 					await params.onProvisionSettled?.({ ok: true });
 				})
 				.catch(async (err) => {
@@ -700,8 +714,7 @@ export class ProxmoxBackend implements VmBackend {
 				await provisioning;
 			}
 		} else {
-			const startUpid = await this.client.startVm(node.node, vmid);
-			await this.client.waitForTask(node.node, startUpid);
+			await this.startAndAwaitRunning(node.node, vmid);
 			await params.onProvisionSettled?.({ ok: true });
 		}
 

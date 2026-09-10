@@ -40,6 +40,10 @@ async function updateActiveVmStatus(
 	vmId: string,
 	values: { status: 'ready' } | { status: 'error'; statusError: string }
 ) {
+	const columns =
+		values.status === 'ready'
+			? { ...values, lastKnownStatus: 'running', lastKnownUptime: 0, lastKnownAt: Date.now() }
+			: values;
 	const settledEvent = getRequestEvent();
 	const ownsPool = !settledEvent.locals.db;
 	const settledDb = initDrizzle();
@@ -50,7 +54,7 @@ async function updateActiveVmStatus(
 	try {
 		await settledDb
 			.update(vms)
-			.set(values)
+			.set(columns)
 			.where(and(eq(vms.id, vmId), eq(vms.active, true), inArray(vms.status, overwritable)));
 		console.log(`VM ${vmId} provision ${values.status === 'ready' ? 'succeeded' : 'failed'}`);
 	} catch (updateErr) {

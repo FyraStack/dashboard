@@ -53,7 +53,9 @@ export function syncServers(projectId: string | null, incoming: ServerInfo[]): v
 				...server,
 				liveLoaded: true,
 				status:
-					server.status === 'deleting' || server.status === 'error'
+					server.status === 'deleting' ||
+					server.status === 'error' ||
+					server.status === 'provisioning'
 						? server.status
 						: current.status,
 				agentConnected: current.agentConnected,

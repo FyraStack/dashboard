@@ -113,17 +113,15 @@ export function toServerInfo(vm: VmSummary): ServerInfo {
 		),
 		ipv6: getFirstIp(vm.live?.networkInterfaces, (address) => address.includes(':')),
 		status:
-			vm.status === 'deleting' || vm.status === 'error'
+			vm.status === 'deleting' || vm.status === 'error' || vm.status === 'provisioning'
 				? vm.status
 				: vm.live?.status === 'running'
 					? 'running'
 					: vm.live?.status === 'paused'
 						? 'restarting'
-						: vm.status === 'provisioning'
-							? 'provisioning'
-							: vm.live?.status === 'stopped'
-								? 'stopped'
-								: 'unknown',
+						: vm.live?.status === 'stopped'
+							? 'stopped'
+							: 'unknown',
 		agentConnected: vm.live?.status === 'running',
 		region: 'Chicago',
 		created: vm.creationDate,

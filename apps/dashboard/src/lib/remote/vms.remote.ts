@@ -19,7 +19,11 @@ import {
 	isBillingConfigured
 } from '$lib/server/billing/autumn';
 import { queueVmDeletion } from '$lib/server/vm-deletion';
-import { provisionVm } from '$lib/server/vm-provisioning';
+import {
+	isProvisioningStalled,
+	provisionVm,
+	resumeStalledProvisioning
+} from '$lib/server/vm-provisioning';
 import { findPlanDowngrades } from '$lib/vm-plans';
 import { isValidPtrHostname } from '$lib/ptr';
 import { instrument, timingLog } from '$lib/server/observability';
@@ -537,6 +541,11 @@ export const listVmStatuses = query(statusParams, async (params) => {
 	});
 
 	persistLiveState(db, persistable);
+	const now = Date.now();
+	for (const row of rows) {
+		if (!isProvisioningStalled(row, now)) continue;
+		runInBackground(resumeStalledProvisioning(db, row), `resume provisioning for VM ${row.id}`);
+	}
 
 	timingLog('remote.vms.listVmStatuses.exit', {
 		'project.id': params.projectId,

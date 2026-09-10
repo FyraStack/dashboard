@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { and, eq, inArray } from 'drizzle-orm';
+import type { InferSelectModel } from 'drizzle-orm';
 import { getRequestEvent } from '$app/server';
 import { runInBackground } from '$lib/server/background';
 import { getBackend } from '$lib/server/backends';
@@ -14,6 +15,7 @@ import { baseImages, vms, vmTypes } from '$lib/server/db/schema';
 import {
 	allocateVmNetworking,
 	createVyosDelegatedRoute,
+	ensureVmDelegatedRoute,
 	generateMacAddress,
 	releaseVmNetworking
 } from '$lib/server/ipam';
@@ -32,8 +34,53 @@ export type ProvisionVmInput = {
 	password?: string;
 };
 
+const PROVISION_STALL_AFTER_MS = 60_000;
+const PROVISION_TIMEOUT_MS = 15 * 60_000;
+const RESUME_ATTEMPT_TTL_MS = 60_000;
+const resumeAttemptsStartedAt = new Map<string, number>();
+
+type VmRecord = InferSelectModel<typeof vms>;
+export type StalledProvisioningVm = Pick<
+	VmRecord,
+	'id' | 'proxmoxId' | 'proxmoxNode' | 'backend' | 'status' | 'createdAt'
+> & { vmTypeStorageAmount: number | null };
+
 function errorMessage(err: unknown) {
 	return err instanceof Error ? err.message : String(err);
+}
+
+export function isProvisioningStalled(row: StalledProvisioningVm, now = Date.now()) {
+	return (
+		row.status === 'provisioning' &&
+		row.proxmoxId != null &&
+		now - row.createdAt > PROVISION_STALL_AFTER_MS
+	);
+}
+
+export async function resumeStalledProvisioning(db: Database, row: StalledProvisioningVm) {
+	const now = Date.now();
+	const inFlightSince = resumeAttemptsStartedAt.get(row.id);
+	if (inFlightSince !== undefined && now - inFlightSince < RESUME_ATTEMPT_TTL_MS) return;
+	resumeAttemptsStartedAt.set(row.id, now);
+	try {
+		if (Date.now() - row.createdAt > PROVISION_TIMEOUT_MS) {
+			await markVmProvisionFailed(row.id, 'Provisioning did not finish in time');
+			return;
+		}
+		const provisioned = await getBackend(row.backend).finishProvisioning(
+			row.id,
+			row.proxmoxId ?? undefined,
+			{ diskGb: row.vmTypeStorageAmount ?? 0 },
+			{ proxmoxNode: row.proxmoxNode ?? undefined }
+		);
+		if (!provisioned) return;
+		await ensureVmDelegatedRoute(db, row.id);
+		await markVmProvisionReady(row.id);
+	} catch (err) {
+		console.warn(`Failed to resume provisioning for VM ${row.id}`, err);
+	} finally {
+		resumeAttemptsStartedAt.delete(row.id);
+	}
 }
 
 async function updateActiveVmStatus(
@@ -190,8 +237,16 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 			sshKeys: input.sshPublicKeys ?? [],
 			password: input.password,
 			onProvisionSettled: async ({ ok, error: err }) => {
-				if (ok) await markVmProvisionReady(vmId);
-				else await markVmProvisionFailed(vmId, err ?? 'Unknown error');
+				if (!ok) {
+					await markVmProvisionFailed(vmId, err ?? 'Unknown error');
+					return;
+				}
+				try {
+					await delegatedRoute;
+				} catch {
+					return;
+				}
+				await markVmProvisionReady(vmId);
 			},
 			registerBackground: runInBackground,
 			userId: input.userId,

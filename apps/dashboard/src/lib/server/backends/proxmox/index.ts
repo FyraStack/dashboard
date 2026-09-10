@@ -265,6 +265,30 @@ export class ProxmoxBackend implements VmBackend {
 		clearProxmoxReadCaches();
 	}
 
+	async finishProvisioning(
+		id: string,
+		proxmoxId: number | undefined,
+		params: { diskGb: number },
+		options: Pick<VmLookupOptions, 'proxmoxNode'> = {}
+	): Promise<boolean> {
+		clearProxmoxReadCaches();
+		const { node, vmid } =
+			this.resolveFromHint(proxmoxId, options.proxmoxNode) ?? (await this.resolve(id, proxmoxId));
+		const config = await this.client.getQemuConfig(node, vmid);
+		const currentDiskGb = parseDiskSizeGb(config.virtio0);
+		if (config.lock || currentDiskGb == null) return false;
+
+		if (params.diskGb > currentDiskGb) {
+			await this.client.resizeDisk(node, vmid, 'virtio0', `${params.diskGb}G`);
+		}
+		const current = await this.client.getQemuVm(node, vmid);
+		if (current.status !== 'running') {
+			await this.startAndAwaitRunning(node, vmid);
+		}
+		clearProxmoxReadCaches();
+		return true;
+	}
+
 	private async getCachedQemuVm(node: string, vmid: number) {
 		return getCached(vmStatusCache, `${node}:${vmid}`, VM_STATUS_TTL_MS, () =>
 			this.client.getQemuVm(node, vmid)

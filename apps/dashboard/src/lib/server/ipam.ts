@@ -801,6 +801,10 @@ export async function allocateVmNetworking(
 	}
 }
 
+export async function ensureVmDelegatedRoute(db: QueryableDb, vmId: string) {
+	await createVyosDelegatedRoute(await vmAllocations(db, vmId), vmId);
+}
+
 export async function releaseVmNetworking(db: QueryableDb, vmId: string) {
 	const allocations = await vmAllocations(db, vmId);
 	await deleteVyosDelegatedRoute(allocations);

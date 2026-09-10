@@ -131,6 +131,12 @@ export interface VmBackend {
 		options?: Pick<VmLookupOptions, 'proxmoxNode'>
 	): Promise<VmMetricsHistorySample[]>;
 	createVm(params: VmCreateParams): Promise<VmCreateResult>;
+	finishProvisioning(
+		id: string,
+		proxmoxId: number | undefined,
+		params: { diskGb: number },
+		options?: Pick<VmLookupOptions, 'proxmoxNode'>
+	): Promise<boolean>;
 	updateVmHostname(id: string, hostname: string, proxmoxId?: number): Promise<void>;
 	resizeVm(id: string, params: VmResizeParams, proxmoxId?: number): Promise<void>;
 	deleteVm(id: string, proxmoxId?: number): Promise<void>;

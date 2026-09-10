@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { goto, invalidate } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import BillingSetupDialog from '$lib/components/billing-setup-dialog.svelte';
@@ -10,6 +10,7 @@
 	import { userSettingsHref } from '$lib/state/user-settings.svelte';
 	import { createVolume as createProjectVolume } from '$lib/remote/volumes.remote';
 	import { createVm } from '$lib/remote/vms.remote';
+	import { requestServerStatusRefresh } from '$lib/state/servers.svelte';
 	import { getErrorMessage } from '$lib/utils';
 	import { onMount } from 'svelte';
 	import ArrowLeft from '~icons/lucide/arrow-left';
@@ -333,6 +334,7 @@
 
 	async function handleCreate() {
 		if (
+			creating ||
 			!serverName.trim() ||
 			!selectedImageId ||
 			!selectedPlanId ||
@@ -368,8 +370,10 @@
 				...(usePasswordAuthentication ? { password: serverPassword.trim() } : {})
 			};
 			const created = await createVm(payload);
-			await invalidate('project:vms');
-			goto(resolve(`/projects/${projectId}/servers/${created.id}`));
+			await goto(resolve(`/projects/${projectId}/servers/${created.id}`), {
+				invalidate: ['project:vms']
+			});
+			requestServerStatusRefresh();
 		} catch (err) {
 			createError = getErrorMessage(err, 'Failed to create server. Please try again.');
 		} finally {

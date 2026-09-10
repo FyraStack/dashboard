@@ -10,7 +10,7 @@
 	import RotateCw from '~icons/nucleo/rotate-cw';
 	import type { FeatureFlags } from '$lib/feature-flags';
 	import { killVm, rebootVm, startVm, stopVm } from '$lib/remote/vms.remote';
-	import { getServerWithFallback } from '$lib/state/servers.svelte';
+	import { getServerWithFallback, requestServerStatusRefresh } from '$lib/state/servers.svelte';
 	import { serverTabs, type ServerTab } from './lib/server-detail';
 	import { toast } from 'svelte-sonner';
 	import { getErrorMessage } from '$lib/utils';
@@ -81,6 +81,7 @@
 			} else {
 				await killVm({ vmId: selectedServer.id });
 			}
+			requestServerStatusRefresh();
 			toast.success(powerMessages[action].success);
 		} catch (error) {
 			toast.error(getErrorMessage(error, powerMessages[action].error));

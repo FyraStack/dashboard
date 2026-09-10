@@ -6,7 +6,7 @@ import { listSshKeys } from '$lib/remote/ssh-keys.remote';
 import { error, redirect } from '@sveltejs/kit';
 import { getProjectMemberRole } from '$lib/server/auth-context';
 import { attachDefaultProjectPlan } from '$lib/server/billing/autumn';
-import { getProjectBillingOverview, refreshProjectBilling } from '$lib/server/billing/overview';
+import { getProjectBillingReadiness, refreshProjectBilling } from '$lib/server/billing/overview';
 import { runInBackground } from '$lib/server/background';
 import { initDrizzle } from '$lib/server/db';
 import { getIpamAvailability } from '$lib/server/ipam';
@@ -47,7 +47,7 @@ export const load: LayoutServerLoad = async ({ locals, params, parent, depends, 
 		listImages(),
 		featureFlags?.volumes ? listVolumes({ projectId: params.projectid }) : [],
 		listSshKeys(),
-		getProjectBillingOverview(params.projectid),
+		getProjectBillingReadiness(params.projectid),
 		getIpamAvailability(db),
 		getProjectMemberRole(db, locals.user.id, params.projectid)
 	]);

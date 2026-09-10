@@ -684,7 +684,7 @@ function tenantDescription(vmId: string, label: string) {
 	return `tenant ${vmId.slice(-8)} ${label}`;
 }
 
-async function createVyosDelegatedRoute(allocations: PendingAllocation[], vmId: string) {
+export async function createVyosDelegatedRoute(allocations: PendingAllocation[], vmId: string) {
 	if (!isVyosConfigured()) return;
 
 	const ipv6TransitAllocation = allocations.find(
@@ -793,7 +793,6 @@ export async function allocateVmNetworking(
 		allocations.push(ipv6PrefixAllocation);
 
 		assertIpv6AllocationPair(ipv6TransitAllocation, ipv6PrefixAllocation);
-		await createVyosDelegatedRoute(allocations, params.vmId);
 
 		return allocations;
 	} catch (err) {

@@ -29,6 +29,19 @@ export async function refreshProjectBilling(projectId: string) {
 	invalidateProjectBillingState(projectId);
 }
 
+function billingSetupRequired(
+	status: Awaited<ReturnType<typeof getProjectBillingState>>['status']
+) {
+	return status !== 'active' && status !== 'provider_unavailable';
+}
+
+export async function getProjectBillingReadiness(projectId: string) {
+	const state = accessibilityFixtureEnabled
+		? accessibilityFixtureBillingOverview
+		: await getProjectBillingState(projectId);
+	return { status: state.status, setupRequired: billingSetupRequired(state.status) };
+}
+
 export async function getProjectBillingOverview(projectId: string) {
 	if (accessibilityFixtureEnabled) return accessibilityFixtureBillingOverview;
 
@@ -106,8 +119,7 @@ export async function getProjectBillingOverview(projectId: string) {
 		status: billingState.status,
 		statusLabel: statusLabel(billingState.status),
 		planLabel: 'Project billing',
-		setupRequired:
-			billingState.status !== 'active' && billingState.status !== 'provider_unavailable',
+		setupRequired: billingSetupRequired(billingState.status),
 		syncError: billingState.syncError,
 		lastUpdatedAt: now,
 		activeResourceCount: activeMeters.length,

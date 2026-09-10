@@ -3,7 +3,11 @@
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { getServerWithFallback } from '$lib/state/servers.svelte';
+	import {
+		getServer,
+		getServerWithFallback,
+		requestServerStatusRefresh
+	} from '$lib/state/servers.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
@@ -96,10 +100,12 @@
 
 	async function handleDelete() {
 		if (deleting) return;
+		const server = selectedServer;
+		const projectId = page.params.projectid;
 		const ok = await confirmDestructive({
 			title: 'Delete server',
-			description: `This permanently deletes ${selectedServer.name} and all of its data. This cannot be undone.`,
-			confirmWord: selectedServer.name,
+			description: `This permanently deletes ${server.name} and all of its data. This cannot be undone.`,
+			confirmWord: server.name,
 			confirmLabel: 'Delete server'
 		});
 		if (!ok) return;
@@ -108,9 +114,14 @@
 		deleteError = '';
 
 		try {
-			await deleteVm({ vmId: selectedServer.id });
-			await invalidate('project:vms');
-			await goto(resolve(`/projects/${page.params.projectid}/servers`));
+			await deleteVm({ vmId: server.id });
+			const current = getServer(server.id);
+			if (current) current.status = 'deleting';
+			requestServerStatusRefresh();
+			if (page.params.projectid !== projectId || page.params.id !== server.id) return;
+			await goto(resolve(`/projects/${projectId}/servers`), {
+				invalidate: ['project:vms']
+			});
 		} catch {
 			deleteError = 'Failed to delete server.';
 			deleting = false;

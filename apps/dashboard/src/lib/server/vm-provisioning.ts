@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { getRequestEvent } from '$app/server';
 import { runInBackground } from '$lib/server/background';
 import { getBackend } from '$lib/server/backends';
@@ -11,7 +11,12 @@ import {
 import { createBillingMeter } from '$lib/server/billing/metering';
 import { closeRequestDb, initDrizzle, type Database } from '$lib/server/db';
 import { baseImages, vms, vmTypes } from '$lib/server/db/schema';
-import { allocateVmNetworking, generateMacAddress, releaseVmNetworking } from '$lib/server/ipam';
+import {
+	allocateVmNetworking,
+	createVyosDelegatedRoute,
+	generateMacAddress,
+	releaseVmNetworking
+} from '$lib/server/ipam';
 import { applyDefaultPtrRecords } from '$lib/server/ptr-records';
 import { config } from '$lib/server/config';
 
@@ -26,6 +31,46 @@ export type ProvisionVmInput = {
 	sshPublicKeys?: string[];
 	password?: string;
 };
+
+function errorMessage(err: unknown) {
+	return err instanceof Error ? err.message : String(err);
+}
+
+async function updateActiveVmStatus(
+	vmId: string,
+	values: { status: 'ready' } | { status: 'error'; statusError: string }
+) {
+	const columns =
+		values.status === 'ready'
+			? { ...values, lastKnownStatus: 'running', lastKnownUptime: 0, lastKnownAt: Date.now() }
+			: values;
+	const settledEvent = getRequestEvent();
+	const ownsPool = !settledEvent.locals.db;
+	const settledDb = initDrizzle();
+	const overwritable =
+		values.status === 'ready'
+			? ['provisioning' as const]
+			: ['provisioning' as const, 'ready' as const];
+	try {
+		await settledDb
+			.update(vms)
+			.set(columns)
+			.where(and(eq(vms.id, vmId), eq(vms.active, true), inArray(vms.status, overwritable)));
+		console.log(`VM ${vmId} provision ${values.status === 'ready' ? 'succeeded' : 'failed'}`);
+	} catch (updateErr) {
+		console.error(`VM ${vmId} status update failed:`, updateErr);
+	} finally {
+		if (ownsPool) closeRequestDb(settledEvent);
+	}
+}
+
+function markVmProvisionReady(vmId: string) {
+	return updateActiveVmStatus(vmId, { status: 'ready' });
+}
+
+function markVmProvisionFailed(vmId: string, statusError: string) {
+	return updateActiveVmStatus(vmId, { status: 'error', statusError });
+}
 
 export async function provisionVm(db: Database, input: ProvisionVmInput) {
 	const [vmType, baseImage] = await Promise.all([
@@ -64,6 +109,7 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 	const vmId = inserted.id;
 	const macAddress = generateMacAddress();
 	let networkingAllocations: Awaited<ReturnType<typeof allocateVmNetworking>> = [];
+	let delegatedRoute: Promise<unknown> = Promise.resolve();
 	let result;
 	try {
 		if (!input.billingExempt) {
@@ -94,6 +140,11 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 				: []),
 			...(ipv6PrefixNetworkAllocation?.prefix ? [ipv6PrefixNetworkAllocation.prefix] : [])
 		];
+		delegatedRoute = createVyosDelegatedRoute(networkingAllocations, vmId).catch(async (err) => {
+			await markVmProvisionFailed(vmId, `Failed to create IPv6 route: ${errorMessage(err)}`);
+			throw err;
+		});
+		runInBackground(delegatedRoute, `create delegated IPv6 route for VM ${vmId}`);
 		const backend = getBackend('proxmox');
 		result = await backend.createVm({
 			id: vmId,
@@ -139,21 +190,8 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 			sshKeys: input.sshPublicKeys ?? [],
 			password: input.password,
 			onProvisionSettled: async ({ ok, error: err }) => {
-				const settledEvent = getRequestEvent();
-				const settledDb = initDrizzle();
-				try {
-					await settledDb
-						.update(vms)
-						.set(
-							ok ? { status: 'ready' } : { status: 'error', statusError: err ?? 'Unknown error' }
-						)
-						.where(and(eq(vms.id, vmId), eq(vms.active, true)));
-					console.log(`VM ${vmId} provision ${ok ? 'succeeded' : 'failed'}`);
-				} catch (updateErr) {
-					console.error(`VM ${vmId} status update failed:`, updateErr);
-				} finally {
-					closeRequestDb(settledEvent);
-				}
+				if (ok) await markVmProvisionReady(vmId);
+				else await markVmProvisionFailed(vmId, err ?? 'Unknown error');
 			},
 			registerBackground: runInBackground,
 			userId: input.userId,
@@ -169,6 +207,7 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 					console.warn(`Failed to clean up Proxmox VM ${vmId} after provisioning error`, deleteErr);
 				});
 		}
+		await delegatedRoute.catch(() => {});
 		await releaseVmNetworking(db, vmId).catch(() => {});
 		await deleteProjectServerEntity(input.projectId, vmId).catch(() => {});
 		await db

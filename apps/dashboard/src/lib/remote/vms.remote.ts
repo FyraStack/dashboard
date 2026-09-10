@@ -157,11 +157,12 @@ function mapVmRow(row: VmRow, liveInput: VmInfo | null, assignedIps?: string[]) 
 function toDashboardStatus(
 	status: VmRow['status'],
 	liveStatus: VmInfo['status'] | null | undefined
-): 'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'unknown' {
+): 'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'error' | 'unknown' {
 	if (status === 'deleting') return 'deleting';
+	if (status === 'error') return 'error';
+	if (status === 'provisioning') return 'provisioning';
 	if (liveStatus === 'running') return 'running';
 	if (liveStatus === 'paused') return 'restarting';
-	if (status === 'provisioning') return 'provisioning';
 	if (liveStatus === 'stopped') return 'stopped';
 	return 'unknown';
 }

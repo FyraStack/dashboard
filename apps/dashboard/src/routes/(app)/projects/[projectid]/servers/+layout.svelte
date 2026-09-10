@@ -9,7 +9,7 @@
 	import HardDrive from '~icons/nucleo/hard-drive';
 	import { listVmStatuses } from '$lib/remote/vms.remote';
 	import { clientTimingLog, runQuery } from '$lib/utils';
-	import { serversState, sortServers } from '$lib/state/servers.svelte';
+	import { serversState, syncServers } from '$lib/state/servers.svelte';
 
 	let { data, children } = $props();
 
@@ -42,154 +42,109 @@
 		return 'Stopped';
 	}
 
-	const REFRESH_INTERVAL_MS = 30000;
-
+	const REFRESH_INTERVAL_MS = 30_000;
+	const PENDING_REFRESH_INTERVAL_MS = 3_000;
 	const initialServers = $derived(data.servers ?? []);
-	let projectId = $derived(data.projectId ?? null);
-	let refreshTimeout: number | null = null;
-
-	function scheduleRefreshStatuses() {
-		clientTimingLog('vm.status.scheduleRefreshStatuses', {
-			'project.id': projectId ?? undefined,
-			'vm.status.delay_ms': 500,
-			'vm.status.had_pending_timeout': Boolean(refreshTimeout)
-		});
-		if (refreshTimeout) window.clearTimeout(refreshTimeout);
-		refreshTimeout = window.setTimeout(() => {
-			refreshTimeout = null;
-			refreshStatuses();
-		}, 500);
-	}
-
-	function cancelScheduledRefreshStatuses() {
-		if (!refreshTimeout) return;
-		window.clearTimeout(refreshTimeout);
-		refreshTimeout = null;
-	}
+	const projectId = $derived(data.projectId ?? null);
+	const currentServers = $derived(
+		(serversState.projectId === projectId ? serversState.servers : initialServers).filter(
+			(server) => server.status !== 'deleting' && server.status !== 'error'
+		)
+	);
 
 	$effect(() => {
-		serversState.servers = sortServers(initialServers);
-		serversState.loading = false;
-		serversState.firstStatusRefreshComplete = initialServers.length === 0;
+		const incoming = initialServers;
+		const incomingProjectId = projectId;
+		untrack(() => syncServers(incomingProjectId, incoming));
 	});
 
-	async function refreshStatuses() {
-		if (!projectId) return;
-		const started = performance.now();
-		clientTimingLog('vm.status.refresh.start', {
-			'project.id': projectId,
-			'vm.status.server_count': serversState.servers.length
-		});
-		serversState.statusRefreshing = true;
+	$effect(() => {
+		const pollingProjectId = projectId;
+		const refreshVersion = serversState.refreshVersion;
+		if (!pollingProjectId) return;
 
-		try {
-			clientTimingLog('vm.status.refresh.remote.start', { 'project.id': projectId });
-			const statuses = await runQuery(listVmStatuses({ projectId }), 'listVmStatuses');
-			clientTimingLog('vm.status.refresh.remote.end', {
-				'project.id': projectId,
-				'vm.status.count': statuses.length,
-				duration_ms: Math.round((performance.now() - started) * 100) / 100
-			});
-			const byId = new Map(statuses.map((server) => [server.id, server]));
+		let cancelled = false;
+		let refreshing = false;
+		let timeout: ReturnType<typeof setTimeout> | undefined;
 
-			untrack(() => {
-				serversState.servers = sortServers(serversState.servers)
-					.filter((server) => server.status !== 'deleting' || byId.has(server.id))
+		async function refreshStatuses() {
+			if (cancelled || refreshing || document.visibilityState !== 'visible') return;
+			if (serversState.servers.length === 0) return;
+			refreshing = true;
+			serversState.statusRefreshing = true;
+			const started = performance.now();
+			const requestedServerIds = new Set(serversState.servers.map((server) => server.id));
+
+			try {
+				const statuses = await runQuery(
+					listVmStatuses({ projectId: pollingProjectId }),
+					'listVmStatuses'
+				);
+				// Ignore requests from a previous project or before the latest VM action.
+				if (cancelled || refreshVersion !== serversState.refreshVersion) return;
+				const byId = new Map(statuses.map((server) => [server.id, server]));
+				serversState.servers = serversState.servers
+					.filter((server) => byId.has(server.id) || !requestedServerIds.has(server.id))
 					.map((server) => {
 						const next = byId.get(server.id);
 						if (!next) return server;
-
-						const ipv4 =
-							getFirstIp(
-								next.networkInterfaces,
-								(address) => !address.startsWith('127.') && !address.includes(':')
-							) ?? server.ip;
-						const ipv6 =
-							getFirstIp(next.networkInterfaces, (address) => address.includes(':')) ?? server.ipv6;
 
 						return {
 							...server,
 							liveLoaded: true,
 							status:
-								next.status === 'deleting'
-									? 'deleting'
-									: next.status === 'running'
-										? 'running'
-										: server.status === 'provisioning' || server.status === 'restarting'
-											? server.status
-											: next.status,
+								server.status === 'restarting' && next.status !== 'running'
+									? 'restarting'
+									: next.status,
 							agentConnected: next.liveStatus === 'running',
-							ip: ipv4,
-							ipv6,
+							ip:
+								getFirstIp(
+									next.networkInterfaces,
+									(address) => !address.startsWith('127.') && !address.includes(':')
+								) ?? server.ip,
+							ipv6:
+								getFirstIp(next.networkInterfaces, (address) => address.includes(':')) ??
+								server.ipv6,
 							uptime: formatUptime(next.uptime),
-							metrics: next.metrics
+							metrics: next.metrics ?? server.metrics
 						};
 					});
-			});
-		} catch {
-			clientTimingLog('vm.status.refresh.error', {
-				'project.id': projectId,
-				duration_ms: Math.round((performance.now() - started) * 100) / 100
-			});
-		} finally {
-			serversState.statusRefreshing = false;
-			serversState.firstStatusRefreshComplete = true;
-			clientTimingLog('vm.status.refresh.end', {
-				'project.id': projectId,
-				duration_ms: Math.round((performance.now() - started) * 100) / 100
-			});
-		}
-	}
-
-	$effect(() => {
-		if (!projectId) return;
-		clientTimingLog('vm.status.polling.effect.start', {
-			'project.id': projectId,
-			'vm.status.initial_count': initialServers.length
-		});
-
-		let interval: number | null = null;
-
-		function startPolling() {
-			if (interval !== null) return;
-			clientTimingLog('vm.status.polling.start', {
-				'project.id': projectId,
-				'vm.status.interval_ms': REFRESH_INTERVAL_MS
-			});
-			interval = window.setInterval(scheduleRefreshStatuses, REFRESH_INTERVAL_MS);
-		}
-
-		function stopPolling() {
-			if (interval === null) return;
-			clientTimingLog('vm.status.polling.stop', { 'project.id': projectId });
-			window.clearInterval(interval);
-			interval = null;
-		}
-
-		function handleVisibilityChange() {
-			clientTimingLog('vm.status.visibilityChange', {
-				'project.id': projectId,
-				'document.visibility_state': document.visibilityState
-			});
-			if (document.visibilityState === 'visible') {
-				scheduleRefreshStatuses();
-				startPolling();
-			} else {
-				stopPolling();
-				cancelScheduledRefreshStatuses();
+			} catch {
+				clientTimingLog('vm.status.refresh.error', { 'project.id': pollingProjectId });
+			} finally {
+				refreshing = false;
+				if (!cancelled && refreshVersion === serversState.refreshVersion) {
+					serversState.statusRefreshing = false;
+					serversState.firstStatusRefreshComplete = true;
+					clientTimingLog('vm.status.refresh.end', {
+						'project.id': pollingProjectId,
+						duration_ms: Math.round(performance.now() - started)
+					});
+					if (document.visibilityState === 'visible') {
+						const pending = serversState.servers.some((server) =>
+							['provisioning', 'restarting', 'deleting'].includes(server.status)
+						);
+						timeout = setTimeout(
+							refreshStatuses,
+							pending ? PENDING_REFRESH_INTERVAL_MS : REFRESH_INTERVAL_MS
+						);
+					}
+				}
 			}
 		}
 
-		untrack(() => {
-			refreshStatuses();
-		});
-		startPolling();
-		document.addEventListener('visibilitychange', handleVisibilityChange);
+		function handleVisibilityChange() {
+			clearTimeout(timeout);
+			void refreshStatuses();
+		}
 
+		untrack(() => void refreshStatuses());
+		document.addEventListener('visibilitychange', handleVisibilityChange);
 		return () => {
+			cancelled = true;
+			clearTimeout(timeout);
 			document.removeEventListener('visibilitychange', handleVisibilityChange);
-			cancelScheduledRefreshStatuses();
-			stopPolling();
+			serversState.statusRefreshing = false;
 		};
 	});
 
@@ -197,11 +152,11 @@
 		if (
 			!projectId ||
 			serversState.loading ||
-			serversState.servers.length === 0 ||
+			currentServers.length === 0 ||
 			currentPath !== serversPath
 		)
 			return;
-		goto(`${serversPath}/${serversState.servers[0].id}`, { replaceState: true });
+		goto(`${serversPath}/${currentServers[0].id}`, { replaceState: true });
 	});
 
 	const currentPath = $derived(page.url.pathname);
@@ -236,9 +191,9 @@
 			<div class="flex min-w-0 items-center">
 				<span class="text-base font-semibold text-foreground lg:text-sm">Servers</span>
 				<Badge variant="secondary" class="ml-2 text-xs lg:text-[10px]"
-					>{serversState.servers.length}</Badge
+					>{currentServers.length}</Badge
 				>
-				{#if serversState.statusRefreshing && serversState.servers.length > 0}
+				{#if serversState.statusRefreshing && currentServers.length > 0}
 					<span class="ml-2 h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-muted-foreground"
 					></span>
 				{/if}
@@ -289,7 +244,7 @@
 				</div>
 			{/if}
 
-			{#each serversState.servers as server (server.id)}
+			{#each currentServers as server (server.id)}
 				<a
 					class="flex w-full items-start justify-between border-b border-border px-4 py-3 text-left transition-colors duration-100 {selectedServerId ===
 					server.id
@@ -330,7 +285,7 @@
 				</a>
 			{/each}
 
-			{#if !serversState.loading && serversState.servers.length === 0}
+			{#if !serversState.loading && currentServers.length === 0}
 				<div class="flex flex-col items-center justify-center py-8 text-muted-foreground lg:py-16">
 					<HardDrive class="mb-3 h-6 w-6" />
 					<p class="text-sm lg:text-xs">No servers</p>

@@ -348,7 +348,7 @@ export const getVm = query(getParams, async (params) => {
 		console.warn(`Failed to load live VM state for ${row.id}`, err);
 		if (
 			row.active &&
-			row.status === 'deleting' &&
+			(row.status === 'deleting' || row.status === 'error') &&
 			err instanceof Error &&
 			err.message.includes('not found on any Proxmox node')
 		) {

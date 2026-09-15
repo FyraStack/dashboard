@@ -507,6 +507,12 @@ export function purchaseProjectCredits(projectId: string, credits: number) {
 	});
 }
 
+const ISSUED_INVOICE_STATUSES = new Set(['open', 'paid', 'uncollectible']);
+
+function isIssuedInvoice(invoice: { status: string }) {
+	return ISSUED_INVOICE_STATUSES.has(invoice.status.toLowerCase());
+}
+
 export async function getProjectInvoices(projectId: string) {
 	if (!isBillingConfigured()) return [];
 
@@ -516,7 +522,7 @@ export async function getProjectInvoices(projectId: string) {
 			expand: ['invoices']
 		});
 
-		return (customer.invoices ?? []).map((invoice) => ({
+		return (customer.invoices ?? []).filter(isIssuedInvoice).map((invoice) => ({
 			stripeId: invoice.stripeId,
 			status: invoice.status,
 			total: invoice.total,

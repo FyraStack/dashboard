@@ -2,6 +2,7 @@ import ky, { HTTPError, type KyInstance } from 'ky';
 import type { Fetcher } from '@cloudflare/workers-types';
 import { createVpcFetch, insecureDirectFetch } from '$lib/server/vpc';
 import type {
+	PveTaskLogLine,
 	PveResponse,
 	PveNode,
 	PveQemuVm,
@@ -24,6 +25,9 @@ export interface ProxmoxClientConfig {
 	verifySsl?: boolean;
 	vpc?: Fetcher;
 }
+
+const isTaskWarning = (exitstatus?: string): exitstatus is string =>
+	!!exitstatus && exitstatus.startsWith('WARNINGS:');
 
 export class ProxmoxClient {
 	private api: KyInstance;
@@ -347,6 +351,16 @@ export class ProxmoxClient {
 		return res.data;
 	}
 
+	async deleteStorageVolume(node: string, storage: string, volume: string): Promise<string> {
+		const res = await this.api
+			.delete(
+				`nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content/${encodeURIComponent(volume)}`,
+				{ timeout: 120_000 }
+			)
+			.json<PveResponse<string>>();
+		return res.data;
+	}
+
 	async importStorageContentFromUrl(
 		node: string,
 		storage: string,
@@ -394,6 +408,15 @@ export class ProxmoxClient {
 		return res.data;
 	}
 
+	async getTaskLog(node: string, upid: string): Promise<PveTaskLogLine[]> {
+		const res = await this.api
+			.get(`nodes/${encodeURIComponent(node)}/tasks/${encodeURIComponent(upid)}/log`, {
+				searchParams: { limit: '500' }
+			})
+			.json<PveResponse<PveTaskLogLine[]>>();
+		return res.data;
+	}
+
 	async waitForTask(
 		node: string,
 		upid: string,
@@ -406,6 +429,10 @@ export class ProxmoxClient {
 		while (Date.now() < deadline) {
 			const status = await this.getTaskStatus(node, upid);
 			if (status.status === 'stopped') {
+				if (isTaskWarning(status.exitstatus)) {
+					await this.logTaskWarnings(node, upid, status.exitstatus);
+					return status;
+				}
 				if (status.exitstatus && status.exitstatus !== 'OK') {
 					throw new Error(`Proxmox task failed: ${status.exitstatus} (UPID: ${upid})`);
 				}
@@ -415,6 +442,19 @@ export class ProxmoxClient {
 		}
 
 		throw new Error(`Proxmox task timed out after ${timeout}ms (UPID: ${upid})`);
+	}
+
+	private async logTaskWarnings(node: string, upid: string, exitstatus: string): Promise<void> {
+		try {
+			const lines = await this.getTaskLog(node, upid);
+			const warnings = lines.map((l) => l.t).filter((t) => /^WARN/.test(t));
+			console.warn(`Proxmox task finished with ${exitstatus} (UPID: ${upid})`, warnings);
+		} catch (err) {
+			console.warn(
+				`Proxmox task finished with ${exitstatus} (UPID: ${upid}); log unavailable`,
+				err
+			);
+		}
 	}
 
 	// Cluster

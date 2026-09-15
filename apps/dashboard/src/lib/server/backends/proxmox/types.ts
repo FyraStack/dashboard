@@ -103,6 +103,11 @@ export interface PveTask {
 	user: string;
 }
 
+export interface PveTaskLogLine {
+	n: number;
+	t: string;
+}
+
 export interface PveTaskStatus {
 	status: 'running' | 'stopped';
 	exitstatus?: string;

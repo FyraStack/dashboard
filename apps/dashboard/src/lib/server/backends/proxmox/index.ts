@@ -799,10 +799,52 @@ export class ProxmoxBackend implements VmBackend {
 			throw err;
 		}
 
+		await this.destroyVmAndWait(node, vmid);
+	}
+
+	private async destroyVmAndWait(node: string, vmid: number): Promise<void> {
+		await new Promise((r) => setTimeout(r, 3_000));
 		const upid = await this.destroyVm(node, vmid);
 		if (!upid) return;
+		const status = await this.client.waitForTask(node, upid);
+		const leaked = await this.leakedDisksAfterDestroy(node, upid, status.exitstatus);
+		if (leaked.length > 0) await this.retryLeakedDiskRemoval(node, vmid, leaked);
+	}
 
-		await this.client.waitForTask(node, upid);
+	private async leakedDisksAfterDestroy(
+		node: string,
+		upid: string,
+		exitstatus?: string
+	): Promise<string[]> {
+		if (!exitstatus?.startsWith('WARNINGS:')) return [];
+		const lines = await this.client.getTaskLog(node, upid);
+		return lines
+			.map((l) => l.t)
+			.filter((t) => t.includes('image still has watchers'))
+			.map((t) => t.match(/rbd rm '([^']+)'/)?.[1])
+			.filter((name): name is string => !!name);
+	}
+
+	private async retryLeakedDiskRemoval(node: string, vmid: number, disks: string[]): Promise<void> {
+		const storage = config.proxmox.vmDiskStorage;
+		let remaining = disks;
+		for (let attempt = 1; remaining.length > 0 && attempt <= 3; attempt++) {
+			await new Promise((r) => setTimeout(r, 5_000 * attempt));
+			const stillLeaked: string[] = [];
+			for (const disk of remaining) {
+				try {
+					const upid = await this.client.deleteStorageVolume(node, storage, `${storage}:${disk}`);
+					await this.client.waitForTask(node, upid);
+				} catch (err) {
+					if (err instanceof HTTPError && err.response.status === 404) continue;
+					stillLeaked.push(disk);
+				}
+			}
+			remaining = stillLeaked;
+		}
+		if (remaining.length > 0) {
+			console.error(`VM ${vmid} on ${node} destroyed but left undeletable disks`, remaining);
+		}
 	}
 
 	private async ensureVmStopped(node: string, vmid: number): Promise<void> {

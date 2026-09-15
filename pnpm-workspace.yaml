@@ -11,3 +11,8 @@ allowBuilds:
   esbuild: true
   sharp: true
   workerd: true
+autoInstallPeers: false
+dedupePeerDependents: false
+minimumReleaseAge: 0
+sideEffectsCache: true
+

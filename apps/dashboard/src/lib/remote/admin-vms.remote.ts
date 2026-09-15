@@ -118,7 +118,7 @@ export const listAllAdminVms = query(async (): Promise<AdminVm[]> => {
 		const staleDeleting = rows.filter(
 			(row) =>
 				row.active &&
-				row.status === 'deleting' &&
+				(row.status === 'deleting' || row.status === 'error') &&
 				!(row.proxmoxId != null ? liveByProxmoxId.get(row.proxmoxId) : null) &&
 				!liveById.get(row.id)
 		);

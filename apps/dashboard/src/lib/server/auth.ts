@@ -388,7 +388,7 @@ function buildAuth() {
 							});
 						}
 
-						expireCookie(ctx, pendingPasskeyCookie);
+						expireCookie(ctx as Parameters<typeof expireCookie>[0], pendingPasskeyCookie);
 						ctx.setCookie(PENDING_PASSKEY_HINT_COOKIE, '', {
 							httpOnly: true,
 							maxAge: 0,

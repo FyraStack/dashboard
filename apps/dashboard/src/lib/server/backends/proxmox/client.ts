@@ -14,7 +14,8 @@ import type {
 	PveNextId,
 	PveCreateQemuParams,
 	PveClusterResource,
-	PveAgentNetworkInterface
+	PveAgentNetworkInterface,
+	PveHaResource
 } from './types';
 
 export interface ProxmoxClientConfig {
@@ -446,5 +447,20 @@ export class ProxmoxClient {
 			})
 			.json<PveResponse<{ result: PveAgentNetworkInterface[] }>>();
 		return res.data.result;
+	}
+
+	async updateHAResources(sid: string, params: Record<string, string>): Promise<void> {
+		await this.api
+			.put(`cluster/ha/resources/${sid}`, {
+				body: this.toForm(params)
+			})
+			.json<PveResponse<null>>();
+	}
+
+	async getHaResource(sid: string): Promise<PveHaResource> {
+		const res = await this.api
+			.get(`cluster/ha/resources/${sid}`)
+			.json<PveResponse<PveHaResource>>();
+		return res.data;
 	}
 }

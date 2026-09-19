@@ -12,6 +12,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { authClient } from '$lib/auth-client';
 	import TotpOnboardingDialog from './totp-onboarding-dialog.svelte';
+	import TotpResetDialog from './totp-reset-dialog.svelte';
 	import PasskeyOnboardingDialog from './passkey-onboarding-dialog.svelte';
 	import PasswordVerificationDialog from './password-verification-dialog.svelte';
 	import {
@@ -212,6 +213,7 @@
 	let totpDialogOpen = $state(false);
 	let passkeyDialogOpen = $state(false);
 	let totpDisableDialogOpen = $state(false);
+	let totpResetDialogOpen = $state(false);
 	let totpDisablePassword = $state('');
 	type TotpDisableMethod = 'totp' | 'backupCode';
 	let totpDisableMethod = $state<TotpDisableMethod>('totp');
@@ -688,21 +690,33 @@
 									</div>
 								</div>
 								{#if twoFactorEnabled}
-									<Button
-										variant="destructive"
-										size="sm"
-										class="h-7 w-20 gap-1.5 text-xs"
-										onclick={() => {
-											totpDisableError = '';
-											totpDisablePassword = '';
-											totpDisableMethod = 'totp';
-											totpDisableCode = '';
-											totpDisableDialogOpen = true;
-										}}
-									>
-										<Minus class="h-3 w-3" />
-										Disable
-									</Button>
+									<div class="flex items-center gap-2">
+										<Button
+											variant="outline"
+											size="sm"
+											class="h-7 gap-1.5 text-xs"
+											onclick={() => {
+												totpResetDialogOpen = true;
+											}}
+										>
+											Reset
+										</Button>
+										<Button
+											variant="destructive"
+											size="sm"
+											class="h-7 w-20 gap-1.5 text-xs"
+											onclick={() => {
+												totpDisableError = '';
+												totpDisablePassword = '';
+												totpDisableMethod = 'totp';
+												totpDisableCode = '';
+												totpDisableDialogOpen = true;
+											}}
+										>
+											<Minus class="h-3 w-3" />
+											Disable
+										</Button>
+									</div>
 								{:else}
 									<Button
 										variant="outline"
@@ -1027,6 +1041,18 @@
 	{#if totpDialogOpen}
 		<TotpOnboardingDialog bind:open={totpDialogOpen} onComplete={loadTwoFactorStatus} />
 	{/if}
+	<TotpResetDialog
+		bind:open={totpResetDialogOpen}
+		userEmail={user?.email}
+		onComplete={(completedChoice) => {
+			void loadTwoFactorStatus();
+			toast.success(
+				completedChoice === 'reset'
+					? 'Authenticator app reset.'
+					: 'Two-factor authentication disabled.'
+			);
+		}}
+	/>
 	<PasskeyOnboardingDialog bind:open={passkeyDialogOpen} onComplete={loadTwoFactorStatus} />
 	<PasswordVerificationDialog
 		bind:open={passwordVerificationOpen}
@@ -1125,6 +1151,17 @@
 						<p class="text-xs text-red-400">{totpDisableError}</p>
 					{/if}
 				</div>
+
+				<button
+					type="button"
+					class="text-left text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+					onclick={() => {
+						totpDisableDialogOpen = false;
+						totpResetDialogOpen = true;
+					}}
+				>
+					Lost access to your authenticator app? Reset it with an email code instead.
+				</button>
 
 				<Dialog.Footer>
 					<Button

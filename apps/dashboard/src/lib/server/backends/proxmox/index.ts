@@ -262,10 +262,17 @@ export class ProxmoxBackend implements VmBackend {
 		proxmoxId?: number,
 		proxmoxNode?: string
 	): Promise<ResolvedVm> {
-		return (await this.resolveFromHint(id, proxmoxId, proxmoxNode)) ?? this.resolve(id, proxmoxId);
+		return (
+			(await this.resolveFromHint(id, proxmoxId, proxmoxNode)) ??
+			this.resolveVerified(id, proxmoxId)
+		);
 	}
 
 	private async resolveForMutation(id: string, proxmoxId?: number): Promise<ResolvedVm> {
+		return this.resolveVerified(id, proxmoxId);
+	}
+
+	private async resolveVerified(id: string, proxmoxId?: number): Promise<ResolvedVm> {
 		const resolved = await this.resolve(id, proxmoxId);
 		vmConfigCache.delete(`${resolved.node}:${resolved.vmid}`);
 		if (!(await this.isOwnedBy(id, resolved))) {

@@ -4,7 +4,7 @@ import { initDrizzle, closeRequestDb, type Database } from '$lib/server/db';
 import { ipAssignments, paymentPeriods, vms, volumes } from '$lib/server/db/schema';
 import { getBackend } from '$lib/server/backends';
 import { deleteProjectServerEntity } from '$lib/server/billing/autumn';
-import { meterResourceThrough } from '$lib/server/billing/metering';
+import { hasUnsyncedUsageEvents, meterResourceThrough } from '$lib/server/billing/metering';
 import { releaseVmNetworking } from '$lib/server/ipam';
 import { runInBackground } from '$lib/server/background';
 
@@ -16,6 +16,9 @@ type DeletableVm = {
 };
 
 export async function queueVmDeletion(db: Database, row: DeletableVm): Promise<void> {
+	await meterResourceThrough('vm', row.id).catch((err) => {
+		console.warn(`Failed to close billing meter for VM ${row.id} before deletion`, err);
+	});
 	await db.update(vms).set({ status: 'deleting', statusError: null }).where(eq(vms.id, row.id));
 	runInBackground(deleteVmResources(row), `vm-delete-${row.id}`);
 }
@@ -92,14 +95,11 @@ async function deleteVmResources(row: DeletableVm): Promise<void> {
 			console.warn(`Failed to release networking for VM ${row.id}`, err);
 		});
 
-		const metered = await meterResourceThrough('vm', row.id).catch((err) => {
-			console.warn(`Failed to meter VM ${row.id} during deletion`, err);
-			return null;
+		const unsynced = await hasUnsyncedUsageEvents('vm', row.id).catch((err) => {
+			console.warn(`Failed to check usage events for VM ${row.id} during deletion`, err);
+			return true;
 		});
-		if (
-			row.ownerProjectId &&
-			(!metered || metered.events.length === 0 || metered.syncStatus === 'synced')
-		) {
+		if (row.ownerProjectId && !unsynced) {
 			await deleteProjectServerEntity(row.ownerProjectId, row.id).catch((err) => {
 				console.warn(`Failed to delete Autumn entity for VM ${row.id}`, err);
 			});

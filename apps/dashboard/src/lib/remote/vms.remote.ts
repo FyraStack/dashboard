@@ -605,7 +605,6 @@ export const deleteVm = command(deleteParams, async (params) => {
 	if (row.ownerProjectId) {
 		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'admin');
 	}
-	if (row.status === 'deleting') return;
 
 	await queueVmDeletion(db, row);
 });

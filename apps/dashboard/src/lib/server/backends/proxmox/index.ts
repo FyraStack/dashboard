@@ -27,7 +27,6 @@ import { VmNotFoundError, VmResizeError } from '../types';
 interface ResolvedVm {
 	node: string;
 	vmid: number;
-	stableId?: string;
 }
 
 const STABLE_ID_TAG_PREFIX = 'vmid-';
@@ -45,10 +44,6 @@ function stableIdFromTags(tags: string | undefined): string | undefined {
 	return tag ? tag.slice(STABLE_ID_TAG_PREFIX.length) : undefined;
 }
 
-function isUnclaimedResource(resource: PveClusterResource) {
-	return stableIdFromTags(resource.tags) === undefined;
-}
-
 type CacheEntry<T> = {
 	expiresAt: number;
 	promise: Promise<T>;
@@ -62,6 +57,10 @@ const clusterResourcesCache = new Map<string, CacheEntry<PveClusterResource[]>>(
 const vmStatusCache = new Map<
 	string,
 	CacheEntry<Awaited<ReturnType<ProxmoxClient['getQemuVm']>>>
+>();
+const vmConfigCache = new Map<
+	string,
+	CacheEntry<Awaited<ReturnType<ProxmoxClient['getQemuConfig']>>>
 >();
 
 function getCached<T>(
@@ -86,6 +85,7 @@ function getCached<T>(
 function clearProxmoxReadCaches() {
 	clusterResourcesCache.clear();
 	vmStatusCache.clear();
+	vmConfigCache.clear();
 }
 
 type ProxmoxBackendOptions = {
@@ -237,18 +237,40 @@ export class ProxmoxBackend implements VmBackend {
 		}
 	}
 
-	private resolveFromHint(proxmoxId?: number, proxmoxNode?: string): ResolvedVm | null {
-		if (proxmoxNode && proxmoxId != null) return { node: proxmoxNode, vmid: proxmoxId };
-		return null;
+	private async isOwnedBy(id: string, candidate: ResolvedVm): Promise<boolean> {
+		const config = await this.getCachedQemuConfig(candidate.node, candidate.vmid);
+		const claimed = stableIdFromTags(typeof config.tags === 'string' ? config.tags : undefined);
+		return claimed === id.toLowerCase();
+	}
+
+	private async resolveFromHint(
+		id: string,
+		proxmoxId?: number,
+		proxmoxNode?: string
+	): Promise<ResolvedVm | null> {
+		if (!proxmoxNode || proxmoxId == null) return null;
+		const candidate = { node: proxmoxNode, vmid: proxmoxId };
+		try {
+			return (await this.isOwnedBy(id, candidate)) ? candidate : null;
+		} catch {
+			return null;
+		}
+	}
+
+	private async resolveForRead(
+		id: string,
+		proxmoxId?: number,
+		proxmoxNode?: string
+	): Promise<ResolvedVm> {
+		return (await this.resolveFromHint(id, proxmoxId, proxmoxNode)) ?? this.resolve(id, proxmoxId);
 	}
 
 	private async resolveForMutation(id: string, proxmoxId?: number): Promise<ResolvedVm> {
 		const resolved = await this.resolve(id, proxmoxId);
-		const config = await this.client.getQemuConfig(resolved.node, resolved.vmid);
-		const claimed = stableIdFromTags(typeof config.tags === 'string' ? config.tags : undefined);
-		if (claimed !== undefined && claimed !== id.toLowerCase()) {
+		vmConfigCache.delete(`${resolved.node}:${resolved.vmid}`);
+		if (!(await this.isOwnedBy(id, resolved))) {
 			throw new VmNotFoundError(
-				`VM ${resolved.vmid} on ${resolved.node} is tagged as a different VM than "${id}"`
+				`VM ${resolved.vmid} on ${resolved.node} is not tagged as VM "${id}"`
 			);
 		}
 		return resolved;
@@ -260,19 +282,16 @@ export class ProxmoxBackend implements VmBackend {
 			() => this.getClusterResources('vm'),
 			{ 'vm.id': id, 'vm.proxmox_id': proxmoxId ?? undefined }
 		);
-		const qemu = resources.filter((r) => r.type === 'qemu');
 		const expectedStableId = id.toLowerCase();
-		const match =
-			qemu.find((r) => stableIdFromTags(r.tags) === expectedStableId) ??
-			(proxmoxId != null
-				? qemu.find((r) => r.vmid === proxmoxId && isUnclaimedResource(r))
-				: qemu.find((r) => r.name === id && isUnclaimedResource(r)));
+		const match = resources.find(
+			(r) => r.type === 'qemu' && stableIdFromTags(r.tags) === expectedStableId
+		);
 
 		if (!match || !match.node || match.vmid == null) {
 			throw new VmNotFoundError(`VM "${id}" not found on any Proxmox node`);
 		}
 
-		return { node: match.node, vmid: match.vmid, stableId: stableIdFromTags(match.tags) };
+		return { node: match.node, vmid: match.vmid };
 	}
 
 	private async getClusterResources(type?: 'vm' | 'storage' | 'node') {
@@ -320,6 +339,12 @@ export class ProxmoxBackend implements VmBackend {
 	private async getCachedQemuVm(node: string, vmid: number) {
 		return getCached(vmStatusCache, `${node}:${vmid}`, VM_STATUS_TTL_MS, () =>
 			this.client.getQemuVm(node, vmid)
+		);
+	}
+
+	private async getCachedQemuConfig(node: string, vmid: number) {
+		return getCached(vmConfigCache, `${node}:${vmid}`, CLUSTER_RESOURCES_TTL_MS, () =>
+			this.client.getQemuConfig(node, vmid)
 		);
 	}
 
@@ -540,19 +565,10 @@ export class ProxmoxBackend implements VmBackend {
 	}
 
 	async getVm(id: string, proxmoxId?: number, options: VmLookupOptions = {}): Promise<VmInfo> {
-		let { node, vmid, stableId } =
-			this.resolveFromHint(proxmoxId, options.proxmoxNode) ?? (await this.resolve(id, proxmoxId));
+		const { node, vmid } = await this.resolveForRead(id, proxmoxId, options.proxmoxNode);
 		const status = await instrument(
 			'proxmox.getVm.status',
-			async () => {
-				try {
-					return await this.getCachedQemuVm(node, vmid);
-				} catch (error) {
-					if (!options.proxmoxNode) throw error;
-					({ node, vmid, stableId } = await this.resolve(id, proxmoxId));
-					return await this.getCachedQemuVm(node, vmid);
-				}
-			},
+			() => this.getCachedQemuVm(node, vmid),
 			{
 				'proxmox.node': node,
 				'proxmox.vmid': vmid,
@@ -576,7 +592,7 @@ export class ProxmoxBackend implements VmBackend {
 
 		return {
 			id,
-			stableId,
+			stableId: id.toLowerCase(),
 			proxmoxId: vmid,
 			proxmoxNode: node,
 			name: status.name ?? `VM ${status.vmid}`,
@@ -603,8 +619,7 @@ export class ProxmoxBackend implements VmBackend {
 		proxmoxId?: number,
 		options: Pick<VmLookupOptions, 'proxmoxNode'> = {}
 	): Promise<VmInfo['networkInterfaces']> {
-		const { node, vmid } =
-			this.resolveFromHint(proxmoxId, options.proxmoxNode) ?? (await this.resolve(id, proxmoxId));
+		const { node, vmid } = await this.resolveForRead(id, proxmoxId, options.proxmoxNode);
 		const ifaces = await instrument(
 			'proxmox.getVm.agentNetworkInterfaces',
 			() => this.client.getNetworkInterfaces(node, vmid),
@@ -625,8 +640,7 @@ export class ProxmoxBackend implements VmBackend {
 		timeframe: VmMetricsTimeframe,
 		options: Pick<VmLookupOptions, 'proxmoxNode'> = {}
 	): Promise<VmMetricsHistorySample[]> {
-		const { node, vmid } =
-			this.resolveFromHint(proxmoxId, options.proxmoxNode) ?? (await this.resolve(id, proxmoxId));
+		const { node, vmid } = await this.resolveForRead(id, proxmoxId, options.proxmoxNode);
 		const samples = await instrument(
 			'proxmox.getVmMetricsHistory.rrdData',
 			() => this.client.getQemuRrdData(node, vmid, { timeframe }),

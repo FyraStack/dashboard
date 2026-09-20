@@ -176,7 +176,6 @@ export const adminDeleteVm = command(powerParams, async (params) => {
 	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
 	if (!row) error(404, `VM "${params.vmId}" not found`);
 	if (!row.active) return;
-	if (row.status === 'deleting') return;
 
 	await queueVmDeletion(db, row);
 });

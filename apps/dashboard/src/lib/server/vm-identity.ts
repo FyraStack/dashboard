@@ -2,14 +2,9 @@ import { sql } from 'drizzle-orm';
 import type { Database } from '$lib/server/db';
 import type { VmBackend, VmInfo } from '$lib/server/backends';
 
-type IdentifiableVm = { id: string; proxmoxId: number | null };
-
-export function findLiveVm<T extends VmInfo>(liveVms: T[], row: IdentifiableVm): T | null {
+export function findLiveVm<T extends VmInfo>(liveVms: T[], row: { id: string }): T | null {
 	const stableId = row.id.toLowerCase();
-	const byStableId = liveVms.find((vm) => vm.stableId === stableId);
-	if (byStableId) return byStableId;
-	if (row.proxmoxId == null) return null;
-	return liveVms.find((vm) => vm.proxmoxId === row.proxmoxId && vm.stableId === undefined) ?? null;
+	return liveVms.find((vm) => vm.stableId === stableId) ?? null;
 }
 
 async function nextSequenceValue(db: Database): Promise<number> {

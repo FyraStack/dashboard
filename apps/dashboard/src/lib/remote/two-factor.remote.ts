@@ -12,8 +12,11 @@ import {
 	beginTotpReset,
 	clearTotpResetGrant,
 	normalizeTotpResetChoice,
+	removeTotpWithVerifiedPassword,
 	requireTotpResetGrant,
-	verifyTotpResetCode as verifyTotpResetEmailCode
+	resolvePendingTwoFactorUser,
+	verifyTotpResetCode as verifyTotpResetEmailCode,
+	type TotpResetUser
 } from '$lib/server/totp-reset';
 
 const CODE_LENGTH = 6;
@@ -66,12 +69,26 @@ export const disableTwoFactorWithVerification = command(disableTwoFactorParams, 
 	});
 });
 
+async function resolveTotpResetUser(
+	event: ReturnType<typeof getRequestEvent>,
+	db: ReturnType<typeof initDrizzle>
+): Promise<TotpResetUser & { hasSession: boolean }> {
+	if (event.locals.user) {
+		const { id, email, name } = event.locals.user;
+		return { id, email, name, hasSession: true };
+	}
+
+	const pending = await resolvePendingTwoFactorUser(event, db, getRuntimeEnv().BETTER_AUTH_SECRET);
+	if (!pending) error(401, 'Authentication required');
+	return { ...pending, hasSession: false };
+}
+
 export const sendTotpResetCode = command(async () => {
 	const event = getRequestEvent();
-	const user = event.locals.user;
-	if (!user) error(401, 'Authentication required');
+	const db = initDrizzle();
+	const user = await resolveTotpResetUser(event, db);
 
-	const code = await beginTotpReset(initDrizzle(), user.id);
+	const code = await beginTotpReset(db, user.id);
 
 	await sendRenderedEmail({
 		component: TotpResetCodeEmail,
@@ -85,10 +102,10 @@ const verifyTotpResetParams = type({ code: 'string' });
 
 export const verifyTotpResetCode = command(verifyTotpResetParams, async (params) => {
 	const event = getRequestEvent();
-	const user = event.locals.user;
-	if (!user) error(401, 'Authentication required');
+	const db = initDrizzle();
+	const user = await resolveTotpResetUser(event, db);
 
-	await verifyTotpResetEmailCode(initDrizzle(), user.id, params.code);
+	await verifyTotpResetEmailCode(db, user.id, params.code);
 
 	return { verified: true };
 });
@@ -97,17 +114,39 @@ const confirmTotpResetParams = type({ password: 'string', choice: 'string' });
 
 export const confirmTotpResetChoice = command(confirmTotpResetParams, async (params) => {
 	const event = getRequestEvent();
-	const user = event.locals.user;
-	if (!user) error(401, 'Authentication required');
+	const db = initDrizzle();
+	const user = await resolveTotpResetUser(event, db);
 
 	const choice = normalizeTotpResetChoice(params.choice);
 	if (!choice) error(400, 'Choose whether to reset or disable two-factor authentication.');
 	if (!params.password) error(400, 'Enter your current password.');
 
-	const db = initDrizzle();
 	await requireTotpResetGrant(db, user.id);
 
 	const auth = initAuth();
+
+	if (!user.hasSession) {
+		const authContext = await auth.$context;
+		await removeTotpWithVerifiedPassword(db, user.id, params.password, (hash, password) =>
+			authContext.password.verify({ hash, password })
+		);
+		await clearTotpResetGrant(db, user.id);
+		await sendSecurityAlertEmail({
+			to: user.email,
+			userName: user.name,
+			alertType:
+				choice === 'reset'
+					? 'Two-factor authentication reset'
+					: 'Two-factor authentication disabled',
+			message:
+				choice === 'reset'
+					? 'Authenticator app two-factor authentication was reset for your Stack account during sign-in. The old authenticator no longer works. Finish setting up the new one to turn two-factor authentication back on.'
+					: 'Authenticator app two-factor authentication was disabled for your Stack account during sign-in.',
+			actionUrl: event.url.origin
+		});
+		return { choice, requiresSignIn: true, totpURI: null, backupCodes: [] as string[] };
+	}
+
 	const headers = new Headers(event.request.headers);
 	headers.set(VERIFIED_2FA_DISABLE_HEADER, getRuntimeEnv().BETTER_AUTH_SECRET);
 
@@ -115,19 +154,33 @@ export const confirmTotpResetChoice = command(confirmTotpResetParams, async (par
 		headers,
 		body: { password: params.password }
 	});
+
+	if (choice === 'disable') {
+		await clearTotpResetGrant(db, user.id);
+		await sendSecurityAlertEmail({
+			to: user.email,
+			userName: user.name,
+			alertType: 'Two-factor authentication disabled',
+			message: 'Authenticator app two-factor authentication was disabled for your Stack account.',
+			actionUrl: event.url.origin
+		});
+		return { choice, requiresSignIn: false, totpURI: null, backupCodes: [] as string[] };
+	}
+
+	const setup = await auth.api.enableTwoFactor({
+		headers: event.request.headers,
+		body: { password: params.password, issuer: 'Fyra Stack' }
+	});
 	await clearTotpResetGrant(db, user.id);
 
 	await sendSecurityAlertEmail({
 		to: user.email,
 		userName: user.name,
-		alertType:
-			choice === 'reset' ? 'Two-factor authentication reset' : 'Two-factor authentication disabled',
+		alertType: 'Two-factor authentication reset',
 		message:
-			choice === 'reset'
-				? 'Authenticator app two-factor authentication was reset for your Stack account. Set up your new authenticator app to finish securing your account.'
-				: 'Authenticator app two-factor authentication was disabled for your Stack account.',
+			'Authenticator app two-factor authentication was reset for your Stack account. The old authenticator no longer works. Finish setting up the new one in Stack to turn two-factor authentication back on.',
 		actionUrl: event.url.origin
 	});
 
-	return { choice };
+	return { choice, requiresSignIn: false, totpURI: setup.totpURI, backupCodes: setup.backupCodes };
 });

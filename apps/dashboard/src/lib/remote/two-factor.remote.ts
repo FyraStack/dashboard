@@ -72,15 +72,12 @@ export const disableTwoFactorWithVerification = command(disableTwoFactorParams, 
 async function resolveTotpResetUser(
 	event: ReturnType<typeof getRequestEvent>,
 	db: ReturnType<typeof initDrizzle>
-): Promise<TotpResetUser & { hasSession: boolean }> {
-	if (event.locals.user) {
-		const { id, email, name } = event.locals.user;
-		return { id, email, name, hasSession: true };
-	}
+): Promise<TotpResetUser> {
+	if (event.locals.user) error(403, 'Two-factor authentication cannot be reset while signed in.');
 
 	const pending = await resolvePendingTwoFactorUser(event, db, getRuntimeEnv().BETTER_AUTH_SECRET);
 	if (!pending) error(401, 'Authentication required');
-	return { ...pending, hasSession: false };
+	return pending;
 }
 
 export const sendTotpResetCode = command(async () => {
@@ -124,81 +121,21 @@ export const confirmTotpResetChoice = command(confirmTotpResetParams, async (par
 	await requireTotpResetGrant(db, user.id);
 
 	const auth = initAuth();
-
-	if (!user.hasSession) {
-		const authContext = await auth.$context;
-		await removeTotpWithVerifiedPassword(db, user.id, params.password, (hash, password) =>
-			authContext.password.verify({ hash, password })
-		);
-		await clearTotpResetGrant(db, user.id);
-		await sendSecurityAlertEmail({
-			to: user.email,
-			userName: user.name,
-			alertType:
-				choice === 'reset'
-					? 'Two-factor authentication reset'
-					: 'Two-factor authentication disabled',
-			message:
-				choice === 'reset'
-					? 'Authenticator app two-factor authentication was reset for your Stack account during sign-in. The old authenticator no longer works. Finish setting up the new one to turn two-factor authentication back on.'
-					: 'Authenticator app two-factor authentication was disabled for your Stack account during sign-in.',
-			actionUrl: event.url.origin
-		});
-		return {
-			choice,
-			requiresSignIn: true,
-			signInEmail: user.email,
-			totpURI: null,
-			backupCodes: [] as string[]
-		};
-	}
-
-	const headers = new Headers(event.request.headers);
-	headers.set(VERIFIED_2FA_DISABLE_HEADER, getRuntimeEnv().BETTER_AUTH_SECRET);
-
-	await auth.api.disableTwoFactor({
-		headers,
-		body: { password: params.password }
-	});
-
-	if (choice === 'disable') {
-		await clearTotpResetGrant(db, user.id);
-		await sendSecurityAlertEmail({
-			to: user.email,
-			userName: user.name,
-			alertType: 'Two-factor authentication disabled',
-			message: 'Authenticator app two-factor authentication was disabled for your Stack account.',
-			actionUrl: event.url.origin
-		});
-		return {
-			choice,
-			requiresSignIn: false,
-			signInEmail: null,
-			totpURI: null,
-			backupCodes: [] as string[]
-		};
-	}
-
-	const setup = await auth.api.enableTwoFactor({
-		headers: event.request.headers,
-		body: { password: params.password, issuer: 'Fyra Stack' }
-	});
+	const authContext = await auth.$context;
+	await removeTotpWithVerifiedPassword(db, user.id, params.password, (hash, password) =>
+		authContext.password.verify({ hash, password })
+	);
 	await clearTotpResetGrant(db, user.id);
-
 	await sendSecurityAlertEmail({
 		to: user.email,
 		userName: user.name,
-		alertType: 'Two-factor authentication reset',
+		alertType:
+			choice === 'reset' ? 'Two-factor authentication reset' : 'Two-factor authentication disabled',
 		message:
-			'Authenticator app two-factor authentication was reset for your Stack account. The old authenticator no longer works. Finish setting up the new one in Stack to turn two-factor authentication back on.',
+			choice === 'reset'
+				? 'Authenticator app two-factor authentication was reset for your Stack account during sign-in. The old authenticator no longer works. Finish setting up the new one to turn two-factor authentication back on.'
+				: 'Authenticator app two-factor authentication was disabled for your Stack account during sign-in.',
 		actionUrl: event.url.origin
 	});
-
-	return {
-		choice,
-		requiresSignIn: false,
-		signInEmail: null,
-		totpURI: setup.totpURI,
-		backupCodes: setup.backupCodes
-	};
+	return { choice, signInEmail: user.email };
 });

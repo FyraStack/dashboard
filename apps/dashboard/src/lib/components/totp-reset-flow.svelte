@@ -26,22 +26,13 @@
 	export type TotpResetCompletedChoice = 'reset' | 'disable';
 
 	type Props = {
-		active?: boolean;
 		centered?: boolean;
 		userEmail?: string | null;
 		onComplete?: (choice: TotpResetCompletedChoice) => void;
-		onCancel?: () => void;
 		onPasskeyChallenge?: () => void;
 	};
 
-	let {
-		active = true,
-		centered = false,
-		userEmail = null,
-		onComplete,
-		onCancel,
-		onPasskeyChallenge
-	}: Props = $props();
+	let { centered = false, userEmail = null, onComplete, onPasskeyChallenge }: Props = $props();
 
 	const footerClass = 'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end';
 
@@ -97,24 +88,6 @@
 			normalizedMessage === 'Invalid code.'
 			? invalidSetupCodeMessage
 			: (message ?? invalidSetupCodeMessage);
-	}
-
-	function resetFlow() {
-		step = 'email';
-		emailCode = '';
-		codeRequested = false;
-		codeSent = false;
-		emailError = '';
-		choice = 'reset-totp';
-		password = '';
-		confirmError = '';
-		totpUri = '';
-		secretKey = '';
-		backupCodes = [];
-		verifyCode = '';
-		setupError = '';
-		copiedSecret = false;
-		copiedBackup = false;
 	}
 
 	function backToChoice() {
@@ -191,12 +164,7 @@
 		confirmError = '';
 		try {
 			const result = await confirmTotpResetChoice({ password, choice: 'reset-totp' });
-			if (result.choice !== 'reset') return;
-			if (!result.requiresSignIn && result.totpURI) {
-				showSetup(result.totpURI, result.backupCodes);
-				return;
-			}
-			const outcome = await signInAfterReset(result.signInEmail ?? '');
+			const outcome = await signInAfterReset(result.signInEmail);
 			if (outcome === 'passkey') {
 				onPasskeyChallenge?.();
 				return;
@@ -230,15 +198,12 @@
 		confirmError = '';
 		try {
 			const result = await confirmTotpResetChoice({ password, choice: 'disable-totp' });
-			if (result.requiresSignIn) {
-				const outcome = await signInAfterReset(result.signInEmail ?? '');
-				if (outcome === 'passkey') {
-					onPasskeyChallenge?.();
-					return;
-				}
-				if (outcome !== 'session') return;
+			const outcome = await signInAfterReset(result.signInEmail);
+			if (outcome === 'passkey') {
+				onPasskeyChallenge?.();
+				return;
 			}
-			onComplete?.('disable');
+			if (outcome === 'session') onComplete?.('disable');
 		} catch (err) {
 			confirmError = getErrorMessage(err, 'Failed to disable two-factor authentication.');
 		} finally {
@@ -258,13 +223,7 @@
 	}
 
 	$effect(() => {
-		if (!active) {
-			resetFlow();
-		}
-	});
-
-	$effect(() => {
-		if (active && step === 'email' && !codeRequested && !codeSending) {
+		if (step === 'email' && !codeRequested && !codeSending) {
 			untrack(() => {
 				void sendCode();
 			});
@@ -396,9 +355,6 @@
 			</div>
 
 			<div class={footerClass}>
-				{#if onCancel}
-					<Button variant="outline" type="button" onclick={onCancel}>Cancel</Button>
-				{/if}
 				<Button type="button" class="gap-1.5" onclick={continueFromChoice}>Continue</Button>
 			</div>
 		</div>

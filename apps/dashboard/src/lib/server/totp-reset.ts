@@ -177,19 +177,13 @@ export async function removeTotpWithVerifiedPassword(
 	await db.update(user).set({ twoFactorEnabled: false }).where(eq(user.id, userId));
 }
 
-export async function requireExistingTotp(db: Db, userId: string) {
-	const [registeredTotp] = await db
-		.select({ id: twoFactor.id })
-		.from(twoFactor)
-		.where(eq(twoFactor.userId, userId))
-		.limit(1);
-
-	if (!registeredTotp)
-		error(400, 'Authenticator app two-factor authentication is not enabled for this account.');
+export async function requireLegacyTotp(db: Db, userId: string) {
+	if (!(await requiresTotpReset(db, userId)))
+		error(403, 'Two-factor authentication cannot be reset for this account.');
 }
 
 export async function beginTotpReset(db: Db, userId: string) {
-	await requireExistingTotp(db, userId);
+	await requireLegacyTotp(db, userId);
 
 	const identifier = totpResetCodeIdentifier(userId);
 	const [existing] = await db
@@ -219,7 +213,7 @@ export async function beginTotpReset(db: Db, userId: string) {
 }
 
 export async function verifyTotpResetCode(db: Db, userId: string, code: string) {
-	await requireExistingTotp(db, userId);
+	await requireLegacyTotp(db, userId);
 
 	const normalizedCode = normalizeTotpResetCode(code);
 	if (normalizedCode.length !== TOTP_RESET_CODE_LENGTH)
@@ -267,7 +261,7 @@ export async function verifyTotpResetCode(db: Db, userId: string, code: string) 
 }
 
 export async function requireTotpResetGrant(db: Db, userId: string) {
-	await requireExistingTotp(db, userId);
+	await requireLegacyTotp(db, userId);
 
 	const [record] = await db
 		.select({ id: verification.id })

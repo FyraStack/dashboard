@@ -2,6 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import { initDrizzle } from '$lib/server/db';
 import { getRuntimeEnv } from '$lib/server/env';
 import { requiresTotpReset, resolvePendingTwoFactorUser } from '$lib/server/totp-reset';
+import { maskEmail } from '$lib/totp-reset-flow';
 import type { PageServerLoad } from './$types';
 
 const pendingPasskeyHintCookie = 'pending_passkey_2fa_hint';
@@ -22,5 +23,9 @@ export const load: PageServerLoad = async (event) => {
 	);
 	const resetRequired = pendingUser ? await requiresTotpReset(db, pendingUser.id) : false;
 
-	return { redirectTo, resetRequired, resetEmail: resetRequired ? pendingUser?.email : null };
+	return {
+		redirectTo,
+		resetRequired,
+		resetEmail: resetRequired && pendingUser ? maskEmail(pendingUser.email) : null
+	};
 };

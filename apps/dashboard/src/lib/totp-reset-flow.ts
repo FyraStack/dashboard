@@ -33,3 +33,12 @@ export function totpResetStepLabel(step: TotpResetFlowStep): string {
 			return 'Disable two-factor authentication';
 	}
 }
+
+export function maskEmail(email: string): string {
+	const at = email.indexOf('@');
+	if (at <= 0) return email;
+	const local = email.slice(0, at);
+	const domain = email.slice(at);
+	const visible = local.length > 2 ? local.slice(0, 2) : local.slice(0, 1);
+	return `${visible}${'•'.repeat(Math.max(local.length - visible.length, 3))}${domain}`;
+}

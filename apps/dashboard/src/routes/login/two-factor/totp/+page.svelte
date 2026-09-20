@@ -63,12 +63,13 @@
 					</div>
 					<h1 class="text-lg font-medium text-foreground">Set up your authenticator again</h1>
 					<p class="text-center text-sm text-muted-foreground">
-						Codes from your existing authenticator app no longer work. Verify your email to set up a
-						new one or turn two-factor authentication off.
+						Due to a migration, you'll need to re-enroll your TOTP code. This is a one-time event,
+						and your existing authenticator will no longer work.
 					</p>
 				</div>
 
 				<TotpResetFlow
+					centered
 					userEmail={data.resetEmail}
 					onComplete={() => goto(redirectTo)}
 					onPasskeyChallenge={() => goto(passkeyHref)}

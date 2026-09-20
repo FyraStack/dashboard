@@ -144,7 +144,13 @@ export const confirmTotpResetChoice = command(confirmTotpResetParams, async (par
 					: 'Authenticator app two-factor authentication was disabled for your Stack account during sign-in.',
 			actionUrl: event.url.origin
 		});
-		return { choice, requiresSignIn: true, totpURI: null, backupCodes: [] as string[] };
+		return {
+			choice,
+			requiresSignIn: true,
+			signInEmail: user.email,
+			totpURI: null,
+			backupCodes: [] as string[]
+		};
 	}
 
 	const headers = new Headers(event.request.headers);
@@ -164,7 +170,13 @@ export const confirmTotpResetChoice = command(confirmTotpResetParams, async (par
 			message: 'Authenticator app two-factor authentication was disabled for your Stack account.',
 			actionUrl: event.url.origin
 		});
-		return { choice, requiresSignIn: false, totpURI: null, backupCodes: [] as string[] };
+		return {
+			choice,
+			requiresSignIn: false,
+			signInEmail: null,
+			totpURI: null,
+			backupCodes: [] as string[]
+		};
 	}
 
 	const setup = await auth.api.enableTwoFactor({
@@ -182,5 +194,11 @@ export const confirmTotpResetChoice = command(confirmTotpResetParams, async (par
 		actionUrl: event.url.origin
 	});
 
-	return { choice, requiresSignIn: false, totpURI: setup.totpURI, backupCodes: setup.backupCodes };
+	return {
+		choice,
+		requiresSignIn: false,
+		signInEmail: null,
+		totpURI: setup.totpURI,
+		backupCodes: setup.backupCodes
+	};
 });

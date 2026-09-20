@@ -27,6 +27,7 @@
 
 	type Props = {
 		active?: boolean;
+		centered?: boolean;
 		userEmail?: string | null;
 		onComplete?: (choice: TotpResetCompletedChoice) => void;
 		onCancel?: () => void;
@@ -35,6 +36,7 @@
 
 	let {
 		active = true,
+		centered = false,
 		userEmail = null,
 		onComplete,
 		onCancel,
@@ -155,8 +157,8 @@
 		step = choice === 'reset-totp' ? 'reset' : 'disable';
 	}
 
-	async function signInAfterReset(): Promise<'session' | 'passkey' | null> {
-		const { data, error } = await authClient.signIn.email({ email: userEmail ?? '', password });
+	async function signInAfterReset(email: string): Promise<'session' | 'passkey' | null> {
+		const { data, error } = await authClient.signIn.email({ email, password });
 		if (error) {
 			confirmError = error.message ?? 'Two-factor authentication was reset, but signing in failed.';
 			return null;
@@ -194,7 +196,7 @@
 				showSetup(result.totpURI, result.backupCodes);
 				return;
 			}
-			const outcome = await signInAfterReset();
+			const outcome = await signInAfterReset(result.signInEmail ?? '');
 			if (outcome === 'passkey') {
 				onPasskeyChallenge?.();
 				return;
@@ -229,7 +231,7 @@
 		try {
 			const result = await confirmTotpResetChoice({ password, choice: 'disable-totp' });
 			if (result.requiresSignIn) {
-				const outcome = await signInAfterReset();
+				const outcome = await signInAfterReset(result.signInEmail ?? '');
 				if (outcome === 'passkey') {
 					onPasskeyChallenge?.();
 					return;
@@ -296,8 +298,8 @@
 </script>
 
 <div class="flex flex-col gap-3">
-	<p class="text-sm text-muted-foreground">{description}</p>
-	<p class="text-xs text-muted-foreground">
+	<p class="text-sm text-muted-foreground" class:text-center={centered}>{description}</p>
+	<p class="text-xs text-muted-foreground" class:text-center={centered}>
 		Step {stepNumber} of {TOTP_RESET_FLOW_STEP_COUNT} · {stepLabel}
 	</p>
 
@@ -321,7 +323,9 @@
 					maxlength={6}
 				/>
 				{#if codeSent}
-					<p class="text-xs text-muted-foreground">We sent a code to {emailTarget}.</p>
+					<p class="text-xs text-muted-foreground" class:text-center={centered}>
+						We sent a code to {emailTarget}.
+					</p>
 				{/if}
 				{#if emailError}
 					<p class="text-xs text-red-400">{emailError}</p>

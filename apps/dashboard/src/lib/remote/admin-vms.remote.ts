@@ -7,6 +7,7 @@ import { initDrizzle } from '$lib/server/db';
 import { member, organization, user, vms, vmTypes } from '$lib/server/db/schema';
 import { getBackend, type VmInfo } from '$lib/server/backends';
 import { queueVmDeletion } from '$lib/server/vm-deletion';
+import { findLiveVm } from '$lib/server/vm-identity';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureAdminVms
@@ -101,42 +102,16 @@ export const listAllAdminVms = query(async (): Promise<AdminVm[]> => {
 	]);
 
 	let liveVms: VmInfo[] = [];
-	let liveListLoaded = false;
 	try {
 		liveVms = await getBackend('proxmox').listVms();
-		liveListLoaded = true;
 	} catch (err) {
 		console.warn('Failed to load Proxmox VM statuses', err);
 	}
-	const liveByProxmoxId = new Map(
-		liveVms.filter((vm) => vm.proxmoxId != null).map((vm) => [vm.proxmoxId!, vm] as const)
-	);
-	const liveById = new Map(liveVms.map((vm) => [vm.id, vm]));
 	const ownerByProject = new Map(owners.map((owner) => [owner.organizationId, owner]));
-
-	if (liveListLoaded) {
-		const staleDeleting = rows.filter(
-			(row) =>
-				row.active &&
-				(row.status === 'deleting' || row.status === 'error') &&
-				!(row.proxmoxId != null ? liveByProxmoxId.get(row.proxmoxId) : null) &&
-				!liveById.get(row.id)
-		);
-		for (const row of staleDeleting) {
-			await queueVmDeletion(db, {
-				id: row.id,
-				backend: row.backend,
-				proxmoxId: row.proxmoxId,
-				ownerProjectId: row.projectId
-			}).catch((err) => {
-				console.warn(`Failed to re-queue deletion for VM ${row.id}`, err);
-			});
-		}
-	}
 
 	const now = Date.now();
 	return rows.map((row) => {
-		const live = row.proxmoxId != null ? liveByProxmoxId.get(row.proxmoxId) : null;
+		const live = findLiveVm(liveVms, row);
 		const owner = row.projectId ? ownerByProject.get(row.projectId) : null;
 
 		return {

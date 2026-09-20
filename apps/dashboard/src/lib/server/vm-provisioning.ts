@@ -20,6 +20,7 @@ import {
 	releaseVmNetworking
 } from '$lib/server/ipam';
 import { applyDefaultPtrRecords } from '$lib/server/ptr-records';
+import { allocateProxmoxVmid } from '$lib/server/vm-identity';
 import { config } from '$lib/server/config';
 
 export type ProvisionVmInput = {
@@ -157,6 +158,7 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 	const macAddress = generateMacAddress();
 	let networkingAllocations: Awaited<ReturnType<typeof allocateVmNetworking>> = [];
 	let delegatedRoute: Promise<unknown> = Promise.resolve();
+	let proxmoxId: number | null = null;
 	let result;
 	try {
 		if (!input.billingExempt) {
@@ -193,10 +195,12 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 		});
 		runInBackground(delegatedRoute, `create delegated IPv6 route for VM ${vmId}`);
 		const backend = getBackend('proxmox');
+		proxmoxId = await allocateProxmoxVmid(db, backend);
+		await db.update(vms).set({ proxmoxId }).where(eq(vms.id, vmId));
 		result = await backend.createVm({
 			id: vmId,
 			name: input.name,
-			proxmoxId: inserted.proxmoxId ?? undefined,
+			proxmoxId,
 			macAddress,
 			cores: vmType.cores,
 			memoryMb: vmType.ramCapacity,
@@ -255,9 +259,9 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 
 		if (!result.macAddress) error(502, 'Proxmox did not return a MAC address');
 	} catch (err) {
-		if (result?.proxmoxId != null) {
+		if (proxmoxId != null) {
 			await getBackend('proxmox')
-				.deleteVm(vmId, result.proxmoxId)
+				.deleteVm(vmId, proxmoxId)
 				.catch((deleteErr) => {
 					console.warn(`Failed to clean up Proxmox VM ${vmId} after provisioning error`, deleteErr);
 				});
@@ -280,7 +284,7 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 	await db
 		.update(vms)
 		.set({
-			proxmoxId: result.proxmoxId ?? null,
+			proxmoxId: result.proxmoxId ?? proxmoxId,
 			proxmoxNode: result.proxmoxNode ?? null,
 			lastKnownIpv4: ipv4Allocation?.address ?? null,
 			lastKnownIpv6: ipv6Allocation?.address ?? null

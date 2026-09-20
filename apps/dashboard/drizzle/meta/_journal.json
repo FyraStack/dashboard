@@ -218,6 +218,20 @@
       "when": 1787915454443,
       "tag": "0030_condemned_wolverine",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789915985488,
+      "tag": "0031_proxmox_vmid_seq",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789916661919,
+      "tag": "0032_unique_active_proxmox_id",
+      "breakpoints": true
     }
   ]
 }

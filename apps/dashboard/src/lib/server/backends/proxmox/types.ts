@@ -154,6 +154,7 @@ export interface PveClusterResource {
 	vmid?: number;
 	name?: string;
 	status?: string;
+	tags?: string;
 	maxcpu?: number;
 	maxmem?: number;
 	maxdisk?: number;

@@ -2,6 +2,7 @@ export type VmStatus = 'running' | 'stopped' | 'paused' | 'unknown';
 
 export interface VmInfo {
 	id: string;
+	stableId?: string;
 	proxmoxId?: number;
 	proxmoxNode?: string;
 	name: string;
@@ -107,6 +108,13 @@ export interface VmResizeParams {
 	diskGb: number;
 }
 
+export class VmNotFoundError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'VmNotFoundError';
+	}
+}
+
 export class VmResizeError extends Error {
 	constructor(message: string) {
 		super(message);
@@ -118,6 +126,7 @@ export interface VmBackend {
 	readonly name: string;
 	ping(): Promise<void>;
 	listVms(): Promise<VmInfo[]>;
+	listUsedProxmoxIds?(): Promise<number[]>;
 	getVm(id: string, proxmoxId?: number, options?: VmLookupOptions): Promise<VmInfo>;
 	getVmNetworkInterfaces?(
 		id: string,

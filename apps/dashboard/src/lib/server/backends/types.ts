@@ -72,7 +72,7 @@ export interface VmNetworkConfig {
 export interface VmCreateParams {
 	id: string;
 	name: string;
-	proxmoxId?: number;
+	proxmoxId: number;
 	cores: number;
 	memoryMb: number;
 	diskGb: number;
@@ -126,7 +126,7 @@ export interface VmBackend {
 	readonly name: string;
 	ping(): Promise<void>;
 	listVms(): Promise<VmInfo[]>;
-	listUsedProxmoxIds?(): Promise<number[]>;
+	listUsedProxmoxIds?(): Promise<Set<number>>;
 	getVm(id: string, proxmoxId?: number, options?: VmLookupOptions): Promise<VmInfo>;
 	getVmNetworkInterfaces?(
 		id: string,

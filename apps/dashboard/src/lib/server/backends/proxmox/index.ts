@@ -507,10 +507,10 @@ export class ProxmoxBackend implements VmBackend {
 		return resources.filter((r) => r.type === 'qemu').map((r) => this.resourceToInfo(r));
 	}
 
-	async listUsedProxmoxIds(): Promise<number[]> {
+	async listUsedProxmoxIds(): Promise<Set<number>> {
 		clearProxmoxReadCaches();
 		const resources = await this.client.getClusterResources('vm');
-		return resources.flatMap((r) => (r.vmid != null ? [r.vmid] : []));
+		return new Set(resources.flatMap((r) => (r.vmid != null ? [r.vmid] : [])));
 	}
 
 	private async firstOnlineNode() {
@@ -671,10 +671,8 @@ export class ProxmoxBackend implements VmBackend {
 
 	async createVm(params: VmCreateParams): Promise<VmCreateResult> {
 		clearProxmoxReadCaches();
-		const [nodes, vmid] = await Promise.all([
-			this.client.listNodes(),
-			params.proxmoxId ?? this.client.getNextVmId()
-		]);
+		const vmid = params.proxmoxId;
+		const nodes = await this.client.listNodes();
 
 		// Pick the online node with the most free memory
 		const online = nodes.filter((n) => n.status === 'online');

@@ -13,7 +13,7 @@ async function nextSequenceValue(db: Database): Promise<number> {
 }
 
 export async function allocateProxmoxVmid(db: Database, backend: VmBackend): Promise<number> {
-	const usedIds = new Set((await backend.listUsedProxmoxIds?.()) ?? []);
+	const usedIds = (await backend.listUsedProxmoxIds?.()) ?? new Set<number>();
 	let candidate = await nextSequenceValue(db);
 	while (usedIds.has(candidate)) candidate = await nextSequenceValue(db);
 	return candidate;

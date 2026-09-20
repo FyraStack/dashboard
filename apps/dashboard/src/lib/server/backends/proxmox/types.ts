@@ -116,8 +116,6 @@ export interface PveTaskStatus {
 	upid: string;
 }
 
-export type PveNextId = number;
-
 export interface PveCreateQemuParams {
 	vmid: number;
 	name?: string;

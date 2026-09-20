@@ -12,7 +12,6 @@ import type {
 	PveStorage,
 	PveStorageContent,
 	PveTaskStatus,
-	PveNextId,
 	PveCreateQemuParams,
 	PveClusterResource,
 	PveAgentNetworkInterface
@@ -458,11 +457,6 @@ export class ProxmoxClient {
 	}
 
 	// Cluster
-
-	async getNextVmId(): Promise<number> {
-		const res = await this.api.get('cluster/nextid').json<PveResponse<PveNextId>>();
-		return typeof res.data === 'string' ? parseInt(res.data, 10) : res.data;
-	}
 
 	async getClusterResources(type?: 'vm' | 'storage' | 'node'): Promise<PveClusterResource[]> {
 		const searchParams: Record<string, string> = {};

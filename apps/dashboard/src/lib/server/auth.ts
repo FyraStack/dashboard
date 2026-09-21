@@ -18,6 +18,7 @@ import { sendRenderedEmail } from '$lib/server/email';
 import { sendSecurityAlertEmail } from '$lib/server/email-notifications';
 import { getRuntimeEnv } from '$lib/server/env';
 import { ulid } from '$lib/server/id';
+import { captureServerEvent } from '$lib/server/posthog';
 
 const PENDING_PASSKEY_COOKIE = 'pending_passkey_2fa';
 const PENDING_PASSKEY_HINT_COOKIE = 'pending_passkey_2fa_hint';
@@ -165,6 +166,23 @@ function buildAuth() {
 						return {
 							data: { ...newUser, role: isFirstUser ? 'admin' : 'user', isAdmin: isFirstUser }
 						};
+					},
+					after: async (createdUser) => {
+						captureServerEvent(
+							'user_signed_up',
+							{},
+							{
+								distinctId: createdUser.id,
+								set: { email: createdUser.email, name: createdUser.name }
+							}
+						);
+					}
+				}
+			},
+			session: {
+				create: {
+					after: async (createdSession) => {
+						captureServerEvent('user_signed_in', {}, { distinctId: createdSession.userId });
 					}
 				}
 			}

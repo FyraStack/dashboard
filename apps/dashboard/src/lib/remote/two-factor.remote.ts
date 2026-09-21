@@ -18,6 +18,7 @@ import {
 	verifyTotpResetCode as verifyTotpResetEmailCode,
 	type TotpResetUser
 } from '$lib/server/totp-reset';
+import { captureServerEvent } from '$lib/server/posthog';
 
 const CODE_LENGTH = 6;
 
@@ -67,6 +68,7 @@ export const disableTwoFactorWithVerification = command(disableTwoFactorParams, 
 		message: 'Authenticator app two-factor authentication was disabled for your Stack account.',
 		actionUrl: event.url.origin
 	});
+	captureServerEvent('two_factor_disabled', { verification_method: params.method });
 });
 
 async function resolveTotpResetUser(
@@ -137,5 +139,6 @@ export const confirmTotpResetChoice = command(confirmTotpResetParams, async (par
 				: 'Authenticator app two-factor authentication was disabled for your Stack account during sign-in.',
 		actionUrl: event.url.origin
 	});
+	captureServerEvent('totp_reset_completed', { choice }, { distinctId: user.id });
 	return { choice, signInEmail: user.email };
 });

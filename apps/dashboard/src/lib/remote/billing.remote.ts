@@ -15,6 +15,7 @@ import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureBillingOverview
 } from '$lib/server/accessibility-fixtures';
+import { captureServerEvent } from '$lib/server/posthog';
 
 const projectParams = type({ projectId: 'string' });
 const setupParams = type({ projectId: 'string', returnTo: 'string?', discountCode: 'string?' });
@@ -52,6 +53,7 @@ export const openBillingPortal = command(projectParams, async (params) => {
 		params.projectId,
 		`${event.url.origin}/projects/${params.projectId}/billing`
 	);
+	captureServerEvent('billing_portal_opened', {}, { projectId: params.projectId });
 
 	return { url };
 });
@@ -70,6 +72,11 @@ export const purchaseCredits = command(purchaseCreditsParams, async (params) => 
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'owner');
 
 	const url = await purchaseProjectCredits(params.projectId, params.credits);
+	captureServerEvent(
+		'credit_purchase_started',
+		{ credits: params.credits },
+		{ projectId: params.projectId }
+	);
 
 	return { url };
 });
@@ -89,6 +96,11 @@ export const setupProjectBillingPayment = command(setupParams, async (params) =>
 	const promoParam = discountCode ? `&billing_promo=${encodeURIComponent(discountCode)}` : '';
 	const successUrl = `${event.url.origin}${returnPath}${separator}billing_setup=complete${promoParam}`;
 	const url = await setupProjectPayment(params.projectId, successUrl);
+	captureServerEvent(
+		'billing_setup_started',
+		{ has_discount_code: Boolean(discountCode) },
+		{ projectId: params.projectId }
+	);
 
 	return { url };
 });

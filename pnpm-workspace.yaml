@@ -7,7 +7,9 @@ overrides:
   '@esbuild-kit/core-utils>esbuild': ^0.25.0
 allowBuilds:
   '@prisma/client': false
+  '@sentry/cli': true
   better-sqlite3: true
+  core-js: false
   esbuild: true
   sharp: true
   workerd: true
@@ -15,4 +17,3 @@ autoInstallPeers: false
 dedupePeerDependents: false
 minimumReleaseAge: 0
 sideEffectsCache: true
-

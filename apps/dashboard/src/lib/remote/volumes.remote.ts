@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
 import { volumes, vms } from '$lib/server/db/schema';
 import { requireProjectAccess } from '$lib/server/auth-context';
+import { captureServerEvent } from '$lib/server/posthog';
 
 type ListParams = { projectId: string };
 type ListResult = {
@@ -49,6 +50,11 @@ export const createVolume = command(createParams, async (params) => {
 			createdAt: Date.now()
 		})
 		.returning();
+	captureServerEvent(
+		'volume_created',
+		{ volume_id: inserted.id, size: params.size, backend: params.backend },
+		{ projectId: params.projectId }
+	);
 
 	return { id: inserted.id };
 });
@@ -71,6 +77,11 @@ export const deleteVolume = command(deleteParams, async (params) => {
 	}
 
 	await db.delete(volumes).where(eq(volumes.id, params.volumeId));
+	captureServerEvent(
+		'volume_deleted',
+		{ volume_id: vol.id, size: vol.size },
+		{ projectId: vol.ownerProjectId }
+	);
 });
 
 const attachParams = type({ volumeId: 'string', vmId: 'string' });
@@ -100,6 +111,11 @@ export const attachVolume = command(attachParams, async (params) => {
 		.update(volumes)
 		.set({ associatedVmId: params.vmId })
 		.where(eq(volumes.id, params.volumeId));
+	captureServerEvent(
+		'volume_attached',
+		{ volume_id: vol.id, vm_id: params.vmId },
+		{ projectId: vol.ownerProjectId }
+	);
 });
 
 const detachParams = type({ volumeId: 'string' });
@@ -116,4 +132,9 @@ export const detachVolume = command(detachParams, async (params) => {
 	await requireProjectAccess(db, event.locals.user.id, vol.ownerProjectId, 'read_write');
 
 	await db.update(volumes).set({ associatedVmId: null }).where(eq(volumes.id, params.volumeId));
+	captureServerEvent(
+		'volume_detached',
+		{ volume_id: vol.id, vm_id: vol.associatedVmId },
+		{ projectId: vol.ownerProjectId }
+	);
 });

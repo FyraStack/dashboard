@@ -12,6 +12,7 @@ import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureAdminVms
 } from '$lib/server/accessibility-fixtures';
+import { captureServerEvent } from '$lib/server/posthog';
 
 export type AdminVm = {
 	id: string;
@@ -161,6 +162,11 @@ async function adminPowerAction(
 	if (row.status === 'deleting') error(409, `VM "${row.name}" is being deleted`);
 
 	await getBackend(row.backend)[action](row.id, row.proxmoxId ?? undefined);
+	captureServerEvent(
+		'admin_vm_power_action',
+		{ vm_id: row.id, action },
+		{ projectId: row.ownerProjectId }
+	);
 }
 
 export const adminStartVm = command(powerParams, async (p) => adminPowerAction(p.vmId, 'startVm'));
@@ -178,4 +184,5 @@ export const adminDeleteVm = command(powerParams, async (params) => {
 	if (!row.active) return;
 
 	await queueVmDeletion(db, row);
+	captureServerEvent('admin_vm_deleted', { vm_id: row.id }, { projectId: row.ownerProjectId });
 });

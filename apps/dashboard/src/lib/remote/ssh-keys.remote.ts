@@ -4,6 +4,7 @@ import { type } from 'arktype';
 import { eq, and } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
 import { sshKeys } from '$lib/server/db/schema';
+import { captureServerEvent } from '$lib/server/posthog';
 
 type ListResult = {
 	id: string;
@@ -67,6 +68,8 @@ export const createSshKey = command(createParams, async (params) => {
 		})
 		.returning();
 
+	captureServerEvent('ssh_key_created', { key_type: parts[0] });
+
 	return { id: inserted.id, fingerprint: inserted.fingerprint };
 });
 
@@ -86,4 +89,5 @@ export const deleteSshKey = command(deleteParams, async (params) => {
 	await db
 		.delete(sshKeys)
 		.where(and(eq(sshKeys.id, params.keyId), eq(sshKeys.userId, event.locals.user.id)));
+	captureServerEvent('ssh_key_deleted');
 });

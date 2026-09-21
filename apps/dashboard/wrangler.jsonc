@@ -14,6 +14,9 @@
 	],
 	"vars": {
 		"ORIGIN": "https://dash.fyrastack.com",
+		"PUBLIC_POSTHOG_KEY": "phc_xpPsXXeqca5GUtozk5DvUdTFMwAjYN7z4SDYLHSqwHpX",
+		"PUBLIC_POSTHOG_HOST": "https://us.posthog.com",
+		"PUBLIC_SENTRY_DSN": "https://509fc8298796e65c16acbef704256178@o271654.ingest.us.sentry.io/4512122021412864",
 		"GITHUB_CLIENT_ID": "Ov23liHWucfwO0M7A6mb",
 		"EMAIL_FROM_ADDRESS": "no-reply@fyrastack.com",
 		"EMAIL_FROM_NAME": "Fyra Stack",
@@ -38,6 +41,7 @@
 		"run_worker_first": [
 			"/",
 			"/_app/remote/*",
+			"/internal/*",
 			"/api/*",
 			"/admin/*",
 			"/projects/*",
@@ -109,6 +113,9 @@
 			"minify": true,
 			"vars": {
 				"ORIGIN": "https://stack-dashboard-preview.fyralabs.workers.dev",
+				"PUBLIC_POSTHOG_KEY": "phc_xpPsXXeqca5GUtozk5DvUdTFMwAjYN7z4SDYLHSqwHpX",
+				"PUBLIC_POSTHOG_HOST": "https://us.posthog.com",
+				"PUBLIC_SENTRY_DSN": "https://509fc8298796e65c16acbef704256178@o271654.ingest.us.sentry.io/4512122021412864",
 				"EMAIL_FROM_ADDRESS": "no-reply@fyrastack.com",
 				"EMAIL_FROM_NAME": "Fyra Stack",
 				"EMAIL_REPLY_TO": "support@fyralabs.com",

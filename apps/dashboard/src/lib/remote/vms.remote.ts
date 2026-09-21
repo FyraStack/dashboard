@@ -32,6 +32,7 @@ import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureServers
 } from '$lib/server/accessibility-fixtures';
+import { captureServerEvent } from '$lib/server/posthog';
 
 type VmRow = {
 	id: string;
@@ -551,7 +552,7 @@ export const createVm = command(createParams, async (params) => {
 		? keys.filter((key) => params.sshKeyIds!.includes(key.id)).map((key) => key.publicKey)
 		: [];
 
-	return provisionVm(db, {
+	const created = await provisionVm(db, {
 		projectId: params.projectId,
 		vmTypeId: params.vmTypeId,
 		name: params.name,
@@ -562,6 +563,18 @@ export const createVm = command(createParams, async (params) => {
 		sshPublicKeys: publicKeys,
 		password: params.password
 	});
+	captureServerEvent(
+		'vm_created',
+		{
+			vm_type_id: params.vmTypeId,
+			networking_mode: params.networkingMode ?? 'both',
+			image_id: params.imageId,
+			ssh_key_count: publicKeys.length,
+			billing_exempt: billingExempt
+		},
+		{ projectId: params.projectId }
+	);
+	return created;
 });
 
 const renameParams = type({ vmId: 'string', name: 'string', updateHostname: 'boolean' });
@@ -590,6 +603,11 @@ export const renameVm = command(renameParams, async (params) => {
 	}
 
 	await db.update(vms).set({ name }).where(eq(vms.id, row.id));
+	captureServerEvent(
+		'vm_renamed',
+		{ vm_id: row.id, hostname_updated: params.updateHostname },
+		{ projectId: row.ownerProjectId }
+	);
 	return { id: row.id, name };
 });
 
@@ -607,6 +625,11 @@ export const deleteVm = command(deleteParams, async (params) => {
 	}
 
 	await queueVmDeletion(db, row);
+	captureServerEvent(
+		'vm_deleted',
+		{ vm_id: row.id, vm_type_id: row.vmTypeId },
+		{ projectId: row.ownerProjectId }
+	);
 });
 
 const powerParams = type({ vmId: 'string' });
@@ -627,6 +650,11 @@ async function powerAction(vmId: string, action: 'startVm' | 'stopVm' | 'killVm'
 
 	const backend = getBackend(row.backend);
 	await backend[action](row.id, row.proxmoxId ?? undefined);
+	captureServerEvent(
+		'vm_power_action',
+		{ vm_id: row.id, action },
+		{ projectId: row.ownerProjectId }
+	);
 }
 
 export const startVm = command(powerParams, async (p) => powerAction(p.vmId, 'startVm'));
@@ -678,6 +706,11 @@ export const resizeVm = command(resizeParams, async (params) => {
 	}
 
 	await db.update(vms).set({ vmTypeId: target.id }).where(eq(vms.id, row.id));
+	captureServerEvent(
+		'vm_resized',
+		{ vm_id: row.id, from_vm_type_id: row.vmTypeId, to_vm_type_id: target.id },
+		{ projectId: row.ownerProjectId }
+	);
 
 	return { id: row.id, vmTypeId: target.id };
 });

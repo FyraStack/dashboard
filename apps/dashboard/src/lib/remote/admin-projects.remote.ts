@@ -33,6 +33,7 @@ import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureAdminProjects
 } from '$lib/server/accessibility-fixtures';
+import { captureServerEvent } from '$lib/server/posthog';
 
 export type AdminProjectBillingStatus = 'configured' | 'past_due' | 'suspended' | 'none';
 
@@ -276,6 +277,12 @@ export const setProjectDisabled = command(setDisabledParams, async (params) => {
 		.set({ disabled: params.disabled })
 		.where(eq(organization.id, params.projectId));
 
+	captureServerEvent(
+		'admin_project_disabled_changed',
+		{ disabled: params.disabled },
+		{ projectId: params.projectId }
+	);
+
 	return { projectId: params.projectId, disabled: params.disabled };
 });
 
@@ -322,6 +329,11 @@ export const deleteProjectWithVerification = command(deleteProjectParams, async 
 
 	await consumeAdminVerification(db, adminUser.id, params.projectId, params.method, params.code);
 	await softDeleteOrganizationResources(db, params.projectId);
+	captureServerEvent(
+		'admin_project_deleted',
+		{ verification_method: params.method },
+		{ projectId: params.projectId }
+	);
 
 	return { projectId: params.projectId, name: target.name };
 });

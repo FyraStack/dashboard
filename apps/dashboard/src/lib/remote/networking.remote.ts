@@ -8,6 +8,7 @@ import { requireProjectAccess } from '$lib/server/auth-context';
 import { isBunnyConfigured } from '$lib/server/bunny';
 import { setPtrRecord } from '$lib/server/ptr-records';
 import type { PermissionLevel } from '$lib/auth/organization-permissions';
+import { captureServerEvent } from '$lib/server/posthog';
 
 async function requireVmAccess(vmId: string, level?: PermissionLevel) {
 	const event = getRequestEvent();
@@ -75,5 +76,12 @@ export const setVmPtrRecord = command(setPtrParams, async (params) => {
 	if (!address) error(400, 'An IP address inside the subnet is required');
 
 	const { ipamPrefix, ...rest } = allocation;
-	return setPtrRecord(db, { ...rest, sourcePrefix: ipamPrefix }, address, params.value);
+	const result = await setPtrRecord(
+		db,
+		{ ...rest, sourcePrefix: ipamPrefix },
+		address,
+		params.value
+	);
+	captureServerEvent('vm_ptr_record_set', { vm_id: params.vmId });
+	return result;
 });

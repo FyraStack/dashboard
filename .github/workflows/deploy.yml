@@ -24,6 +24,10 @@ jobs:
       - run: pnpm run check
       - run: pnpm run lint
       - run: pnpm -r build
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
       - run: pnpm --filter stack-dashboard run db:migrate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

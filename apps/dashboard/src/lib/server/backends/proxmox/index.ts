@@ -97,7 +97,10 @@ type ProxmoxBackendOptions = {
 	snippetsStorage?: string;
 	firewallSecurityGroup?: string;
 	vmCpuType?: string;
+	excludedNodes?: string[];
 };
+
+const UNSCHEDULABLE_HA_STATES = new Set(['maintenance', 'fence', 'gone']);
 
 type CloudInitVendorConfigParams = {
 	enableSshPasswordAuth?: boolean;
@@ -513,15 +516,34 @@ export class ProxmoxBackend implements VmBackend {
 		return new Set(resources.flatMap((r) => (r.vmid != null ? [r.vmid] : [])));
 	}
 
-	private async firstOnlineNode() {
-		const nodes = await this.client.listNodes();
-		const online = nodes.filter((node) => node.status === 'online');
-		if (online.length === 0) throw new Error('No online Proxmox nodes available');
-		return online.sort((a, b) => a.node.localeCompare(b.node))[0];
+	private async listSchedulableNodes() {
+		const [nodes, resources] = await Promise.all([
+			this.client.listNodes(),
+			this.getClusterResources('node')
+		]);
+		const haStateByNode = new Map(resources.map((r) => [r.node, r.hastate]));
+		const excluded = new Set(this.options.excludedNodes ?? []);
+		const schedulable = nodes.filter((node) => {
+			if (node.status !== 'online') return false;
+			if (excluded.has(node.node)) return false;
+			const haState = haStateByNode.get(node.node);
+			return !haState || !UNSCHEDULABLE_HA_STATES.has(haState);
+		});
+		if (schedulable.length === 0) {
+			throw new Error(
+				'No schedulable Proxmox nodes available (all offline, excluded, or in maintenance)'
+			);
+		}
+		return schedulable;
+	}
+
+	private async firstSchedulableNode() {
+		const nodes = await this.listSchedulableNodes();
+		return nodes.sort((a, b) => a.node.localeCompare(b.node))[0];
 	}
 
 	async listImages(): Promise<BackendImage[]> {
-		const node = await this.firstOnlineNode();
+		const node = await this.firstSchedulableNode();
 		const storages = await this.client.listStorage(node.node);
 		const importStorages = storages.filter((storage) => this.isActiveImportStorage(storage));
 
@@ -548,7 +570,7 @@ export class ProxmoxBackend implements VmBackend {
 	}
 
 	async listImageImportTargets(): Promise<BackendImageImportTarget[]> {
-		const node = await this.firstOnlineNode();
+		const node = await this.firstSchedulableNode();
 		const storages = await this.client.listStorage(node.node);
 		return storages
 			.filter((storage) => this.isActiveImportStorage(storage))
@@ -672,12 +694,8 @@ export class ProxmoxBackend implements VmBackend {
 	async createVm(params: VmCreateParams): Promise<VmCreateResult> {
 		clearProxmoxReadCaches();
 		const vmid = params.proxmoxId;
-		const nodes = await this.client.listNodes();
-
-		// Pick the online node with the most free memory
-		const online = nodes.filter((n) => n.status === 'online');
-		if (!online.length) throw new Error('No online Proxmox nodes available');
-		const node = online.sort((a, b) => b.maxmem - b.mem - (a.maxmem - a.mem))[0];
+		const nodes = await this.listSchedulableNodes();
+		const node = nodes.sort((a, b) => b.maxmem - b.mem - (a.maxmem - a.mem))[0];
 
 		const sshKeysEncoded = params.sshKeys
 			? encodeURIComponent(params.sshKeys.join('\n'))

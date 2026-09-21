@@ -19,6 +19,7 @@ import {
 	isBillingConfigured
 } from '$lib/server/billing/autumn';
 import { queueVmDeletion } from '$lib/server/vm-deletion';
+import { findLiveVm } from '$lib/server/vm-identity';
 import {
 	isProvisioningStalled,
 	provisionVm,
@@ -346,14 +347,6 @@ export const getVm = query(getParams, async (params) => {
 		if (live.status === 'running') refreshVmNetworkInterfaces(db, row, backend);
 	} catch (err) {
 		console.warn(`Failed to load live VM state for ${row.id}`, err);
-		if (
-			row.active &&
-			(row.status === 'deleting' || row.status === 'error') &&
-			err instanceof Error &&
-			err.message.includes('not found on any Proxmox node')
-		) {
-			await queueVmDeletion(db, row);
-		}
 	}
 
 	if (live) persistLiveState(db, [{ id: row.id, live }]);
@@ -485,34 +478,13 @@ export const listVmStatuses = query(statusParams, async (params) => {
 	});
 
 	let liveVms: VmInfo[] = [];
-	let liveListLoaded = false;
 	try {
 		const backend = getBackend('proxmox');
 		liveVms = await instrument('remote.vms.listVmStatuses.backend', () => backend.listVms(), {
 			'vm.status.project_active_count': rows.length
 		});
-		liveListLoaded = true;
 	} catch (err) {
 		console.warn('Failed to load live Proxmox VM statuses', err);
-	}
-
-	const liveByProxmoxId = new Map(
-		liveVms.filter((vm) => vm.proxmoxId != null).map((vm) => [vm.proxmoxId!, vm] as const)
-	);
-	const liveById = new Map(liveVms.map((vm) => [vm.id, vm]));
-
-	if (liveListLoaded) {
-		const staleDeleting = rows.filter(
-			(row) =>
-				row.status === 'deleting' &&
-				!(row.proxmoxId != null ? liveByProxmoxId.get(row.proxmoxId) : null) &&
-				!liveById.get(row.id)
-		);
-		for (const row of staleDeleting) {
-			await queueVmDeletion(db, row).catch((err) => {
-				console.warn(`Failed to re-queue deletion for VM ${row.id}`, err);
-			});
-		}
 	}
 
 	const assignedIps = await getAssignedIps(
@@ -522,10 +494,7 @@ export const listVmStatuses = query(statusParams, async (params) => {
 
 	const persistable: { id: string; live: VmInfo }[] = [];
 	const statuses = rows.map((row) => {
-		const live =
-			(row.proxmoxId != null ? liveByProxmoxId.get(row.proxmoxId) : null) ??
-			liveById.get(row.id) ??
-			null;
+		const live = findLiveVm(liveVms, row);
 		if (live) persistable.push({ id: row.id, live });
 		const mapped = mapVmRow(row, live, assignedIps.get(row.id));
 		return {
@@ -636,7 +605,6 @@ export const deleteVm = command(deleteParams, async (params) => {
 	if (row.ownerProjectId) {
 		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'admin');
 	}
-	if (row.status === 'deleting') return;
 
 	await queueVmDeletion(db, row);
 });

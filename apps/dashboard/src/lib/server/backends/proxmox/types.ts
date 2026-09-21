@@ -116,8 +116,6 @@ export interface PveTaskStatus {
 	upid: string;
 }
 
-export type PveNextId = number;
-
 export interface PveCreateQemuParams {
 	vmid: number;
 	name?: string;
@@ -154,6 +152,7 @@ export interface PveClusterResource {
 	vmid?: number;
 	name?: string;
 	status?: string;
+	tags?: string;
 	maxcpu?: number;
 	maxmem?: number;
 	maxdisk?: number;

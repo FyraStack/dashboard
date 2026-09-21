@@ -1,6 +1,7 @@
 import {
 	pgTable,
 	pgEnum,
+	pgSequence,
 	text,
 	boolean,
 	bigint,
@@ -88,9 +89,18 @@ export const vms = pgTable(
 	(table) => [
 		index('vms_owner_project_id_index').on(table.ownerProjectId),
 		index('vms_owner_project_active_index').on(table.ownerProjectId, table.active),
-		index('vms_proxmox_id_index').on(table.proxmoxId)
+		index('vms_proxmox_id_index').on(table.proxmoxId),
+		uniqueIndex('vms_active_proxmox_id_unique')
+			.on(table.proxmoxId)
+			.where(sql`${table.active}`)
 	]
 );
+
+export const proxmoxVmidSequence = pgSequence('proxmox_vmid_seq', {
+	startWith: 1000,
+	minValue: 1000,
+	maxValue: 999_999_999
+});
 
 export const vmsRelations = relations(vms, ({ one, many }) => ({
 	project: one(organization, {

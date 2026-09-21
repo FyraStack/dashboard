@@ -18,7 +18,7 @@ export type {
 	VmResizeParams,
 	VmStatus
 } from './types';
-export { VmResizeError } from './types';
+export { VmNotFoundError, VmResizeError } from './types';
 
 let cached: { key: string; backend: VmBackend } | null = null;
 

@@ -228,7 +228,7 @@ async function meterCapContext(meter: BillingMeter) {
 		const vmType = await vmTypeBilledByMeter(meter);
 		capHours = capHoursFor(vmType?.rate, vmType?.cap);
 
-		if (await vmMeterIsErrored(meter)) {
+		if (await vmMeterIsUnbillable(meter)) {
 			return { capHours, periodAt: makePeriodAt(null), billable: false };
 		}
 	}
@@ -242,13 +242,29 @@ async function meterCapContext(meter: BillingMeter) {
 	return { capHours, periodAt: makePeriodAt(lookup.anchor), billable: true };
 }
 
-async function vmMeterIsErrored(meter: Pick<BillingMeter, 'resourceId'>) {
+async function vmMeterIsUnbillable(meter: Pick<BillingMeter, 'resourceId'>) {
 	const db = initDrizzle();
 	const vm = await db.query.vms.findFirst({
 		where: eq(vms.id, meter.resourceId),
 		columns: { status: true }
 	});
-	return vmIsErrored(vm?.status);
+	return vmIsUnbillable(vm?.status);
+}
+
+export async function hasUnsyncedUsageEvents(
+	resourceType: BillingResourceType,
+	resourceId: string
+) {
+	const db = initDrizzle();
+	const pending = await db.query.billingUsageEvents.findFirst({
+		where: and(
+			eq(billingUsageEvents.resourceType, resourceType),
+			eq(billingUsageEvents.resourceId, resourceId),
+			inArray(billingUsageEvents.syncStatus, ['pending', 'failed'])
+		),
+		columns: { id: true }
+	});
+	return pending != null;
 }
 
 function logUnbillableProject(projectId: string) {
@@ -521,7 +537,7 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 		meters,
 		METER_CONCURRENCY,
 		async ({ meter, rate, cap, currentFeatureId, vmStatus }) => {
-			if (vmIsErrored(vmStatus)) {
+			if (vmIsUnbillable(vmStatus)) {
 				skipped.errored += 1;
 				return;
 			}
@@ -548,8 +564,8 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 	return { meters: meters.length, events, skipped };
 }
 
-function vmIsErrored(status: VmStatus | null | undefined) {
-	return status === 'error';
+function vmIsUnbillable(status: VmStatus | null | undefined) {
+	return status === 'error' || status === 'deleting';
 }
 
 type ProjectTargetStatus = 'ok' | 'failed' | 'gone';

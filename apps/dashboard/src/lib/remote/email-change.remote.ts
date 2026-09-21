@@ -6,6 +6,7 @@ import { initAuth } from '$lib/server/auth';
 import { initDrizzle } from '$lib/server/db';
 import { user, verification } from '$lib/server/db/schema';
 import { ulid } from '$lib/server/id';
+import { captureServerEvent } from '$lib/server/posthog';
 
 const EMAIL_CHANGE_TTL_MS = 60 * 60 * 1000;
 
@@ -67,6 +68,8 @@ export const requestEmailChange = command(emailChangeParams, async (params) => {
 		value: newEmail,
 		expiresAt: new Date(Date.now() + EMAIL_CHANGE_TTL_MS)
 	});
+
+	captureServerEvent('email_change_requested');
 
 	return { email: newEmail };
 });

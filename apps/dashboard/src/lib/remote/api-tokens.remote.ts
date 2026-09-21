@@ -4,6 +4,7 @@ import { type } from 'arktype';
 import { eq, and } from 'drizzle-orm';
 import { initDrizzle } from '$lib/server/db';
 import { apiTokens } from '$lib/server/db/schema';
+import { captureServerEvent } from '$lib/server/posthog';
 
 type ListResult = {
 	id: string;
@@ -64,6 +65,8 @@ export const createApiToken = command(createParams, async (params) => {
 		})
 		.returning();
 
+	captureServerEvent('api_token_created', { token_id: inserted.id });
+
 	return { id: inserted.id, token: plainToken };
 });
 
@@ -83,4 +86,5 @@ export const revokeApiToken = command(revokeParams, async (params) => {
 	await db
 		.delete(apiTokens)
 		.where(and(eq(apiTokens.id, params.tokenId), eq(apiTokens.userId, event.locals.user.id)));
+	captureServerEvent('api_token_revoked', { token_id: params.tokenId });
 });

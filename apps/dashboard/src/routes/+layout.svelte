@@ -3,10 +3,12 @@
 	import NavigationProgress from '$lib/components/navigation-progress.svelte';
 	import { onMount } from 'svelte';
 	import { ModeWatcher } from 'mode-watcher';
+	import { initPostHog } from '$lib/analytics/posthog';
 
 	let { children } = $props();
 
 	onMount(async () => {
+		initPostHog();
 		const { init } = await import('@plausible-analytics/tracker');
 		init({
 			domain: 'dash.fyrastack.com',

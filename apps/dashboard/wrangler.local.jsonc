@@ -10,6 +10,7 @@
 		"run_worker_first": [
 			"/",
 			"/_app/remote/*",
+			"/internal/*",
 			"/api/*",
 			"/admin/*",
 			"/projects/*",

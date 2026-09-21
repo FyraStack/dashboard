@@ -29,6 +29,7 @@ import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureAdminUsers
 } from '$lib/server/accessibility-fixtures';
+import { captureServerEvent } from '$lib/server/posthog';
 
 export type UserSession = {
 	id: string;
@@ -249,6 +250,11 @@ export const setUserDisabled = command(setDisabledParams, async (params) => {
 		.set({ banned: params.disabled, banReason: params.disabled ? null : target.banReason })
 		.where(eq(user.id, params.userId));
 
+	captureServerEvent('admin_user_disabled_changed', {
+		target_user_id: params.userId,
+		disabled: params.disabled
+	});
+
 	return { userId: params.userId, disabled: params.disabled };
 });
 
@@ -262,6 +268,11 @@ export const setUserBillingExempt = command(setBillingExemptParams, async (param
 		.update(user)
 		.set({ billingExempt: params.billingExempt })
 		.where(eq(user.id, params.userId));
+
+	captureServerEvent('admin_user_billing_exempt_changed', {
+		target_user_id: params.userId,
+		billing_exempt: params.billingExempt
+	});
 
 	return { userId: params.userId, billingExempt: params.billingExempt };
 });
@@ -290,6 +301,11 @@ export const setUserRole = command(setRoleParams, async (params) => {
 		.update(user)
 		.set({ role: params.role, isAdmin: hasAdminRole(params.role) })
 		.where(eq(user.id, params.userId));
+
+	captureServerEvent('admin_user_role_changed', {
+		target_user_id: params.userId,
+		role: params.role
+	});
 
 	return { userId: params.userId, role: params.role, isAdmin: hasAdminRole(params.role) };
 });
@@ -327,6 +343,10 @@ export const deleteUserWithVerification = command(deleteUserParams, async (param
 
 	await consumeAdminVerification(db, adminUserId, params.userId, params.method, params.code);
 	await deleteUserData(db, params.userId);
+	captureServerEvent('admin_user_deleted', {
+		target_user_id: params.userId,
+		verification_method: params.method
+	});
 
 	return { userId: params.userId, email: target.email };
 });

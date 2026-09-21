@@ -1,5 +1,10 @@
-import { redirect, type Handle } from '@sveltejs/kit';
-import { building } from '$app/environment';
+import { redirect, type Handle, type HandleServerError } from '@sveltejs/kit';
+import { sequence } from '@sveltejs/kit/hooks';
+import { handleErrorWithSentry, initCloudflareSentryHandle, sentryHandle } from '@sentry/sveltekit';
+import { building, dev } from '$app/environment';
+import { env as publicEnv } from '$env/dynamic/public';
+import { handlePostHogProxy } from '$lib/server/posthog-proxy';
+import { captureServerException } from '$lib/server/posthog';
 import { getCachedAuthSession, hasAuthSessionCookie } from '$lib/server/auth-lite';
 import { closeRequestDb } from '$lib/server/db';
 import { instrument, timingLog } from '$lib/server/observability';
@@ -18,6 +23,7 @@ const publicRoutes = [
 	'/reset-password',
 	'/accept-invitation',
 	'/api/',
+	'/internal/',
 	'/_app/remote/'
 ];
 const authPages = ['/login', '/register', '/signup', '/forgot-password'];
@@ -163,4 +169,29 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	}
 };
 
-export const handle: Handle = handleBetterAuth;
+let sentryRequestHandle: Handle | undefined;
+
+const handleSentryInit: Handle = (input) => {
+	if (!publicEnv.PUBLIC_SENTRY_DSN) return input.resolve(input.event);
+
+	sentryRequestHandle ??= initCloudflareSentryHandle({
+		dsn: publicEnv.PUBLIC_SENTRY_DSN,
+		environment: dev ? 'development' : 'production',
+		sendDefaultPii: false
+	});
+	return sentryRequestHandle(input);
+};
+
+export const handle: Handle = sequence(
+	handleSentryInit,
+	sentryHandle({ injectFetchProxyScript: false }),
+	handlePostHogProxy,
+	handleBetterAuth
+);
+
+const logServerError: HandleServerError = ({ error, event }) => {
+	console.error('Unhandled server error', { pathname: event.url.pathname, error });
+	captureServerException(error, event);
+};
+
+export const handleError = handleErrorWithSentry(logServerError);

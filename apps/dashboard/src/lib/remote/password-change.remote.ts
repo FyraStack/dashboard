@@ -9,6 +9,7 @@ import { verification } from '$lib/server/db/schema';
 import { sendRenderedEmail } from '$lib/server/email';
 import { ulid } from '$lib/server/id';
 import { account } from '$lib/server/db/auth.schema';
+import { captureServerEvent } from '$lib/server/posthog';
 
 const CODE_LENGTH = 6;
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -136,6 +137,7 @@ export const confirmPasswordChangeWithEmail = command(emailParams, async (params
 		await changePasswordOauth(params.newPassword);
 	}
 	await db.delete(verification).where(eq(verification.id, record.id));
+	captureServerEvent('password_changed', { verification_method: 'email' });
 });
 
 const totpParams = type({ currentPassword: 'string', newPassword: 'string', code: 'string' });
@@ -159,6 +161,7 @@ export const confirmPasswordChangeWithTotp = command(totpParams, async (params) 
 	} else {
 		await changePasswordOauth(params.newPassword);
 	}
+	captureServerEvent('password_changed', { verification_method: 'totp' });
 });
 
 const passkeyParams = type({ currentPassword: 'string', newPassword: 'string' });
@@ -184,4 +187,5 @@ export const confirmPasswordChangeWithPasskey = command(passkeyParams, async (pa
 		await changePasswordOauth(params.newPassword);
 	}
 	await db.delete(verification).where(eq(verification.id, record.id));
+	captureServerEvent('password_changed', { verification_method: 'passkey' });
 });

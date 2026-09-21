@@ -24,6 +24,9 @@ declare global {
 			ctx: ExecutionContext;
 			env: {
 				ORIGIN: string;
+				PUBLIC_POSTHOG_KEY?: string;
+				PUBLIC_POSTHOG_HOST?: string;
+				PUBLIC_SENTRY_DSN?: string;
 				BETTER_AUTH_SECRET: string;
 				VYOS_API_URL?: string;
 				VYOS_API_KEY?: string;

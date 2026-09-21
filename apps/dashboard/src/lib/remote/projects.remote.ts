@@ -18,6 +18,7 @@ import {
 	accessibilityFixtureProjects
 } from '$lib/server/accessibility-fixtures';
 import { softDeleteOrganizationResources } from '$lib/server/project-deletion';
+import { captureServerEvent } from '$lib/server/posthog';
 
 type ListResult = {
 	id: string;
@@ -203,6 +204,7 @@ export const createProject = command(createParams, async (params) => {
 		console.warn(`Failed to sync Autumn customer for project ${org.id}`, err);
 	});
 	clearProjectListCache(event.locals.user.id);
+	captureServerEvent('project_created', {}, { projectId: org.id });
 
 	return { id: org.id };
 });
@@ -217,6 +219,7 @@ export const deleteProject = command(deleteParams, async (params) => {
 
 	await softDeleteOrganizationResources(db, params.projectId);
 	clearProjectListCache();
+	captureServerEvent('project_deleted', {}, { projectId: params.projectId });
 });
 
 const updateParams = type({ projectId: 'string', name: 'string' });
@@ -236,6 +239,7 @@ export const updateProject = command(updateParams, async (params) => {
 		console.warn(`Failed to sync Autumn customer update for project ${params.projectId}`, err);
 	});
 	clearProjectListCache();
+	captureServerEvent('project_renamed', {}, { projectId: params.projectId });
 });
 
 const addMemberParams = type({
@@ -260,6 +264,11 @@ export const addMember = command(addMemberParams, async (params) => {
 			resend: true
 		}
 	});
+	captureServerEvent(
+		'project_member_invited',
+		{ permissions: params.permissions },
+		{ projectId: params.projectId }
+	);
 });
 
 const updateMemberRoleParams = type({
@@ -279,6 +288,11 @@ export const updateMemberRole = command(updateMemberRoleParams, async (params) =
 		.set({ role: params.permissions })
 		.where(and(eq(member.organizationId, params.projectId), eq(member.userId, params.userId)));
 	clearProjectListCache();
+	captureServerEvent(
+		'project_member_role_updated',
+		{ member_user_id: params.userId, permissions: params.permissions },
+		{ projectId: params.projectId }
+	);
 });
 
 const removeMemberParams = type({ projectId: 'string', userId: 'string' });
@@ -297,4 +311,9 @@ export const removeMember = command(removeMemberParams, async (params) => {
 
 	await db.delete(member).where(eq(member.id, target.id));
 	clearProjectListCache();
+	captureServerEvent(
+		'project_member_removed',
+		{ member_user_id: params.userId, previous_role: target.role },
+		{ projectId: params.projectId }
+	);
 });

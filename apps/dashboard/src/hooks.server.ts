@@ -17,7 +17,8 @@ const publicRoutes = [
 	'/forgot-password',
 	'/reset-password',
 	'/accept-invitation',
-	'/api/'
+	'/api/',
+	'/_app/remote/'
 ];
 const authPages = ['/login', '/register', '/signup', '/forgot-password'];
 

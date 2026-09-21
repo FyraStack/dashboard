@@ -24,6 +24,7 @@ const PENDING_PASSKEY_HINT_COOKIE = 'pending_passkey_2fa_hint';
 const PENDING_PASSKEY_MAX_AGE = 600;
 const PASSKEY_PASSWORD_CHANGE_MAX_AGE_MS = 60 * 1000;
 export const VERIFIED_2FA_DISABLE_HEADER = 'x-fyra-verified-2fa-disable';
+export const TOTP_SECRET_KEY_VERSION = 1;
 
 function passwordChangePasskeyIdentifier(userId: string) {
 	return `password-change-passkey:${userId}`;
@@ -123,6 +124,7 @@ function buildAuth() {
 		appName: 'Stack',
 		baseURL,
 		secret: env.BETTER_AUTH_SECRET,
+		secrets: [{ version: TOTP_SECRET_KEY_VERSION, value: env.BETTER_AUTH_SECRET }],
 		database: drizzleAdapter(db, { provider: 'pg' }),
 		advanced: {
 			database: {

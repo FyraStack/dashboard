@@ -25,7 +25,6 @@ export default defineConfig(({ mode }) => {
 		plugins: [
 			tailwindcss(),
 			sentrySvelteKit({
-				autoInstrument: false,
 				autoUploadSourceMaps: Boolean(env.SENTRY_AUTH_TOKEN),
 				org: env.SENTRY_ORG,
 				project: env.SENTRY_PROJECT,

@@ -152,7 +152,15 @@
 	);
 
 	type AudienceField =
-		'signedUp' | 'vmCount' | 'vmType' | 'verified' | 'billingExempt' | 'disabled';
+		| 'signedUp'
+		| 'vmCount'
+		| 'vmType'
+		| 'verified'
+		| 'billingExempt'
+		| 'disabled'
+		| 'totp'
+		| 'twoFactor'
+		| 'passkey';
 	type AudienceCondition = { field: AudienceField; op: string; value: string };
 
 	const audienceFieldDefs: Record<
@@ -182,7 +190,10 @@
 		},
 		verified: { label: 'Email verified', ops: [{ value: 'is', label: 'is' }] },
 		billingExempt: { label: 'Billing exempt', ops: [{ value: 'is', label: 'is' }] },
-		disabled: { label: 'Disabled', ops: [{ value: 'is', label: 'is' }] }
+		disabled: { label: 'Disabled', ops: [{ value: 'is', label: 'is' }] },
+		totp: { label: 'TOTP enabled', ops: [{ value: 'is', label: 'is' }] },
+		twoFactor: { label: '2FA enabled (any)', ops: [{ value: 'is', label: 'is' }] },
+		passkey: { label: 'Passkey enabled', ops: [{ value: 'is', label: 'is' }] }
 	};
 
 	function defaultCondition(field: AudienceField): AudienceCondition {
@@ -223,6 +234,14 @@
 						return account.billingExempt === (condition.value === 'yes');
 					case 'disabled':
 						return account.disabled === (condition.value === 'yes');
+					case 'totp':
+						return account.twoFactorEnabled === (condition.value === 'yes');
+					case 'twoFactor':
+						return (
+							(account.twoFactorEnabled || account.passkeyCount > 0) === (condition.value === 'yes')
+						);
+					case 'passkey':
+						return account.passkeyCount > 0 === (condition.value === 'yes');
 				}
 			})
 		)

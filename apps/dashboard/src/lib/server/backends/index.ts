@@ -22,6 +22,14 @@ export { VmNotFoundError, VmResizeError } from './types';
 
 let cached: { key: string; backend: VmBackend } | null = null;
 
+function parseNodeList(value: string | undefined): string[] {
+	if (!value) return [];
+	return value
+		.split(',')
+		.map((node) => node.trim())
+		.filter(Boolean);
+}
+
 function createProxmox(): ProxmoxBackend {
 	const started = performance.now();
 	const env = getBackendEnv();
@@ -64,7 +72,8 @@ function createProxmox(): ProxmoxBackend {
 		snippetsEndpointVerifySsl: env.PROXMOX_SNIPPETS_ENDPOINT_VERIFY_SSL !== 'false',
 		snippetsStorage: env.PROXMOX_SNIPPETS_STORAGE,
 		firewallSecurityGroup: env.PROXMOX_VM_FIREWALL_SECURITY_GROUP,
-		vmCpuType: env.PROXMOX_VM_CPU_TYPE
+		vmCpuType: env.PROXMOX_VM_CPU_TYPE,
+		excludedNodes: parseNodeList(env.PROXMOX_EXCLUDED_NODES)
 	});
 
 	timingLog('backend.proxmox.create.end', {

@@ -68,6 +68,7 @@ declare global {
 				PROXMOX_SNIPPETS_ENDPOINT_VERIFY_SSL?: string;
 				PROXMOX_SNIPPETS_STORAGE?: string;
 				PROXMOX_VM_FIREWALL_SECURITY_GROUP?: string;
+				PROXMOX_EXCLUDED_NODES?: string;
 				PROXMOX_VM_CPU_TYPE?: string;
 			};
 		}

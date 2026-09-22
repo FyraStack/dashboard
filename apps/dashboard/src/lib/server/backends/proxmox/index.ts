@@ -926,13 +926,7 @@ export class ProxmoxBackend implements VmBackend {
 		const status = await this.client.getQemuVm(node, vmid);
 		if (status.status === 'stopped') return;
 
-		let stopUpid: string;
-		try {
-			stopUpid = await this.client.stopVm(node, vmid, { overruleShutdown: true });
-		} catch (err) {
-			if (!(err instanceof HTTPError) || err.response.status !== 400) throw err;
-			stopUpid = await this.client.stopVm(node, vmid);
-		}
+		const stopUpid = await this.forceStopVm(node, vmid);
 		try {
 			await this.client.waitForTask(node, stopUpid);
 		} catch (err) {
@@ -947,6 +941,15 @@ export class ProxmoxBackend implements VmBackend {
 			await new Promise((r) => setTimeout(r, 1_000));
 		}
 		throw new Error(`VM ${vmid} on node ${node} did not reach stopped state within 60s`);
+	}
+
+	private async forceStopVm(node: string, vmid: number): Promise<string> {
+		try {
+			return await this.client.stopVm(node, vmid, { overruleShutdown: true });
+		} catch (err) {
+			if (!(err instanceof HTTPError) || err.response.status !== 400) throw err;
+			return await this.client.stopVm(node, vmid);
+		}
 	}
 
 	private async destroyVm(node: string, vmid: number): Promise<string | undefined> {
@@ -982,7 +985,7 @@ export class ProxmoxBackend implements VmBackend {
 	async killVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
-		const upid = await this.client.stopVm(node, vmid);
+		const upid = await this.forceStopVm(node, vmid);
 		await this.client.waitForTask(node, upid);
 	}
 

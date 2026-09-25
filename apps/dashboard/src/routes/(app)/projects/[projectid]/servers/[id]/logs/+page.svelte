@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
 	import { getServerWithFallback } from '$lib/state/servers.svelte';
+	import { primaryAddress } from '../../lib/server-summary';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import X from '~icons/lucide/x';
@@ -39,7 +40,7 @@
 			timestamp: '2026-04-27 05:11:02',
 			severity: 'debug',
 			source: 'network',
-			message: `primary endpoint ${selectedServer.ip}`
+			message: `primary endpoint ${primaryAddress(selectedServer) ?? '-'}`
 		},
 		{
 			id: 4,

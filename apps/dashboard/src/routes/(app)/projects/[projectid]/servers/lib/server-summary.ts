@@ -68,6 +68,12 @@ export type ServerInfo = {
 	metrics: ServerMetrics | null;
 };
 
+export function primaryAddress(server: Pick<ServerInfo, 'ip' | 'ipv6'>): string | null {
+	if (server.ip && server.ip !== '-') return server.ip;
+	if (server.ipv6 && server.ipv6 !== '-') return server.ipv6;
+	return null;
+}
+
 export function formatBytes(bytes: number): string {
 	if (!bytes) return '0B';
 	const gb = bytes / (1024 * 1024 * 1024);

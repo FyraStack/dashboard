@@ -10,6 +10,7 @@
 	import { listVmStatuses } from '$lib/remote/vms.remote';
 	import { clientTimingLog, runQuery } from '$lib/utils';
 	import { serversState, syncServers } from '$lib/state/servers.svelte';
+	import { primaryAddress } from './lib/server-summary';
 
 	let { data, children } = $props();
 
@@ -258,7 +259,7 @@
 						<p class="mt-0.5 truncate text-sm text-muted-foreground lg:text-xs">
 							{server.vcpu} vCPU &bull; {server.ram} &bull;
 							{#if server.liveLoaded || serversState.firstStatusRefreshComplete}
-								{server.ip}
+								{primaryAddress(server) ?? '-'}
 							{:else}
 								<span class="inline-block h-2.5 w-14 animate-pulse rounded bg-muted"></span>
 							{/if}

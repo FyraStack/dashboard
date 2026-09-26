@@ -10,9 +10,11 @@
 	import Trash2 from '~icons/nucleo/trash';
 	import { getServerWithFallback, serversState } from '$lib/state/servers.svelte';
 	import { getVmMetricsHistory } from '$lib/remote/vms.remote';
+	import { primaryAddress } from '../lib/server-summary';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
+	let sshAddress = $derived(primaryAddress(selectedServer));
 	let copied = $state('');
 	let liveLoaded = $derived(selectedServer.liveLoaded || serversState.firstStatusRefreshComplete);
 	const metricsHistory = $derived(
@@ -319,13 +321,13 @@
 						<p class="text-sm font-medium text-muted-foreground">Coming soon</p>
 						<p class="mt-1 text-xs text-muted-foreground">Console access is not available yet.</p>
 					</div>
-					{#if selectedServer.ip}
+					{#if sshAddress}
 						<div class="flex items-center gap-2 border border-border bg-background px-3 py-1.5">
-							<span class="text-xs text-muted-foreground">ssh root@{selectedServer.ip}</span>
+							<span class="text-xs text-muted-foreground">ssh root@{sshAddress}</span>
 							<button
 								class="text-muted-foreground hover:text-foreground"
 								aria-label="Copy SSH command"
-								onclick={() => copyToClipboard(`ssh root@${selectedServer.ip}`, 'ssh-console')}
+								onclick={() => copyToClipboard(`ssh root@${sshAddress}`, 'ssh-console')}
 							>
 								{#if copied === 'ssh-console'}<Check class="h-3 w-3 text-emerald-500" />{:else}<Copy
 										class="h-3 w-3"
@@ -398,14 +400,13 @@
 					<p class="text-sm font-medium text-muted-foreground">Coming soon</p>
 					<p class="mt-1 text-xs text-muted-foreground">Log streaming is not available yet.</p>
 				</div>
-				{#if selectedServer.ip}
+				{#if sshAddress}
 					<div class="flex items-center gap-2 border border-border bg-background px-3 py-1.5">
-						<span class="text-muted-foreground">ssh root@{selectedServer.ip} journalctl -f</span>
+						<span class="text-muted-foreground">ssh root@{sshAddress} journalctl -f</span>
 						<button
 							class="text-muted-foreground hover:text-foreground"
 							aria-label="Copy logs command"
-							onclick={() =>
-								copyToClipboard(`ssh root@${selectedServer.ip} journalctl -f`, 'ssh-logs')}
+							onclick={() => copyToClipboard(`ssh root@${sshAddress} journalctl -f`, 'ssh-logs')}
 						>
 							{#if copied === 'ssh-logs'}<Check class="h-3 w-3 text-emerald-500" />{:else}<Copy
 									class="h-3 w-3"

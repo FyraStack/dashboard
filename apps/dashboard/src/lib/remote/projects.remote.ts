@@ -2,23 +2,23 @@ import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { and, eq } from 'drizzle-orm';
-import { projectRoles, type ProjectRole } from '$lib/auth/organization-permissions';
-import { initDrizzle } from '$lib/server/db';
-import { member, organization } from '$lib/server/db/schema';
-import { requireProjectAccess } from '$lib/server/auth-context';
-import { initAuth } from '$lib/server/auth';
+import { projectRoles, type ProjectRole } from '#lib/auth/organization-permissions.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { member, organization } from '#lib/server/db/schema.js';
+import { requireProjectAccess } from '#lib/server/auth-context.js';
+import { initAuth } from '#lib/server/auth.js';
 import {
 	ensureLocalProjectBillingCustomer,
 	ensureProjectCustomer,
 	updateProjectCustomer
-} from '$lib/server/billing/autumn';
+} from '#lib/server/billing/autumn.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureProjectDetails,
 	accessibilityFixtureProjects
-} from '$lib/server/accessibility-fixtures';
-import { softDeleteOrganizationResources } from '$lib/server/project-deletion';
-import { captureServerEvent } from '$lib/server/posthog';
+} from '#lib/server/accessibility-fixtures.js';
+import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 
 type ListResult = {
 	id: string;

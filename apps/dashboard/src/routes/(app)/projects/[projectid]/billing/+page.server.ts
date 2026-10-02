@@ -1,14 +1,14 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { getProjectMemberRole, requireProjectAccess } from '$lib/server/auth-context';
-import { attachDefaultProjectPlan } from '$lib/server/billing/autumn';
-import { getProjectBillingOverview, refreshProjectBilling } from '$lib/server/billing/overview';
-import { runInBackground } from '$lib/server/background';
-import { initDrizzle } from '$lib/server/db';
+import { getProjectMemberRole, requireProjectAccess } from '#lib/server/auth-context.js';
+import { attachDefaultProjectPlan } from '#lib/server/billing/autumn.js';
+import { getProjectBillingOverview, refreshProjectBilling } from '#lib/server/billing/overview.js';
+import { runInBackground } from '#lib/server/background.js';
+import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureBillingOverview
-} from '$lib/server/accessibility-fixtures';
+} from '#lib/server/accessibility-fixtures.js';
 
 export const load: PageServerLoad = async ({ locals, params, parent, url }) => {
 	if (!locals.user) error(401, 'Authentication required');

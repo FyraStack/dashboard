@@ -5,7 +5,7 @@
 
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getBackend } from '$lib/server/backends';
+import { getBackend } from '#lib/server/backends/index.js';
 
 export const GET: RequestHandler = async () => {
 	try {

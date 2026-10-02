@@ -1,15 +1,15 @@
 import type { LayoutServerLoad } from './$types';
-import { listVmTypes } from '$lib/remote/vm-types.remote';
-import { listImages } from '$lib/remote/images.remote';
-import { listVolumes } from '$lib/remote/volumes.remote';
-import { listSshKeys } from '$lib/remote/ssh-keys.remote';
+import { listVmTypes } from '#lib/remote/vm-types.remote.js';
+import { listImages } from '#lib/remote/images.remote.js';
+import { listVolumes } from '#lib/remote/volumes.remote.js';
+import { listSshKeys } from '#lib/remote/ssh-keys.remote.js';
 import { error, redirect } from '@sveltejs/kit';
-import { getProjectMemberRole } from '$lib/server/auth-context';
-import { attachDefaultProjectPlan } from '$lib/server/billing/autumn';
-import { getProjectBillingReadiness, refreshProjectBilling } from '$lib/server/billing/overview';
-import { runInBackground } from '$lib/server/background';
-import { initDrizzle } from '$lib/server/db';
-import { getIpamAvailability } from '$lib/server/ipam';
+import { getProjectMemberRole } from '#lib/server/auth-context.js';
+import { attachDefaultProjectPlan } from '#lib/server/billing/autumn.js';
+import { getProjectBillingReadiness, refreshProjectBilling } from '#lib/server/billing/overview.js';
+import { runInBackground } from '#lib/server/background.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { getIpamAvailability } from '#lib/server/ipam.js';
 
 export const load: LayoutServerLoad = async ({ locals, params, parent, depends, url }) => {
 	depends('project:create-server');

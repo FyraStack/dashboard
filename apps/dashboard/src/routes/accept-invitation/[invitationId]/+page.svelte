@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { Button } from '$lib/components/ui/button';
-	import { authClient } from '$lib/auth-client';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { authClient } from '#lib/auth-client.js';
 	import AlertCircle from '~icons/nucleo/alert-circle';
-	import { isProjectRole, projectRoleLabels } from '$lib/auth/organization-permissions';
+	import { isProjectRole, projectRoleLabels } from '#lib/auth/organization-permissions.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -24,7 +24,7 @@
 			accepting = false;
 			return;
 		}
-		await goto(`/projects/${res.member.organizationId}/servers`, { invalidateAll: true });
+		await goto(`/projects/${res.member.organizationId}/servers`, { refreshAll: true });
 	}
 
 	async function decline() {

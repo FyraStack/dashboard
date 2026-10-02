@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
-	import { getServerWithFallback } from '$lib/state/servers.svelte';
+	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 	import { primaryAddress } from '../../lib/server-summary';
-	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import X from '~icons/lucide/x';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
 	import Search from '~icons/nucleo/search';

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Input } from '$lib/components/ui/input';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
 	import ArrowDown from '~icons/lucide/arrow-down';
 	import ChevronRight from '~icons/lucide/chevron-right';
 	import FileText from '~icons/nucleo/file-text';

@@ -1,6 +1,7 @@
 import type { RequestEvent } from '@sveltejs/kit';
+import { waitUntil } from 'cloudflare:workers';
 import { getRequestEvent } from '$app/server';
-import { env } from '$env/dynamic/public';
+import { PUBLIC_POSTHOG_HOST, PUBLIC_POSTHOG_KEY } from '$app/env/public';
 import { PostHog } from 'posthog-node/edge';
 
 type EventProperties = Record<string, string | number | boolean | null | undefined>;
@@ -12,13 +13,13 @@ type CaptureOptions = {
 };
 
 function ingestHost(): string {
-	return env.PUBLIC_POSTHOG_HOST?.includes('eu.')
+	return PUBLIC_POSTHOG_HOST?.includes('eu.')
 		? 'https://eu.i.posthog.com'
 		: 'https://us.i.posthog.com';
 }
 
 function createClient(): PostHog | null {
-	const token = env.PUBLIC_POSTHOG_KEY;
+	const token = PUBLIC_POSTHOG_KEY;
 	if (!token) return null;
 	return new PostHog(token, { host: ingestHost(), flushAt: 1, flushInterval: 0 });
 }
@@ -39,8 +40,7 @@ function dispatch(event: RequestEvent | null, send: (client: PostHog) => Promise
 		.then(() => client._shutdown())
 		.catch((captureError) => console.warn('PostHog capture failed', captureError));
 
-	const ctx = event?.platform?.ctx;
-	if (ctx) ctx.waitUntil(pending);
+	waitUntil(pending);
 }
 
 function requestContext(event: RequestEvent | null): EventProperties {

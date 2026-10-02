@@ -1,5 +1,5 @@
-import { getRuntimeEnv } from '$lib/server/env';
-import { createVpcFetch, insecureDirectFetch } from '$lib/server/vpc';
+import { getRuntimeEnv } from '#lib/server/env.js';
+import { createVpcFetch, insecureDirectFetch } from '#lib/server/vpc.js';
 import ky, { type KyInstance } from 'ky';
 
 type VyosApiResponse<T = unknown> = {

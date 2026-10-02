@@ -1,6 +1,6 @@
-import { dev } from '$app/environment';
-import { getRuntimeEnv } from '$lib/server/env';
-import { instrument, timingLog } from '$lib/server/observability';
+import { dev } from '$app/env';
+import { getRuntimeEnv } from '#lib/server/env.js';
+import { instrument, timingLog } from '#lib/server/observability.js';
 
 type CachedSession = {
 	session: NonNullable<App.Locals['session']>;

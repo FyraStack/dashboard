@@ -1,18 +1,18 @@
 import { error } from '@sveltejs/kit';
 import { and, eq, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
-import { getBackend } from '$lib/server/backends';
+import { getBackend } from '#lib/server/backends/index.js';
 import {
 	cancelProjectBilling,
 	deleteLocalProjectBillingCustomer,
 	deleteProjectServerEntity
-} from '$lib/server/billing/autumn';
+} from '#lib/server/billing/autumn.js';
 import {
 	abandonProjectUsageEvents,
 	closeProjectMeters,
 	meterResourceThrough,
 	syncProjectUsage
-} from '$lib/server/billing/metering';
-import { initDrizzle } from '$lib/server/db';
+} from '#lib/server/billing/metering.js';
+import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	billingUsageEvents,
 	invitation,
@@ -22,8 +22,8 @@ import {
 	projectBillingCustomers,
 	volumes,
 	vms
-} from '$lib/server/db/schema';
-import { releaseVmNetworking } from '$lib/server/ipam';
+} from '#lib/server/db/schema.js';
+import { releaseVmNetworking } from '#lib/server/ipam.js';
 
 export const DELETED_PROJECT_RETENTION_DAYS = 90;
 

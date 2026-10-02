@@ -1,7 +1,7 @@
 import type { Fetcher } from '@cloudflare/workers-types';
 import ky from 'ky';
-import { dev } from '$app/environment';
-import { instrument } from '$lib/server/observability';
+import { dev } from '$app/env';
+import { instrument } from '#lib/server/observability.js';
 
 export type VpcFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 

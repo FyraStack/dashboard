@@ -2,21 +2,21 @@ import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { and, count, desc, eq, isNull } from 'drizzle-orm';
-import AdminProjectDeletionCodeEmail from '$lib/emails/admin-project-deletion-code.svelte';
+import AdminProjectDeletionCodeEmail from '#lib/emails/admin-project-deletion-code.svelte';
 import {
 	ADMIN_VERIFICATION_CODE_TTL_MS,
 	beginAdminVerification,
 	consumeAdminVerification
-} from '$lib/server/admin-verification';
-import { initAuth } from '$lib/server/auth';
-import { requireAdmin } from '$lib/server/auth-context';
+} from '#lib/server/admin-verification.js';
+import { initAuth } from '#lib/server/auth.js';
+import { requireAdmin } from '#lib/server/auth-context.js';
 import {
 	ensureLocalProjectBillingCustomer,
 	ensureProjectCustomer,
 	isProjectBillingExempt,
 	requireProjectBillingActive
-} from '$lib/server/billing/autumn';
-import { initDrizzle } from '$lib/server/db';
+} from '#lib/server/billing/autumn.js';
+import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	member,
 	organization,
@@ -25,15 +25,15 @@ import {
 	user,
 	vms,
 	volumes
-} from '$lib/server/db/schema';
-import { sendRenderedEmail } from '$lib/server/email';
-import { softDeleteOrganizationResources } from '$lib/server/project-deletion';
-import { provisionVm } from '$lib/server/vm-provisioning';
+} from '#lib/server/db/schema.js';
+import { sendRenderedEmail } from '#lib/server/email.js';
+import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
+import { provisionVm } from '#lib/server/vm-provisioning.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureAdminProjects
-} from '$lib/server/accessibility-fixtures';
-import { captureServerEvent } from '$lib/server/posthog';
+} from '#lib/server/accessibility-fixtures.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 
 export type AdminProjectBillingStatus = 'configured' | 'past_due' | 'suspended' | 'none';
 

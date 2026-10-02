@@ -2,15 +2,15 @@
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { untrack } from 'svelte';
-	import type { UserSettingsTab } from '$lib/state/user-settings.svelte';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import * as Avatar from '$lib/components/ui/avatar';
-	import * as Tabs from '$lib/components/ui/tabs';
-	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { authClient } from '$lib/auth-client';
+	import type { UserSettingsTab } from '#lib/state/user-settings.svelte.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import * as Avatar from '#lib/components/ui/avatar/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import { authClient } from '#lib/auth-client.js';
 	import TotpOnboardingDialog from './totp-onboarding-dialog.svelte';
 	import PasskeyOnboardingDialog from './passkey-onboarding-dialog.svelte';
 	import PasswordVerificationDialog from './password-verification-dialog.svelte';
@@ -18,14 +18,14 @@
 		createSshKey as createSshKeyRpc,
 		deleteSshKey,
 		listSshKeys
-	} from '$lib/remote/ssh-keys.remote';
-	import { listApiTokens, createApiToken, revokeApiToken } from '$lib/remote/api-tokens.remote';
-	import { getPendingEmailChange, requestEmailChange } from '$lib/remote/email-change.remote';
-	import { disableTwoFactorWithVerification } from '$lib/remote/two-factor.remote';
-	import { hasPassword } from '$lib/remote/password-change.remote';
+	} from '#lib/remote/ssh-keys.remote.js';
+	import { listApiTokens, createApiToken, revokeApiToken } from '#lib/remote/api-tokens.remote.js';
+	import { getPendingEmailChange, requestEmailChange } from '#lib/remote/email-change.remote.js';
+	import { disableTwoFactorWithVerification } from '#lib/remote/two-factor.remote.js';
+	import { hasPassword } from '#lib/remote/password-change.remote.js';
 	import { toast } from 'svelte-sonner';
-	import { getErrorMessage } from '$lib/utils';
-	import { confirmDestructive } from '$lib/confirm.svelte';
+	import { getErrorMessage } from '#lib/utils.js';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
 
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';
@@ -223,9 +223,11 @@
 	let totpDisableCodeLabel = $derived(
 		totpDisableMethod === 'totp' ? 'Authenticator Code' : 'Backup Code'
 	);
+
 	let totpDisableCodeValid = $derived(
 		totpDisableMethod === 'totp' ? normalizedTotpDisableCode.length === 6 : Boolean(totpDisableCode)
 	);
+
 	let totpDisableSubmitDisabled = $derived(
 		disablingTotp || !totpDisablePassword || !totpDisableCodeValid
 	);
@@ -339,12 +341,16 @@
 		if (!newKeyName.trim() || !newKeyValue.trim() || sshKeyAdding) return;
 		sshKeyAdding = true;
 		try {
-			const res = await createSshKeyRpc({
-				name: newKeyName.trim(),
-				publicKey: newKeyValue.trim()
-			});
+			const res = await createSshKeyRpc({ name: newKeyName.trim(), publicKey: newKeyValue.trim() });
+
 			await invalidate('app:ssh-keys');
-			sshKeys.push({ id: res.id, name: newKeyName.trim(), fingerprint: res.fingerprint });
+
+			sshKeys.push({
+				id: res.id,
+				name: newKeyName.trim(),
+				fingerprint: res.fingerprint
+			});
+
 			newKeyName = '';
 			newKeyValue = '';
 		} catch (err) {
@@ -458,7 +464,7 @@
 
 	async function signOut() {
 		await authClient.signOut();
-		goto(resolve('/login'));
+		goto(resolve('login'));
 	}
 
 	$effect(() => {
@@ -708,11 +714,8 @@
 										variant="outline"
 										size="sm"
 										class="h-7 gap-1.5 text-xs"
-										onclick={() => (totpDialogOpen = true)}
+										onclick={() => (totpDialogOpen = true)}><Plus class="h-3 w-3" />Set Up</Button
 									>
-										<Plus class="h-3 w-3" />
-										Set Up
-									</Button>
 								{/if}
 							</div>
 							<div class="border-t border-border/50"></div>
@@ -732,11 +735,8 @@
 										variant="outline"
 										size="sm"
 										class="h-7 w-20 gap-1.5 text-xs"
-										onclick={() => (passkeyDialogOpen = true)}
+										onclick={() => (passkeyDialogOpen = true)}><Plus class="h-3 w-3" />Add</Button
 									>
-										<Plus class="h-3 w-3" />
-										Add
-									</Button>
 								</div>
 
 								{#if passkeysLoading && passkeys.length === 0}

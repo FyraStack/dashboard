@@ -1,6 +1,7 @@
+import adapter from '@sveltejs/adapter-cloudflare';
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { sentrySvelteKit } from '@sentry/sveltekit';
+import { sentrySvelteKit } from '@sentry/sveltekit/vite';
 import { defineConfig, loadEnv } from 'vite';
 import Icons from 'unplugin-icons/vite';
 import { FileSystemIconLoader } from 'unplugin-icons/loaders';
@@ -28,9 +29,19 @@ export default defineConfig(({ mode }) => {
 				autoUploadSourceMaps: Boolean(env.SENTRY_AUTH_TOKEN),
 				org: env.SENTRY_ORG,
 				project: env.SENTRY_PROJECT,
-				authToken: env.SENTRY_AUTH_TOKEN
+				authToken: env.SENTRY_AUTH_TOKEN,
+				// Bundles CJS deps like `pg` into the SSR output, which crashes under workerd
+				// We should open an issue for this
+				buildTimeInstrumentation: false
 			}),
-			sveltekit(),
+
+			sveltekit({
+				compilerOptions: { experimental: { async: true } },
+				adapter: adapter({ platformProxy: { configPath: 'wrangler.local.jsonc' } }),
+				experimental: { remoteFunctions: true },
+				tracing: { server: true }
+			}),
+
 			Icons({
 				compiler: 'svelte',
 				customCollections: {
@@ -45,11 +56,6 @@ export default defineConfig(({ mode }) => {
 		],
 		ssr: {
 			external: ['postcss']
-		},
-		build: {
-			rollupOptions: {
-				external: ['cloudflare:workers']
-			}
 		}
 	};
 });

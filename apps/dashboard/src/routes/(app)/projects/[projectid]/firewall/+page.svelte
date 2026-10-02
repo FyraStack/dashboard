@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Switch } from '$lib/components/ui/switch';
-	import CreateFirewallGroupDialog from '$lib/components/dialogs/create-firewall-group-dialog.svelte';
-	import * as Dialog from '$lib/components/ui/dialog';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import CreateFirewallGroupDialog from '#lib/components/dialogs/create-firewall-group-dialog.svelte';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import ChevronRight from '~icons/lucide/chevron-right';
 	import Plus from '~icons/lucide/plus';
 	import Shield from '~icons/nucleo/shield';

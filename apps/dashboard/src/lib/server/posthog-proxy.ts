@@ -1,9 +1,9 @@
-import type { Handle } from '@sveltejs/kit';
-import { env } from '$env/dynamic/public';
-import { posthogProxyPath } from '$lib/analytics/posthog';
+import type { Handle } from '@sveltejs/kit/hooks';
+import { PUBLIC_POSTHOG_HOST } from '$app/env/public';
+import { posthogProxyPath } from '#lib/analytics/posthog.js';
 
 function posthogRegion(): 'us' | 'eu' {
-	return env.PUBLIC_POSTHOG_HOST?.includes('eu.') ? 'eu' : 'us';
+	return PUBLIC_POSTHOG_HOST?.includes('eu.') ? 'eu' : 'us';
 }
 
 function upstreamHost(pathname: string): string {

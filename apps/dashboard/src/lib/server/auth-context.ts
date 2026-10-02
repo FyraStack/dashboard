@@ -1,13 +1,13 @@
 import { error } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { getRequestEvent } from '$app/server';
-import { hasProjectRole, type PermissionLevel } from '$lib/auth/organization-permissions';
-import { member, organization, user } from '$lib/server/db/schema';
+import { hasProjectRole, type PermissionLevel } from '#lib/auth/organization-permissions.js';
+import { member, organization, user } from '#lib/server/db/schema.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureProject,
 	accessibilityFixtureUser
-} from '$lib/server/accessibility-fixtures';
+} from '#lib/server/accessibility-fixtures.js';
 
 export function hasAdminRole(role: string | null | undefined): boolean {
 	return role?.split(',').includes('admin') ?? false;

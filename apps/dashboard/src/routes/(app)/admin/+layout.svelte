@@ -2,9 +2,9 @@
 	import { untrack, type Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { Badge } from '$lib/components/ui/badge';
-	import { featureFlagKeys } from '$lib/feature-flags';
-	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { featureFlagKeys } from '#lib/feature-flags.js';
+	import { AdminState, type AdminPageData } from '#lib/state/admin.svelte.js';
 	import Cpu from '~icons/nucleo/cpu';
 	import Disc from '~icons/nucleo/disc';
 	import Flag from '~icons/nucleo/flag';
@@ -22,49 +22,49 @@
 
 	const tabs = $derived([
 		{
-			href: resolve('/admin/users'),
+			href: resolve('admin/users'),
 			label: 'Users',
 			icon: UserCog,
 			count: admin.adminUsers.length
 		},
 		{
-			href: resolve('/admin/projects'),
+			href: resolve('admin/projects'),
 			label: 'Projects',
 			icon: FolderOpen,
 			count: admin.adminProjects.length
 		},
 		{
-			href: resolve('/admin/vms'),
+			href: resolve('admin/vms'),
 			label: 'VMs',
 			icon: Server,
 			count: admin.adminVms.filter((vm) => vm.active).length
 		},
 		{
-			href: resolve('/admin/vm-types'),
+			href: resolve('admin/vm-types'),
 			label: 'VM Types',
 			icon: Cpu,
 			count: admin.vmTypes.length
 		},
 		{
-			href: resolve('/admin/images'),
+			href: resolve('admin/images'),
 			label: 'Images',
 			icon: Disc,
 			count: admin.images.length
 		},
 		{
-			href: resolve('/admin/ipam'),
+			href: resolve('admin/ipam'),
 			label: 'IPAM',
 			icon: Network,
 			count: admin.ipamPrefixes.length
 		},
 		{
-			href: resolve('/admin/features'),
+			href: resolve('admin/features'),
 			label: 'Feature Flags',
 			icon: Flag,
 			count: featureFlagKeys.filter((key) => admin.featureFlags[key]).length
 		},
 		{
-			href: resolve('/admin/emails'),
+			href: resolve('admin/emails'),
 			label: 'Emails',
 			icon: Mail,
 			count: null

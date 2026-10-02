@@ -2,10 +2,10 @@ import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { eq } from 'drizzle-orm';
-import { initDrizzle } from '$lib/server/db';
-import { volumes, vms } from '$lib/server/db/schema';
-import { requireProjectAccess } from '$lib/server/auth-context';
-import { captureServerEvent } from '$lib/server/posthog';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { volumes, vms } from '#lib/server/db/schema.js';
+import { requireProjectAccess } from '#lib/server/auth-context.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 
 type ListParams = { projectId: string };
 type ListResult = {

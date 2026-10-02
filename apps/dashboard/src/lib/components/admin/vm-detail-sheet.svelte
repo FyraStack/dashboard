@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { Button } from '$lib/components/ui/button';
-	import { Separator } from '$lib/components/ui/separator';
-	import * as Sheet from '$lib/components/ui/sheet';
-	import { getVmBillingUsage, type VmBillingUsage } from '$lib/remote/admin-billing.remote';
-	import type { AdminVm } from '$lib/remote/admin-vms.remote';
-	import type { AdminState } from '$lib/state/admin.svelte';
-	import { getErrorMessage, runQuery } from '$lib/utils';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Separator } from '#lib/components/ui/separator/index.js';
+	import * as Sheet from '#lib/components/ui/sheet/index.js';
+	import { getVmBillingUsage, type VmBillingUsage } from '#lib/remote/admin-billing.remote.js';
+	import type { AdminVm } from '#lib/remote/admin-vms.remote.js';
+	import type { AdminState } from '#lib/state/admin.svelte.js';
+	import { getErrorMessage, runQuery } from '#lib/utils.js';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Activity from '~icons/nucleo/activity';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
@@ -323,10 +323,8 @@
 						{#if vm.projectId}
 							<a
 								class="text-xs text-foreground hover:underline"
-								href={resolve(`/admin/projects/${vm.projectId}`)}
+								href={resolve(`admin/projects/${vm.projectId}`)}>{vm.projectName ?? vm.projectId}</a
 							>
-								{vm.projectName ?? vm.projectId}
-							</a>
 						{:else}
 							<span class="text-xs text-foreground">-</span>
 						{/if}

@@ -1,20 +1,20 @@
+import type { HandleClientError } from '@sveltejs/kit/hooks';
 import { handleErrorWithSentry } from '@sentry/sveltekit';
 import * as Sentry from '@sentry/sveltekit';
-import type { HandleClientError } from '@sveltejs/kit';
-import { dev } from '$app/environment';
-import { env } from '$env/dynamic/public';
-import { captureClientException } from '$lib/analytics/posthog';
+import { dev } from '$app/env';
+import { PUBLIC_SENTRY_DSN } from '$app/env/public';
+import { captureClientException } from '#lib/analytics/posthog.js';
 
-if (env.PUBLIC_SENTRY_DSN) {
+if (PUBLIC_SENTRY_DSN) {
 	Sentry.init({
-		dsn: env.PUBLIC_SENTRY_DSN,
+		dsn: PUBLIC_SENTRY_DSN,
 		tunnel: '/internal/sentry_in',
-		environment: dev ? 'development' : 'production',
-		sendDefaultPii: false
+		environment: dev ? 'development' : 'production'
 	});
 }
 
-const forwardToPostHog: HandleClientError = ({ error }) => {
+const forwardToPostHog: HandleClientError = ({ kind, error }) => {
+	if (kind !== 'unknown') return;
 	captureClientException(error);
 };
 

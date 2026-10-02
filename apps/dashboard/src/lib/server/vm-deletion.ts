@@ -1,12 +1,12 @@
 import { getRequestEvent } from '$app/server';
 import { and, eq, inArray, isNotNull, lt } from 'drizzle-orm';
-import { initDrizzle, closeRequestDb, type Database } from '$lib/server/db';
-import { ipAssignments, paymentPeriods, vms, volumes } from '$lib/server/db/schema';
-import { getBackend } from '$lib/server/backends';
-import { deleteProjectServerEntity } from '$lib/server/billing/autumn';
-import { hasUnsyncedUsageEvents, meterResourceThrough } from '$lib/server/billing/metering';
-import { releaseVmNetworking } from '$lib/server/ipam';
-import { runInBackground } from '$lib/server/background';
+import { initDrizzle, closeRequestDb, type Database } from '#lib/server/db/index.js';
+import { ipAssignments, paymentPeriods, vms, volumes } from '#lib/server/db/schema.js';
+import { getBackend } from '#lib/server/backends/index.js';
+import { deleteProjectServerEntity } from '#lib/server/billing/autumn.js';
+import { hasUnsyncedUsageEvents, meterResourceThrough } from '#lib/server/billing/metering.js';
+import { releaseVmNetworking } from '#lib/server/ipam.js';
+import { runInBackground } from '#lib/server/background.js';
 
 type DeletableVm = {
 	id: string;

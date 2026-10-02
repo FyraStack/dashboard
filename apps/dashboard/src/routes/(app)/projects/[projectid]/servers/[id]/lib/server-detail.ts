@@ -8,8 +8,8 @@ import Globe from '~icons/nucleo/globe';
 import RotateCw from '~icons/nucleo/rotate-cw';
 import Settings from '~icons/nucleo/settings';
 import Terminal from '~icons/nucleo/terminal';
-import type { FeatureFlagKey } from '$lib/feature-flags';
-import type { IconComponent } from '$lib';
+import type { FeatureFlagKey } from '#lib/feature-flags.js';
+import type { IconComponent } from '#lib';
 
 export type ServerTab =
 	| 'overview'

@@ -3,18 +3,18 @@
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { authClient } from '$lib/auth-client';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Switch } from '$lib/components/ui/switch';
-	import { Separator } from '$lib/components/ui/separator';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import * as Sheet from '$lib/components/ui/sheet';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import VmBillingReversalDialog from '$lib/components/admin/vm-billing-reversal-dialog.svelte';
-	import { confirmDestructive } from '$lib/confirm.svelte';
-	import { generateServerName } from '$lib/name-generator';
+	import { authClient } from '#lib/auth-client.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import { Separator } from '#lib/components/ui/separator/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import * as Sheet from '#lib/components/ui/sheet/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import VmBillingReversalDialog from '#lib/components/admin/vm-billing-reversal-dialog.svelte';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { generateServerName } from '#lib/name-generator.js';
 	import {
 		beginDeleteProject,
 		createAdminProject,
@@ -22,11 +22,11 @@
 		deleteProjectWithVerification,
 		setProjectDisabled,
 		type AdminProject
-	} from '$lib/remote/admin-projects.remote';
-	import { getUserResources, type UserSshKey } from '$lib/remote/admin-users.remote';
-	import type { AdminVm } from '$lib/remote/admin-vms.remote';
-	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
-	import { getErrorMessage, runQuery } from '$lib/utils';
+	} from '#lib/remote/admin-projects.remote.js';
+	import { getUserResources, type UserSshKey } from '#lib/remote/admin-users.remote.js';
+	import type { AdminVm } from '#lib/remote/admin-vms.remote.js';
+	import { AdminState, type AdminPageData } from '#lib/state/admin.svelte.js';
+	import { getErrorMessage, runQuery } from '#lib/utils.js';
 	import { toast } from 'svelte-sonner';
 	import Check from '~icons/lucide/check';
 	import ChevronDown from '~icons/lucide/chevron-down';
@@ -77,6 +77,7 @@
 			? 'All'
 			: (ownerOptions.find((owner) => owner.email === ownerFilter)?.name ?? ownerFilter)
 	);
+
 	const billingFilterOptions = [
 		{ value: 'exempt', label: 'Exempt' },
 		{ value: 'configured', label: 'Configured' },
@@ -84,10 +85,10 @@
 		{ value: 'suspended', label: 'Suspended' },
 		{ value: 'none', label: 'No billing' }
 	] as const;
+
 	const billingFilterLabel = $derived(
 		billingFilterOptions.find((option) => option.value === billingFilter)?.label ?? 'All'
 	);
-
 	const filteredProjects = $derived(
 		admin.adminProjects.filter((project) => {
 			if (ownerFilter !== 'all' && project.ownerEmail !== ownerFilter) return false;
@@ -98,6 +99,7 @@
 			}
 			const term = search.trim().toLowerCase();
 			if (!term) return true;
+
 			return [project.name, project.slug, project.ownerName, project.ownerEmail, project.id]
 				.filter(Boolean)
 				.some((value) => value!.toLowerCase().includes(term));
@@ -113,8 +115,8 @@
 			(p) => p.billingStatus === 'past_due' || p.billingStatus === 'suspended'
 		).length
 	);
+	const projectsBase = resolve('admin/projects');
 
-	const projectsBase = resolve('/admin/projects');
 	const selectedProject = $derived(
 		page.params.id
 			? (admin.adminProjects.find((project) => project.id === page.params.id) ?? null)
@@ -122,14 +124,11 @@
 	);
 
 	function openProjectSheet(project: AdminProject) {
-		void goto(resolve(`/admin/projects/${project.id}`), {
-			noScroll: true,
-			keepFocus: true
-		});
+		void goto(resolve(`admin/projects/${project.id}`), { reset: false });
 	}
 
 	function closeProjectSheet() {
-		void goto(projectsBase, { noScroll: true, keepFocus: true });
+		void goto(projectsBase, { reset: false });
 	}
 
 	function projectVms(projectId: string) {
@@ -234,7 +233,7 @@
 			await invalidate('app:admin-projects');
 			createProjectOpen = false;
 			toast.success('Project created');
-			void goto(resolve(`/admin/projects/${created.id}`), { noScroll: true, keepFocus: true });
+			void goto(resolve(`admin/projects/${created.id}`), { reset: false });
 		} catch (err) {
 			createProjectError = getErrorMessage(err, 'Failed to create project');
 		} finally {
@@ -362,6 +361,7 @@
 
 		return `Enter the code sent to ${deleteVerificationEmail} to confirm permanently deleting ${deleteProjectName}.`;
 	});
+
 	const deleteVerificationDisabled = $derived(
 		deleteVerifying ||
 			deletePreparing ||
@@ -524,10 +524,9 @@
 						{#if project.ownerId}
 							<a
 								class="truncate text-sm font-medium text-foreground hover:underline"
-								href={resolve(`/admin/users/${project.ownerId}`)}
+								href={resolve(`admin/users/${project.ownerId}`)}
+								>{project.ownerName ?? 'No owner'}</a
 							>
-								{project.ownerName ?? 'No owner'}
-							</a>
 						{:else}
 							<span class="truncate text-sm font-medium text-foreground">No owner</span>
 						{/if}
@@ -637,13 +636,12 @@
 							<div class="flex min-w-0 flex-col gap-0.5">
 								<a
 									class="truncate text-xs font-medium text-foreground hover:underline"
-									href={resolve(`/admin/vms/${vm.id}`)}
+									href={resolve(`admin/vms/${vm.id}`)}>{vm.name}</a
 								>
-									{vm.name}
-								</a>
-								<span class="truncate font-mono text-[10px] text-muted-foreground">
-									{vm.vmTypeName ?? '-'} · {vm.lastKnownIpv4 ?? vm.lastKnownIpv6 ?? vm.id}
-								</span>
+
+								<span class="truncate font-mono text-[10px] text-muted-foreground"
+									>{vm.vmTypeName ?? '-'} · {vm.lastKnownIpv4 ?? vm.lastKnownIpv6 ?? vm.id}</span
+								>
 							</div>
 							<div class="flex shrink-0 items-center gap-2">
 								<span
@@ -1235,20 +1233,17 @@
 						'both'
 							? 'border-ring/60 bg-muted/30 text-foreground'
 							: 'border-border/60 text-muted-foreground hover:bg-muted/20'}"
-						onclick={() => (createVmNetworking = 'both')}
+						onclick={() => (createVmNetworking = 'both')}>IPv4 + IPv6</button
 					>
-						IPv4 + IPv6
-					</button>
+
 					<button
 						type="button"
 						class="rounded-sm border px-3 py-2 text-left text-xs transition-colors {createVmNetworking ===
 						'ipv6'
 							? 'border-ring/60 bg-muted/30 text-foreground'
 							: 'border-border/60 text-muted-foreground hover:bg-muted/20'}"
-						onclick={() => (createVmNetworking = 'ipv6')}
+						onclick={() => (createVmNetworking = 'ipv6')}>IPv6 only</button
 					>
-						IPv6 only
-					</button>
 				</div>
 			</div>
 

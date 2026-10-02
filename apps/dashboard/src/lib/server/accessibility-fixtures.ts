@@ -1,4 +1,4 @@
-import type { FeatureFlags } from '$lib/feature-flags';
+import type { FeatureFlags } from '#lib/feature-flags.js';
 
 export const accessibilityFixtureEnabled = process.env['ACCESSIBILITY_FIXTURES'] === '1';
 

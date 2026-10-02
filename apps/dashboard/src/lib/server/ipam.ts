@@ -1,11 +1,11 @@
 import { error } from '@sveltejs/kit';
 import { Address4, Address6 } from 'ip-address';
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
-import { initDrizzle } from '$lib/server/db';
-import { ipamAllocations, ipamPrefixes, vms } from '$lib/server/db/schema';
-import { isVyosConfigured, VyosClient } from '$lib/server/vyos';
-import { deletePtrRecords } from '$lib/server/ptr-records';
-import { isValidPtrHostname } from '$lib/ptr';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { ipamAllocations, ipamPrefixes, vms } from '#lib/server/db/schema.js';
+import { isVyosConfigured, VyosClient } from '#lib/server/vyos.js';
+import { deletePtrRecords } from '#lib/server/ptr-records.js';
+import { isValidPtrHostname } from '#lib/ptr.js';
 
 export type IpFamily = 'ipv4' | 'ipv6';
 export type VmNetworkingMode = 'both' | 'ipv6';

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Badge } from '$lib/components/ui/badge';
-	import * as Sheet from '$lib/components/ui/sheet';
-	import { imageTypeColors } from '$lib/data/images';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as Sheet from '#lib/components/ui/sheet/index.js';
+	import { imageTypeColors } from '#lib/data/images.js';
 	import ChevronLeft from '~icons/lucide/chevron-left';
 	import ChevronRight from '~icons/lucide/chevron-right';
 	import Disc from '~icons/nucleo/disc';

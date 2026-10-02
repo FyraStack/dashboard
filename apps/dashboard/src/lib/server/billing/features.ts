@@ -1,4 +1,4 @@
-import type { billingResourceTypeEnum, vmTypes } from '$lib/server/db/schema';
+import type { billingResourceTypeEnum, vmTypes } from '#lib/server/db/schema.js';
 
 export const VOLUME_GIB_HOURS_FEATURE_ID = 'volume_gib_hours';
 

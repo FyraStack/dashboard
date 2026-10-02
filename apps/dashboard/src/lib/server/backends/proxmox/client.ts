@@ -1,6 +1,6 @@
 import ky, { HTTPError, type KyInstance } from 'ky';
 import type { Fetcher } from '@cloudflare/workers-types';
-import { createVpcFetch, insecureDirectFetch } from '$lib/server/vpc';
+import { createVpcFetch, insecureDirectFetch } from '#lib/server/vpc.js';
 import type {
 	PveTaskLogLine,
 	PveResponse,

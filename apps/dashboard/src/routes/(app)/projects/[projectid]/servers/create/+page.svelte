@@ -2,16 +2,16 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Button } from '$lib/components/ui/button';
-	import BillingSetupDialog from '$lib/components/billing-setup-dialog.svelte';
-	import { Input } from '$lib/components/ui/input';
-	import * as Tabs from '$lib/components/ui/tabs';
-	import type { FeatureFlags } from '$lib/feature-flags';
-	import { userSettingsHref } from '$lib/state/user-settings.svelte';
-	import { createVolume as createProjectVolume } from '$lib/remote/volumes.remote';
-	import { createVm } from '$lib/remote/vms.remote';
-	import { requestServerStatusRefresh } from '$lib/state/servers.svelte';
-	import { getErrorMessage } from '$lib/utils';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import BillingSetupDialog from '#lib/components/billing-setup-dialog.svelte';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import type { FeatureFlags } from '#lib/feature-flags.js';
+	import { userSettingsHref } from '#lib/state/user-settings.svelte.js';
+	import { createVolume as createProjectVolume } from '#lib/remote/volumes.remote.js';
+	import { createVm } from '#lib/remote/vms.remote.js';
+	import { requestServerStatusRefresh } from '#lib/state/servers.svelte.js';
+	import { getErrorMessage } from '#lib/utils.js';
 	import { onMount } from 'svelte';
 	import ArrowLeft from '~icons/lucide/arrow-left';
 	import Check from '~icons/lucide/check';
@@ -28,7 +28,7 @@
 	import Key from '~icons/nucleo/key';
 	import Server from '~icons/nucleo/server';
 	import Upload from '~icons/nucleo/upload';
-	import { generateServerName } from '$lib/name-generator';
+	import { generateServerName } from '#lib/name-generator.js';
 
 	type PageData = {
 		currentProject?: { id: string } | null;
@@ -184,14 +184,27 @@
 	};
 
 	let sections = $derived<Section[]>([
-		{ id: 'name', label: 'Name', icon: Server, isComplete: serverName.trim().length > 0 },
+		{
+			id: 'name',
+			label: 'Name',
+			icon: Server,
+			isComplete: serverName.trim().length > 0
+		},
+
 		{
 			id: 'image',
 			label: 'Image',
 			icon: HardDrive,
 			isComplete: selectedImageId !== null && selectedImageVersion !== null
 		},
-		{ id: 'plan', label: 'Plan', icon: Server, isComplete: selectedPlanId !== null },
+
+		{
+			id: 'plan',
+			label: 'Plan',
+			icon: Server,
+			isComplete: selectedPlanId !== null
+		},
+
 		...(volumesEnabled
 			? [
 					{
@@ -202,8 +215,20 @@
 					}
 				]
 			: []),
-		{ id: 'networking', label: 'Networking', icon: Globe, isComplete: true },
-		{ id: 'ssh', label: 'Authentication', icon: Key, isComplete: true }
+
+		{
+			id: 'networking',
+			label: 'Networking',
+			icon: Globe,
+			isComplete: true
+		},
+
+		{
+			id: 'ssh',
+			label: 'Authentication',
+			icon: Key,
+			isComplete: true
+		}
 	]);
 
 	let imagesSearch = $state('');
@@ -370,7 +395,8 @@
 				...(usePasswordAuthentication ? { password: serverPassword.trim() } : {})
 			};
 			const created = await createVm(payload);
-			await goto(resolve(`/projects/${projectId}/servers/${created.id}`), {
+
+			await goto(resolve(`projects/${projectId}/servers/${created.id}`), {
 				invalidate: ['project:vms']
 			});
 			requestServerStatusRefresh();
@@ -404,7 +430,7 @@
 				variant="ghost"
 				size="sm"
 				class="h-9 shrink-0 gap-1.5 px-2.5 text-sm text-muted-foreground hover:text-foreground sm:h-7 sm:px-2 sm:text-xs"
-				onclick={() => goto(resolve(`/projects/${page.params.projectid}/servers`))}
+				onclick={() => goto(resolve(`projects/${page.params.projectid}/servers`))}
 			>
 				<ArrowLeft class="h-3.5 w-3.5 sm:h-3 sm:w-3" />
 				Back
@@ -634,9 +660,9 @@
 												class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground sm:text-[11px]"
 											>
 												<span>{plan.cores} vCPU</span>
-												<span class="text-muted-foreground">&bull;</span>
+												<span class="text-muted-foreground">•</span>
 												<span>{formatRam(plan.ramCapacity)}</span>
-												<span class="text-muted-foreground">&bull;</span>
+												<span class="text-muted-foreground">•</span>
 												<span>{plan.storageAmount}GB</span>
 											</div>
 											{#if plan.cap}
@@ -769,9 +795,11 @@
 														}}
 														class="h-5 w-5 shrink-0 accent-red-500 sm:h-4 sm:w-4"
 													/>
+
 													<span class="min-w-0 truncate font-medium text-foreground"
 														>{vol.name}</span
 													>
+
 													<span
 														class="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums sm:text-[11px]"
 														>{vol.sizeGb}GB</span
@@ -899,7 +927,7 @@
 									</p>
 									<a
 										href={resolve(userSettingsHref('keys', page.url) as any)}
-										data-sveltekit-noscroll
+										data-sveltekit-reset="false"
 										class="mt-2 inline-flex py-1 text-sm font-medium text-red-400 transition-colors hover:text-red-300 sm:py-0 sm:text-[11px]"
 									>
 										Add an SSH key in user settings
@@ -1012,10 +1040,12 @@
 							{#if selectedPlan}
 								<div class="flex items-center justify-between gap-3 text-sm sm:text-xs">
 									<span class="text-muted-foreground">Disk</span>
-									<span class="min-w-0 truncate text-right text-foreground tabular-nums"
-										>{selectedPlan.storageAmount}GB{#if selectedVolumeCount > 0}
-											+ {selectedVolumeCount} vol{/if}</span
-									>
+
+									<span class="min-w-0 truncate text-right text-foreground tabular-nums">
+										{selectedPlan.storageAmount}GB{#if selectedVolumeCount > 0}
+											+ {selectedVolumeCount} vol
+										{/if}
+									</span>
 								</div>
 							{/if}
 							<div class="flex items-center justify-between gap-3 text-sm sm:text-xs">

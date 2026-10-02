@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
-import { initDrizzle } from '$lib/server/db';
+import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	billingMeters,
 	billingUsageEvents,
@@ -8,7 +8,7 @@ import {
 	vmTypes,
 	type billingResourceTypeEnum,
 	type vmStatusEnum
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { billedQuantity, hoursBetween, requireVmFeatureId, usageIdempotencyKey } from './features';
 import {
 	billingCyclePeriod,

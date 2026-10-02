@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { authClient } from '$lib/auth-client';
-	import { Button } from '$lib/components/ui/button';
+	import { authClient } from '#lib/auth-client.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertCircle from '~icons/nucleo/alert-circle';
 	import Fingerprint from '~icons/nucleo/fingerprint';
@@ -39,7 +39,7 @@
 			return;
 		}
 
-		goto(redirectTo);
+		goto(redirectTo).catch(() => goto('/'));
 	}
 </script>
 

@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Switch } from '$lib/components/ui/switch';
-	import CreateNetworkDialog from '$lib/components/dialogs/create-network-dialog.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import CreateNetworkDialog from '#lib/components/dialogs/create-network-dialog.svelte';
 	import Check from '~icons/lucide/check';
 	import Plus from '~icons/lucide/plus';
 	import X from '~icons/lucide/x';

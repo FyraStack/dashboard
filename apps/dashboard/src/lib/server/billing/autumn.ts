@@ -1,9 +1,9 @@
 import { Autumn } from 'autumn-js';
 import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
-import { initDrizzle } from '$lib/server/db';
-import { member, organization, projectBillingCustomers, user } from '$lib/server/db/schema';
-import { getRuntimeEnv } from '$lib/server/env';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { member, organization, projectBillingCustomers, user } from '#lib/server/db/schema.js';
+import { getRuntimeEnv } from '#lib/server/env.js';
 import type { CapPeriod } from './caps';
 
 export function isBillingConfigured() {

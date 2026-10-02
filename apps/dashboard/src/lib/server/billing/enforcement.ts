@@ -1,12 +1,12 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
-import { initDrizzle } from '$lib/server/db';
-import { projectBillingCustomers, vms } from '$lib/server/db/schema';
-import { getBackend } from '$lib/server/backends';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { projectBillingCustomers, vms } from '#lib/server/db/schema.js';
+import { getBackend } from '#lib/server/backends/index.js';
 import { getProjectBillingState, isBillingConfigured } from './autumn';
 import {
 	sendProjectPastDueEmail,
 	sendProjectSuspendedEmail
-} from '$lib/server/email-notifications';
+} from '#lib/server/email-notifications.js';
 
 const GRACE_PERIOD_DAYS = 1000;
 const GRACE_PERIOD_MS = GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000;

@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import * as Dialog from '$lib/components/ui/dialog';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import {
 		getVmBillingUsage,
 		reverseVmBillingUsage,
 		type VmBillingUsage
-	} from '$lib/remote/admin-billing.remote';
-	import { getErrorMessage, runQuery } from '$lib/utils';
+	} from '#lib/remote/admin-billing.remote.js';
+	import { getErrorMessage, runQuery } from '#lib/utils.js';
 	import { toast } from 'svelte-sonner';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';

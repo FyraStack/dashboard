@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { invalidate } from '$app/navigation';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import * as Dialog from '$lib/components/ui/dialog';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import {
 		createIpamPrefix,
 		deleteIpamPrefix,
@@ -14,11 +14,11 @@
 		setIpamPrefixDisabled,
 		updateIpamPrefix,
 		updateIpamPtrDefaultFormats
-	} from '$lib/remote/ipam.remote';
-	import { reverseDnsZoneForCidr } from '$lib/ptr';
-	import { AdminState, type AdminPageData, type IpamPrefix } from '$lib/state/admin.svelte';
-	import { getErrorMessage, runQuery } from '$lib/utils';
-	import { confirmDestructive } from '$lib/confirm.svelte';
+	} from '#lib/remote/ipam.remote.js';
+	import { reverseDnsZoneForCidr } from '#lib/ptr.js';
+	import { AdminState, type AdminPageData, type IpamPrefix } from '#lib/state/admin.svelte.js';
+	import { getErrorMessage, runQuery } from '#lib/utils.js';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
@@ -26,7 +26,7 @@
 	import Pencil from '~icons/nucleo/pencil';
 	import Power from '~icons/nucleo/power';
 	import Trash2 from '~icons/nucleo/trash';
-	import { featureFlagKeys } from '$lib/feature-flags';
+	import { featureFlagKeys } from '#lib/feature-flags.js';
 	import { toast } from 'svelte-sonner';
 
 	let { data }: { data: AdminPageData } = $props();

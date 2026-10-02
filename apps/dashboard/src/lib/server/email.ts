@@ -1,7 +1,7 @@
-import { dev } from '$app/environment';
+import { dev } from '$app/env';
 import appStyles from '../../routes/layout.css?raw';
-import { getRuntimeEnv } from '$lib/server/env';
-import { instrument } from '$lib/server/observability';
+import { getRuntimeEnv } from '#lib/server/env.js';
+import { instrument } from '#lib/server/observability.js';
 
 type EmailRenderer = {
 	render(
@@ -72,6 +72,7 @@ async function getCloudflareAccountId(apiToken: string) {
 						.map((entry) => entry.message ?? entry.code)
 						.filter(Boolean)
 						.join(', ');
+
 		throw new Error(
 			`Unable to discover Cloudflare account ID (${response.status}${details ? `: ${details}` : ''}). Set CLOUDFLARE_ACCOUNT_ID explicitly.`
 		);
@@ -159,6 +160,7 @@ async function sendCloudflareEmail({
 					.map((entry) => entry.message ?? entry.code)
 					.filter(Boolean)
 					.join(', ');
+
 	throw new Error(
 		`Cloudflare Email REST send failed (${response.status}${details ? `: ${details}` : ''})`
 	);
@@ -220,6 +222,7 @@ export async function sendEmail({ subject, to, html, text }: SendEmailParams) {
 	if (cloudflareApiToken) {
 		const accountId =
 			env.CLOUDFLARE_ACCOUNT_ID ?? (await getCloudflareAccountId(cloudflareApiToken));
+
 		await instrument(
 			'email.send',
 			() =>

@@ -8,7 +8,7 @@
 		featureFlagCategoryLabels,
 		type FeatureFlagKey,
 		type FeatureFlagCategory
-	} from '$lib/feature-flags';
+	} from '#lib/feature-flags.js';
 	import Check from '~icons/lucide/check';
 	import FileText from '~icons/nucleo/file-text';
 	import FolderOpen from '~icons/nucleo/folder-open';
@@ -28,8 +28,8 @@
 	import Shield from '~icons/nucleo/shield';
 	import Terminal from '~icons/nucleo/terminal';
 	import Upload from '~icons/nucleo/upload';
-	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
-	import type { IconComponent } from '$lib';
+	import { AdminState, type AdminPageData } from '#lib/state/admin.svelte.js';
+	import type { IconComponent } from '#lib';
 
 	const featureFlagIcons: Record<FeatureFlagKey, IconComponent> = {
 		colocation: Server,

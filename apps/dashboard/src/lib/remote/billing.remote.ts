@@ -1,21 +1,21 @@
 import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { requireProjectAccess } from '$lib/server/auth-context';
+import { requireProjectAccess } from '#lib/server/auth-context.js';
 import {
 	openProjectBillingPortal,
 	purchaseProjectCredits,
 	setupProjectPayment,
 	validateProjectDiscountCode
-} from '$lib/server/billing/autumn';
-import { getProjectBillingOverview, refreshProjectBilling } from '$lib/server/billing/overview';
-import { runInBackground } from '$lib/server/background';
-import { initDrizzle } from '$lib/server/db';
+} from '#lib/server/billing/autumn.js';
+import { getProjectBillingOverview, refreshProjectBilling } from '#lib/server/billing/overview.js';
+import { runInBackground } from '#lib/server/background.js';
+import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureBillingOverview
-} from '$lib/server/accessibility-fixtures';
-import { captureServerEvent } from '$lib/server/posthog';
+} from '#lib/server/accessibility-fixtures.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 
 const projectParams = type({ projectId: 'string' });
 const setupParams = type({ projectId: 'string', returnTo: 'string?', discountCode: 'string?' });

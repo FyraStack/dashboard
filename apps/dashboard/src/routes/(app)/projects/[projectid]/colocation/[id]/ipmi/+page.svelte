@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import Check from '~icons/lucide/check';
 	import Copy from '~icons/nucleo/copy';
 	import Power from '~icons/nucleo/power';

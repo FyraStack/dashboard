@@ -6,12 +6,12 @@ import {
 	getProjectInvoices,
 	invalidateProjectBillingState
 } from './autumn';
-import { initDrizzle } from '$lib/server/db';
-import { billingMeters, billingUsageEvents, vmTypes } from '$lib/server/db/schema';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { billingMeters, billingUsageEvents, vmTypes } from '#lib/server/db/schema.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureBillingOverview
-} from '$lib/server/accessibility-fixtures';
+} from '#lib/server/accessibility-fixtures.js';
 
 function statusLabel(status: Awaited<ReturnType<typeof getProjectBillingState>>['status']) {
 	if (status === 'active') return 'Ready';

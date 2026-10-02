@@ -1,28 +1,28 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import UserSettingsDialog from '$lib/components/dialogs/user-settings-dialog.svelte';
-	import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
+	import UserSettingsDialog from '#lib/components/dialogs/user-settings-dialog.svelte';
+	import ConfirmDialog from '#lib/components/confirm-dialog.svelte';
 	import {
 		clearUserSettingsHref,
 		UserSettingsState,
 		type UserSettingsTab
-	} from '$lib/state/user-settings.svelte';
-	import { Toaster } from '$lib/components/ui/sonner';
-	import * as Avatar from '$lib/components/ui/avatar';
-	import * as Tooltip from '$lib/components/ui/tooltip';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	} from '#lib/state/user-settings.svelte.js';
+	import { Toaster } from '#lib/components/ui/sonner/index.js';
+	import * as Avatar from '#lib/components/ui/avatar/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 
-	import * as Command from '$lib/components/ui/command';
-	import * as Sheet from '$lib/components/ui/sheet';
+	import * as Command from '#lib/components/ui/command/index.js';
+	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import { toast } from 'svelte-sonner';
-	import { getErrorMessage, runQuery } from '$lib/utils';
-	import { goto, replaceState } from '$app/navigation';
+	import { getErrorMessage, runQuery } from '#lib/utils.js';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { untrack } from 'svelte';
-	import { listVms } from '$lib/remote/vms.remote';
-	import { authClient } from '$lib/auth-client';
-	import type { FeatureFlags } from '$lib/feature-flags';
-	import type { IconComponent } from '$lib';
+	import { listVms } from '#lib/remote/vms.remote.js';
+	import { authClient } from '#lib/auth-client.js';
+	import type { FeatureFlags } from '#lib/feature-flags.js';
+	import type { IconComponent } from '#lib';
 	import ArrowRight from '~icons/lucide/arrow-right';
 	import Check from '~icons/lucide/check';
 	import ChevronDown from '~icons/lucide/chevron-down';
@@ -130,7 +130,7 @@
 		try {
 			selectedProjectId = projectId;
 			await authClient.organization.setActive({ organizationId: projectId });
-			await goto(resolve(`/projects/${projectId}/servers`), { invalidate: ['app:projects'] });
+			await goto(resolve(`projects/${projectId}/servers`), { invalidate: ['app:projects'] });
 		} catch (error) {
 			toast.error(getErrorMessage(error, 'Failed to switch project'));
 		} finally {
@@ -159,7 +159,13 @@
 		const url = page.url;
 		if (!userSettings.urlHasSettingsTab(url)) return;
 		userSettings.syncFromUrl(url);
-		untrack(() => replaceState(resolve(clearUserSettingsHref(url) as any), page.state));
+		untrack(() =>
+			goto(resolve(clearUserSettingsHref(url) as any), {
+				shallow: true,
+				replace: true,
+				state: page.state
+			})
+		);
 	});
 
 	let commandOpen = $state(false);
@@ -333,12 +339,8 @@
 </script>
 
 <Toaster position="top-center" />
-
 <svelte:window onkeydown={handleKeydown} />
-
-<svelte:head>
-	<title>Stack / Dashboard</title>
-</svelte:head>
+<svelte:head><title>Stack / Dashboard</title></svelte:head>
 
 {#if !data.user}
 	{@render children()}
@@ -350,12 +352,10 @@
 					<button
 						class="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground lg:hidden"
 						aria-label="Open navigation menu"
-						onclick={() => (mobileNavOpen = true)}
+						onclick={() => (mobileNavOpen = true)}><Menu class="h-4 w-4" /></button
 					>
-						<Menu class="h-4 w-4" />
-					</button>
 				{/if}
-				<a href={resolve('/')} class="flex shrink-0 items-center gap-2">
+				<a href={resolve('')} class="flex shrink-0 items-center gap-2">
 					<img src="/logo.svg" alt="" class="h-5 w-5" />
 					<span class="text-sm font-semibold tracking-tight text-foreground">Stack</span>
 				</a>
@@ -408,7 +408,7 @@
 			<div class="flex min-w-0 flex-1 items-center justify-end gap-3">
 				{#if data.isAdmin}
 					<a
-						href={resolve('/admin')}
+						href={resolve('admin')}
 						aria-label="Admin"
 						class="flex h-8 shrink-0 items-center gap-1.5 border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
 					>
@@ -556,7 +556,7 @@
 
 				{#if data.isAdmin}
 					<a
-						href={resolve('/admin')}
+						href={resolve('admin')}
 						onclick={() => (mobileNavOpen = false)}
 						class="flex items-center gap-3 border-t border-border px-5 py-3 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
 					>
@@ -593,11 +593,8 @@
 					f.id
 						? 'bg-muted text-foreground'
 						: 'text-muted-foreground hover:text-foreground'}"
-					onclick={() => (cmdFilter = f.id)}
+					onclick={() => (cmdFilter = f.id)}><f.icon class="h-3 w-3" />{f.label}</button
 				>
-					<f.icon class="h-3 w-3" />
-					{f.label}
-				</button>
 			{/each}
 		</div>
 		<Command.List class="max-h-[350px] bg-background">
@@ -616,7 +613,7 @@
 							value={`${server.name} ${server.plan} ${server.status} ${server.detail}`}
 							onSelect={() =>
 								runCommand(() =>
-									goto(resolve(`/projects/${selectedProjectId}/servers/${server.id}` as any))
+									goto(resolve(`projects/${selectedProjectId}/servers/${server.id}`))
 								)}
 							class="gap-2"
 						>

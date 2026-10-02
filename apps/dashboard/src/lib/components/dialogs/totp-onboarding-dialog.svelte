@@ -1,10 +1,10 @@
 <script lang="ts">
 	import QRCode from 'qrcode';
-	import { authClient } from '$lib/auth-client';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { Label } from '$lib/components/ui/label';
+	import { authClient } from '#lib/auth-client.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 	import Check from '~icons/lucide/check';
 	import Copy from '~icons/nucleo/copy';
 	import ShieldCheck from '~icons/nucleo/shield-check';

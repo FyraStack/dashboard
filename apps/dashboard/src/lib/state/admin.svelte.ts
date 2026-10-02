@@ -7,7 +7,7 @@ import {
 	listProxmoxImages,
 	reorderImages,
 	updateImage
-} from '$lib/remote/images.remote';
+} from '#lib/remote/images.remote.js';
 import { goto, invalidate } from '$app/navigation';
 import {
 	listAdminUsers,
@@ -25,9 +25,9 @@ import {
 	type UserOrganization,
 	type UserSshKey,
 	type UserApiToken
-} from '$lib/remote/admin-users.remote';
-import { config } from '$lib/config';
-import { updateFeatureFlag } from '$lib/remote/feature-flags.remote';
+} from '#lib/remote/admin-users.remote.js';
+import { config } from '#lib/config.js';
+import { updateFeatureFlag } from '#lib/remote/feature-flags.remote.js';
 import {
 	adminDeleteVm,
 	adminKillVm,
@@ -36,23 +36,23 @@ import {
 	adminStopVm,
 	listAllAdminVms,
 	type AdminVm
-} from '$lib/remote/admin-vms.remote';
-import { setProjectBillingExempt, type AdminProject } from '$lib/remote/admin-projects.remote';
+} from '#lib/remote/admin-vms.remote.js';
+import { setProjectBillingExempt, type AdminProject } from '#lib/remote/admin-projects.remote.js';
 import {
 	createVmType,
 	deleteVmType,
 	reorderVmTypes,
 	updateVmType
-} from '$lib/remote/vm-types.remote';
+} from '#lib/remote/vm-types.remote.js';
 import { toast } from 'svelte-sonner';
-import { getErrorMessage, runQuery } from '$lib/utils';
+import { getErrorMessage, runQuery } from '#lib/utils.js';
 import { untrack } from 'svelte';
 import {
 	defaultFeatureFlags,
 	featureFlagKeys,
 	type FeatureFlagKey,
 	type FeatureFlags
-} from '$lib/feature-flags';
+} from '#lib/feature-flags.js';
 import { page } from '$app/state';
 
 export type VmIsa = 'x86';

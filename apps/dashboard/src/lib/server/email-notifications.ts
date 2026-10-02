@@ -2,29 +2,29 @@ import { and, eq } from 'drizzle-orm';
 import BillingNoticeEmail from '#lib/emails/billing-notice.svelte';
 import BillingReminderEmail from '#lib/emails/billing-reminder.svelte';
 import SecurityAlertEmail from '#lib/emails/security-alert.svelte';
+import { member, user } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
-import { member, user } from '#lib/server/db/schema.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
 
-type SecurityAlertEmailParams = {
-	to: string;
-	userName?: string | null;
+interface SecurityAlertEmailParams {
+	actionUrl?: string | null;
 	alertType: string;
+	details?: string | null;
 	message: string;
 	timestamp?: string;
-	details?: string | null;
-	actionUrl?: string | null;
-};
-
-type BillingReminderEmailParams = {
 	to: string;
 	userName?: string | null;
+}
+
+interface BillingReminderEmailParams {
 	amount: string;
 	dueDate: string;
 	invoiceUrl: string;
 	planName?: string | null;
-};
+	to: string;
+	userName?: string | null;
+}
 
 type ProjectBillingReminderEmailParams = Omit<BillingReminderEmailParams, 'to' | 'userName'> & {
 	projectId: string;
@@ -120,7 +120,9 @@ function projectBillingUrl(projectId: string) {
 
 export async function sendProjectPastDueEmail(projectId: string, graceDays: number) {
 	const owner = await getProjectOwnerRecipient(projectId);
-	if (!owner) return null;
+	if (!owner) {
+		return null;
+	}
 
 	await sendRenderedEmail({
 		component: BillingNoticeEmail,
@@ -141,7 +143,9 @@ export async function sendProjectPastDueEmail(projectId: string, graceDays: numb
 
 export async function sendProjectSuspendedEmail(projectId: string) {
 	const owner = await getProjectOwnerRecipient(projectId);
-	if (!owner) return null;
+	if (!owner) {
+		return null;
+	}
 
 	await sendRenderedEmail({
 		component: BillingNoticeEmail,

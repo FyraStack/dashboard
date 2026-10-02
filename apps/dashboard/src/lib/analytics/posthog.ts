@@ -1,16 +1,20 @@
-import { browser, dev } from '$app/env';
-import { PUBLIC_POSTHOG_KEY, PUBLIC_POSTHOG_HOST } from '$app/env/public';
 import posthog from 'posthog-js';
+import { browser, dev } from '$app/env';
+import { PUBLIC_POSTHOG_HOST, PUBLIC_POSTHOG_KEY } from '$app/env/public';
 
 export const posthogProxyPath = '/internal/phog_in';
 
 let initialized = false;
 
 export function initPostHog() {
-	if (!browser || initialized) return;
+	if (!browser || initialized) {
+		return;
+	}
 
 	const token = PUBLIC_POSTHOG_KEY;
-	if (!token) return;
+	if (!token) {
+		return;
+	}
 
 	initialized = true;
 	posthog.init(token, {
@@ -33,6 +37,8 @@ export function initPostHog() {
 }
 
 export function captureClientException(error: unknown) {
-	if (!initialized) return;
+	if (!initialized) {
+		return;
+	}
 	posthog.captureException(error);
 }

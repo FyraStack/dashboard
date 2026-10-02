@@ -1,23 +1,29 @@
-import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { eq, inArray, sql } from 'drizzle-orm';
-import { initDrizzle, type Database } from '#lib/server/db/index.js';
-import { runInBackground } from '#lib/server/background.js';
-import { vms, vmTypes, sshKeys, ipamAllocations } from '#lib/server/db/schema.js';
+import { isValidPtrHostname } from '#lib/ptr.js';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureServers
+} from '#lib/server/accessibility-fixtures.js';
+import { requireProjectAccess } from '#lib/server/auth-context.js';
 import {
 	getBackend,
-	VmResizeError,
 	type VmBackend,
 	type VmInfo,
 	type VmMetricsTimeframe
 } from '#lib/server/backends/index.js';
-import { requireProjectAccess } from '#lib/server/auth-context.js';
+import { VmResizeError } from '#lib/server/backends/types.js';
+import { runInBackground } from '#lib/server/background.js';
 import {
+	isBillingConfigured,
 	isProjectBillingExempt,
-	requireProjectBillingActive,
-	isBillingConfigured
+	requireProjectBillingActive
 } from '#lib/server/billing/autumn.js';
+import { type Database, initDrizzle } from '#lib/server/db/index.js';
+import { ipamAllocations, sshKeys, vms, vmTypes } from '#lib/server/db/schema.js';
+import { instrument, timingLog } from '#lib/server/observability.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 import { queueVmDeletion } from '#lib/server/vm-deletion.js';
 import { findLiveVm } from '#lib/server/vm-identity.js';
 import {
@@ -26,39 +32,35 @@ import {
 	resumeStalledProvisioning
 } from '#lib/server/vm-provisioning.js';
 import { findPlanDowngrades } from '#lib/vm-plans.js';
-import { isValidPtrHostname } from '#lib/ptr.js';
-import { instrument, timingLog } from '#lib/server/observability.js';
-import {
-	accessibilityFixtureEnabled,
-	accessibilityFixtureServers
-} from '#lib/server/accessibility-fixtures.js';
-import { captureServerEvent } from '#lib/server/posthog.js';
+import { command, getRequestEvent, query } from '$app/server';
 
-type VmRow = {
-	id: string;
-	name: string;
-	proxmoxId: number | null;
-	proxmoxNode: string | null;
+interface VmRow extends Record<string, unknown> {
 	active: boolean;
-	ownerProjectId: string | null;
-	vmTypeId: string;
-	creationDate: string;
-	createdAt: number;
 	backend: 'proxmox';
-	status: 'provisioning' | 'ready' | 'error' | 'deleting';
+	createdAt: number;
+	creationDate: string;
+	id: string;
+	lastKnownAt: number | null;
 	lastKnownIpv4: string | null;
 	lastKnownIpv6: string | null;
 	lastKnownStatus: VmInfo['status'] | null;
 	lastKnownUptime: number;
-	lastKnownAt: number | null;
-	vmTypeName: string | null;
+	name: string;
+	ownerProjectId: string | null;
+	proxmoxId: number | null;
+	proxmoxNode: string | null;
+	status: 'provisioning' | 'ready' | 'error' | 'deleting';
 	vmTypeCores: number | null;
+	vmTypeId: string;
+	vmTypeName: string | null;
 	vmTypeRamCapacity: number | null;
 	vmTypeStorageAmount: number | null;
-};
+}
 
 function getKnownNetworkInterfaces(row: VmRow): VmInfo['networkInterfaces'] | undefined {
-	if (!row.lastKnownIpv4 && !row.lastKnownIpv6) return undefined;
+	if (!(row.lastKnownIpv4 || row.lastKnownIpv6)) {
+		return undefined;
+	}
 
 	return {
 		cached: {
@@ -77,20 +79,24 @@ function baseKnownLive(row: VmRow): VmInfo {
 		cores: row.vmTypeCores ?? 0,
 		memory: (row.vmTypeRamCapacity ?? 0) * 1024 * 1024,
 		disk: (row.vmTypeStorageAmount ?? 0) * 1024 * 1024 * 1024,
-		uptime: row.lastKnownUptime ?? 0,
+		uptime: row.lastKnownUptime,
 		networkInterfaces: getKnownNetworkInterfaces(row),
 		metrics: undefined
 	};
 }
 
 function getKnownLive(row: VmRow): VmInfo | null {
-	if (!row.lastKnownStatus && !row.lastKnownIpv4 && !row.lastKnownIpv6) return null;
+	if (!(row.lastKnownStatus || row.lastKnownIpv4 || row.lastKnownIpv6)) {
+		return null;
+	}
 	return baseKnownLive(row);
 }
 
 async function getAssignedIps(db: Database, vmIds: string[]): Promise<Map<string, string[]>> {
 	const assigned = new Map<string, string[]>();
-	if (vmIds.length === 0) return assigned;
+	if (vmIds.length === 0) {
+		return assigned;
+	}
 
 	const rows = await db.query.ipamAllocations.findMany({
 		where: inArray(ipamAllocations.associatedVmId, vmIds),
@@ -98,7 +104,9 @@ async function getAssignedIps(db: Database, vmIds: string[]): Promise<Map<string
 	});
 
 	for (const row of rows) {
-		if (!row.address) continue;
+		if (!row.address) {
+			continue;
+		}
 		const addresses = assigned.get(row.associatedVmId) ?? [];
 		addresses.push(row.address);
 		assigned.set(row.associatedVmId, addresses);
@@ -108,8 +116,12 @@ async function getAssignedIps(db: Database, vmIds: string[]): Promise<Map<string
 }
 
 function mergeKnownLive(row: VmRow, live: VmInfo | null): VmInfo | null {
-	if (!live) return getKnownLive(row);
-	if (live.networkInterfaces) return live;
+	if (!live) {
+		return getKnownLive(row);
+	}
+	if (live.networkInterfaces) {
+		return live;
+	}
 
 	const networkInterfaces = getKnownNetworkInterfaces(row);
 	return networkInterfaces ? { ...live, networkInterfaces } : live;
@@ -164,12 +176,24 @@ function toDashboardStatus(
 	status: VmRow['status'],
 	liveStatus: VmInfo['status'] | null | undefined
 ): 'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'error' | 'unknown' {
-	if (status === 'deleting') return 'deleting';
-	if (status === 'error') return 'error';
-	if (status === 'provisioning') return 'provisioning';
-	if (liveStatus === 'running') return 'running';
-	if (liveStatus === 'paused') return 'restarting';
-	if (liveStatus === 'stopped') return 'stopped';
+	if (status === 'deleting') {
+		return 'deleting';
+	}
+	if (status === 'error') {
+		return 'error';
+	}
+	if (status === 'provisioning') {
+		return 'provisioning';
+	}
+	if (liveStatus === 'running') {
+		return 'running';
+	}
+	if (liveStatus === 'paused') {
+		return 'restarting';
+	}
+	if (liveStatus === 'stopped') {
+		return 'stopped';
+	}
 	return 'unknown';
 }
 
@@ -177,7 +201,9 @@ const persistableStatuses: VmInfo['status'][] = ['running', 'stopped', 'paused']
 
 function persistLiveState(db: Database, entries: { id: string; live: VmInfo }[]): void {
 	const persistable = entries.filter((entry) => persistableStatuses.includes(entry.live.status));
-	if (persistable.length === 0) return;
+	if (persistable.length === 0) {
+		return;
+	}
 
 	const now = Date.now();
 	const work = instrument(
@@ -205,7 +231,9 @@ function persistLiveState(db: Database, entries: { id: string; live: VmInfo }[])
 }
 
 function refreshVmNetworkInterfaces(db: Database, row: VmRow, backend: VmBackend): void {
-	if (!backend.getVmNetworkInterfaces || row.proxmoxId == null) return;
+	if (!backend.getVmNetworkInterfaces || row.proxmoxId === null) {
+		return;
+	}
 
 	const work = instrument(
 		'vm.refreshNetworkInterfaces',
@@ -216,7 +244,9 @@ function refreshVmNetworkInterfaces(db: Database, row: VmRow, backend: VmBackend
 				{ proxmoxNode: row.proxmoxNode ?? undefined }
 			);
 			const ips = getNetworkIpSnapshot(networkInterfaces);
-			if (!ips.ipv4 && !ips.ipv6) return;
+			if (!(ips.ipv4 || ips.ipv6)) {
+				return;
+			}
 
 			await db
 				.update(vms)
@@ -235,8 +265,12 @@ function refreshVmNetworkInterfaces(db: Database, row: VmRow, backend: VmBackend
 const listParams = type({ projectId: 'string' });
 export const listVms = query(listParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
-	if (accessibilityFixtureEnabled) return accessibilityFixtureServers;
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureServers;
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId);
@@ -281,10 +315,14 @@ export const getVm = query(getParams, async (params) => {
 	const started = performance.now();
 	timingLog('remote.vms.getVm.enter', { 'vm.id': params.vmId });
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 	if (accessibilityFixtureEnabled) {
 		const server = accessibilityFixtureServers.find((item) => item.id === params.vmId);
-		if (!server) error(404, `VM "${params.vmId}" not found`);
+		if (!server) {
+			error(404, `VM "${params.vmId}" not found`);
+		}
 		return server;
 	}
 
@@ -316,13 +354,15 @@ export const getVm = query(getParams, async (params) => {
 		where ${vms.id} = ${params.vmId}
 		limit 1
 	`);
-	const row = (result.rows as VmRow[])[0];
+	const [row] = result.rows as VmRow[];
 	timingLog('remote.vms.getVm.db.end', {
 		'vm.id': params.vmId,
 		duration_ms: Math.round((performance.now() - started) * 100) / 100
 	});
 
-	if (!row) error(404, `VM "${params.vmId}" not found`);
+	if (!row) {
+		error(404, `VM "${params.vmId}" not found`);
+	}
 	if (row.ownerProjectId) {
 		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId);
 	}
@@ -345,12 +385,16 @@ export const getVm = query(getParams, async (params) => {
 				'proxmox.node_hint': row.proxmoxNode ?? undefined
 			}
 		);
-		if (live.status === 'running') refreshVmNetworkInterfaces(db, row, backend);
+		if (live.status === 'running') {
+			refreshVmNetworkInterfaces(db, row, backend);
+		}
 	} catch (err) {
 		console.warn(`Failed to load live VM state for ${row.id}`, err);
 	}
 
-	if (live) persistLiveState(db, [{ id: row.id, live }]);
+	if (live) {
+		persistLiveState(db, [{ id: row.id, live }]);
+	}
 
 	timingLog('remote.vms.getVm.exit', {
 		'vm.id': params.vmId,
@@ -370,7 +414,9 @@ export const getVmMetricsHistory = query(metricsHistoryParams, async (params) =>
 		'vm.metrics.timeframe': params.timeframe ?? 'hour'
 	});
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 	if (accessibilityFixtureEnabled) {
 		return [
 			{ time: Date.now() - 120_000, cpu: 0.18, memory: 0.41, bandwidth: 2048, diskIo: 256 },
@@ -384,7 +430,9 @@ export const getVmMetricsHistory = query(metricsHistoryParams, async (params) =>
 		'vm.id': params.vmId,
 		duration_ms: Math.round((performance.now() - started) * 100) / 100
 	});
-	if (!row) error(404, `VM "${params.vmId}" not found`);
+	if (!row) {
+		error(404, `VM "${params.vmId}" not found`);
+	}
 	if (row.ownerProjectId) {
 		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId);
 	}
@@ -428,7 +476,9 @@ export const listVmStatuses = query(statusParams, async (params) => {
 	const started = performance.now();
 	timingLog('remote.vms.listVmStatuses.enter', { 'project.id': params.projectId });
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 	if (accessibilityFixtureEnabled) {
 		return accessibilityFixtureServers.map((server) => ({
 			id: server.id,
@@ -496,7 +546,9 @@ export const listVmStatuses = query(statusParams, async (params) => {
 	const persistable: { id: string; live: VmInfo }[] = [];
 	const statuses = rows.map((row) => {
 		const live = findLiveVm(liveVms, row);
-		if (live) persistable.push({ id: row.id, live });
+		if (live) {
+			persistable.push({ id: row.id, live });
+		}
 		const mapped = mapVmRow(row, live, assignedIps.get(row.id));
 		return {
 			id: mapped.id,
@@ -513,7 +565,9 @@ export const listVmStatuses = query(statusParams, async (params) => {
 	persistLiveState(db, persistable);
 	const now = Date.now();
 	for (const row of rows) {
-		if (!isProvisioningStalled(row, now)) continue;
+		if (!isProvisioningStalled(row, now)) {
+			continue;
+		}
 		runInBackground(resumeStalledProvisioning(db, row), `resume provisioning for VM ${row.id}`);
 	}
 
@@ -536,21 +590,25 @@ const createParams = type({
 });
 export const createVm = command(createParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'read_write');
 	const billingExempt = await isProjectBillingExempt(params.projectId);
-	if (!billingExempt) await requireProjectBillingActive(params.projectId);
+	if (!billingExempt) {
+		await requireProjectBillingActive(params.projectId);
+	}
 
-	const keys = params.sshKeyIds?.length
-		? await db.query.sshKeys.findMany({
-				where: eq(sshKeys.userId, event.locals.user.id)
-			})
-		: [];
-	const publicKeys = params.sshKeyIds?.length
-		? keys.filter((key) => params.sshKeyIds!.includes(key.id)).map((key) => key.publicKey)
-		: [];
+	const sshKeyIds = params.sshKeyIds ?? [];
+	const keys =
+		sshKeyIds.length > 0
+			? await db.query.sshKeys.findMany({
+					where: eq(sshKeys.userId, event.locals.user.id)
+				})
+			: [];
+	const publicKeys = keys.filter((key) => sshKeyIds.includes(key.id)).map((key) => key.publicKey);
 
 	const created = await provisionVm(db, {
 		projectId: params.projectId,
@@ -580,19 +638,33 @@ export const createVm = command(createParams, async (params) => {
 const renameParams = type({ vmId: 'string', name: 'string', updateHostname: 'boolean' });
 export const renameVm = command(renameParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
-	if (!row) error(404, `VM "${params.vmId}" not found`);
-	if (!row.active) error(409, `VM "${row.name}" is not active`);
-	if (row.status === 'deleting') error(409, `VM "${row.name}" is being deleted`);
-	if (row.status === 'provisioning') error(409, `VM "${row.name}" is still provisioning`);
-	if (!row.ownerProjectId) error(400, 'VM is not attached to a project');
+	if (!row) {
+		error(404, `VM "${params.vmId}" not found`);
+	}
+	if (!row.active) {
+		error(409, `VM "${row.name}" is not active`);
+	}
+	if (row.status === 'deleting') {
+		error(409, `VM "${row.name}" is being deleted`);
+	}
+	if (row.status === 'provisioning') {
+		error(409, `VM "${row.name}" is still provisioning`);
+	}
+	if (!row.ownerProjectId) {
+		error(400, 'VM is not attached to a project');
+	}
 	await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
 
 	const name = params.name.trim();
-	if (!name) error(400, 'Server name is required');
+	if (!name) {
+		error(400, 'Server name is required');
+	}
 	if (params.updateHostname && !isValidPtrHostname(name)) {
 		error(400, 'Server name must be a valid hostname to update the guest hostname');
 	}
@@ -614,12 +686,18 @@ export const renameVm = command(renameParams, async (params) => {
 const deleteParams = type({ vmId: 'string' });
 export const deleteVm = command(deleteParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
-	if (!row) error(404, `VM "${params.vmId}" not found`);
-	if (!row.active) return;
+	if (!row) {
+		error(404, `VM "${params.vmId}" not found`);
+	}
+	if (!row.active) {
+		return;
+	}
 	if (row.ownerProjectId) {
 		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'admin');
 	}
@@ -635,12 +713,18 @@ export const deleteVm = command(deleteParams, async (params) => {
 const powerParams = type({ vmId: 'string' });
 async function powerAction(vmId: string, action: 'startVm' | 'stopVm' | 'killVm' | 'rebootVm') {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const row = await db.query.vms.findFirst({ where: eq(vms.id, vmId) });
-	if (!row) error(404, `VM "${vmId}" not found`);
-	if (row.status === 'deleting') error(409, `VM "${row.name}" is being deleted`);
+	if (!row) {
+		error(404, `VM "${vmId}" not found`);
+	}
+	if (row.status === 'deleting') {
+		error(409, `VM "${row.name}" is being deleted`);
+	}
 	if (row.ownerProjectId) {
 		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
 		if (action === 'startVm' || action === 'rebootVm') {
@@ -665,28 +749,45 @@ export const rebootVm = command(powerParams, async (p) => powerAction(p.vmId, 'r
 const resizeParams = type({ vmId: 'string', vmTypeId: 'string' });
 export const resizeVm = command(resizeParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const row = await db.query.vms.findFirst({
 		where: eq(vms.id, params.vmId),
 		with: { vmType: true }
 	});
-	if (!row) error(404, `VM "${params.vmId}" not found`);
-	if (!row.active) error(409, `VM "${row.name}" is not active`);
-	if (row.status === 'deleting') error(409, `VM "${row.name}" is being deleted`);
-	if (row.status === 'provisioning') error(409, `VM "${row.name}" is still provisioning`);
+	if (!row) {
+		error(404, `VM "${params.vmId}" not found`);
+	}
+	if (!row.active) {
+		error(409, `VM "${row.name}" is not active`);
+	}
+	if (row.status === 'deleting') {
+		error(409, `VM "${row.name}" is being deleted`);
+	}
+	if (row.status === 'provisioning') {
+		error(409, `VM "${row.name}" is still provisioning`);
+	}
 	if (row.ownerProjectId) {
 		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
 		const billingExempt = await isProjectBillingExempt(row.ownerProjectId);
-		if (!billingExempt) await requireProjectBillingActive(row.ownerProjectId);
+		if (!billingExempt) {
+			await requireProjectBillingActive(row.ownerProjectId);
+		}
 	}
 
 	const target = await db.query.vmTypes.findFirst({ where: eq(vmTypes.id, params.vmTypeId) });
-	if (!target) error(400, `VM type "${params.vmTypeId}" not found`);
-	if (target.id === row.vmTypeId) error(400, `VM is already on plan "${target.name}"`);
-	if (isBillingConfigured() && !target.autumnFeatureId)
+	if (!target) {
+		error(400, `VM type "${params.vmTypeId}" not found`);
+	}
+	if (target.id === row.vmTypeId) {
+		error(400, `VM is already on plan "${target.name}"`);
+	}
+	if (isBillingConfigured() && !target.autumnFeatureId) {
 		error(400, `VM type "${target.name}" is missing an Autumn feature ID`);
+	}
 
 	const downgrades = findPlanDowngrades(row.vmType, target);
 	if (downgrades.length > 0) {
@@ -701,7 +802,9 @@ export const resizeVm = command(resizeParams, async (params) => {
 			row.proxmoxId ?? undefined
 		);
 	} catch (err) {
-		if (err instanceof VmResizeError) error(400, err.message);
+		if (err instanceof VmResizeError) {
+			error(400, err.message);
+		}
 		throw err;
 	}
 

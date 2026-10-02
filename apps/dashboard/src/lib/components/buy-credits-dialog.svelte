@@ -1,12 +1,12 @@
 <script lang="ts">
-	import Loader2 from '~icons/lucide/loader-2';
-	import DollarSign from '~icons/nucleo/dollar-sign';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { purchaseCredits } from '#lib/remote/billing.remote.js';
 	import { getErrorMessage } from '#lib/utils.js';
+	import Loader2 from '~icons/lucide/loader-2';
+	import DollarSign from '~icons/nucleo/dollar-sign';
 
 	let {
 		open = $bindable(false),
@@ -20,9 +20,10 @@
 		remaining?: number | null;
 	} = $props();
 
-	const packPrice = $derived(
-		prepaidPrice?.amount != null && prepaidPrice.amount > 0 ? prepaidPrice.amount : null
-	);
+	const packPrice = $derived.by(() => {
+		const amount = prepaidPrice?.amount ?? 0;
+		return amount > 0 ? amount : null;
+	});
 	const billingUnits = $derived(
 		prepaidPrice && prepaidPrice.billingUnits > 0 ? prepaidPrice.billingUnits : 100
 	);
@@ -36,15 +37,15 @@
 	const amount = $derived(Number.parseFloat(amountInput));
 	const amountValid = $derived(Number.isFinite(amount) && amount > 0);
 	const packs = $derived(
-		packPrice != null && amountValid ? Math.ceil(amount / packPrice - 1e-6) : 0
+		packPrice !== null && amountValid ? Math.ceil(amount / packPrice - 1e-6) : 0
 	);
 	const credits = $derived(packs * billingUnits);
-	const billedNow = $derived(packPrice != null ? packs * packPrice : 0);
-	const roundedUp = $derived(amountValid && packPrice != null && billedNow > amount);
-	const canSubmit = $derived(packPrice != null && amountValid && credits > 0);
-	const creditRate = $derived(packPrice != null ? packPrice / billingUnits : null);
+	const billedNow = $derived(packPrice === null ? 0 : packs * packPrice);
+	const roundedUp = $derived(amountValid && packPrice !== null && billedNow > amount);
+	const canSubmit = $derived(packPrice !== null && amountValid && credits > 0);
+	const creditRate = $derived(packPrice === null ? null : packPrice / billingUnits);
 	const balanceValue = $derived(
-		remaining != null && creditRate != null ? remaining * creditRate : null
+		remaining !== null && creditRate !== null ? remaining * creditRate : null
 	);
 
 	const currencyFormat = new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' });
@@ -54,7 +55,9 @@
 	}
 
 	async function handlePurchase() {
-		if (!projectId || loading || !canSubmit) return;
+		if (!projectId || loading || !canSubmit) {
+			return;
+		}
 
 		loading = true;
 		actionError = '';
@@ -86,7 +89,7 @@
 			</Dialog.Description>
 		</Dialog.Header>
 
-		{#if packPrice != null}
+		{#if packPrice !== null}
 			<div class="space-y-2">
 				<Label for="top-up-amount" class="text-sm text-muted-foreground">Amount</Label>
 				<div class="relative">
@@ -129,7 +132,7 @@
 			</div>
 
 			<div class="rounded-md border border-border/60 bg-background/40">
-				{#if balanceValue != null}
+				{#if balanceValue !== null}
 					<div class="flex items-center justify-between px-3.5 py-2.5 text-sm">
 						<span class="text-muted-foreground">New balance</span>
 						<span class="font-medium text-foreground tabular-nums">
@@ -138,9 +141,9 @@
 					</div>
 				{/if}
 				<div
-					class="flex items-center justify-between px-3.5 py-2.5 text-sm {balanceValue != null
-						? 'border-t border-border/40'
-						: ''}"
+					class="flex items-center justify-between px-3.5 py-2.5 text-sm {balanceValue === null
+						? ''
+						: 'border-t border-border/40'}"
 				>
 					<span class="text-muted-foreground">Billed now</span>
 					<span class="font-semibold text-foreground tabular-nums">
@@ -151,9 +154,8 @@
 
 			{#if roundedUp}
 				<p class="text-xs text-muted-foreground">
-					Credits are sold in {formatCost(packPrice)} increments, so the amount is rounded up to {formatCost(
-						billedNow
-					)}.
+					Credits are sold in {formatCost(packPrice)} increments, so the amount is rounded up to
+					{formatCost(billedNow)}.
 				</p>
 			{/if}
 		{:else}

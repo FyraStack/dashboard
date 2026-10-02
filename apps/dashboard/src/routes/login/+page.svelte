@@ -1,20 +1,21 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import SiGithub from '@icons-pack/svelte-simple-icons/icons/SiGithub';
+	import { authClient } from '#lib/auth-client.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { authClient } from '#lib/auth-client.js';
+	import { goto } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertCircle from '~icons/nucleo/alert-circle';
 	import CheckCircle2 from '~icons/nucleo/check-circle';
 	import Eye from '~icons/nucleo/eye';
 	import EyeOff from '~icons/nucleo/eye-off';
 	import Fingerprint from '~icons/nucleo/fingerprint';
-	import SiGithub from '@icons-pack/svelte-simple-icons/icons/SiGithub';
 	import type { PageData } from './$types';
-	type SignInDataWithTwoFactor = {
-		twoFactorRedirect?: boolean;
+
+	interface SignInDataWithTwoFactor {
 		twoFactorMethods?: string[] | null;
-	};
+		twoFactorRedirect?: boolean;
+	}
 
 	let { data }: { data: PageData } = $props();
 	const redirectTo = $derived(data.redirectTo ?? '/');
@@ -26,23 +27,25 @@
 	let email = $state('');
 	let password = $state('');
 	let showPassword = $state(false);
-	let error = $state('');
+	let errorMessage = $state('');
 	let loading = $state(false);
 	let passkeyLoading = $state(false);
 	let socialLoading = $state<'github' | null>(null);
 
 	async function signInWithSocial(provider: 'github') {
-		if (socialLoading) return;
-		error = '';
+		if (socialLoading) {
+			return;
+		}
+		errorMessage = '';
 		socialLoading = provider;
 		try {
 			const { error: err } = await authClient.signIn.social({ provider, callbackURL: redirectTo });
 			if (err) {
-				error = err.message ?? 'Unable to sign in.';
+				errorMessage = err.message ?? 'Unable to sign in.';
 				socialLoading = null;
 			}
 		} catch {
-			error = 'Unable to sign in.';
+			errorMessage = 'Unable to sign in.';
 			socialLoading = null;
 		}
 	}
@@ -53,14 +56,16 @@
 	}
 
 	async function handleLogin() {
-		if (!email || !password) return;
-		error = '';
+		if (!(email && password)) {
+			return;
+		}
+		errorMessage = '';
 		loading = true;
 
 		const res = await authClient.signIn.email({ email, password });
 
 		if (res.error) {
-			error = res.error.message ?? 'Invalid credentials';
+			errorMessage = res.error.message ?? 'Invalid credentials';
 			loading = false;
 			return;
 		}
@@ -85,7 +90,7 @@
 	}
 
 	async function handlePasskeySignIn() {
-		error = '';
+		errorMessage = '';
 		passkeyLoading = true;
 
 		const { error: err } = await authClient.signIn.passkey({ autoFill: false });
@@ -93,7 +98,7 @@
 		passkeyLoading = false;
 
 		if (err) {
-			error = err.message ?? 'Unable to sign in with passkey.';
+			errorMessage = err.message ?? 'Unable to sign in with passkey.';
 			return;
 		}
 
@@ -115,12 +120,12 @@
 		<div class="space-y-5">
 			<h1 class="text-center text-lg font-medium text-foreground">Sign in</h1>
 
-			{#if error}
+			{#if errorMessage}
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
 					<AlertCircle class="size-4 shrink-0" />
-					{error}
+					{errorMessage}
 				</div>
 			{/if}
 
@@ -157,7 +162,11 @@
 						class="absolute top-1/2 right-1 flex size-8 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
 						onclick={() => (showPassword = !showPassword)}
 					>
-						{#if showPassword}<EyeOff class="size-4" />{:else}<Eye class="size-4" />{/if}
+						{#if showPassword}
+							<EyeOff class="size-4" />
+						{:else}
+							<Eye class="size-4" />
+						{/if}
 					</button>
 				</div>
 

@@ -1,26 +1,35 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import { authClient } from '#lib/auth-client.js';
-	import AlertCircle from '~icons/nucleo/alert-circle';
 	import { isProjectRole, projectRoleLabels } from '#lib/auth/organization-permissions.js';
+	import { authClient } from '#lib/auth-client.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { goto } from '$app/navigation';
+	import AlertCircle from '~icons/nucleo/alert-circle';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	let error = $state('');
+	let errorMessage = $state('');
 	let accepting = $state(false);
 	let declining = $state(false);
 	let switching = $state(false);
 
+	const roleAccess = $derived(
+		data.role && isProjectRole(data.role) ? ` with ${projectRoleLabels[data.role]} access` : ''
+	);
+	const invitationSummary = $derived(
+		`${data.inviterEmail} invited you to join ${data.organizationName}${roleAccess}.`
+	);
+
 	async function accept() {
-		if (accepting || declining) return;
-		error = '';
+		if (accepting || declining) {
+			return;
+		}
+		errorMessage = '';
 		accepting = true;
 		const { data: res, error: err } = await authClient.organization.acceptInvitation({
 			invitationId: data.invitationId
 		});
 		if (err || !res) {
-			error = err?.message ?? 'Unable to accept invitation.';
+			errorMessage = err?.message ?? 'Unable to accept invitation.';
 			accepting = false;
 			return;
 		}
@@ -28,14 +37,16 @@
 	}
 
 	async function decline() {
-		if (accepting || declining) return;
-		error = '';
+		if (accepting || declining) {
+			return;
+		}
+		errorMessage = '';
 		declining = true;
 		const { error: err } = await authClient.organization.rejectInvitation({
 			invitationId: data.invitationId
 		});
 		if (err) {
-			error = err.message ?? 'Unable to decline invitation.';
+			errorMessage = err.message ?? 'Unable to decline invitation.';
 			declining = false;
 			return;
 		}
@@ -88,18 +99,14 @@
 					Join {data.organizationName}
 				</h1>
 
-				<p class="text-center text-xs text-muted-foreground">
-					{data.inviterEmail} invited you to join {data.organizationName}
-					{#if data.role && isProjectRole(data.role)}
-						with {projectRoleLabels[data.role]} access{/if}.
-				</p>
+				<p class="text-center text-xs text-muted-foreground">{invitationSummary}</p>
 
-				{#if error}
+				{#if errorMessage}
 					<div
 						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 					>
 						<AlertCircle class="size-4 shrink-0" />
-						{error}
+						{errorMessage}
 					</div>
 				{/if}
 

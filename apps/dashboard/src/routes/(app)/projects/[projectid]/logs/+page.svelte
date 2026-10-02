@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { Button } from '#lib/components/ui/button/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import ArrowDown from '~icons/lucide/arrow-down';
 	import ChevronRight from '~icons/lucide/chevron-right';
-	import FileText from '~icons/nucleo/file-text';
 	import X from '~icons/lucide/x';
+	import FileText from '~icons/nucleo/file-text';
 	import Pause from '~icons/nucleo/pause';
 	import Play from '~icons/nucleo/play';
 	import Search from '~icons/nucleo/search';
@@ -13,19 +13,19 @@
 
 	type Severity = 'info' | 'warn' | 'error' | 'debug';
 
-	type LogEntry = {
+	interface LogEntry {
 		id: number;
-		timestamp: string;
+		message: string;
 		severity: Severity;
 		source: string;
-		message: string;
-	};
+		timestamp: string;
+	}
 
-	type ServerLog = {
+	interface ServerLog {
 		id: string;
 		name: string;
 		status: 'running' | 'stopped';
-	};
+	}
 
 	const serverList: ServerLog[] = [
 		{ id: 'vps-747762', name: 'vps-747762', status: 'running' },
@@ -102,7 +102,7 @@
 		const msgs = sampleMessages[severity];
 		const message = msgs[Math.floor(Math.random() * msgs.length)];
 		const source = sources[Math.floor(Math.random() * sources.length)];
-		logId++;
+		logId += 1;
 		return { id: logId, timestamp: makeTimestamp(), severity, source, message };
 	}
 
@@ -140,13 +140,19 @@
 
 	// Auto-stream new logs for running servers
 	$effect(() => {
-		if (!streaming) return;
+		if (!streaming) {
+			return;
+		}
 		const serverId = selectedServerId;
 		const server = serverList.find((s) => s.id === serverId);
-		if (!server || server.status === 'stopped') return;
+		if (!server || server.status === 'stopped') {
+			return;
+		}
 
 		const interval = setInterval(() => {
-			if (!serverLogs[serverId]) serverLogs[serverId] = [];
+			if (!serverLogs[serverId]) {
+				serverLogs[serverId] = [];
+			}
 			serverLogs[serverId].push(randomLog());
 			if (serverLogs[serverId].length > 200) {
 				serverLogs[serverId] = serverLogs[serverId].slice(-200);
@@ -159,7 +165,9 @@
 	$effect(() => {
 		const logCount = filtered.length;
 		const container = logContainer;
-		if (!streaming || !container) return;
+		if (!(streaming && container)) {
+			return;
+		}
 
 		const frame = requestAnimationFrame(() => {
 			if (logCount === filtered.length) {
@@ -173,6 +181,13 @@
 	function clearLogs() {
 		serverLogs[selectedServerId] = [];
 	}
+
+	const severityMessageColors: Record<Severity, string> = {
+		error: 'text-red-400',
+		warn: 'text-amber-400/80',
+		info: 'text-muted-foreground',
+		debug: 'text-muted-foreground'
+	};
 
 	const severityColors: Record<Severity, string> = {
 		info: 'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-400',
@@ -203,6 +218,7 @@
 		<div class="flex-1 overflow-y-auto">
 			{#each serverList as server (server.id)}
 				<button
+					type="button"
 					class="flex w-full items-center justify-between border-b border-border px-4 py-2.5 text-left transition-colors duration-100 {selectedServerId ===
 					server.id
 						? 'bg-muted/60'
@@ -246,6 +262,7 @@
 				<div class="flex items-center border border-border">
 					{#each filterOptions as opt (opt.value)}
 						<button
+							type="button"
 							class="px-2 py-1 text-[11px] font-medium transition-colors duration-100 {filter ===
 							opt.value
 								? 'bg-muted text-foreground'
@@ -259,9 +276,13 @@
 				{#if sourceFilter}
 					<Badge variant="secondary" class="gap-1 text-[10px]">
 						{sourceFilter}
-						<button aria-label="Clear source filter" onclick={() => (sourceFilter = null)}
-							><X class="h-2.5 w-2.5" /></button
+						<button
+							type="button"
+							aria-label="Clear source filter"
+							onclick={() => (sourceFilter = null)}
 						>
+							<X class="h-2.5 w-2.5" />
+						</button>
 					</Badge>
 				{/if}
 				<Button
@@ -306,7 +327,10 @@
 						class="flex items-start gap-3 border-b border-border/20 px-5 py-1.5 transition-colors duration-100 hover:bg-background/50"
 					>
 						<span class="shrink-0 pt-0.5 text-muted-foreground">{entry.timestamp}</span>
-						<button onclick={() => (filter = filter === entry.severity ? 'all' : entry.severity)}>
+						<button
+							type="button"
+							onclick={() => (filter = filter === entry.severity ? 'all' : entry.severity)}
+						>
 							<Badge
 								variant="outline"
 								class="shrink-0 cursor-pointer text-[9px] {severityColors[
@@ -317,6 +341,7 @@
 							</Badge>
 						</button>
 						<button
+							type="button"
 							class="w-16 shrink-0 text-left text-muted-foreground hover:text-muted-foreground {sourceFilter ===
 							entry.source
 								? 'text-foreground underline'
@@ -325,13 +350,7 @@
 						>
 							{entry.source}
 						</button>
-						<span
-							class={entry.severity === 'error'
-								? 'text-red-400'
-								: entry.severity === 'warn'
-									? 'text-amber-400/80'
-									: 'text-muted-foreground'}
-						>
+						<span class={severityMessageColors[entry.severity]}>
 							{entry.message}
 						</span>
 					</div>
@@ -351,13 +370,15 @@
 			class="flex h-7 shrink-0 items-center justify-between border-t border-border bg-background px-5"
 		>
 			<span class="text-[10px] text-muted-foreground">
-				{filtered.length} entries
+				{filtered.length}
+				entries
 				{#if filter !== 'all' || search.trim()}
 					(filtered from {currentLogs.length})
 				{/if}
 			</span>
 			{#if !streaming}
 				<button
+					type="button"
 					class="flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
 					onclick={() => (streaming = true)}
 				>

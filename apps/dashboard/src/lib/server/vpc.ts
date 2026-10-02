@@ -1,7 +1,7 @@
 import type { Fetcher } from '@cloudflare/workers-types';
 import ky from 'ky';
-import { dev } from '$app/env';
 import { instrument } from '#lib/server/observability.js';
+import { dev } from '$app/env';
 
 export type VpcFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -45,7 +45,9 @@ async function toUrlAndInit(
 
 export function createVpcFetch(services: Array<Fetcher | undefined>, fallback: VpcFetch): VpcFetch {
 	const orderedServices = services.filter((service): service is Fetcher => Boolean(service));
-	if (orderedServices.length === 0) return fallback;
+	if (orderedServices.length === 0) {
+		return fallback;
+	}
 
 	return async (input, init) => {
 		const [url, normalizedInit] = await toUrlAndInit(input, init);
@@ -59,6 +61,7 @@ export function createVpcFetch(services: Array<Fetcher | undefined>, fallback: V
 					const send = service.fetch.bind(service) as unknown as VpcFetch;
 
 					try {
+						// biome-ignore lint/performance/noAwaitInLoops: routers are tried in failover order and only on failure of the previous one
 						return await send(url, normalizedInit);
 					} catch (error) {
 						lastError = error;

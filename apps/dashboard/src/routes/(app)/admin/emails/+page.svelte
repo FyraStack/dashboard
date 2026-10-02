@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
 	import {
 		CAMPAIGN_BATCH_SIZE,
@@ -11,13 +11,14 @@
 		extractPlaceholders,
 		fieldToken
 	} from '#lib/emails/campaign-registry.js';
+	import type { AdminUser } from '#lib/remote/admin-users.remote.js';
 	import {
 		previewCampaignEmail,
 		renderCampaignEditor,
 		sendCampaignEmails
 	} from '#lib/remote/email-campaign.remote.js';
+	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
-	import { AdminState, type AdminPageData } from '#lib/state/admin.svelte.js';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
@@ -33,8 +34,6 @@
 		admin.sync(data);
 	});
 
-	const userCount = $derived(admin.adminUsers.length);
-
 	let selectedTemplateKey = $state(campaignTemplates[0].key);
 	let subject = $state(campaignTemplates[0].defaultSubject);
 	let fieldValues = $state<Record<string, string>>(defaultFieldValues(campaignTemplates[0].key));
@@ -46,16 +45,20 @@
 	function defaultFieldValues(key: string) {
 		const entry = campaignTemplates.find((candidate) => candidate.key === key);
 		const values: Record<string, string> = {};
-		for (const field of entry?.fields ?? []) values[field.name] = field.defaultValue ?? '';
+		for (const field of entry?.fields ?? []) {
+			values[field.name] = field.defaultValue ?? '';
+		}
 		return values;
 	}
 
 	function selectTemplate(key: string) {
-		if (key === selectedTemplateKey || sending) return;
+		if (key === selectedTemplateKey || sending) {
+			return;
+		}
 		selectedTemplateKey = key;
 		subject = campaignTemplates.find((entry) => entry.key === key)?.defaultSubject ?? '';
 		fieldValues = defaultFieldValues(key);
-		void loadEditor();
+		loadEditor();
 	}
 
 	let editorHtml = $state('');
@@ -68,37 +71,46 @@
 		const doc = new DOMParser().parseFromString(raw, 'text/html');
 		let html = doc.body.innerHTML;
 		for (const field of template.fields) {
-			if (!field.inline) continue;
+			if (!field.inline) {
+				continue;
+			}
 			html = html.replaceAll(fieldToken(field.name), `<span data-field="${field.name}"></span>`);
 		}
 		return html;
 	}
 
 	async function loadEditor() {
-		const request = ++editorRequest;
+		editorRequest += 1;
+		const request = editorRequest;
 		editorLoading = true;
 		editorError = '';
 		try {
 			const settings: Record<string, string> = {};
-			for (const field of settingsFields) settings[field.name] = fieldValues[field.name] ?? '';
+			for (const field of settingsFields) {
+				settings[field.name] = fieldValues[field.name] ?? '';
+			}
 			const result = await renderCampaignEditor({
 				template: selectedTemplateKey,
 				fields: settings
 			});
-			if (request !== editorRequest) return;
+			if (request !== editorRequest) {
+				return;
+			}
 			editorHtml = prepareEditorHtml(result.html);
 		} catch (err) {
 			if (request === editorRequest) {
 				editorError = getErrorMessage(err, 'Failed to render the template');
 			}
 		} finally {
-			if (request === editorRequest) editorLoading = false;
+			if (request === editorRequest) {
+				editorLoading = false;
+			}
 		}
 	}
 
 	function scheduleEditorRefresh() {
 		clearTimeout(refreshTimer);
-		refreshTimer = setTimeout(() => void loadEditor(), 500);
+		refreshTimer = setTimeout(() => loadEditor(), 500);
 	}
 
 	function hydrateFields(node: HTMLElement) {
@@ -119,14 +131,16 @@
 				for (const other of node.querySelectorAll<HTMLElement>(
 					`[data-field="${CSS.escape(name)}"]`
 				)) {
-					if (other !== span) other.textContent = value;
+					if (other !== span) {
+						other.textContent = value;
+					}
 				}
 			});
 		}
 	}
 
 	onMount(() => {
-		void loadEditor();
+		loadEditor();
 		return () => clearTimeout(refreshTimer);
 	});
 
@@ -135,10 +149,14 @@
 	const activeVmsByOwnerEmail = $derived.by(() => {
 		const map = new Map<string, { count: number; types: Set<string> }>();
 		for (const vm of admin.adminVms) {
-			if (!vm.active || !vm.ownerEmail) continue;
+			if (!(vm.active && vm.ownerEmail)) {
+				continue;
+			}
 			const entry = map.get(vm.ownerEmail) ?? { count: 0, types: new Set<string>() };
 			entry.count += 1;
-			if (vm.vmTypeName) entry.types.add(vm.vmTypeName);
+			if (vm.vmTypeName) {
+				entry.types.add(vm.vmTypeName);
+			}
 			map.set(vm.ownerEmail, entry);
 		}
 		return map;
@@ -146,7 +164,7 @@
 	const vmTypeOptions = $derived(
 		[
 			...new Set(
-				admin.adminVms.filter((vm) => vm.active && vm.vmTypeName).map((vm) => vm.vmTypeName!)
+				admin.adminVms.flatMap((vm) => (vm.active && vm.vmTypeName ? [vm.vmTypeName] : []))
 			)
 		].sort()
 	);
@@ -161,7 +179,11 @@
 		| 'totp'
 		| 'twoFactor'
 		| 'passkey';
-	type AudienceCondition = { field: AudienceField; op: string; value: string };
+	interface AudienceCondition {
+		field: AudienceField;
+		op: string;
+		value: string;
+	}
 
 	const audienceFieldDefs: Record<
 		AudienceField,
@@ -197,53 +219,83 @@
 	};
 
 	function defaultCondition(field: AudienceField): AudienceCondition {
-		if (field === 'signedUp') return { field, op: 'before', value: '' };
-		if (field === 'vmCount') return { field, op: 'gte', value: '1' };
-		if (field === 'vmType') return { field, op: 'is', value: vmTypeOptions[0] ?? '' };
+		if (field === 'signedUp') {
+			return { field, op: 'before', value: '' };
+		}
+		if (field === 'vmCount') {
+			return { field, op: 'gte', value: '1' };
+		}
+		if (field === 'vmType') {
+			return { field, op: 'is', value: vmTypeOptions[0] ?? '' };
+		}
 		return { field, op: 'is', value: 'yes' };
 	}
 
 	let audienceConditions = $state<AudienceCondition[]>([defaultCondition('vmCount')]);
 
+	function matchesFlag(actual: boolean, condition: AudienceCondition) {
+		return actual === (condition.value === 'yes');
+	}
+
+	function matchesSignedUp(createdAt: Date, condition: AudienceCondition) {
+		if (!condition.value) {
+			return true;
+		}
+		const cutoff = new Date(condition.value).getTime();
+		if (Number.isNaN(cutoff)) {
+			return true;
+		}
+		const created = new Date(createdAt).getTime();
+		return condition.op === 'before' ? created < cutoff : created > cutoff;
+	}
+
+	function matchesVmCount(ownedCount: number, condition: AudienceCondition) {
+		const target = Number.parseInt(condition.value, 10);
+		if (Number.isNaN(target)) {
+			return true;
+		}
+		return condition.op === 'gte' ? ownedCount >= target : ownedCount === target;
+	}
+
+	function matchesVmType(ownedTypes: Set<string> | undefined, condition: AudienceCondition) {
+		if (!condition.value) {
+			return true;
+		}
+		const hasType = ownedTypes?.has(condition.value) ?? false;
+		return condition.op === 'is' ? hasType : !hasType;
+	}
+
+	function matchesAudienceCondition(account: AdminUser, condition: AudienceCondition): boolean {
+		const owned = activeVmsByOwnerEmail.get(account.email);
+		switch (condition.field) {
+			case 'signedUp':
+				return matchesSignedUp(account.createdAt, condition);
+			case 'vmCount':
+				return matchesVmCount(owned?.count ?? 0, condition);
+			case 'vmType':
+				return matchesVmType(owned?.types, condition);
+			case 'verified':
+				return matchesFlag(account.emailVerified, condition);
+			case 'billingExempt':
+				return matchesFlag(account.billingExempt, condition);
+			case 'disabled':
+				return matchesFlag(account.disabled, condition);
+			case 'totp':
+				return matchesFlag(account.twoFactorEnabled, condition);
+			case 'twoFactor':
+				return matchesFlag(account.twoFactorEnabled || account.passkeyCount > 0, condition);
+			case 'passkey':
+				return matchesFlag(account.passkeyCount > 0, condition);
+			default: {
+				const unhandledField: never = condition.field;
+				return unhandledField;
+			}
+		}
+	}
+
 	const queryRecipients = $derived(
 		admin.adminUsers.filter((account) =>
-			audienceConditions.every((condition) => {
-				const owned = activeVmsByOwnerEmail.get(account.email);
-				switch (condition.field) {
-					case 'signedUp': {
-						if (!condition.value) return true;
-						const cutoff = new Date(condition.value).getTime();
-						if (Number.isNaN(cutoff)) return true;
-						const created = new Date(account.createdAt).getTime();
-						return condition.op === 'before' ? created < cutoff : created > cutoff;
-					}
-					case 'vmCount': {
-						const target = Number.parseInt(condition.value, 10);
-						if (Number.isNaN(target)) return true;
-						const ownedCount = owned?.count ?? 0;
-						return condition.op === 'gte' ? ownedCount >= target : ownedCount === target;
-					}
-					case 'vmType': {
-						if (!condition.value) return true;
-						const hasType = owned?.types.has(condition.value) ?? false;
-						return condition.op === 'is' ? hasType : !hasType;
-					}
-					case 'verified':
-						return account.emailVerified === (condition.value === 'yes');
-					case 'billingExempt':
-						return account.billingExempt === (condition.value === 'yes');
-					case 'disabled':
-						return account.disabled === (condition.value === 'yes');
-					case 'totp':
-						return account.twoFactorEnabled === (condition.value === 'yes');
-					case 'twoFactor':
-						return (
-							(account.twoFactorEnabled || account.passkeyCount > 0) === (condition.value === 'yes')
-						);
-					case 'passkey':
-						return account.passkeyCount > 0 === (condition.value === 'yes');
-				}
-			})
+			audienceConditions.every((condition) => matchesAudienceCondition(account, condition))
 		)
 	);
 	const queryLabel = $derived(
@@ -318,14 +370,18 @@
 	const processedCount = $derived(sentCount + sendFailures.length);
 
 	async function startSend() {
-		if (!canSend) return;
+		if (!canSend) {
+			return;
+		}
 		const ok = await confirmDestructive({
 			title: 'Send emails',
 			description: `This sends the "${template.label}" template to ${recipientRows.length} recipient${recipientRows.length === 1 ? '' : 's'} (${queryLabel}). This cannot be undone.`,
 			confirmWord: 'send',
 			confirmLabel: 'Send emails'
 		});
-		if (!ok) return;
+		if (!ok) {
+			return;
+		}
 
 		sending = true;
 		sendComplete = false;
@@ -336,6 +392,7 @@
 		const fields = $state.snapshot(fieldValues);
 		try {
 			for (let i = 0; i < rows.length; i += CAMPAIGN_BATCH_SIZE) {
+				// biome-ignore lint/performance/noAwaitInLoops: batches go out one at a time to stay under the email provider's rate limit and report progress
 				const result = await sendCampaignEmails({
 					template: selectedTemplateKey,
 					subject,
@@ -397,9 +454,9 @@
 						<div class="flex flex-col gap-1.5">
 							<Label>
 								{field.label}
-								{#if !field.required}<span class="font-normal text-muted-foreground"
-										>(optional)</span
-									>{/if}
+								{#if !field.required}
+									<span class="font-normal text-muted-foreground">(optional)</span>
+								{/if}
 							</Label>
 							{#if field.options}
 								<select
@@ -452,12 +509,11 @@
 				{/if}
 			</div>
 			<p class="text-xs text-muted-foreground">
-				Click the outlined text in the email to edit it in place. Use <span
-					class="font-mono text-muted-foreground">{'{{column}}'}</span
-				>
+				Click the outlined text in the email to edit it in place. Use
+				<span class="font-mono text-muted-foreground">{'{{column}}'}</span>
 				to pull values from the audience columns (name, email). HTML tags like
-				<span class="font-mono text-muted-foreground">{'<a href="...">link</a>'}</span> render in the
-				sent email. Check them with Preview.
+				<span class="font-mono text-muted-foreground">{'<a href="...">link</a>'}</span>
+				render in the sent email. Check them with Preview.
 			</p>
 			{#if missingColumns.length > 0}
 				<div
@@ -572,7 +628,9 @@
 			</div>
 			<div class="flex items-center gap-1.5 text-xs text-muted-foreground">
 				<Users class="size-4 text-muted-foreground" />
-				{queryRecipients.length} recipient{queryRecipients.length === 1 ? '' : 's'} matched
+				{queryRecipients.length}
+				recipient{queryRecipients.length === 1 ? '' : 's'}
+				matched
 			</div>
 			{#if queryRecipients.length > 0}
 				<div class="max-h-48 overflow-y-auto border border-border">
@@ -581,7 +639,8 @@
 							class="flex items-center justify-between gap-3 border-b border-border/50 px-3 py-1.5 last:border-b-0"
 						>
 							<span class="truncate text-xs text-foreground">{recipient.name}</span>
-							<span class="shrink-0 font-mono text-xs text-muted-foreground">{recipient.email}</span
+							<span class="shrink-0 font-mono text-xs text-muted-foreground"
+								>{recipient.email}</span
 							>
 						</div>
 					{/each}
@@ -613,13 +672,19 @@
 					onclick={() => openPreview()}
 					disabled={!canPreview}
 				>
-					{#if previewLoading}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Eye
-							class="h-3 w-3"
-						/>{/if}
+					{#if previewLoading}
+						<Loader2 class="h-3 w-3 animate-spin" />
+					{:else}
+						<Eye class="h-3 w-3" />
+					{/if}
 					Preview{recipientRows.length > 0 ? ' with first row' : ''}
 				</Button>
 				<Button size="sm" class="gap-1.5 text-xs" onclick={() => startSend()} disabled={!canSend}>
-					{#if sending}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Send class="h-3 w-3" />{/if}
+					{#if sending}
+						<Loader2 class="h-3 w-3 animate-spin" />
+					{:else}
+						<Send class="h-3 w-3" />
+					{/if}
 					Send to {recipientRows.length} recipient{recipientRows.length === 1 ? '' : 's'}
 				</Button>
 			</div>
@@ -672,7 +737,9 @@
 			<Dialog.Title>Preview</Dialog.Title>
 			<Dialog.Description>
 				Subject: {previewSubject}
-				{#if recipientRows.length > 0}· rendered with the first recipient{/if}
+				{#if recipientRows.length > 0}
+					· rendered with the first recipient
+				{/if}
 			</Dialog.Description>
 		</Dialog.Header>
 		<iframe
@@ -686,10 +753,10 @@
 
 <style>
 	:global(.email-editor [data-field]) {
-		outline: 1px dashed rgb(75 85 99 / 0.8);
-		outline-offset: 2px;
 		white-space: pre-wrap;
 		cursor: text;
+		outline: 1px dashed rgb(75 85 99 / 0.8);
+		outline-offset: 2px;
 		transition: outline-color 120ms;
 	}
 
@@ -702,7 +769,7 @@
 	}
 
 	:global(.email-editor [data-field]:empty::before) {
-		content: attr(data-placeholder);
 		color: rgb(107 114 128);
+		content: attr(data-placeholder);
 	}
 </style>

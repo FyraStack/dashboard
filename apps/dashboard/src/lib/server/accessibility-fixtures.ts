@@ -1,6 +1,6 @@
 import type { FeatureFlags } from '#lib/feature-flags.js';
 
-export const accessibilityFixtureEnabled = process.env['ACCESSIBILITY_FIXTURES'] === '1';
+export const accessibilityFixtureEnabled = process.env.ACCESSIBILITY_FIXTURES === '1';
 
 const now = new Date('2026-01-01T00:00:00.000Z');
 

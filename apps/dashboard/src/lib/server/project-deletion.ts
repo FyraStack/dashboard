@@ -12,16 +12,15 @@ import {
 	meterResourceThrough,
 	syncProjectUsage
 } from '#lib/server/billing/metering.js';
+import { invitation, organization } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	billingUsageEvents,
-	invitation,
 	ipAssignments,
-	organization,
 	paymentPeriods,
 	projectBillingCustomers,
-	volumes,
-	vms
+	vms,
+	volumes
 } from '#lib/server/db/schema.js';
 import { releaseVmNetworking } from '#lib/server/ipam.js';
 
@@ -44,6 +43,7 @@ export async function softDeleteOrganizationResources(
 
 	for (const vm of projectVms.filter((item) => item.active)) {
 		try {
+			// biome-ignore lint/performance/noAwaitInLoops: Proxmox deletes run one at a time and the first failure must abort the project delete
 			await getBackend(vm.backend).deleteVm(vm.id, vm.proxmoxId ?? undefined);
 		} catch (err) {
 			console.warn(`Failed to deprovision VM ${vm.id} during project delete`, err);
@@ -52,6 +52,7 @@ export async function softDeleteOrganizationResources(
 	}
 
 	for (const vm of projectVms.filter((item) => item.active)) {
+		// biome-ignore lint/performance/noAwaitInLoops: each VM's final usage is metered and synced to Autumn one at a time
 		const metered = await meterResourceThrough('vm', vm.id).catch((err) => {
 			console.warn(`Failed to meter VM ${vm.id} during project delete`, err);
 			return null;
@@ -65,6 +66,7 @@ export async function softDeleteOrganizationResources(
 	await syncProjectUsage(organizationId);
 
 	for (const vm of projectVms) {
+		// biome-ignore lint/performance/noAwaitInLoops: releasing networking writes VyOS and Bunny config, which must not race between VMs
 		await releaseVmNetworking(db, vm.id).catch((err) => {
 			console.warn(`Failed to release networking for VM ${vm.id} during project delete`, err);
 		});
@@ -105,6 +107,7 @@ export async function purgeExpiredDeletedOrganizations(now = Date.now(), limit =
 
 	let purged = 0;
 	for (const { id } of expired) {
+		// biome-ignore lint/performance/noAwaitInLoops: each project purge is a multi-step delete run one project at a time to bound database load
 		const [unsettled] = await db
 			.select({ id: billingUsageEvents.id })
 			.from(billingUsageEvents)
@@ -115,7 +118,9 @@ export async function purgeExpiredDeletedOrganizations(now = Date.now(), limit =
 				)
 			)
 			.limit(1);
-		if (unsettled) continue;
+		if (unsettled) {
+			continue;
+		}
 
 		const projectVms = await db.select({ id: vms.id }).from(vms).where(eq(vms.ownerProjectId, id));
 		const vmIds = projectVms.map((vm) => vm.id);

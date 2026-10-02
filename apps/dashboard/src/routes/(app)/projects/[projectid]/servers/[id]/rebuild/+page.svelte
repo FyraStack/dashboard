@@ -1,9 +1,9 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
+	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
+	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -28,19 +28,20 @@
 		Rebuilding isn't available yet.
 	</p>
 	<div class="space-y-2">
-		<Label for="rebuild-os-select">Operating System</Label><select
+		<Label for="rebuild-os-select">Operating System</Label
+		><select
 			id="rebuild-os-select"
 			bind:value={rebuildOs}
 			class="h-9 w-full border border-border bg-background px-3 text-sm text-foreground"
-			>{#each osOptions as os (os)}<option>{os}</option>{/each}</select
 		>
+			{#each osOptions as os (os)}
+				<option>{os}</option>
+			{/each}
+		</select>
 	</div>
 	<div class="space-y-2">
-		<Label for="rebuild-confirm-input">Type server ID to confirm</Label><Input
-			id="rebuild-confirm-input"
-			placeholder={selectedServer.id}
-			class="font-mono"
-		/>
+		<Label for="rebuild-confirm-input">Type server ID to confirm</Label>
+		<Input id="rebuild-confirm-input" placeholder={selectedServer.id} class="font-mono" />
 	</div>
 	<Button
 		variant="outline"

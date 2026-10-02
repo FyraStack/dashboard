@@ -1,24 +1,18 @@
-import { getRequestEvent } from '$app/server';
-import type { LayoutServerLoad } from './$types';
-import { listVmTypes } from '#lib/remote/vm-types.remote.js';
-import { listImages } from '#lib/remote/images.remote.js';
+import { listAdminProjects } from '#lib/remote/admin-projects.remote.js';
 import { listAdminUsers } from '#lib/remote/admin-users.remote.js';
 import { listAllAdminVms } from '#lib/remote/admin-vms.remote.js';
-import { listAdminProjects } from '#lib/remote/admin-projects.remote.js';
+import { listImages } from '#lib/remote/images.remote.js';
 import { listIpamPrefixes } from '#lib/remote/ipam.remote.js';
-import { initDrizzle } from '#lib/server/db/index.js';
-import { requireAdmin } from '#lib/server/auth-context.js';
-import { getFeatureFlags } from '#lib/server/feature-flags.js';
+import { listVmTypes } from '#lib/remote/vm-types.remote.js';
 import {
 	accessibilityFixtureEnabled,
-	accessibilityFixtureVmTypes,
-	accessibilityFixtureImages,
-	accessibilityFixtureFeatureFlags,
-	accessibilityFixtureAdminUsers,
-	accessibilityFixtureIpamPrefixes,
-	accessibilityFixtureAdminVms,
-	accessibilityFixtureAdminProjects
+	accessibilityFixtureFeatureFlags
 } from '#lib/server/accessibility-fixtures.js';
+import { requireAdmin } from '#lib/server/auth-context.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { getFeatureFlags } from '#lib/server/feature-flags.js';
+import { getRequestEvent } from '$app/server';
+import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ depends }) => {
 	depends('app:feature-flags');

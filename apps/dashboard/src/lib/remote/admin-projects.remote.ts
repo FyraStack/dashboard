@@ -1,8 +1,11 @@
-import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { and, count, desc, eq, isNull } from 'drizzle-orm';
 import AdminProjectDeletionCodeEmail from '#lib/emails/admin-project-deletion-code.svelte';
+import {
+	accessibilityFixtureAdminProjects,
+	accessibilityFixtureEnabled
+} from '#lib/server/accessibility-fixtures.js';
 import {
 	ADMIN_VERIFICATION_CODE_TTL_MS,
 	beginAdminVerification,
@@ -16,47 +19,39 @@ import {
 	isProjectBillingExempt,
 	requireProjectBillingActive
 } from '#lib/server/billing/autumn.js';
+import { member, organization, user } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
-import {
-	member,
-	organization,
-	projectBillingCustomers,
-	sshKeys,
-	user,
-	vms,
-	volumes
-} from '#lib/server/db/schema.js';
+import { projectBillingCustomers, sshKeys, vms, volumes } from '#lib/server/db/schema.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
 import { provisionVm } from '#lib/server/vm-provisioning.js';
-import {
-	accessibilityFixtureEnabled,
-	accessibilityFixtureAdminProjects
-} from '#lib/server/accessibility-fixtures.js';
-import { captureServerEvent } from '#lib/server/posthog.js';
+import { command, getRequestEvent, query } from '$app/server';
 
 export type AdminProjectBillingStatus = 'configured' | 'past_due' | 'suspended' | 'none';
 
-export type AdminProject = {
-	id: string;
-	name: string;
-	slug: string;
+export interface AdminProject {
+	billingExempt: boolean;
+	billingStatus: AdminProjectBillingStatus;
 	createdAt: number;
+	disabled: boolean;
+	id: string;
+	memberCount: number;
+	name: string;
+	ownerBillingExempt: boolean;
+	ownerEmail: string | null;
 	ownerId: string | null;
 	ownerName: string | null;
-	ownerEmail: string | null;
-	ownerBillingExempt: boolean;
-	memberCount: number;
+	slug: string;
 	vmCount: number;
 	volumeCount: number;
-	billingStatus: AdminProjectBillingStatus;
-	billingExempt: boolean;
-	disabled: boolean;
-};
+}
 
 async function requireCurrentAdmin() {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
@@ -64,17 +59,36 @@ async function requireCurrentAdmin() {
 	return db;
 }
 
+function toBillingStatus(
+	billing: { suspendedAt: number | null; pastDueSince: number | null } | undefined
+): AdminProjectBillingStatus {
+	if (!billing) {
+		return 'none';
+	}
+	if (billing.suspendedAt !== null) {
+		return 'suspended';
+	}
+	if (billing.pastDueSince !== null) {
+		return 'past_due';
+	}
+	return 'configured';
+}
+
 function makeCountMap(rows: { key: string | null; count: number }[]) {
 	const map = new Map<string, number>();
 	for (const row of rows) {
-		if (!row.key) continue;
+		if (!row.key) {
+			continue;
+		}
 		map.set(row.key, row.count);
 	}
 	return map;
 }
 
 export const listAdminProjects = query(async (): Promise<AdminProject[]> => {
-	if (accessibilityFixtureEnabled) return accessibilityFixtureAdminProjects;
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureAdminProjects;
+	}
 	const db = await requireCurrentAdmin();
 
 	const [orgs, owners, memberCounts, vmCounts, volumeCounts, billingCustomers] = await Promise.all([
@@ -131,14 +145,7 @@ export const listAdminProjects = query(async (): Promise<AdminProject[]> => {
 
 	return orgs.map((org) => {
 		const owner = ownerByProject.get(org.id);
-		const billing = billingByProject.get(org.id);
-		const billingStatus: AdminProjectBillingStatus = billing
-			? billing.suspendedAt != null
-				? 'suspended'
-				: billing.pastDueSince != null
-					? 'past_due'
-					: 'configured'
-			: 'none';
+		const billingStatus = toBillingStatus(billingByProject.get(org.id));
 
 		return {
 			id: org.id,
@@ -166,7 +173,9 @@ export const setProjectBillingExempt = command(setBillingExemptParams, async (pa
 	const target = await db.query.organization.findFirst({
 		where: eq(organization.id, params.projectId)
 	});
-	if (!target) error(404, 'Project not found');
+	if (!target) {
+		error(404, 'Project not found');
+	}
 
 	await db
 		.update(organization)
@@ -192,7 +201,9 @@ export const createAdminProject = command(createProjectParams, async (params) =>
 	const db = await requireCurrentAdmin();
 
 	const owner = await db.query.user.findFirst({ where: eq(user.id, params.ownerUserId) });
-	if (!owner) error(404, 'User not found');
+	if (!owner) {
+		error(404, 'User not found');
+	}
 
 	const name = params.name.trim() || 'Untitled Project';
 	const auth = initAuth();
@@ -203,7 +214,9 @@ export const createAdminProject = command(createProjectParams, async (params) =>
 			userId: params.ownerUserId
 		}
 	});
-	if (!org) error(502, 'Failed to create project');
+	if (!org) {
+		error(502, 'Failed to create project');
+	}
 
 	await ensureLocalProjectBillingCustomer(org.id);
 	ensureProjectCustomer(org.id).catch((err) => {
@@ -225,16 +238,24 @@ const createVmParams = type({
 export const createAdminVm = command(createVmParams, async (params) => {
 	const db = await requireCurrentAdmin();
 	const adminUser = getRequestEvent().locals.user;
-	if (!adminUser) error(401, 'Authentication required');
+	if (!adminUser) {
+		error(401, 'Authentication required');
+	}
 
 	const project = await db.query.organization.findFirst({
 		where: eq(organization.id, params.projectId)
 	});
-	if (!project) error(404, 'Project not found');
-	if (project.disabled) error(400, 'This project is disabled');
+	if (!project) {
+		error(404, 'Project not found');
+	}
+	if (project.disabled) {
+		error(400, 'This project is disabled');
+	}
 
 	const billingExempt = await isProjectBillingExempt(params.projectId);
-	if (!billingExempt) await requireProjectBillingActive(params.projectId);
+	if (!billingExempt) {
+		await requireProjectBillingActive(params.projectId);
+	}
 
 	const [owner] = await db
 		.select({ userId: member.userId })
@@ -242,13 +263,12 @@ export const createAdminVm = command(createVmParams, async (params) => {
 		.where(and(eq(member.organizationId, params.projectId), eq(member.role, 'owner')))
 		.limit(1);
 
+	const sshKeyIds = params.sshKeyIds ?? [];
 	const keys =
-		params.sshKeyIds?.length && owner
+		sshKeyIds.length > 0 && owner
 			? await db.query.sshKeys.findMany({ where: eq(sshKeys.userId, owner.userId) })
 			: [];
-	const publicKeys = params.sshKeyIds?.length
-		? keys.filter((key) => params.sshKeyIds!.includes(key.id)).map((key) => key.publicKey)
-		: [];
+	const publicKeys = keys.filter((key) => sshKeyIds.includes(key.id)).map((key) => key.publicKey);
 
 	return provisionVm(db, {
 		projectId: params.projectId,
@@ -270,7 +290,9 @@ export const setProjectDisabled = command(setDisabledParams, async (params) => {
 	const target = await db.query.organization.findFirst({
 		where: eq(organization.id, params.projectId)
 	});
-	if (!target) error(404, 'Project not found');
+	if (!target) {
+		error(404, 'Project not found');
+	}
 
 	await db
 		.update(organization)
@@ -290,12 +312,16 @@ const beginDeleteProjectParams = type({ projectId: 'string' });
 export const beginDeleteProject = command(beginDeleteProjectParams, async (params) => {
 	const db = await requireCurrentAdmin();
 	const adminUser = getRequestEvent().locals.user;
-	if (!adminUser) error(401, 'Authentication required');
+	if (!adminUser) {
+		error(401, 'Authentication required');
+	}
 
 	const target = await db.query.organization.findFirst({
 		where: eq(organization.id, params.projectId)
 	});
-	if (!target) error(404, 'Project not found');
+	if (!target) {
+		error(404, 'Project not found');
+	}
 
 	const { method, code } = await beginAdminVerification(db, adminUser.id, params.projectId);
 
@@ -320,12 +346,16 @@ const deleteProjectParams = type({ projectId: 'string', method: 'string', code: 
 export const deleteProjectWithVerification = command(deleteProjectParams, async (params) => {
 	const db = await requireCurrentAdmin();
 	const adminUser = getRequestEvent().locals.user;
-	if (!adminUser) error(401, 'Authentication required');
+	if (!adminUser) {
+		error(401, 'Authentication required');
+	}
 
 	const target = await db.query.organization.findFirst({
 		where: eq(organization.id, params.projectId)
 	});
-	if (!target) error(404, 'Project not found');
+	if (!target) {
+		error(404, 'Project not found');
+	}
 
 	await consumeAdminVerification(db, adminUser.id, params.projectId, params.method, params.code);
 	await softDeleteOrganizationResources(db, params.projectId);

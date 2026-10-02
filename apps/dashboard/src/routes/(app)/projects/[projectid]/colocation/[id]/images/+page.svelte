@@ -7,10 +7,10 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import {
-		imageTypeColors,
-		officialImages,
 		type ImageType,
-		type OfficialImage
+		imageTypeColors,
+		type OfficialImage,
+		officialImages
 	} from '#lib/data/images.js';
 	import ChevronLeft from '~icons/lucide/chevron-left';
 	import ChevronRight from '~icons/lucide/chevron-right';
@@ -22,15 +22,17 @@
 	import Upload from '~icons/nucleo/upload';
 	import { getColocationContext } from '../../colocation-context.svelte';
 
-	type UserImage = {
+	const FILE_EXTENSION_PATTERN = /\.[^.]+$/;
+
+	interface UserImage {
 		id: string;
 		name: string;
-		type: ImageType;
-		size: string;
-		uploaded: string;
-		status: 'ready' | 'uploading' | 'processing';
 		progress: number;
-	};
+		size: string;
+		status: 'ready' | 'uploading' | 'processing';
+		type: ImageType;
+		uploaded: string;
+	}
 
 	const colo = getColocationContext();
 	let userImages = $state<UserImage[]>([
@@ -62,7 +64,9 @@
 	const imagesPerPage = 6;
 
 	let filteredOfficialImages = $derived.by(() => {
-		if (!search.trim()) return officialImages;
+		if (!search.trim()) {
+			return officialImages;
+		}
 		const q = search.toLowerCase();
 		return officialImages.filter(
 			(image) =>
@@ -75,7 +79,9 @@
 		filteredOfficialImages.slice(imagePage * imagesPerPage, (imagePage + 1) * imagesPerPage)
 	);
 	let filteredUserImages = $derived.by(() => {
-		if (!search.trim()) return userImages;
+		if (!search.trim()) {
+			return userImages;
+		}
 		const q = search.toLowerCase();
 		return userImages.filter((image) => image.name.toLowerCase().includes(q));
 	});
@@ -94,12 +100,20 @@
 		mountedImage = `${name} ${version}`;
 	}
 
+	function mountSelectedImageVersion(version: string) {
+		if (selectedImage) {
+			mountOfficialVersion(selectedImage.name, version);
+		}
+	}
+
 	function mountUserImage(name: string) {
 		mountedImage = name;
 	}
 
 	function bootFromMountedImage() {
-		if (!mountedImage || bootingFromImage) return;
+		if (!mountedImage || bootingFromImage) {
+			return;
+		}
 		bootingFromImage = true;
 		colo.updateSelectedUnit({ status: 'provisioning' });
 		setTimeout(() => {
@@ -110,22 +124,34 @@
 
 	function detectImageType(filename: string): ImageType | null {
 		const ext = filename.split('.').pop()?.toLowerCase();
-		if (ext === 'iso') return 'iso';
-		if (ext === 'img') return 'img';
-		if (ext === 'qcow2') return 'qcow2';
+		if (ext === 'iso') {
+			return 'iso';
+		}
+		if (ext === 'img') {
+			return 'img';
+		}
+		if (ext === 'qcow2') {
+			return 'qcow2';
+		}
 		return null;
 	}
 
 	function handleFileSelect(event: Event) {
 		const file = (event.target as HTMLInputElement).files?.[0];
-		if (!file) return;
+		if (!file) {
+			return;
+		}
 		uploadFile = file.name;
 		uploadDetectedType = detectImageType(file.name);
-		if (!uploadName) uploadName = file.name.replace(/\.[^.]+$/, '');
+		if (!uploadName) {
+			uploadName = file.name.replace(FILE_EXTENSION_PATTERN, '');
+		}
 	}
 
 	function handleUrlChange() {
-		if (uploadUrl) uploadDetectedType = detectImageType(uploadUrl.split('/').pop() ?? '');
+		if (uploadUrl) {
+			uploadDetectedType = detectImageType(uploadUrl.split('/').pop() ?? '');
+		}
 	}
 
 	function openUploadDialog() {
@@ -138,7 +164,9 @@
 	}
 
 	function startUpload() {
-		if (!uploadName.trim() || uploadingImage) return;
+		if (!uploadName.trim() || uploadingImage) {
+			return;
+		}
 		uploadingImage = true;
 		imageCounter += 1;
 		const sizes = ['1.2 GB', '2.8 GB', '4.5 GB', '680 MB', '9.1 GB'];
@@ -177,7 +205,9 @@
 	}
 
 	function deleteImage(id: string) {
-		if (deletingImageIds.includes(id)) return;
+		if (deletingImageIds.includes(id)) {
+			return;
+		}
 		deletingImageIds = [...deletingImageIds, id];
 		userImages = userImages.filter((image) => image.id !== id);
 		deletingImageIds = deletingImageIds.filter((item) => item !== id);
@@ -201,14 +231,19 @@
 						onclick={bootFromMountedImage}
 					>
 						<Power class="h-3 w-3" />
-						{#if bootingFromImage}Booting...{:else}Boot from Image{/if}
+						{#if bootingFromImage}
+							Booting...
+						{:else}
+							Boot from Image
+						{/if}
 					</Button>
 					<Button
 						variant="ghost"
 						size="sm"
 						class="h-7 px-2 text-xs"
 						disabled={bootingFromImage}
-						onclick={() => (mountedImage = null)}>Unmount</Button
+						onclick={() => (mountedImage = null)}
+						>Unmount</Button
 					>
 				</div>
 			</div>
@@ -235,7 +270,8 @@
 				class="h-7 gap-1.5 px-3 text-xs"
 				onclick={openUploadDialog}
 			>
-				<Upload class="h-3 w-3" /> Upload Image
+				<Upload class="h-3 w-3" />
+				Upload Image
 			</Button>
 		</div>
 
@@ -247,16 +283,22 @@
 				{#if imageTotalPages > 1}
 					<div class="flex items-center gap-1.5">
 						<button
+							type="button"
 							class="flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
 							disabled={imagePage === 0}
-							onclick={() => (imagePage -= 1)}><ChevronLeft class="h-3.5 w-3.5" /></button
+							onclick={() => (imagePage -= 1)}
 						>
+							<ChevronLeft class="h-3.5 w-3.5" />
+						</button>
 						<span class="text-[10px] text-muted-foreground">{imagePage + 1}/{imageTotalPages}</span>
 						<button
+							type="button"
 							class="flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
 							disabled={imagePage >= imageTotalPages - 1}
-							onclick={() => (imagePage += 1)}><ChevronRight class="h-3.5 w-3.5" /></button
+							onclick={() => (imagePage += 1)}
 						>
+							<ChevronRight class="h-3.5 w-3.5" />
+						</button>
 					</div>
 				{/if}
 			</div>
@@ -264,6 +306,7 @@
 				<div class="grid grid-cols-2 gap-px bg-background">
 					{#each pagedOfficialImages as image (image.id)}
 						<button
+							type="button"
 							class="relative flex gap-3 overflow-hidden bg-background p-4 text-left transition-colors hover:bg-muted/40"
 							onclick={() => openImageDetail(image)}
 						>
@@ -272,28 +315,29 @@
 								style:background={`radial-gradient(120% 120% at 0% 0%, ${image.iconColor} 0%, transparent 55%)`}
 							></div>
 							<div class="relative shrink-0">
-								{#if image.icon}<Icon
-										name={image.icon}
-										class="h-10 w-10 text-muted-foreground"
-									/>{:else}<Disc class="h-10 w-10 text-muted-foreground" />{/if}
+								{#if image.icon}
+									<Icon name={image.icon} class="h-10 w-10 text-muted-foreground" />
+								{:else}
+									<Disc class="h-10 w-10 text-muted-foreground" />
+								{/if}
 							</div>
 							<div class="relative flex min-w-0 flex-1 flex-col">
 								<div class="flex items-center gap-1.5">
 									<span class="text-sm font-semibold text-foreground">{image.name}</span>
-									{#if image.paid}<Badge
+									{#if image.paid}
+										<Badge
 											variant="outline"
 											class="border-red-700 bg-red-950/40 text-[8px] text-red-400"
 											><DollarSign class="mr-0.5 h-2 w-2" />{image.price}</Badge
-										>{/if}
+										>
+									{/if}
 								</div>
 								<p class="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
 									{image.description}
 								</p>
 								<p class="mt-auto pt-1.5 text-[10px] leading-none text-muted-foreground">
-									{image.versions[0].archs.join('  ')} | {image.versions.length} version{image
-										.versions.length > 1
-										? 's'
-										: ''}
+									{image.versions[0].archs.join('  ')}
+									| {image.versions.length} version{image.versions.length > 1 ? 's' : ''}
 								</p>
 							</div>
 						</button>
@@ -339,7 +383,8 @@
 											size="sm"
 											class="h-6 px-2 text-[10px]"
 											disabled={bootingFromImage}
-											onclick={() => mountUserImage(image.name)}>Mount</Button
+											onclick={() => mountUserImage(image.name)}
+											>Mount</Button
 										>
 									{/if}
 									<span class="text-[10px] text-muted-foreground">{image.uploaded}</span>
@@ -385,19 +430,22 @@
 				<Sheet.Header class="border-b border-border pb-4">
 					<div class="flex items-start gap-4">
 						<div class="shrink-0">
-							{#if selectedImage.icon}<Icon
-									name={selectedImage.icon}
-									class="h-14 w-14 text-muted-foreground"
-								/>{:else}<Disc class="h-14 w-14 text-muted-foreground" />{/if}
+							{#if selectedImage.icon}
+								<Icon name={selectedImage.icon} class="h-14 w-14 text-muted-foreground" />
+							{:else}
+								<Disc class="h-14 w-14 text-muted-foreground" />
+							{/if}
 						</div>
 						<div class="flex-1">
 							<div class="flex items-center gap-2">
-								<Sheet.Title class="text-base">{selectedImage.name}</Sheet.Title
-								>{#if selectedImage.paid}<Badge
+								<Sheet.Title class="text-base">{selectedImage.name}</Sheet.Title>
+								{#if selectedImage.paid}
+									<Badge
 										variant="outline"
 										class="border-red-700 bg-red-950/40 text-[9px] text-red-400"
 										><DollarSign class="mr-0.5 h-2 w-2" />{selectedImage.price}</Badge
-									>{/if}
+									>
+								{/if}
 							</div>
 							<Sheet.Description class="mt-1 text-xs leading-relaxed"
 								>{selectedImage.description}</Sheet.Description
@@ -415,10 +463,12 @@
 								<div class="flex items-center gap-3">
 									<span class="text-sm font-medium text-foreground">{version.version}</span>
 									<div class="flex gap-1">
-										{#each version.archs as arch (arch)}<span
+										{#each version.archs as arch (arch)}
+											<span
 												class="border border-border px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground"
 												>{arch}</span
-											>{/each}
+											>
+										{/each}
 									</div>
 								</div>
 								<div class="flex items-center gap-2">
@@ -433,8 +483,9 @@
 									size="sm"
 									class="h-7 gap-1.5 px-3 text-xs"
 									disabled={bootingFromImage}
-									onclick={() => mountOfficialVersion(selectedImage!.name, version.version)}
-									><Disc class="h-3 w-3" /> Mount via IPMI</Button
+									onclick={() => mountSelectedImageVersion(version.version)}
+									><Disc class="h-3 w-3" />
+									Mount via IPMI</Button
 								>
 								<Button
 									variant="outline"
@@ -442,10 +493,12 @@
 									class="h-7 gap-1.5 px-3 text-xs"
 									disabled={bootingFromImage}
 									onclick={() => {
-										mountOfficialVersion(selectedImage!.name, version.version);
+										mountSelectedImageVersion(version.version);
 										sheetOpen = false;
 										bootFromMountedImage();
-									}}><Power class="h-3 w-3" /> Mount & Boot</Button
+									}}
+									><Power class="h-3 w-3" />
+									Mount & Boot</Button
 								>
 							</div>
 						{/each}
@@ -458,7 +511,8 @@
 	<Dialog.Root bind:open={uploadOpen}>
 		<Dialog.Content class="border-border bg-background sm:max-w-md">
 			<Dialog.Header
-				><Dialog.Title>Upload Image</Dialog.Title><Dialog.Description
+				><Dialog.Title>Upload Image</Dialog.Title
+				><Dialog.Description
 					>Upload a .iso or .img file to mount via IPMI virtual media.</Dialog.Description
 				></Dialog.Header
 			>
@@ -470,31 +524,44 @@
 					<Label>Source</Label>
 					<div class="flex gap-2">
 						<button
+							type="button"
 							class="flex-1 border px-3 py-2 text-center text-xs font-medium transition-colors {uploadMethod ===
 							'file'
 								? 'border-red-500 bg-red-950/20 text-foreground'
 								: 'border-border text-muted-foreground hover:border-ring'}"
-							onclick={() => (uploadMethod = 'file')}>File Upload</button
-						><button
+							onclick={() => (uploadMethod = 'file')}
+						>
+							File Upload
+						</button><button
+							type="button"
 							class="flex-1 border px-3 py-2 text-center text-xs font-medium transition-colors {uploadMethod ===
 							'url'
 								? 'border-red-500 bg-red-950/20 text-foreground'
 								: 'border-border text-muted-foreground hover:border-ring'}"
-							onclick={() => (uploadMethod = 'url')}>URL Import</button
+							onclick={() => (uploadMethod = 'url')}
 						>
+							URL Import
+						</button>
 					</div>
 				</div>
 				{#if uploadMethod === 'file'}
 					<label
+						aria-label="Upload image file"
 						class="flex cursor-pointer flex-col items-center justify-center border border-dashed border-ring bg-muted/30 px-4 py-6 text-center transition-colors hover:border-ring hover:bg-muted/50"
 					>
 						<Upload class="mb-2 h-6 w-6 text-muted-foreground" />
-						{#if uploadFile}<span class="text-xs font-medium text-foreground">{uploadFile}</span
-							>{#if uploadDetectedType}<span class="mt-1 text-[10px] text-muted-foreground"
+						{#if uploadFile}
+							<span class="text-xs font-medium text-foreground">{uploadFile}</span>
+							{#if uploadDetectedType}
+								<span class="mt-1 text-[10px] text-muted-foreground"
 									>Detected: .{uploadDetectedType}</span
-								>{/if}{:else}<span class="text-xs text-muted-foreground"
+								>
+							{/if}
+						{:else}
+							<span class="text-xs text-muted-foreground"
 								>Drop or click to browse (.iso, .img, .qcow2)</span
-							>{/if}
+							>
+						{/if}
 						<input
 							type="file"
 							accept=".iso,.img,.qcow2"
@@ -504,15 +571,17 @@
 					</label>
 				{:else}
 					<div class="flex flex-col gap-2">
-						<Label>Image URL</Label><Input
+						<Label>Image URL</Label>
+						<Input
 							bind:value={uploadUrl}
 							placeholder="https://example.com/image.iso"
 							oninput={handleUrlChange}
-						/>{#if uploadDetectedType}<p class="text-xs text-muted-foreground">
-								Detected: .{uploadDetectedType}
-							</p>{:else if uploadUrl}<p class="text-xs text-amber-500">
-								Could not detect format. Will default to .img
-							</p>{/if}
+						/>
+						{#if uploadDetectedType}
+							<p class="text-xs text-muted-foreground">Detected: .{uploadDetectedType}</p>
+						{:else if uploadUrl}
+							<p class="text-xs text-amber-500">Could not detect format. Will default to .img</p>
+						{/if}
 					</div>
 				{/if}
 			</div>
@@ -521,11 +590,12 @@
 					variant="outline"
 					size="sm"
 					onclick={() => (uploadOpen = false)}
-					disabled={uploadingImage}>Cancel</Button
+					disabled={uploadingImage}
+					>Cancel</Button
 				><Button
 					size="sm"
 					onclick={startUpload}
-					disabled={uploadingImage || (!uploadName.trim() && !uploadFile && !uploadUrl)}
+					disabled={uploadingImage || !(uploadName.trim() || uploadFile || uploadUrl)}
 					><Upload class="h-3 w-3" /> {uploadingImage ? 'Uploading...' : 'Upload'}</Button
 				></Dialog.Footer
 			>

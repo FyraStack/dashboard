@@ -1,15 +1,15 @@
+import type { IconComponent } from '#lib';
+import type { FeatureFlagKey } from '#lib/feature-flags.js';
 import ArrowUpDown from '~icons/lucide/arrow-up-down';
-import Clock from '~icons/nucleo/clock';
-import FileText from '~icons/nucleo/file-text';
 import Activity from '~icons/nucleo/activity';
 import Camera from '~icons/nucleo/camera';
+import Clock from '~icons/nucleo/clock';
 import Disc from '~icons/nucleo/disc';
+import FileText from '~icons/nucleo/file-text';
 import Globe from '~icons/nucleo/globe';
 import RotateCw from '~icons/nucleo/rotate-cw';
 import Settings from '~icons/nucleo/settings';
 import Terminal from '~icons/nucleo/terminal';
-import type { FeatureFlagKey } from '#lib/feature-flags.js';
-import type { IconComponent } from '#lib';
 
 export type ServerTab =
 	| 'overview'

@@ -1,19 +1,21 @@
 <script lang="ts">
+	import { authClient } from '#lib/auth-client.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { authClient } from '#lib/auth-client.js';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertCircle from '~icons/nucleo/alert-circle';
 	import CheckCircle2 from '~icons/nucleo/check-circle';
 
 	let email = $state('');
-	let error = $state('');
+	let errorMessage = $state('');
 	let loading = $state(false);
 	let sent = $state(false);
 
 	async function handleSubmit() {
-		if (!email) return;
-		error = '';
+		if (!email) {
+			return;
+		}
+		errorMessage = '';
 		loading = true;
 
 		const { error: err } = await authClient.requestPasswordReset({
@@ -24,7 +26,7 @@
 		loading = false;
 
 		if (err) {
-			error = err.message ?? 'Unable to send reset email.';
+			errorMessage = err.message ?? 'Unable to send reset email.';
 			return;
 		}
 
@@ -58,12 +60,12 @@
 					Enter your email and we'll send you a link to reset your password.
 				</p>
 
-				{#if error}
+				{#if errorMessage}
 					<div
 						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 					>
 						<AlertCircle class="size-4 shrink-0" />
-						{error}
+						{errorMessage}
 					</div>
 				{/if}
 

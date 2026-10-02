@@ -1,14 +1,14 @@
 <script lang="ts">
-	import Loader2 from '~icons/lucide/loader-2';
-	import CreditCard from '~icons/nucleo/credit-card';
-	import Info from '~icons/nucleo/info';
-	import ShieldAlert from '~icons/nucleo/shield-alert';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { openBillingPortal, setupProjectBillingPayment } from '#lib/remote/billing.remote.js';
 	import { getErrorMessage } from '#lib/utils.js';
+	import Loader2 from '~icons/lucide/loader-2';
+	import CreditCard from '~icons/nucleo/credit-card';
+	import Info from '~icons/nucleo/info';
+	import ShieldAlert from '~icons/nucleo/shield-alert';
 
 	type Mode = 'server-create' | 'billing-page';
 
@@ -33,17 +33,18 @@
 	let discountCode = $state('');
 
 	const title = $derived(billingReady ? 'Manage billing' : 'Set up billing');
+	const blockedResource = $derived(mode === 'server-create' ? 'servers' : 'resources');
 	const description = $derived(
 		billingReady
 			? 'Manage payment methods, invoices, and project billing settings.'
-			: mode === 'server-create'
-				? 'This project needs a payment method before servers can be created.'
-				: 'This project needs a payment method before resources can be created.'
+			: `This project needs a payment method before ${blockedResource} can be created.`
 	);
 	const primaryLabel = $derived(billingReady ? 'Open billing portal' : 'Add payment method');
 
 	async function handlePrimaryAction() {
-		if (!projectId || loading || !canManageBilling) return;
+		if (!projectId || loading || !canManageBilling) {
+			return;
+		}
 
 		loading = true;
 		actionError = '';

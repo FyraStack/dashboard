@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import Icon from '#lib/components/icon.svelte';
 	import ComingSoon from '#lib/components/coming-soon.svelte';
+	import Icon from '#lib/components/icon.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import {
-		officialImages,
+		type ImageType,
 		imageTypeColors,
 		type OfficialImage,
-		type ImageType
+		officialImages
 	} from '#lib/data/images.js';
+	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 	import ChevronLeft from '~icons/lucide/chevron-left';
 	import ChevronRight from '~icons/lucide/chevron-right';
 	import Disc from '~icons/nucleo/disc';
@@ -27,15 +27,14 @@
 	let mountedImage = $state<string | null>(null);
 	let rebuildFromImage = $state<{ name: string; version: string } | null>(null);
 	let rebuildImageConfirm = $state('');
-	let imgUploadOpen = $state(false);
 
-	type UserImage = {
+	interface UserImage {
 		id: string;
 		name: string;
-		type: ImageType;
 		size: string;
+		type: ImageType;
 		uploaded: string;
-	};
+	}
 
 	let vmUserImages = $state<UserImage[]>([
 		{
@@ -48,7 +47,9 @@
 	]);
 
 	let filteredOfficialImages = $derived.by(() => {
-		if (!imgSearch.trim()) return officialImages;
+		if (!imgSearch.trim()) {
+			return officialImages;
+		}
 		const query = imgSearch.toLowerCase();
 		return officialImages.filter(
 			(image) =>
@@ -63,7 +64,9 @@
 		return list.slice(imgPage * imgPerPage, (imgPage + 1) * imgPerPage);
 	});
 	let filteredVmUserImages = $derived.by(() => {
-		if (!imgSearch.trim()) return vmUserImages;
+		if (!imgSearch.trim()) {
+			return vmUserImages;
+		}
 		const query = imgSearch.toLowerCase();
 		return vmUserImages.filter((image) => image.name.toLowerCase().includes(query));
 	});
@@ -128,7 +131,8 @@
 					disabled
 					class="gap-1.5 border-red-300 px-3 text-xs text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950"
 				>
-					<RotateCw class="h-3 w-3" /> Rebuild
+					<RotateCw class="h-3 w-3" />
+					Rebuild
 				</Button>
 				<ComingSoon />
 				<Button
@@ -157,7 +161,8 @@
 		<div class="flex items-center gap-2">
 			<ComingSoon />
 			<Button variant="outline" size="sm" disabled class="h-7 gap-1.5 px-3 text-xs">
-				<Upload class="h-3 w-3" /> Upload Image
+				<Upload class="h-3 w-3" />
+				Upload Image
 			</Button>
 		</div>
 	</div>
@@ -170,17 +175,19 @@
 			{#if imgTotalPages > 1}
 				<div class="flex items-center gap-1.5">
 					<button
+						type="button"
 						class="flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
 						disabled={imgPage === 0}
-						onclick={() => imgPage--}
+						onclick={() => (imgPage -= 1)}
 					>
 						<ChevronLeft class="h-3.5 w-3.5" />
 					</button>
 					<span class="text-[10px] text-muted-foreground">{imgPage + 1}/{imgTotalPages}</span>
 					<button
+						type="button"
 						class="flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
 						disabled={imgPage >= imgTotalPages - 1}
-						onclick={() => imgPage++}
+						onclick={() => (imgPage += 1)}
 					>
 						<ChevronRight class="h-3.5 w-3.5" />
 					</button>
@@ -240,10 +247,8 @@
 								</Button>
 							</div>
 							<p class="mt-auto pt-1.5 text-[10px] leading-none text-muted-foreground">
-								{version.archs.join('  ')} | {image.versions.length} version{image.versions.length >
-								1
-									? 's'
-									: ''}
+								{version.archs.join('  ')}
+								| {image.versions.length} version{image.versions.length > 1 ? 's' : ''}
 							</p>
 						</div>
 					</div>
@@ -287,14 +292,16 @@
 									variant="ghost"
 									size="sm"
 									class="h-6 px-2 text-[10px]"
-									onclick={() => mountUserImage(image.name)}>Mount</Button
+									onclick={() => mountUserImage(image.name)}
+									>Mount</Button
 								>
 							{/if}
 							<Button
 								variant="outline"
 								size="sm"
 								class="h-6 px-2 text-[10px]"
-								onclick={() => startRebuild(image.name, '')}>Rebuild</Button
+								onclick={() => startRebuild(image.name, '')}
+								>Rebuild</Button
 							>
 							<span class="text-[10px] text-muted-foreground">{image.uploaded}</span>
 							<Button

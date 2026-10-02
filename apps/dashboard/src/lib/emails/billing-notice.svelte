@@ -14,12 +14,12 @@
 	import EmailHeader from './email-header.svelte';
 
 	interface Props {
-		userName?: string | null;
+		actionLabel: string;
+		actionUrl: string;
+		body: string;
 		heading: string;
 		preview: string;
-		body: string;
-		actionUrl: string;
-		actionLabel: string;
+		userName?: string | null;
 	}
 
 	let { userName = null, heading, preview, body, actionUrl, actionLabel }: Props = $props();
@@ -34,7 +34,11 @@
 			<Section class="p-8">
 				<Heading as="h1" class="m-0 text-xl font-semibold text-gray-50">{heading}</Heading>
 				<Text class="mt-4 text-sm leading-5 text-gray-400">
-					{#if userName}Hi {userName},{:else}Hi there,{/if}
+					{#if userName}
+						Hi {userName},
+					{:else}
+						Hi there,
+					{/if}
 				</Text>
 				<Text class="mt-2 text-sm leading-5 text-gray-400">{body}</Text>
 				<Section class="mt-6">

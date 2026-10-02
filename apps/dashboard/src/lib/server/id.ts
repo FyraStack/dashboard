@@ -1,3 +1,5 @@
-import { ulid } from 'ulid';
+import { ulid as generateUlid } from 'ulid';
 
-export { ulid };
+export function ulid(): string {
+	return generateUlid();
+}

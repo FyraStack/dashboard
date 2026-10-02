@@ -1,6 +1,6 @@
 import type { Handle } from '@sveltejs/kit/hooks';
-import { PUBLIC_POSTHOG_HOST } from '$app/env/public';
 import { posthogProxyPath } from '#lib/analytics/posthog.js';
+import { PUBLIC_POSTHOG_HOST } from '$app/env/public';
 
 function posthogRegion(): 'us' | 'eu' {
 	return PUBLIC_POSTHOG_HOST?.includes('eu.') ? 'eu' : 'us';
@@ -38,7 +38,9 @@ export const handlePostHogProxy: Handle = async ({ event, resolve }) => {
 	headers.delete('accept-encoding');
 
 	const clientIp = event.request.headers.get('cf-connecting-ip') ?? event.getClientAddress();
-	if (clientIp) headers.set('x-forwarded-for', clientIp);
+	if (clientIp) {
+		headers.set('x-forwarded-for', clientIp);
+	}
 
 	const hasBody = event.request.method !== 'GET' && event.request.method !== 'HEAD';
 	const upstream = await fetch(upstreamUrl, {

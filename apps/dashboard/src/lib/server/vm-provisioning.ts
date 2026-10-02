@@ -1,16 +1,20 @@
 import { error } from '@sveltejs/kit';
-import { and, eq, inArray } from 'drizzle-orm';
 import type { InferSelectModel } from 'drizzle-orm';
-import { getRequestEvent } from '$app/server';
+import { and, eq, inArray } from 'drizzle-orm';
+import {
+	getBackend,
+	type VmCreateParams,
+	type VmCreateResult
+} from '#lib/server/backends/index.js';
 import { runInBackground } from '#lib/server/background.js';
-import { getBackend } from '#lib/server/backends/index.js';
 import {
 	deleteProjectServerEntity,
 	ensureProjectServerEntity,
 	isBillingConfigured
 } from '#lib/server/billing/autumn.js';
 import { createBillingMeter } from '#lib/server/billing/metering.js';
-import { closeRequestDb, initDrizzle, type Database } from '#lib/server/db/index.js';
+import { config } from '#lib/server/config.js';
+import { closeRequestDb, type Database, initDrizzle } from '#lib/server/db/index.js';
 import { baseImages, vms, vmTypes } from '#lib/server/db/schema.js';
 import {
 	allocateVmNetworking,
@@ -21,19 +25,19 @@ import {
 } from '#lib/server/ipam.js';
 import { applyDefaultPtrRecords } from '#lib/server/ptr-records.js';
 import { allocateProxmoxVmid } from '#lib/server/vm-identity.js';
-import { config } from '#lib/server/config.js';
+import { getRequestEvent } from '$app/server';
 
-export type ProvisionVmInput = {
-	projectId: string;
-	vmTypeId: string;
-	name: string;
-	userId: string;
+export interface ProvisionVmInput {
 	billingExempt: boolean;
-	networkingMode?: 'both' | 'ipv6';
 	imageId?: string;
-	sshPublicKeys?: string[];
+	name: string;
+	networkingMode?: 'both' | 'ipv6';
 	password?: string;
-};
+	projectId: string;
+	sshPublicKeys?: string[];
+	userId: string;
+	vmTypeId: string;
+}
 
 const PROVISION_STALL_AFTER_MS = 60_000;
 const PROVISION_TIMEOUT_MS = 15 * 60_000;
@@ -53,7 +57,7 @@ function errorMessage(err: unknown) {
 export function isProvisioningStalled(row: StalledProvisioningVm, now = Date.now()) {
 	return (
 		row.status === 'provisioning' &&
-		row.proxmoxId != null &&
+		row.proxmoxId !== null &&
 		now - row.createdAt > PROVISION_STALL_AFTER_MS
 	);
 }
@@ -61,7 +65,9 @@ export function isProvisioningStalled(row: StalledProvisioningVm, now = Date.now
 export async function resumeStalledProvisioning(db: Database, row: StalledProvisioningVm) {
 	const now = Date.now();
 	const inFlightSince = resumeAttemptsStartedAt.get(row.id);
-	if (inFlightSince !== undefined && now - inFlightSince < RESUME_ATTEMPT_TTL_MS) return;
+	if (inFlightSince !== undefined && now - inFlightSince < RESUME_ATTEMPT_TTL_MS) {
+		return;
+	}
 	resumeAttemptsStartedAt.set(row.id, now);
 	try {
 		if (Date.now() - row.createdAt > PROVISION_TIMEOUT_MS) {
@@ -74,7 +80,9 @@ export async function resumeStalledProvisioning(db: Database, row: StalledProvis
 			{ diskGb: row.vmTypeStorageAmount ?? 0 },
 			{ proxmoxNode: row.proxmoxNode ?? undefined }
 		);
-		if (!provisioned) return;
+		if (!provisioned) {
+			return;
+		}
 		await ensureVmDelegatedRoute(db, row.id);
 		await markVmProvisionReady(row.id);
 	} catch (err) {
@@ -108,7 +116,9 @@ async function updateActiveVmStatus(
 	} catch (updateErr) {
 		console.error(`VM ${vmId} status update failed:`, updateErr);
 	} finally {
-		if (ownsPool) closeRequestDb(settledEvent);
+		if (ownsPool) {
+			closeRequestDb(settledEvent);
+		}
 	}
 }
 
@@ -118,6 +128,86 @@ function markVmProvisionReady(vmId: string) {
 
 function markVmProvisionFailed(vmId: string, statusError: string) {
 	return updateActiveVmStatus(vmId, { status: 'error', statusError });
+}
+
+type NetworkingAllocations = Awaited<ReturnType<typeof allocateVmNetworking>>;
+
+function buildVmNetworkConfig(
+	networkingAllocations: NetworkingAllocations
+): NonNullable<VmCreateParams['networkConfig']> {
+	const ipv4NetworkAllocation = networkingAllocations.find(
+		(allocation) => allocation.family === 'ipv4' && allocation.address
+	);
+	const ipv6TransitNetworkAllocation = networkingAllocations.find(
+		(allocation) => allocation.family === 'ipv6' && allocation.address
+	);
+	const ipv6PrefixNetworkAllocation = networkingAllocations.find(
+		(allocation) => allocation.family === 'ipv6' && allocation.prefix
+	);
+	const firewallIpSet = [
+		...(ipv4NetworkAllocation?.address ? [`${ipv4NetworkAllocation.address}/32`] : []),
+		...(ipv6TransitNetworkAllocation?.address
+			? [`${ipv6TransitNetworkAllocation.address}/128`]
+			: []),
+		...(ipv6PrefixNetworkAllocation?.prefix ? [ipv6PrefixNetworkAllocation.prefix] : [])
+	];
+
+	return {
+		firewallIpSet,
+		...(ipv4NetworkAllocation?.address
+			? {
+					ipv4: {
+						address: ipv4NetworkAllocation.address,
+						prefixLength: ipv4NetworkAllocation.prefixLength,
+						gateway: ipv4NetworkAllocation.sourcePrefix.gatewayAddress ?? ''
+					}
+				}
+			: {}),
+		...(ipv6TransitNetworkAllocation?.address
+			? {
+					ipv6: {
+						address: ipv6TransitNetworkAllocation.address,
+						prefixLength: ipv6TransitNetworkAllocation.prefixLength
+					}
+				}
+			: {}),
+		...(ipv6PrefixNetworkAllocation?.prefix
+			? { ipv6Prefix: ipv6PrefixNetworkAllocation.prefix }
+			: {}),
+		...(!ipv4NetworkAllocation &&
+		(ipv6TransitNetworkAllocation?.address || ipv6PrefixNetworkAllocation?.prefix)
+			? {
+					nat64Prefix: config.vmNetwork.nat64Prefix,
+					nat64Dns64Server: config.vmNetwork.nat64Dns64Server
+				}
+			: {})
+	};
+}
+
+async function cleanUpFailedProvision(
+	db: Database,
+	params: {
+		vmId: string;
+		projectId: string;
+		proxmoxId: number | null;
+		delegatedRoute: Promise<unknown>;
+	}
+) {
+	const { vmId, projectId, proxmoxId, delegatedRoute } = params;
+	if (proxmoxId !== null) {
+		await getBackend('proxmox')
+			.deleteVm(vmId, proxmoxId)
+			.catch((deleteErr) => {
+				console.warn(`Failed to clean up Proxmox VM ${vmId} after provisioning error`, deleteErr);
+			});
+	}
+	await delegatedRoute.catch(() => undefined);
+	await releaseVmNetworking(db, vmId).catch(() => undefined);
+	await deleteProjectServerEntity(projectId, vmId).catch(() => undefined);
+	await db
+		.delete(vms)
+		.where(eq(vms.id, vmId))
+		.catch(() => undefined);
 }
 
 export async function provisionVm(db: Database, input: ProvisionVmInput) {
@@ -131,12 +221,17 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 				})
 			: null
 	]);
-	if (!vmType) error(400, `VM type "${input.vmTypeId}" not found`);
-	if (isBillingConfigured() && !vmType.autumnFeatureId)
+	if (!vmType) {
+		error(400, `VM type "${input.vmTypeId}" not found`);
+	}
+	if (isBillingConfigured() && !vmType.autumnFeatureId) {
 		error(400, `VM type "${vmType.name}" is missing an Autumn feature ID`);
+	}
 	const featureId = vmType.autumnFeatureId;
 
-	if (input.imageId && !baseImage) error(400, `Image "${input.imageId}" not found`);
+	if (input.imageId && !baseImage) {
+		error(400, `Image "${input.imageId}" not found`);
+	}
 
 	const now = Date.now();
 	const [inserted] = await db
@@ -159,7 +254,7 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 	let networkingAllocations: Awaited<ReturnType<typeof allocateVmNetworking>> = [];
 	let delegatedRoute: Promise<unknown> = Promise.resolve();
 	let proxmoxId: number | null = null;
-	let result;
+	let result: VmCreateResult;
 	try {
 		if (!input.billingExempt) {
 			await ensureProjectServerEntity({
@@ -173,22 +268,7 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 			macAddress,
 			mode: input.networkingMode ?? 'both'
 		});
-		const ipv4NetworkAllocation = networkingAllocations.find(
-			(allocation) => allocation.family === 'ipv4' && allocation.address
-		);
-		const ipv6TransitNetworkAllocation = networkingAllocations.find(
-			(allocation) => allocation.family === 'ipv6' && allocation.address
-		);
-		const ipv6PrefixNetworkAllocation = networkingAllocations.find(
-			(allocation) => allocation.family === 'ipv6' && allocation.prefix
-		);
-		const firewallIpSet = [
-			...(ipv4NetworkAllocation?.address ? [`${ipv4NetworkAllocation.address}/32`] : []),
-			...(ipv6TransitNetworkAllocation?.address
-				? [`${ipv6TransitNetworkAllocation.address}/128`]
-				: []),
-			...(ipv6PrefixNetworkAllocation?.prefix ? [ipv6PrefixNetworkAllocation.prefix] : [])
-		];
+		const networkConfig = buildVmNetworkConfig(networkingAllocations);
 		delegatedRoute = createVyosDelegatedRoute(networkingAllocations, vmId).catch(async (err) => {
 			await markVmProvisionFailed(vmId, `Failed to create IPv6 route: ${errorMessage(err)}`);
 			throw err;
@@ -208,36 +288,7 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 			imageId: input.imageId,
 			imageSource: baseImage?.filePath,
 			secureBoot: baseImage?.secureBoot ?? true,
-			networkConfig: {
-				firewallIpSet,
-				...(ipv4NetworkAllocation?.address
-					? {
-							ipv4: {
-								address: ipv4NetworkAllocation.address,
-								prefixLength: ipv4NetworkAllocation.prefixLength,
-								gateway: ipv4NetworkAllocation.sourcePrefix.gatewayAddress ?? ''
-							}
-						}
-					: {}),
-				...(ipv6TransitNetworkAllocation?.address
-					? {
-							ipv6: {
-								address: ipv6TransitNetworkAllocation.address,
-								prefixLength: ipv6TransitNetworkAllocation.prefixLength
-							}
-						}
-					: {}),
-				...(ipv6PrefixNetworkAllocation?.prefix
-					? { ipv6Prefix: ipv6PrefixNetworkAllocation.prefix }
-					: {}),
-				...(!ipv4NetworkAllocation &&
-				(ipv6TransitNetworkAllocation?.address || ipv6PrefixNetworkAllocation?.prefix)
-					? {
-							nat64Prefix: config.vmNetwork.nat64Prefix,
-							nat64Dns64Server: config.vmNetwork.nat64Dns64Server
-						}
-					: {})
-			},
+			networkConfig,
 			sshKeys: input.sshPublicKeys ?? [],
 			password: input.password,
 			onProvisionSettled: async ({ ok, error: err }) => {
@@ -257,22 +308,16 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 			projectId: input.projectId
 		});
 
-		if (!result.macAddress) error(502, 'Proxmox did not return a MAC address');
-	} catch (err) {
-		if (proxmoxId != null) {
-			await getBackend('proxmox')
-				.deleteVm(vmId, proxmoxId)
-				.catch((deleteErr) => {
-					console.warn(`Failed to clean up Proxmox VM ${vmId} after provisioning error`, deleteErr);
-				});
+		if (!result.macAddress) {
+			error(502, 'Proxmox did not return a MAC address');
 		}
-		await delegatedRoute.catch(() => {});
-		await releaseVmNetworking(db, vmId).catch(() => {});
-		await deleteProjectServerEntity(input.projectId, vmId).catch(() => {});
-		await db
-			.delete(vms)
-			.where(eq(vms.id, inserted.id))
-			.catch(() => {});
+	} catch (err) {
+		await cleanUpFailedProvision(db, {
+			vmId,
+			projectId: input.projectId,
+			proxmoxId,
+			delegatedRoute
+		});
 		throw err;
 	}
 

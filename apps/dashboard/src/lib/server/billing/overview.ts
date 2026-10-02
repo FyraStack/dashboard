@@ -1,24 +1,34 @@
 import { and, eq, sum } from 'drizzle-orm';
 import {
+	accessibilityFixtureBillingOverview,
+	accessibilityFixtureEnabled
+} from '#lib/server/accessibility-fixtures.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { billingMeters, billingUsageEvents, vmTypes } from '#lib/server/db/schema.js';
+import {
 	ensureProjectCustomer,
 	getProjectBillingState,
 	getProjectCreditsBalance,
 	getProjectInvoices,
 	invalidateProjectBillingState
 } from './autumn';
-import { initDrizzle } from '#lib/server/db/index.js';
-import { billingMeters, billingUsageEvents, vmTypes } from '#lib/server/db/schema.js';
-import {
-	accessibilityFixtureEnabled,
-	accessibilityFixtureBillingOverview
-} from '#lib/server/accessibility-fixtures.js';
 
 function statusLabel(status: Awaited<ReturnType<typeof getProjectBillingState>>['status']) {
-	if (status === 'active') return 'Ready';
-	if (status === 'past_due') return 'Past due';
-	if (status === 'failed') return 'Needs attention';
-	if (status === 'payment_required') return 'Payment method required';
-	if (status === 'provider_unavailable') return 'Billing temporarily unavailable';
+	if (status === 'active') {
+		return 'Ready';
+	}
+	if (status === 'past_due') {
+		return 'Past due';
+	}
+	if (status === 'failed') {
+		return 'Needs attention';
+	}
+	if (status === 'payment_required') {
+		return 'Payment method required';
+	}
+	if (status === 'provider_unavailable') {
+		return 'Billing temporarily unavailable';
+	}
 	return 'Not set up';
 }
 
@@ -43,7 +53,9 @@ export async function getProjectBillingReadiness(projectId: string) {
 }
 
 export async function getProjectBillingOverview(projectId: string) {
-	if (accessibilityFixtureEnabled) return accessibilityFixtureBillingOverview;
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureBillingOverview;
+	}
 
 	const db = initDrizzle();
 	const now = Date.now();
@@ -86,7 +98,9 @@ export async function getProjectBillingOverview(projectId: string) {
 	);
 	const vmTypeByFeature = new Map<string, { name: string; rate: string }>();
 	for (const row of vmTypeRows) {
-		if (row.featureId) vmTypeByFeature.set(row.featureId, { name: row.name, rate: row.rate });
+		if (row.featureId) {
+			vmTypeByFeature.set(row.featureId, { name: row.name, rate: row.rate });
+		}
 	}
 
 	const groups = new Map<string, { count: number; liveHours: number }>();
@@ -97,7 +111,9 @@ export async function getProjectBillingOverview(projectId: string) {
 		groups.set(meter.featureId, group);
 	}
 	for (const featureId of recordedByFeature.keys()) {
-		if (!groups.has(featureId)) groups.set(featureId, { count: 0, liveHours: 0 });
+		if (!groups.has(featureId)) {
+			groups.set(featureId, { count: 0, liveHours: 0 });
+		}
 	}
 
 	const activeResources = [...groups.entries()].map(([featureId, group]) => {
@@ -110,7 +126,7 @@ export async function getProjectBillingOverview(projectId: string) {
 			resourceType: 'vm' as const,
 			count: group.count,
 			hours: Number(hours.toFixed(2)),
-			cost: rate != null ? Number((hours * rate).toFixed(2)) : null
+			cost: rate === null ? null : Number((hours * rate).toFixed(2))
 		};
 	});
 

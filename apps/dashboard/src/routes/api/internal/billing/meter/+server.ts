@@ -1,27 +1,33 @@
 import { error } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
-import {
-	meterActiveResources,
-	reconcileOrphanedMeters,
-	syncPendingUsage
-} from '#lib/server/billing/metering.js';
-import { purgeExpiredDeletedVms } from '#lib/server/vm-deletion.js';
-import { purgeExpiredDeletedOrganizations } from '#lib/server/project-deletion.js';
 import {
 	isBillingConfigured,
 	retryOrphanedProjectBillingCancellations
 } from '#lib/server/billing/autumn.js';
 import { enforceProjectBillingGrace } from '#lib/server/billing/enforcement.js';
+import {
+	meterActiveResources,
+	reconcileOrphanedMeters,
+	syncPendingUsage
+} from '#lib/server/billing/metering.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
+import { purgeExpiredDeletedOrganizations } from '#lib/server/project-deletion.js';
+import { purgeExpiredDeletedVms } from '#lib/server/vm-deletion.js';
+import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const secret = getRuntimeEnv().INTERNAL_CRON_SECRET;
-	if (!secret) error(503, 'Internal cron is not configured');
+	if (!secret) {
+		error(503, 'Internal cron is not configured');
+	}
 
 	const authorization = request.headers.get('authorization');
-	if (authorization !== `Bearer ${secret}`) error(401, 'Unauthorized');
+	if (authorization !== `Bearer ${secret}`) {
+		error(401, 'Unauthorized');
+	}
 
-	if (!isBillingConfigured()) error(503, 'Billing is not configured');
+	if (!isBillingConfigured()) {
+		error(503, 'Billing is not configured');
+	}
 
 	const reconciled = await reconcileOrphanedMeters().catch((err) => {
 		console.error('Orphaned meter reconciliation failed', err);

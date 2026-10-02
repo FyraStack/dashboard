@@ -1,40 +1,40 @@
 <script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Fingerprint from '~icons/nucleo/fingerprint';
 
-	type Props = {
-		open?: boolean;
+	interface Props {
 		onComplete?: () => void;
-	};
+		open?: boolean;
+	}
 
 	let { open = $bindable(false), onComplete }: Props = $props();
 
 	let passkeyName = $state('');
 	let registering = $state(false);
-	let error = $state('');
+	let errorMessage = $state('');
 
 	$effect(() => {
 		if (!open) {
 			passkeyName = '';
-			error = '';
+			errorMessage = '';
 			registering = false;
 		}
 	});
 
 	async function registerPasskey() {
 		registering = true;
-		error = '';
+		errorMessage = '';
 		const { error: err } = await authClient.passkey.addPasskey({
 			name: passkeyName.trim() || undefined
 		});
 		registering = false;
 		if (err) {
-			error = err.message ?? 'Failed to register passkey';
+			errorMessage = err.message ?? 'Failed to register passkey';
 			return;
 		}
 		open = false;
@@ -62,8 +62,8 @@
 				/>
 			</div>
 
-			{#if error}
-				<p class="text-xs text-red-400">{error}</p>
+			{#if errorMessage}
+				<p class="text-xs text-red-400">{errorMessage}</p>
 			{/if}
 
 			<Button onclick={registerPasskey} disabled={registering} class="gap-1.5">

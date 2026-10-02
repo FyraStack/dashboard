@@ -1,14 +1,16 @@
 <script lang="ts">
 	import Activity from '~icons/nucleo/activity';
 	import Cpu from '~icons/nucleo/cpu';
-	import Fan from '~icons/nucleo/wind';
 	import Thermometer from '~icons/nucleo/thermometer';
+	import Fan from '~icons/nucleo/wind';
 	import { getColocationContext } from '../../colocation-context.svelte';
 
 	const colo = getColocationContext();
 
 	let sensorData = $derived.by(() => {
-		if (colo.selectedUnit?.status === 'offline') return null;
+		if (colo.selectedUnit?.status === 'offline') {
+			return null;
+		}
 		return {
 			cpuTemp: Math.floor(Math.random() * 15 + 45),
 			inletTemp: Math.floor(Math.random() * 5 + 22),
@@ -27,12 +29,34 @@
 	});
 
 	let powerPct = $derived.by(() => {
-		const selectedUnit = colo.selectedUnit;
-		if (!selectedUnit) return 0;
-		const draw = parseInt(selectedUnit.powerDraw);
-		const budget = parseInt(selectedUnit.powerBudget);
+		const { selectedUnit } = colo;
+		if (!selectedUnit) {
+			return 0;
+		}
+		const draw = Number.parseInt(selectedUnit.powerDraw, 10);
+		const budget = Number.parseInt(selectedUnit.powerBudget, 10);
 		return budget > 0 ? (draw / budget) * 100 : 0;
 	});
+
+	function cpuTempClass(temp: number): string {
+		if (temp > 70) {
+			return 'text-red-400';
+		}
+		if (temp > 55) {
+			return 'text-amber-400';
+		}
+		return 'text-foreground';
+	}
+
+	function powerBarClass(pct: number): string {
+		if (pct > 80) {
+			return 'bg-red-500';
+		}
+		if (pct > 50) {
+			return 'bg-amber-500';
+		}
+		return 'bg-emerald-500';
+	}
 </script>
 
 {#if colo.selectedUnit}
@@ -44,14 +68,35 @@
 						>Temperatures</span
 					>
 				</div>
-				{#each [['CPU Package', `${sensorData.cpuTemp}°C`, sensorData.cpuTemp > 70 ? 'text-red-400' : sensorData.cpuTemp > 55 ? 'text-amber-400' : 'text-foreground', 85], ['Inlet Ambient', `${sensorData.inletTemp}°C`, 'text-foreground', 40], ['Exhaust', `${sensorData.exhaustTemp}°C`, sensorData.exhaustTemp > 45 ? 'text-amber-400' : 'text-foreground', 55], ['Disk 0 (sda)', `${sensorData.disk1Temp}°C`, sensorData.disk1Temp > 45 ? 'text-amber-400' : 'text-foreground', 60], ['Disk 1 (sdb)', `${sensorData.disk2Temp}°C`, sensorData.disk2Temp > 45 ? 'text-amber-400' : 'text-foreground', 60]] as [name, value, color, max] (name)}
+				{#each [
+					['CPU Package', `${sensorData.cpuTemp}°C`, cpuTempClass(sensorData.cpuTemp), 85],
+					['Inlet Ambient', `${sensorData.inletTemp}°C`, 'text-foreground', 40],
+					[
+						'Exhaust',
+						`${sensorData.exhaustTemp}°C`,
+						sensorData.exhaustTemp > 45 ? 'text-amber-400' : 'text-foreground',
+						55
+					],
+					[
+						'Disk 0 (sda)',
+						`${sensorData.disk1Temp}°C`,
+						sensorData.disk1Temp > 45 ? 'text-amber-400' : 'text-foreground',
+						60
+					],
+					[
+						'Disk 1 (sdb)',
+						`${sensorData.disk2Temp}°C`,
+						sensorData.disk2Temp > 45 ? 'text-amber-400' : 'text-foreground',
+						60
+					]
+				] as [name, value, color, max] (name)}
 					<div class="flex items-center gap-4 px-5 py-2">
 						<Thermometer class="h-3 w-3 shrink-0 text-muted-foreground" />
 						<span class="w-28 shrink-0 text-xs text-muted-foreground">{name}</span>
 						<div class="h-1 flex-1 bg-muted">
 							<div
 								class="h-full bg-muted-foreground transition-all"
-								style:width={`${(parseInt(String(value)) / Number(max)) * 100}%`}
+								style:width={`${(Number.parseInt(String(value), 10) / Number(max)) * 100}%`}
 							></div>
 						</div>
 						<span class="w-12 shrink-0 text-right text-xs font-medium {color}">{value}</span>
@@ -63,18 +108,24 @@
 						>Fan Speeds</span
 					>
 				</div>
-				{#each [['Fan 1', sensorData.fan1], ['Fan 2', sensorData.fan2], ['Fan 3', sensorData.fan3], ['Fan 4', sensorData.fan4]] as [name, rpm] (name)}
+				{#each [
+					['Fan 1', sensorData.fan1],
+					['Fan 2', sensorData.fan2],
+					['Fan 3', sensorData.fan3],
+					['Fan 4', sensorData.fan4]
+				] as [name, rpm] (name)}
 					<div class="flex items-center gap-4 px-5 py-2">
 						<Fan class="h-3 w-3 shrink-0 text-muted-foreground" />
 						<span class="w-28 shrink-0 text-xs text-muted-foreground">{name}</span>
 						<div class="h-1 flex-1 bg-muted">
 							<div
 								class="h-full bg-muted-foreground transition-all"
-								style:width={`${(Number(rpm) / 10000) * 100}%`}
+								style:width={`${(Number(rpm) / 10_000) * 100}%`}
 							></div>
 						</div>
 						<span class="w-16 shrink-0 text-right text-xs font-medium text-foreground"
-							>{rpm} RPM</span
+							>{rpm}
+							RPM</span
 						>
 					</div>
 				{/each}
@@ -84,7 +135,12 @@
 						>Voltages</span
 					>
 				</div>
-				{#each [['Vcore', `${sensorData.vCore}V`, 0.9, 1.4], ['+3.3V', `${sensorData.v33}V`, 3.1, 3.5], ['+5V', `${sensorData.v5}V`, 4.7, 5.3], ['+12V', `${sensorData.v12}V`, 11.5, 12.5]] as [name, value, lo, hi] (name)}
+				{#each [
+					['Vcore', `${sensorData.vCore}V`, 0.9, 1.4],
+					['+3.3V', `${sensorData.v33}V`, 3.1, 3.5],
+					['+5V', `${sensorData.v5}V`, 4.7, 5.3],
+					['+12V', `${sensorData.v12}V`, 11.5, 12.5]
+				] as [name, value, lo, hi] (name)}
 					<div class="flex items-center gap-4 px-5 py-2">
 						<Cpu class="h-3 w-3 shrink-0 text-muted-foreground" />
 						<span class="w-28 shrink-0 text-xs text-muted-foreground">{name}</span>
@@ -92,7 +148,7 @@
 						<div class="h-1 flex-1 bg-muted">
 							<div
 								class="h-full bg-emerald-600 transition-all"
-								style:width={`${((parseFloat(String(value)) - Number(lo)) / (Number(hi) - Number(lo))) * 100}%`}
+								style:width={`${((Number.parseFloat(String(value)) - Number(lo)) / (Number(hi) - Number(lo))) * 100}%`}
 							></div>
 						</div>
 						<span class="text-xs text-muted-foreground">{hi}V</span>
@@ -118,11 +174,7 @@
 				<div class="px-5 py-3">
 					<div class="h-1.5 w-full bg-muted">
 						<div
-							class="h-full transition-all duration-500 {powerPct > 80
-								? 'bg-red-500'
-								: powerPct > 50
-									? 'bg-amber-500'
-									: 'bg-emerald-500'}"
+							class="h-full transition-all duration-500 {powerBarClass(powerPct)}"
 							style:width={`${powerPct}%`}
 						></div>
 					</div>

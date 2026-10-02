@@ -1,13 +1,13 @@
-import { dev } from '$app/env';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import { instrument, timingLog } from '#lib/server/observability.js';
+import { dev } from '$app/env';
 
-type CachedSession = {
+interface CachedSession {
 	session: NonNullable<App.Locals['session']>;
-	user: NonNullable<App.Locals['user']>;
 	updatedAt: number;
+	user: NonNullable<App.Locals['user']>;
 	version?: string;
-};
+}
 
 const sessionCookieNames = new Set([
 	'better-auth.session_token',
@@ -18,11 +18,15 @@ const sessionCookieNames = new Set([
 
 export function hasAuthSessionCookie(request: Request): boolean {
 	const cookie = request.headers.get('cookie');
-	if (!cookie) return false;
+	if (!cookie) {
+		return false;
+	}
 
 	for (const part of cookie.split(';')) {
-		const name = part.trimStart().split('=', 1)[0];
-		if (sessionCookieNames.has(name)) return true;
+		const [name] = part.trimStart().split('=', 1);
+		if (sessionCookieNames.has(name)) {
+			return true;
+		}
 	}
 
 	return false;
@@ -77,7 +81,7 @@ export async function getCachedAuthSession(request: Request): Promise<CachedSess
 		{ 'auth.cookie_cache.strategy': 'compact' }
 	);
 
-	if (!cached?.session || !cached.user) {
+	if (!(cached?.session && cached.user)) {
 		timingLog('auth.cookieCache.miss', {
 			duration_ms: Math.round((performance.now() - started) * 100) / 100
 		});

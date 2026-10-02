@@ -1,0 +1,90 @@
+{
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	"extends": ["ultracite/biome/core", "ultracite/biome/svelte"],
+	"files": {
+		"includes": [
+			"!!apps/dashboard/static",
+			"!!apps/dashboard/drizzle",
+			"!apps/dashboard/src/lib/components/ui",
+			"!!**/.factory",
+			"!!**/*.svg"
+		]
+	},
+	"assist": {
+		"actions": {
+			"source": {
+				"useSortedKeys": "off",
+				"useSortedAttributes": "off"
+			}
+		}
+	},
+	"html": {
+		"formatter": {
+			"selfCloseVoidElements": "always"
+		}
+	},
+	"formatter": {
+		"indentStyle": "tab",
+		"lineWidth": 100
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "single",
+			"trailingCommas": "none"
+		}
+	},
+	"css": {
+		"formatter": {
+			"lineWidth": 100
+		}
+	},
+	"json": {
+		"formatter": {
+			"indentStyle": "tab",
+			"lineWidth": 100
+		}
+	},
+	"linter": {
+		"rules": {
+			"performance": {
+				"noNamespaceImport": "off"
+			}
+		}
+	},
+	"overrides": [
+		{
+			"includes": ["**/*.svelte"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noReturnAssign": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"apps/dashboard/src/lib/ptr.ts",
+				"apps/dashboard/src/lib/server/ipam.ts",
+				"apps/dashboard/src/lib/server/backends/proxmox/index.ts"
+			],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noBitwiseOperators": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["apps/dashboard/src/app.d.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noNamespace": "off"
+					}
+				}
+			}
+		}
+	]
+}

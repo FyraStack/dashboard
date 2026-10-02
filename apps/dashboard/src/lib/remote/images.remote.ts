@@ -1,47 +1,42 @@
-import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { asc, desc, eq } from 'drizzle-orm';
-import { initDrizzle } from '#lib/server/db/index.js';
-import { baseImages } from '#lib/server/db/schema.js';
-import { getBackend } from '#lib/server/backends/index.js';
-import { requireAdmin } from '#lib/server/auth-context.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureImages
 } from '#lib/server/accessibility-fixtures.js';
+import { requireAdmin } from '#lib/server/auth-context.js';
+import { getBackend } from '#lib/server/backends/index.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { baseImages } from '#lib/server/db/schema.js';
+import { command, getRequestEvent, query } from '$app/server';
 
-type ImageRow = {
-	id: string;
-	name: string;
-	version: string;
-	description: string;
-	icon: string | null;
-	color: string;
-	isOfficial: boolean;
-	logoSvg: string | null;
-	accentColor: string;
-	imageType: string;
-	secureBoot: boolean;
-	filePath: string;
-	isa: string;
-};
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+const SVG_EVENT_HANDLER_PATTERN = /\son[a-z]+\s*=/;
+const SVG_REMOTE_HREF_PATTERN = /\s(?:href|xlink:href)\s*=\s*["']https?:/i;
+const HTTP_URL_PATTERN = /^https?:\/\//i;
 
 const checksumAlgorithms = ['md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512'] as const;
 
 function validateAccentColor(value: string) {
-	if (!/^#[0-9a-fA-F]{6}$/.test(value)) error(400, 'Accent color must be a hex color like #51A2DA');
+	if (!HEX_COLOR_PATTERN.test(value)) {
+		error(400, 'Accent color must be a hex color like #51A2DA');
+	}
 }
 
 function validateLogoSvg(value: string | undefined, isOfficial: boolean) {
 	const svg = value?.trim();
-	if (!isOfficial || !svg) return svg;
+	if (!(isOfficial && svg)) {
+		return svg;
+	}
 	const lower = svg.toLowerCase();
-	if (!lower.startsWith('<svg') || !lower.endsWith('</svg>')) error(400, 'Logo must be an SVG');
+	if (!(lower.startsWith('<svg') && lower.endsWith('</svg>'))) {
+		error(400, 'Logo must be an SVG');
+	}
 	if (lower.includes('<script') || lower.includes('<foreignobject')) {
 		error(400, 'SVG logo contains unsupported markup');
 	}
-	if (/\son[a-z]+\s*=/.test(lower) || /\s(?:href|xlink:href)\s*=\s*["']https?:/i.test(svg)) {
+	if (SVG_EVENT_HANDLER_PATTERN.test(lower) || SVG_REMOTE_HREF_PATTERN.test(svg)) {
 		error(400, 'SVG logo contains unsafe attributes');
 	}
 	return svg;
@@ -55,9 +50,13 @@ async function getUploadedImage(volid: string) {
 
 export const listImages = query(async () => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
-	if (accessibilityFixtureEnabled) return accessibilityFixtureImages;
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureImages;
+	}
 
 	const db = initDrizzle();
 	const rows = await db.query.baseImages.findMany({
@@ -95,13 +94,17 @@ const createParams = type({
 });
 export const createImage = command(createParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
 	const isOfficial = params.isOfficial ?? false;
 	const selectedImage = await getUploadedImage(params.filePath);
-	if (!selectedImage) error(400, 'Select an uploaded Proxmox import image');
+	if (!selectedImage) {
+		error(400, 'Select an uploaded Proxmox import image');
+	}
 	const accentColor = params.accentColor ?? '#6b7280';
 	validateAccentColor(accentColor);
 	const logoSvg = validateLogoSvg(params.logoSvg, isOfficial);
@@ -148,7 +151,9 @@ const updateParams = type({
 });
 export const updateImage = command(updateParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
@@ -156,7 +161,9 @@ export const updateImage = command(updateParams, async (params) => {
 	const existing = await db.query.baseImages.findFirst({
 		where: eq(baseImages.id, params.imageId)
 	});
-	if (!existing) error(404, 'Image not found');
+	if (!existing) {
+		error(404, 'Image not found');
+	}
 
 	const { imageId, ...fields } = params;
 	const updates: Record<string, unknown> = Object.fromEntries(
@@ -164,10 +171,14 @@ export const updateImage = command(updateParams, async (params) => {
 	);
 	if (updates.filePath) {
 		const selectedImage = await getUploadedImage(String(updates.filePath));
-		if (!selectedImage) error(400, 'Select an uploaded Proxmox import image');
+		if (!selectedImage) {
+			error(400, 'Select an uploaded Proxmox import image');
+		}
 		updates.imageType = selectedImage.format || 'qcow2';
 	}
-	if (updates.accentColor) validateAccentColor(String(updates.accentColor));
+	if (updates.accentColor) {
+		validateAccentColor(String(updates.accentColor));
+	}
 	if (updates.logoSvg !== undefined || updates.isOfficial !== undefined) {
 		const logoSvg = validateLogoSvg(
 			updates.logoSvg === undefined ? (existing.logoSvg ?? undefined) : String(updates.logoSvg),
@@ -175,7 +186,9 @@ export const updateImage = command(updateParams, async (params) => {
 		);
 		updates.logoSvg = logoSvg ?? null;
 	}
-	if (Object.keys(updates).length === 0) return;
+	if (Object.keys(updates).length === 0) {
+		return;
+	}
 
 	await db.update(baseImages).set(updates).where(eq(baseImages.id, params.imageId));
 });
@@ -183,7 +196,9 @@ export const updateImage = command(updateParams, async (params) => {
 const reorderParams = type({ imageIds: 'string[]' });
 export const reorderImages = command(reorderParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
@@ -209,7 +224,9 @@ export const reorderImages = command(reorderParams, async (params) => {
 const deleteParams = type({ imageId: 'string' });
 export const deleteImage = command(deleteParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
@@ -217,14 +234,18 @@ export const deleteImage = command(deleteParams, async (params) => {
 	const existing = await db.query.baseImages.findFirst({
 		where: eq(baseImages.id, params.imageId)
 	});
-	if (!existing) error(404, 'Image not found');
+	if (!existing) {
+		error(404, 'Image not found');
+	}
 
 	await db.delete(baseImages).where(eq(baseImages.id, params.imageId));
 });
 
 export const listProxmoxImages = query(async () => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	await requireAdmin(initDrizzle(), event.locals.user.id);
 
@@ -234,7 +255,9 @@ export const listProxmoxImages = query(async () => {
 
 export const listProxmoxImageImportTargets = query(async () => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	await requireAdmin(initDrizzle(), event.locals.user.id);
 
@@ -252,12 +275,17 @@ const importUrlParams = type({
 });
 export const importProxmoxImageFromUrl = command(importUrlParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 	await requireAdmin(initDrizzle(), event.locals.user.id);
 
-	if (!/^https?:\/\//i.test(params.url))
+	if (!HTTP_URL_PATTERN.test(params.url)) {
 		error(400, 'Image URL must start with http:// or https://');
-	if (!params.filename.trim()) error(400, 'Filename is required');
+	}
+	if (!params.filename.trim()) {
+		error(400, 'Filename is required');
+	}
 	if (params.checksumAlgorithm && !checksumAlgorithms.includes(params.checksumAlgorithm)) {
 		error(400, 'Unsupported checksum algorithm');
 	}
@@ -267,8 +295,9 @@ export const importProxmoxImageFromUrl = command(importUrlParams, async (params)
 	const targets = (await backend.listImageImportTargets()).filter(
 		(target) => target.storage === storage
 	);
-	if (targets.length === 0)
+	if (targets.length === 0) {
 		error(400, `No online Proxmox nodes expose import storage "${storage}"`);
+	}
 
 	const tasks = await Promise.all(
 		targets.map(async (target) => ({
@@ -292,7 +321,9 @@ export const importProxmoxImageFromUrl = command(importUrlParams, async (params)
 const taskStatusParams = type({ node: 'string', upid: 'string' });
 export const getProxmoxTaskStatus = query(taskStatusParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 	await requireAdmin(initDrizzle(), event.locals.user.id);
 
 	const backend = getBackend('proxmox');

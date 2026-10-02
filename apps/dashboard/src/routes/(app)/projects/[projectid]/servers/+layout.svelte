@@ -1,23 +1,25 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { listVmStatuses } from '#lib/remote/vms.remote.js';
+	import { type ServerInfo, serversState, syncServers } from '#lib/state/servers.svelte.js';
+	import { clientTimingLog, runQuery } from '#lib/utils.js';
+	import { afterNavigate, goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import ChevronDown from '~icons/lucide/chevron-down';
 	import Plus from '~icons/lucide/plus';
 	import HardDrive from '~icons/nucleo/hard-drive';
-	import { listVmStatuses } from '#lib/remote/vms.remote.js';
-	import { clientTimingLog, runQuery } from '#lib/utils.js';
-	import { serversState, syncServers } from '#lib/state/servers.svelte.js';
 	import { primaryAddress } from './lib/server-summary';
 
 	let { data, children } = $props();
 
 	function formatUptime(seconds: number): string {
-		if (!seconds) return '-';
-		const d = Math.floor(seconds / 86400);
-		const h = Math.floor((seconds % 86400) / 3600);
+		if (!seconds) {
+			return '-';
+		}
+		const d = Math.floor(seconds / 86_400);
+		const h = Math.floor((seconds % 86_400) / 3600);
 		const m = Math.floor((seconds % 3600) / 60);
 		return `${d}d ${h}h ${m}m`;
 	}
@@ -33,18 +35,87 @@
 		);
 	}
 
+	type VmStatus = Awaited<ReturnType<typeof listVmStatuses>>[number];
+
+	function mergeLiveStatus(server: ServerInfo, next: VmStatus): ServerInfo {
+		return {
+			...server,
+			liveLoaded: true,
+			status:
+				server.status === 'restarting' && next.status !== 'running' ? 'restarting' : next.status,
+			agentConnected: next.liveStatus === 'running',
+			ip:
+				getFirstIp(
+					next.networkInterfaces,
+					(address) => !(address.startsWith('127.') || address.includes(':'))
+				) ?? server.ip,
+			ipv6: getFirstIp(next.networkInterfaces, (address) => address.includes(':')) ?? server.ipv6,
+			uptime: formatUptime(next.uptime),
+			metrics: next.metrics ?? server.metrics
+		};
+	}
+
+	function applyStatuses(statuses: VmStatus[], requestedServerIds: Set<string>) {
+		const byId = new Map(statuses.map((server) => [server.id, server]));
+		serversState.servers = serversState.servers
+			.filter((server) => byId.has(server.id) || !requestedServerIds.has(server.id))
+			.map((server) => {
+				const next = byId.get(server.id);
+				return next ? mergeLiveStatus(server, next) : server;
+			});
+	}
+
+	function hasPendingServers(): boolean {
+		return serversState.servers.some((server) =>
+			['provisioning', 'restarting', 'deleting'].includes(server.status)
+		);
+	}
+
+	function statusDotClass(server: { liveLoaded?: boolean; status: string }): string {
+		if (server.status === 'deleting') {
+			return 'animate-pulse bg-red-500';
+		}
+		if (!server.liveLoaded) {
+			return 'bg-muted-foreground';
+		}
+		switch (server.status) {
+			case 'running':
+				return 'bg-emerald-500';
+			case 'provisioning':
+				return 'animate-pulse bg-blue-500';
+			case 'restarting':
+				return 'animate-pulse bg-amber-500';
+			case 'unknown':
+				return 'bg-muted-foreground';
+			default:
+				return 'bg-red-500';
+		}
+	}
+
 	function statusLabel(s: { liveLoaded?: boolean; status: string }): string {
-		if (s.status === 'deleting') return 'Deleting';
-		if (!s.liveLoaded) return 'Unknown';
-		if (s.status === 'running') return 'Running';
-		if (s.status === 'provisioning') return 'Provisioning';
-		if (s.status === 'restarting') return 'Restarting';
-		if (s.status === 'unknown') return 'Unknown';
+		if (s.status === 'deleting') {
+			return 'Deleting';
+		}
+		if (!s.liveLoaded) {
+			return 'Unknown';
+		}
+		if (s.status === 'running') {
+			return 'Running';
+		}
+		if (s.status === 'provisioning') {
+			return 'Provisioning';
+		}
+		if (s.status === 'restarting') {
+			return 'Restarting';
+		}
+		if (s.status === 'unknown') {
+			return 'Unknown';
+		}
 		return 'Stopped';
 	}
 
 	const REFRESH_INTERVAL_MS = 30_000;
-	const PENDING_REFRESH_INTERVAL_MS = 3_000;
+	const PENDING_REFRESH_INTERVAL_MS = 3000;
 	const initialServers = $derived(data.servers ?? []);
 	const projectId = $derived(data.projectId ?? null);
 	const currentServers = $derived(
@@ -61,16 +132,22 @@
 
 	$effect(() => {
 		const pollingProjectId = projectId;
-		const refreshVersion = serversState.refreshVersion;
-		if (!pollingProjectId) return;
+		const { refreshVersion } = serversState;
+		if (!pollingProjectId) {
+			return;
+		}
 
 		let cancelled = false;
 		let refreshing = false;
 		let timeout: ReturnType<typeof setTimeout> | undefined;
 
 		async function refreshStatuses() {
-			if (cancelled || refreshing || document.visibilityState !== 'visible') return;
-			if (serversState.servers.length === 0) return;
+			if (cancelled || refreshing || document.visibilityState !== 'visible') {
+				return;
+			}
+			if (serversState.servers.length === 0) {
+				return;
+			}
 			refreshing = true;
 			serversState.statusRefreshing = true;
 			const started = performance.now();
@@ -82,64 +159,44 @@
 					'listVmStatuses'
 				);
 				// Ignore requests from a previous project or before the latest VM action.
-				if (cancelled || refreshVersion !== serversState.refreshVersion) return;
-				const byId = new Map(statuses.map((server) => [server.id, server]));
-				serversState.servers = serversState.servers
-					.filter((server) => byId.has(server.id) || !requestedServerIds.has(server.id))
-					.map((server) => {
-						const next = byId.get(server.id);
-						if (!next) return server;
-
-						return {
-							...server,
-							liveLoaded: true,
-							status:
-								server.status === 'restarting' && next.status !== 'running'
-									? 'restarting'
-									: next.status,
-							agentConnected: next.liveStatus === 'running',
-							ip:
-								getFirstIp(
-									next.networkInterfaces,
-									(address) => !address.startsWith('127.') && !address.includes(':')
-								) ?? server.ip,
-							ipv6:
-								getFirstIp(next.networkInterfaces, (address) => address.includes(':')) ??
-								server.ipv6,
-							uptime: formatUptime(next.uptime),
-							metrics: next.metrics ?? server.metrics
-						};
-					});
+				if (cancelled || refreshVersion !== serversState.refreshVersion) {
+					return;
+				}
+				applyStatuses(statuses, requestedServerIds);
 			} catch {
 				clientTimingLog('vm.status.refresh.error', { 'project.id': pollingProjectId });
 			} finally {
-				refreshing = false;
-				if (!cancelled && refreshVersion === serversState.refreshVersion) {
-					serversState.statusRefreshing = false;
-					serversState.firstStatusRefreshComplete = true;
-					clientTimingLog('vm.status.refresh.end', {
-						'project.id': pollingProjectId,
-						duration_ms: Math.round(performance.now() - started)
-					});
-					if (document.visibilityState === 'visible') {
-						const pending = serversState.servers.some((server) =>
-							['provisioning', 'restarting', 'deleting'].includes(server.status)
-						);
-						timeout = setTimeout(
-							refreshStatuses,
-							pending ? PENDING_REFRESH_INTERVAL_MS : REFRESH_INTERVAL_MS
-						);
-					}
-				}
+				finishRefresh(started);
+			}
+		}
+
+		function finishRefresh(started: number) {
+			refreshing = false;
+			if (cancelled || refreshVersion !== serversState.refreshVersion) {
+				return;
+			}
+			serversState.statusRefreshing = false;
+			serversState.firstStatusRefreshComplete = true;
+			clientTimingLog('vm.status.refresh.end', {
+				'project.id': pollingProjectId,
+				duration_ms: Math.round(performance.now() - started)
+			});
+			if (document.visibilityState === 'visible') {
+				timeout = setTimeout(
+					refreshStatuses,
+					hasPendingServers() ? PENDING_REFRESH_INTERVAL_MS : REFRESH_INTERVAL_MS
+				);
 			}
 		}
 
 		function handleVisibilityChange() {
 			clearTimeout(timeout);
-			void refreshStatuses();
+			refreshStatuses();
 		}
 
-		untrack(() => void refreshStatuses());
+		untrack(() => {
+			refreshStatuses();
+		});
 		document.addEventListener('visibilitychange', handleVisibilityChange);
 		return () => {
 			cancelled = true;
@@ -155,8 +212,9 @@
 			serversState.loading ||
 			currentServers.length === 0 ||
 			currentPath !== serversPath
-		)
+		) {
 			return;
+		}
 		goto(`${serversPath}/${currentServers[0].id}`, { replace: true });
 	});
 
@@ -167,17 +225,17 @@
 	let mobileListOpen = $state(false);
 	const listOpen = $derived(mobileListOpen || isServersIndex);
 
-	$effect(() => {
-		currentPath;
-		mobileListOpen = false;
+	afterNavigate(({ from, to }) => {
+		if (from?.url.pathname !== to?.url.pathname) {
+			mobileListOpen = false;
+		}
 	});
-	const selectedServerId = $derived(
-		isCreatePage
-			? null
-			: currentPath.startsWith(`${serversPath}/`)
-				? currentPath.split('/').pop()
-				: null
-	);
+	const selectedServerId = $derived.by(() => {
+		if (isCreatePage || !currentPath.startsWith(`${serversPath}/`)) {
+			return null;
+		}
+		return currentPath.split('/').pop();
+	});
 </script>
 
 <div class="flex h-full w-full flex-col overflow-hidden lg:flex-row">
@@ -195,7 +253,8 @@
 					>{currentServers.length}</Badge
 				>
 				{#if serversState.statusRefreshing && currentServers.length > 0}
-					<span class="ml-2 h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-muted-foreground"
+					<span
+						class="ml-2 h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-muted-foreground"
 					></span>
 				{/if}
 			</div>
@@ -257,7 +316,8 @@
 					<div class="min-w-0">
 						<p class="truncate text-base font-semibold text-foreground lg:text-sm">{server.name}</p>
 						<p class="mt-0.5 truncate text-sm text-muted-foreground lg:text-xs">
-							{server.vcpu} vCPU &bull; {server.ram} &bull;
+							{server.vcpu}
+							vCPU &bull; {server.ram} &bull;
 							{#if server.liveLoaded || serversState.firstStatusRefreshComplete}
 								{primaryAddress(server) ?? '-'}
 							{:else}
@@ -269,19 +329,7 @@
 						role="img"
 						aria-label={`Status: ${statusLabel(server)}`}
 						title={statusLabel(server)}
-						class="mt-1 ml-2 h-2 w-2 shrink-0 rounded-full {server.status === 'deleting'
-							? 'animate-pulse bg-red-500'
-							: server.liveLoaded
-								? server.status === 'running'
-									? 'bg-emerald-500'
-									: server.status === 'provisioning'
-										? 'animate-pulse bg-blue-500'
-										: server.status === 'restarting'
-											? 'animate-pulse bg-amber-500'
-											: server.status === 'unknown'
-												? 'bg-muted-foreground'
-												: 'bg-red-500'
-								: 'bg-muted-foreground'}"
+						class="mt-1 ml-2 h-2 w-2 shrink-0 rounded-full {statusDotClass(server)}"
 					></span>
 				</a>
 			{/each}

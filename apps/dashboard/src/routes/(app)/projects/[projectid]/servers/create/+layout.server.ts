@@ -1,15 +1,15 @@
-import type { LayoutServerLoad } from './$types';
-import { listVmTypes } from '#lib/remote/vm-types.remote.js';
-import { listImages } from '#lib/remote/images.remote.js';
-import { listVolumes } from '#lib/remote/volumes.remote.js';
-import { listSshKeys } from '#lib/remote/ssh-keys.remote.js';
 import { error, redirect } from '@sveltejs/kit';
+import { listImages } from '#lib/remote/images.remote.js';
+import { listSshKeys } from '#lib/remote/ssh-keys.remote.js';
+import { listVmTypes } from '#lib/remote/vm-types.remote.js';
+import { listVolumes } from '#lib/remote/volumes.remote.js';
 import { getProjectMemberRole } from '#lib/server/auth-context.js';
+import { runInBackground } from '#lib/server/background.js';
 import { attachDefaultProjectPlan } from '#lib/server/billing/autumn.js';
 import { getProjectBillingReadiness, refreshProjectBilling } from '#lib/server/billing/overview.js';
-import { runInBackground } from '#lib/server/background.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { getIpamAvailability } from '#lib/server/ipam.js';
+import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ locals, params, parent, depends, url }) => {
 	depends('project:create-server');
@@ -27,7 +27,9 @@ export const load: LayoutServerLoad = async ({ locals, params, parent, depends, 
 
 	if (url.searchParams.get('billing_setup') === 'complete') {
 		const role = await getProjectMemberRole(db, locals.user.id, params.projectid);
-		if (role !== 'owner') error(403, 'Project owner permission required');
+		if (role !== 'owner') {
+			error(403, 'Project owner permission required');
+		}
 
 		const cleanPath = `/projects/${params.projectid}/servers/create`;
 		const paymentUrl = await attachDefaultProjectPlan(
@@ -35,7 +37,9 @@ export const load: LayoutServerLoad = async ({ locals, params, parent, depends, 
 			`${url.origin}${cleanPath}`,
 			url.searchParams.get('billing_promo') ?? undefined
 		);
-		if (paymentUrl) redirect(303, paymentUrl);
+		if (paymentUrl) {
+			redirect(303, paymentUrl);
+		}
 
 		await refreshProjectBilling(params.projectid);
 		redirect(303, cleanPath);

@@ -1,37 +1,41 @@
 <script lang="ts">
-	import { goto, invalidate } from '$app/navigation';
-	import { resolve } from '$app/paths';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
+	import { toast } from 'svelte-sonner';
+	import { projectRoleLabels } from '#lib/auth/organization-permissions.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 	import {
-		updateProject as updateProjectRpc,
-		deleteProject as deleteProjectRpc,
 		addMember as addMemberRpc,
+		deleteProject as deleteProjectRpc,
+		removeMember as removeMemberRpc,
 		updateMemberRole as updateMemberRoleRpc,
-		removeMember as removeMemberRpc
+		updateProject as updateProjectRpc
 	} from '#lib/remote/projects.remote.js';
+	import { getErrorMessage } from '#lib/utils.js';
+	import { goto, invalidate } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
 	import Settings from '~icons/nucleo/settings';
 	import Trash2 from '~icons/nucleo/trash';
 	import User from '~icons/nucleo/user';
-	import { toast } from 'svelte-sonner';
-	import { getErrorMessage } from '#lib/utils.js';
-	import { projectRoleLabels } from '#lib/auth/organization-permissions.js';
 
 	let { data } = $props();
 
 	type ProjectRole = 'owner' | 'admin' | 'read_write' | 'read';
 	type MemberRole = Exclude<ProjectRole, 'owner'>;
-	type ProjectMember = { userId: string; name: string; email: string; permissions: ProjectRole };
+	interface ProjectMember {
+		email: string;
+		name: string;
+		permissions: ProjectRole;
+		userId: string;
+	}
 
 	let projectName = $derived(data.project.projectName);
-	let projectOwnerId = $derived(data.project.ownerUserId);
 	let projectOwnerName = $derived(data.project.ownerName);
 	let projectOwnerEmail = $derived(data.project.ownerEmail);
 	let members = $derived<ProjectMember[]>([...data.project.members]);
@@ -67,18 +71,20 @@
 		{ value: 'read', description: 'View resources only' }
 	];
 
-	$effect(() => {
-		return clearSavedTimeout;
-	});
+	$effect(() => clearSavedTimeout);
 
 	function clearSavedTimeout() {
-		if (!savedTimeout) return;
+		if (!savedTimeout) {
+			return;
+		}
 		clearTimeout(savedTimeout);
 		savedTimeout = undefined;
 	}
 
 	async function saveName() {
-		if (saving || !projectId) return;
+		if (saving || !projectId) {
+			return;
+		}
 		saving = true;
 		saved = false;
 		try {
@@ -98,7 +104,9 @@
 	}
 
 	async function deleteProject() {
-		if (deleting || !projectId) return;
+		if (deleting || !projectId) {
+			return;
+		}
 		deleting = true;
 		try {
 			await deleteProjectRpc({ projectId });
@@ -111,7 +119,9 @@
 	}
 
 	async function addMember() {
-		if (!projectId || addingMember || !memberInviteEmail.trim()) return;
+		if (!projectId || addingMember || !memberInviteEmail.trim()) {
+			return;
+		}
 		addingMember = true;
 		const email = memberInviteEmail.trim();
 		try {
@@ -133,16 +143,22 @@
 	}
 
 	function confirmRemoveMember() {
-		if (!memberToRemove) return;
-		const userId = memberToRemove.userId;
+		if (!memberToRemove) {
+			return;
+		}
+		const { userId } = memberToRemove;
 		memberToRemove = null;
 		removeMember(userId);
 	}
 
 	async function removeMember(userId: string) {
-		if (!projectId || removingMemberIds.includes(userId)) return;
+		if (!projectId || removingMemberIds.includes(userId)) {
+			return;
+		}
 		const idx = members.findIndex((m) => m.userId === userId);
-		if (idx === -1) return;
+		if (idx === -1) {
+			return;
+		}
 		const removed = members[idx];
 		removingMemberIds = [...removingMemberIds, userId];
 		members = members.filter((m) => m.userId !== userId);
@@ -157,10 +173,16 @@
 	}
 
 	async function updateMemberRole(userId: string, newRole: MemberRole) {
-		if (!projectId || updatingMemberIds.includes(userId)) return;
+		if (!projectId || updatingMemberIds.includes(userId)) {
+			return;
+		}
 		const idx = members.findIndex((m) => m.userId === userId);
-		if (idx === -1) return;
-		if (members[idx].permissions === newRole) return;
+		if (idx === -1) {
+			return;
+		}
+		if (members[idx].permissions === newRole) {
+			return;
+		}
 		const oldRole = members[idx].permissions;
 		updatingMemberIds = [...updatingMemberIds, userId];
 		members = members.map((member) =>
@@ -213,7 +235,8 @@
 								<Loader2 class="h-3 w-3 animate-spin" />
 								Saving...
 							{:else if saved}
-								<Check class="h-3 w-3" /> Saved
+								<Check class="h-3 w-3" />
+								Saved
 							{:else}
 								Save Name
 							{/if}
@@ -360,15 +383,17 @@
 <Dialog.Root
 	open={memberToRemove !== null}
 	onOpenChange={(v) => {
-		if (!v) memberToRemove = null;
+		if (!v) {
+			memberToRemove = null;
+		}
 	}}
 >
 	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Remove Member</Dialog.Title>
 			<Dialog.Description>
-				{memberToRemove?.name} ({memberToRemove?.email}) will lose access to this project. They can
-				be re-invited later.
+				{memberToRemove?.name}
+				({memberToRemove?.email}) will lose access to this project. They can be re-invited later.
 			</Dialog.Description>
 		</Dialog.Header>
 		<Dialog.Footer>
@@ -420,7 +445,8 @@
 				variant="outline"
 				size="sm"
 				onclick={() => (addMemberOpen = false)}
-				disabled={addingMember}>Cancel</Button
+				disabled={addingMember}
+				>Cancel</Button
 			>
 			<Button size="sm" onclick={addMember} disabled={addingMember || !memberInviteEmail.trim()}>
 				{#if addingMember}

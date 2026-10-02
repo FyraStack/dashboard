@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { authClient } from '#lib/auth-client.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { authClient } from '#lib/auth-client.js';
+	import { goto } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertCircle from '~icons/nucleo/alert-circle';
 	import Eye from '~icons/nucleo/eye';
@@ -14,18 +14,20 @@
 	let password = $state('');
 	let confirmPassword = $state('');
 	let showPassword = $state(false);
-	let error = $state('');
+	let errorMessage = $state('');
 	let loading = $state(false);
 
 	async function handleSubmit() {
-		if (!password || !confirmPassword || !data.token) return;
-
-		if (password !== confirmPassword) {
-			error = 'Passwords do not match';
+		if (!(password && confirmPassword && data.token)) {
 			return;
 		}
 
-		error = '';
+		if (password !== confirmPassword) {
+			errorMessage = 'Passwords do not match';
+			return;
+		}
+
+		errorMessage = '';
 		loading = true;
 
 		const { error: err } = await authClient.resetPassword({
@@ -34,7 +36,7 @@
 		});
 
 		if (err) {
-			error = err.message ?? 'Unable to reset password.';
+			errorMessage = err.message ?? 'Unable to reset password.';
 			loading = false;
 			return;
 		}
@@ -74,12 +76,12 @@
 					</a>
 				</p>
 			{:else}
-				{#if error}
+				{#if errorMessage}
 					<div
 						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 					>
 						<AlertCircle class="size-4 shrink-0" />
-						{error}
+						{errorMessage}
 					</div>
 				{/if}
 
@@ -105,7 +107,11 @@
 							class="absolute top-1/2 right-1 flex size-8 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
 							onclick={() => (showPassword = !showPassword)}
 						>
-							{#if showPassword}<EyeOff class="size-4" />{:else}<Eye class="size-4" />{/if}
+							{#if showPassword}
+								<EyeOff class="size-4" />
+							{:else}
+								<Eye class="size-4" />
+							{/if}
 						</button>
 					</div>
 

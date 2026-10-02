@@ -1,9 +1,15 @@
-import { command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import AdminUserDeletionCodeEmail from '#lib/emails/admin-user-deletion-code.svelte';
 import BillingNoticeEmail from '#lib/emails/billing-notice.svelte';
 import BillingReminderEmail from '#lib/emails/billing-reminder.svelte';
+import {
+	applyPlaceholders,
+	CAMPAIGN_BATCH_SIZE,
+	type CampaignTemplate,
+	campaignTemplates,
+	fieldToken
+} from '#lib/emails/campaign-registry.js';
 import EmptyEmail from '#lib/emails/empty.svelte';
 import OrganizationInvitationEmail from '#lib/emails/organization-invitation.svelte';
 import PasswordChangeCodeEmail from '#lib/emails/password-change-code.svelte';
@@ -11,16 +17,10 @@ import ResetPasswordEmail from '#lib/emails/reset-password.svelte';
 import SecurityAlertEmail from '#lib/emails/security-alert.svelte';
 import ServiceDisruptionEmail from '#lib/emails/service-disruption.svelte';
 import VerifyEmailEmail from '#lib/emails/verify-email.svelte';
-import {
-	applyPlaceholders,
-	CAMPAIGN_BATCH_SIZE,
-	campaignTemplates,
-	fieldToken,
-	type CampaignTemplate
-} from '#lib/emails/campaign-registry.js';
 import { requireAdmin } from '#lib/server/auth-context.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { emailToPlainText, renderEmail, sendEmail } from '#lib/server/email.js';
+import { command, getRequestEvent } from '$app/server';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -39,7 +39,9 @@ const templateComponents: Record<string, unknown> = {
 
 async function requireCurrentAdmin() {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
@@ -50,7 +52,9 @@ async function requireCurrentAdmin() {
 function resolveTemplate(key: string) {
 	const meta = campaignTemplates.find((template) => template.key === key);
 	const component = templateComponents[key];
-	if (!meta || !component) error(400, 'Unknown email template');
+	if (!(meta && component)) {
+		error(400, 'Unknown email template');
+	}
 	return { meta, component };
 }
 
@@ -65,7 +69,9 @@ async function renderCampaignHtml(
 	for (const field of meta.fields) {
 		const value = applyPlaceholders(fields[field.name] ?? '', row).trim();
 		if (value === '') {
-			if (field.required) throw new Error(`Missing value for ${field.label}`);
+			if (field.required) {
+				throw new Error(`Missing value for ${field.label}`);
+			}
 			continue;
 		}
 		if (field.inline) {
@@ -102,8 +108,11 @@ export const renderCampaignEditor = command(editorParams, async (params) => {
 			continue;
 		}
 		const value = (params.fields[field.name] ?? '').trim();
-		if (value !== '') props[field.name] = value;
-		else if (field.required) props[field.name] = field.placeholder;
+		if (value !== '') {
+			props[field.name] = value;
+		} else if (field.required) {
+			props[field.name] = field.placeholder;
+		}
 	}
 
 	const { html } = await renderEmail(component, props);
@@ -141,7 +150,9 @@ const sendParams = type({
 export const sendCampaignEmails = command(sendParams, async (params) => {
 	await requireCurrentAdmin();
 	const { meta, component } = resolveTemplate(params.template);
-	if (params.rows.length === 0) error(400, 'No recipients provided');
+	if (params.rows.length === 0) {
+		error(400, 'No recipients provided');
+	}
 	if (params.rows.length > CAMPAIGN_BATCH_SIZE) {
 		error(400, `Send at most ${CAMPAIGN_BATCH_SIZE} recipients per batch`);
 	}
@@ -152,9 +163,14 @@ export const sendCampaignEmails = command(sendParams, async (params) => {
 	for (const row of params.rows) {
 		const to = (row[params.emailColumn] ?? '').trim();
 		try {
-			if (!EMAIL_PATTERN.test(to)) throw new Error('Invalid email address');
+			if (!EMAIL_PATTERN.test(to)) {
+				throw new Error('Invalid email address');
+			}
 			const subject = applyPlaceholders(params.subject, row).trim();
-			if (subject === '') throw new Error('Subject is empty for this recipient');
+			if (subject === '') {
+				throw new Error('Subject is empty for this recipient');
+			}
+			// biome-ignore lint/performance/noAwaitInLoops: campaign sends go out one at a time to stay under the email provider's rate limit
 			const html = await renderCampaignHtml(meta, component, params.fields, row);
 			const text = await emailToPlainText(html);
 			await sendEmail({ subject, to, html, text });

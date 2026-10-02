@@ -1,25 +1,25 @@
+import { waitUntil } from 'cloudflare:workers';
+import { passkey } from '@better-auth/passkey';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { createAuthMiddleware, APIError } from 'better-auth/api';
+import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { deleteSessionCookie, expireCookie } from 'better-auth/cookies';
-import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
-import { passkey } from '@better-auth/passkey';
+import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { and, count, eq, gt } from 'drizzle-orm';
-import { dev } from '$app/env';
-import { waitUntil } from 'cloudflare:workers';
-import { getRequestEvent } from '$app/server';
 import { ac, organizationRoles } from '#lib/auth/organization-permissions.js';
 import OrganizationInvitationEmail from '#lib/emails/organization-invitation.svelte';
 import ResetPasswordEmail from '#lib/emails/reset-password.svelte';
 import VerifyEmail from '#lib/emails/verify-email.svelte';
-import { initDrizzle, type Database } from '#lib/server/db/index.js';
-import { member, user as userTable, verification } from '#lib/server/db/schema.js';
+import { member, user as userTable, verification } from '#lib/server/db/auth.schema.js';
+import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { sendSecurityAlertEmail } from '#lib/server/email-notifications.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import { ulid } from '#lib/server/id.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { dev } from '$app/env';
+import { getRequestEvent } from '$app/server';
 
 const PENDING_PASSKEY_COOKIE = 'pending_passkey_2fa';
 const PENDING_PASSKEY_HINT_COOKIE = 'pending_passkey_2fa_hint';
@@ -44,16 +44,17 @@ function adminUserDeletionPasskeyIdentifier(adminUserId: string, targetUserId: s
 	return `admin-user-delete-passkey:${adminUserId}:${targetUserId}`;
 }
 
-type PasskeyRecord = {
+interface PasskeyRecord {
 	userId: string;
-};
+}
 
-async function sendAuthEmail(email: Promise<void>) {
+function sendAuthEmail(email: Promise<void>): Promise<void> {
 	waitUntil(email);
+	return Promise.resolve();
 }
 
 function securityAlertDetails() {
-	const headers = getRequestEvent().request.headers;
+	const { headers } = getRequestEvent().request;
 	const ipAddress =
 		headers.get('cf-connecting-ip') ?? headers.get('x-forwarded-for')?.split(',')[0];
 	const userAgent = headers.get('user-agent');
@@ -67,11 +68,8 @@ function securityAlertDetails() {
 	return details || null;
 }
 
-async function sendSignInSecurityAlert(
-	user: { email: string; name?: string | null },
-	baseURL: string
-) {
-	await sendAuthEmail(
+function sendSignInSecurityAlert(user: { email: string; name?: string | null }, baseURL: string) {
+	return sendAuthEmail(
 		sendSecurityAlertEmail({
 			to: user.email,
 			userName: user.name,
@@ -103,6 +101,7 @@ async function resyncOwnedProjectBilling(userId: string) {
 		.where(and(eq(member.userId, userId), eq(member.role, 'owner')));
 
 	for (const { organizationId } of owned) {
+		// biome-ignore lint/performance/noAwaitInLoops: Autumn customer updates are sent one at a time to stay within its rate limits
 		await updateProjectCustomer(organizationId).catch((err) => {
 			console.warn(`Failed to sync Autumn customer email for project ${organizationId}`, err);
 		});
@@ -156,7 +155,7 @@ function buildAuth() {
 							data: { ...newUser, role: isFirstUser ? 'admin' : 'user', isAdmin: isFirstUser }
 						};
 					},
-					after: async (createdUser) => {
+					after: (createdUser) => {
 						captureServerEvent(
 							'user_signed_up',
 							{},
@@ -165,13 +164,15 @@ function buildAuth() {
 								set: { email: createdUser.email, name: createdUser.name }
 							}
 						);
+						return Promise.resolve();
 					}
 				}
 			},
 			session: {
 				create: {
-					after: async (createdSession) => {
+					after: (createdSession) => {
 						captureServerEvent('user_signed_in', {}, { distinctId: createdSession.userId });
+						return Promise.resolve();
 					}
 				}
 			}
@@ -189,29 +190,27 @@ function buildAuth() {
 				...additionalFields,
 				id
 			}),
-			sendResetPassword: async ({ user, url }) => {
-				await sendAuthEmail(
+			sendResetPassword: ({ user, url }) =>
+				sendAuthEmail(
 					sendRenderedEmail({
 						component: ResetPasswordEmail,
 						props: { userName: user.name, resetUrl: url },
 						subject: 'Reset your Stack password',
 						to: user.email
 					})
-				);
-			}
+				)
 		},
 
 		emailVerification: {
-			sendVerificationEmail: async ({ user, url }) => {
-				await sendAuthEmail(
+			sendVerificationEmail: ({ user, url }) =>
+				sendAuthEmail(
 					sendRenderedEmail({
 						component: VerifyEmail,
 						props: { userName: user.name, verificationUrl: url },
 						subject: 'Verify your Stack email',
 						to: user.email
 					})
-				);
-			},
+				),
 			afterEmailVerification: async (user) => {
 				await db
 					.delete(verification)
@@ -227,12 +226,13 @@ function buildAuth() {
 		},
 
 		socialProviders: {
-			...(env.GITHUB_CLIENT_ID && {
-				github: {
-					clientId: env.GITHUB_CLIENT_ID,
-					clientSecret: env.GITHUB_CLIENT_SECRET!
-				}
-			})
+			...(env.GITHUB_CLIENT_ID &&
+				env.GITHUB_CLIENT_SECRET && {
+					github: {
+						clientId: env.GITHUB_CLIENT_ID,
+						clientSecret: env.GITHUB_CLIENT_SECRET
+					}
+				})
 		},
 
 		plugins: [
@@ -246,16 +246,18 @@ function buildAuth() {
 					before: [
 						{
 							matcher: (context) => context.path === '/two-factor/disable',
-							handler: createAuthMiddleware(async (ctx) => {
+							handler: createAuthMiddleware((ctx) => {
 								if (ctx.headers?.get(VERIFIED_2FA_DISABLE_HEADER) === env.BETTER_AUTH_SECRET) {
-									return;
+									return Promise.resolve();
 								}
 
-								throw APIError.from('FORBIDDEN', {
-									code: 'TWO_FACTOR_VERIFICATION_REQUIRED',
-									message:
-										'Verify with an authenticator app or backup code before disabling two-factor authentication.'
-								});
+								return Promise.reject(
+									APIError.from('FORBIDDEN', {
+										code: 'TWO_FACTOR_VERIFICATION_REQUIRED',
+										message:
+											'Verify with an authenticator app or backup code before disabling two-factor authentication.'
+									})
+								);
 							})
 						}
 					]
@@ -269,7 +271,9 @@ function buildAuth() {
 							matcher: (context) => context.path === '/sign-in/email',
 							handler: createAuthMiddleware(async (ctx) => {
 								const data = ctx.context.newSession;
-								if (!data) return;
+								if (!data) {
+									return;
+								}
 
 								const userPasskeys = await ctx.context.adapter.findMany({
 									model: 'passkey',
@@ -334,14 +338,18 @@ function buildAuth() {
 							where: [{ field: 'credentialID', value: clientData.id }]
 						})) as PasskeyRecord | null;
 
-						if (!verifiedPasskey) return;
+						if (!verifiedPasskey) {
+							return;
+						}
 
 						if (!pendingUserId) {
 							const sessionToken = await ctx.getSignedCookie(
 								ctx.context.authCookies.sessionToken.name,
 								ctx.context.secret
 							);
-							if (!sessionToken) return;
+							if (!sessionToken) {
+								return;
+							}
 
 							const currentSession = await ctx.context.internalAdapter.findSession(sessionToken);
 							if (currentSession?.user.id !== verifiedPasskey.userId) {
@@ -419,13 +427,13 @@ function buildAuth() {
 			organization({
 				ac,
 				roles: organizationRoles,
-				sendInvitationEmail: async ({ email, id, organization }) => {
+				sendInvitationEmail: ({ email, id, organization: invitedOrganization }) => {
 					const invitationUrl = `${baseURL}/accept-invitation/${id}`;
-					await sendAuthEmail(
+					return sendAuthEmail(
 						sendRenderedEmail({
 							component: OrganizationInvitationEmail,
-							props: { organizationName: organization.name, invitationUrl },
-							subject: `You're invited to join ${organization.name} on Stack`,
+							props: { organizationName: invitedOrganization.name, invitationUrl },
+							subject: `You're invited to join ${invitedOrganization.name} on Stack`,
 							to: email
 						})
 					);
@@ -439,5 +447,6 @@ function buildAuth() {
 let authInstance: ReturnType<typeof buildAuth> | null = null;
 
 export function initAuth() {
-	return (authInstance ??= buildAuth());
+	authInstance ??= buildAuth();
+	return authInstance;
 }

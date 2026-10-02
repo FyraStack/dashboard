@@ -1,16 +1,16 @@
-import { dev } from '$app/env';
 import { env as platformEnv } from 'cloudflare:workers';
+import { dev } from '$app/env';
 import { STACK_TIMING_SPAM } from '$app/env/private';
 
 type SpanAttributes = Record<string, string | number | boolean | undefined>;
 
-type TraceSpan = {
-	setAttribute(key: string, value: string | number | boolean | undefined): void;
-};
+interface TraceSpan {
+	setAttribute: (key: string, value: string | number | boolean | undefined) => void;
+}
 
-type TracingApi = {
-	enterSpan<T>(name: string, callback: (span: TraceSpan) => T): T;
-};
+interface TracingApi {
+	enterSpan: <T>(name: string, callback: (span: TraceSpan) => T) => T;
+}
 
 let tracingLoader: Promise<TracingApi | null> | undefined;
 
@@ -18,17 +18,23 @@ function roundMs(value: number): number {
 	return Math.round(value * 100) / 100;
 }
 
-function timingLogsEnabled(): boolean {
-	let value: string | undefined;
+function readPlatformTimingSpam(): string | undefined {
 	try {
-		value = platformEnv.STACK_TIMING_SPAM;
-	} catch {}
-	value ??= STACK_TIMING_SPAM;
+		return platformEnv.STACK_TIMING_SPAM;
+	} catch {
+		return undefined;
+	}
+}
+
+function timingLogsEnabled(): boolean {
+	const value = readPlatformTimingSpam() ?? STACK_TIMING_SPAM;
 	return value === undefined ? dev : value === 'true';
 }
 
 export function timingLog(name: string, attributes?: SpanAttributes) {
-	if (!timingLogsEnabled()) return;
+	if (!timingLogsEnabled()) {
+		return;
+	}
 
 	console.info({
 		message: `[timing] ${name}`,
@@ -51,7 +57,9 @@ function loadTracing(): Promise<TracingApi | null> {
 }
 
 function applyAttributes(span: TraceSpan, attributes?: SpanAttributes) {
-	if (!attributes) return;
+	if (!attributes) {
+		return;
+	}
 	for (const [key, value] of Object.entries(attributes)) {
 		span.setAttribute(key, value);
 	}
@@ -99,6 +107,8 @@ export async function instrument<T>(
 }
 
 export function summarizeStatement(statement: string | undefined): string | undefined {
-	if (!statement) return undefined;
+	if (!statement) {
+		return undefined;
+	}
 	return statement.replace(/\s+/g, ' ').trim().slice(0, 120);
 }

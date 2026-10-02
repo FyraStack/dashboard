@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { invalidate } from '$app/navigation';
+	import { toast } from 'svelte-sonner';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { reverseDnsZoneForCidr } from '#lib/ptr.js';
 	import {
 		createIpamPrefix,
 		deleteIpamPrefix,
@@ -15,10 +17,9 @@
 		updateIpamPrefix,
 		updateIpamPtrDefaultFormats
 	} from '#lib/remote/ipam.remote.js';
-	import { reverseDnsZoneForCidr } from '#lib/ptr.js';
-	import { AdminState, type AdminPageData, type IpamPrefix } from '#lib/state/admin.svelte.js';
+	import { type AdminPageData, AdminState, type IpamPrefix } from '#lib/state/admin.svelte.js';
 	import { getErrorMessage, runQuery } from '#lib/utils.js';
-	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { invalidate } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
@@ -26,8 +27,6 @@
 	import Pencil from '~icons/nucleo/pencil';
 	import Power from '~icons/nucleo/power';
 	import Trash2 from '~icons/nucleo/trash';
-	import { featureFlagKeys } from '#lib/feature-flags.js';
-	import { toast } from 'svelte-sonner';
 
 	let { data }: { data: AdminPageData } = $props();
 	const admin = new AdminState(untrack(() => data));
@@ -56,8 +55,6 @@
 	let ptrFormatIpv4 = $state('');
 	let ptrFormatIpv6 = $state('');
 
-	const userCount = $derived(admin.adminUsers.length);
-	const enabledCount = $derived(featureFlagKeys.filter((key) => admin.featureFlags[key]).length);
 	const ipv4Count = $derived(
 		admin.ipamPrefixes.filter((prefix) => prefix.family === 'ipv4').length
 	);
@@ -68,9 +65,20 @@
 
 	function formatCount(value: string) {
 		const parsed = BigInt(value);
-		if (parsed < 1_000_000n) return parsed.toString();
-		if (parsed < 1_000_000_000n) return `${parsed / 1_000_000n}M`;
+		if (parsed < 1_000_000n) {
+			return parsed.toString();
+		}
+		if (parsed < 1_000_000_000n) {
+			return `${parsed / 1_000_000n}M`;
+		}
 		return `${parsed / 1_000_000_000n}B+`;
+	}
+
+	function allocationUnitLabel(prefix: IpamPrefix) {
+		if (prefix.family !== 'ipv6') {
+			return '/32 addresses';
+		}
+		return prefix.ipv6UseTransitAddress ? '/128 transit' : '/64 prefixes';
 	}
 
 	function openCreate() {
@@ -89,14 +97,11 @@
 
 	function openEdit(prefix: IpamPrefix) {
 		editing = prefix;
-		name = prefix.name;
-		cidr = prefix.cidr;
+		({ name, cidr, disabled, ipv6UseTransitAddress } = prefix);
 		whitelistStart = prefix.whitelistStart ?? '';
 		whitelistEnd = prefix.whitelistEnd ?? '';
 		gatewayAddress = prefix.gatewayAddress ?? '';
 		bunnyDnsZone = prefix.bunnyDnsZone ?? '';
-		disabled = prefix.disabled;
-		ipv6UseTransitAddress = prefix.ipv6UseTransitAddress;
 		formError = '';
 		dialogOpen = true;
 	}
@@ -107,7 +112,9 @@
 	}
 
 	async function savePrefix() {
-		if (!name.trim() || !cidr.trim() || (!isIpv6Prefix && !gatewayAddress.trim())) return;
+		if (!(name.trim() && cidr.trim() && (isIpv6Prefix || gatewayAddress.trim()))) {
+			return;
+		}
 
 		saving = true;
 		formError = '';
@@ -155,7 +162,9 @@
 
 	function autoFillBunnyZone() {
 		const generated = reverseDnsZoneForCidr(cidr.trim());
-		if (generated) bunnyDnsZone = generated;
+		if (generated) {
+			bunnyDnsZone = generated;
+		}
 	}
 
 	async function openPtrDefaults() {
@@ -197,7 +206,9 @@
 			confirmWord: prefix.name,
 			confirmLabel: 'Delete prefix'
 		});
-		if (!ok) return;
+		if (!ok) {
+			return;
+		}
 		try {
 			await deleteIpamPrefix({ prefixId: prefix.id });
 			admin.ipamPrefixes = admin.ipamPrefixes.filter((item) => item.id !== prefix.id);
@@ -223,7 +234,8 @@
 				Default PTR Format
 			</Button>
 			<Button size="sm" class="h-7 gap-1.5 text-xs" onclick={openCreate}>
-				<Plus class="h-3 w-3" /> Add Prefix
+				<Plus class="h-3 w-3" />
+				Add Prefix
 			</Button>
 		</div>
 	</div>
@@ -233,7 +245,8 @@
 			<Network class="mb-3 h-6 w-6" />
 			<p class="text-xs">No IPAM prefixes configured</p>
 			<Button variant="outline" size="sm" class="mt-3 gap-1.5 text-xs" onclick={openCreate}>
-				<Plus class="h-3 w-3" /> Add Prefix
+				<Plus class="h-3 w-3" />
+				Add Prefix
 			</Button>
 		</div>
 	{:else}
@@ -270,11 +283,7 @@
 						</td>
 						<td class="px-5 py-3">
 							<Badge variant="outline" class="text-[10px]">
-								{prefix.family === 'ipv6'
-									? prefix.ipv6UseTransitAddress
-										? '/128 transit'
-										: '/64 prefixes'
-									: '/32 addresses'}
+								{allocationUnitLabel(prefix)}
 							</Badge>
 						</td>
 						<td class="px-5 py-3 font-mono text-xs text-muted-foreground">
@@ -414,7 +423,7 @@
 				disabled={saving ||
 					!name.trim() ||
 					!cidr.trim() ||
-					(!isIpv6Prefix && !gatewayAddress.trim())}
+					!(isIpv6Prefix || gatewayAddress.trim())}
 			>
 				{#if saving}
 					<Loader2 class="mr-2 h-3 w-3 animate-spin" />
@@ -465,7 +474,8 @@
 				/>
 				<p class="text-xs text-muted-foreground">
 					Placeholders: <span class="font-mono">{'{group1}'}</span> through
-					<span class="font-mono">{'{group8}'}</span> (expanded hextets)
+					<span class="font-mono">{'{group8}'}</span>
+					(expanded hextets)
 				</p>
 			</div>
 		</div>

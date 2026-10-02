@@ -1,6 +1,6 @@
-import type { RemoteQuery } from '$app/server';
-import { clsx, type ClassValue } from 'clsx';
+import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import type { RemoteQuery } from '$app/server';
 
 type ClientTimingAttributes = Record<string, string | number | boolean | undefined>;
 
@@ -13,7 +13,9 @@ function roundMs(value: number): number {
 }
 
 export function clientTimingLog(name: string, attributes?: ClientTimingAttributes) {
-	if (typeof window === 'undefined') return;
+	if (typeof window === 'undefined') {
+		return;
+	}
 
 	console.info({
 		message: `[timing] ${name}`,
@@ -46,25 +48,31 @@ export async function runQuery<T>(query: RemoteQuery<T>, label = 'remote.query')
 }
 
 export function getErrorMessage(err: unknown, fallback: string): string {
-	if (typeof err === 'string') return err;
-	if (err instanceof Error) return err.message;
+	if (typeof err === 'string') {
+		return err;
+	}
+	if (err instanceof Error) {
+		return err.message;
+	}
 	if (typeof err === 'object' && err !== null) {
-		if ('message' in err) return String((err as { message: unknown }).message);
+		if ('message' in err) {
+			return String((err as { message: unknown }).message);
+		}
 		if (
 			'body' in err &&
 			typeof (err as { body: unknown }).body === 'object' &&
 			(err as { body: unknown }).body !== null
 		) {
-			const body = (err as { body: Record<string, unknown> }).body;
-			if ('message' in body) return String(body.message);
+			const { body } = err as { body: Record<string, unknown> };
+			if ('message' in body) {
+				return String(body.message);
+			}
 		}
 	}
 	return fallback;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type WithoutChild<T> = T extends { child?: any } ? Omit<T, 'child'> : T;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type WithoutChildren<T> = T extends { children?: any } ? Omit<T, 'children'> : T;
+export type WithoutChild<T> = T extends { child?: unknown } ? Omit<T, 'child'> : T;
+export type WithoutChildren<T> = T extends { children?: unknown } ? Omit<T, 'children'> : T;
 export type WithoutChildrenOrChild<T> = WithoutChildren<WithoutChild<T>>;
 export type WithElementRef<T, U extends HTMLElement = HTMLElement> = T & { ref?: U | null };

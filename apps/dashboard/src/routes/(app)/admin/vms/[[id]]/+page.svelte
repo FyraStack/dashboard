@@ -1,16 +1,16 @@
 <script lang="ts">
+	import VmBillingReversalDialog from '#lib/components/admin/vm-billing-reversal-dialog.svelte';
+	import VmDetailSheet from '#lib/components/admin/vm-detail-sheet.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import type { AdminVm } from '#lib/remote/admin-vms.remote.js';
+	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { Switch } from '#lib/components/ui/switch/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import VmBillingReversalDialog from '#lib/components/admin/vm-billing-reversal-dialog.svelte';
-	import VmDetailSheet from '#lib/components/admin/vm-detail-sheet.svelte';
-	import type { AdminVm } from '#lib/remote/admin-vms.remote.js';
-	import { AdminState, type AdminPageData } from '#lib/state/admin.svelte.js';
 	import Check from '~icons/lucide/check';
 	import ChevronDown from '~icons/lucide/chevron-down';
 	import Loader2 from '~icons/lucide/loader-2';
@@ -53,9 +53,9 @@
 	const ownerOptions = $derived(
 		[
 			...new Map(
-				admin.adminVms
-					.filter((vm) => vm.ownerEmail)
-					.map((vm) => [vm.ownerEmail!, vm.ownerName ?? vm.ownerEmail!])
+				admin.adminVms.flatMap((vm) =>
+					vm.ownerEmail ? [[vm.ownerEmail, vm.ownerName ?? vm.ownerEmail] as const] : []
+				)
 			).entries()
 		]
 			.map(([email, name]) => ({ email, name }))
@@ -80,62 +80,84 @@
 
 	const filteredVms = $derived(
 		admin.adminVms.filter((vm) => {
-			if (!showDeleted && !vm.active) return false;
-			if (ownerFilter !== 'all' && vm.ownerEmail !== ownerFilter) return false;
-			if (typeFilter !== 'all' && vm.vmTypeName !== typeFilter) return false;
-			if (statusFilter !== 'all' && statusInfo(vm).label !== statusFilter) return false;
+			if (!(showDeleted || vm.active)) {
+				return false;
+			}
+			if (ownerFilter !== 'all' && vm.ownerEmail !== ownerFilter) {
+				return false;
+			}
+			if (typeFilter !== 'all' && vm.vmTypeName !== typeFilter) {
+				return false;
+			}
+			if (statusFilter !== 'all' && statusInfo(vm).label !== statusFilter) {
+				return false;
+			}
 			const term = search.trim().toLowerCase();
-			if (!term) return true;
+			if (!term) {
+				return true;
+			}
 
-			return [vm.name, vm.projectName, vm.ownerName, vm.ownerEmail, vm.lastKnownIpv4, vm.id]
-				.filter(Boolean)
-				.some((value) => value!.toLowerCase().includes(term));
+			return [vm.name, vm.projectName, vm.ownerName, vm.ownerEmail, vm.lastKnownIpv4, vm.id].some(
+				(value) => value?.toLowerCase().includes(term)
+			);
 		})
 	);
 
 	function statusInfo(vm: AdminVm) {
-		if (!vm.active)
+		if (!vm.active) {
 			return { label: 'deleted', class: 'border-ring/20 bg-muted/30 text-muted-foreground' };
-		if (vm.status === 'deleting')
+		}
+		if (vm.status === 'deleting') {
 			return {
 				label: 'deleting',
 				class:
 					'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
 			};
-		if (vm.status === 'error')
+		}
+		if (vm.status === 'error') {
 			return {
 				label: 'error',
 				class:
 					'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
 			};
-		if (vm.status === 'provisioning')
+		}
+		if (vm.status === 'provisioning') {
 			return {
 				label: 'provisioning',
 				class:
 					'border-sky-300 bg-sky-100 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-400'
 			};
-		if (vm.liveStatus === 'running')
+		}
+		if (vm.liveStatus === 'running') {
 			return {
 				label: 'running',
 				class:
 					'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400'
 			};
-		if (vm.liveStatus === 'paused')
+		}
+		if (vm.liveStatus === 'paused') {
 			return {
 				label: 'paused',
 				class:
 					'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400'
 			};
+		}
 		return { label: 'stopped', class: 'border-ring/20 bg-muted/30 text-muted-foreground' };
 	}
 
 	function formatUptime(seconds: number) {
-		if (seconds <= 0) return '-';
+		if (seconds <= 0) {
+			return '-';
+		}
 		const days = Math.floor(seconds / 86_400);
-		const hours = Math.floor((seconds % 86_400) / 3_600);
-		const minutes = Math.floor((seconds % 3_600) / 60);
-		if (days > 0) return `${days}d ${hours}h`;
-		if (hours > 0) return `${hours}h ${minutes}m`;
+		const hours = Math.floor((seconds % 86_400) / 3600);
+		const minutes = Math.floor((seconds % 3600) / 60);
+		if (days > 0) {
+			return `${days}d ${hours}h`;
+		}
+		if (hours > 0) {
+			return `${hours}h ${minutes}m`;
+		}
 		return `${minutes}m`;
 	}
 
@@ -167,11 +189,19 @@
 	);
 
 	function openVmSheet(vm: AdminVm) {
-		void goto(resolve(`admin/vms/${vm.id}`), { reset: false });
+		goto(resolve(`admin/vms/${vm.id}`), { reset: false });
+	}
+
+	function openVmSheetFromRow(event: MouseEvent, vm: AdminVm) {
+		const startedInActions =
+			event.target instanceof Element && event.target.closest('[data-row-actions]') !== null;
+		if (!startedInActions) {
+			openVmSheet(vm);
+		}
 	}
 
 	function closeVmSheet() {
-		void goto(vmsBase, { reset: false });
+		goto(vmsBase, { reset: false });
 	}
 
 	function openDeleteDialog(vm: AdminVm) {
@@ -193,13 +223,15 @@
 	);
 
 	async function confirmDelete() {
-		if (!deleteTarget || deleteDisabled) return;
+		if (!deleteTarget || deleteDisabled) {
+			return;
+		}
 		try {
 			await admin.adminVmDelete(deleteTarget.id);
-			closeDeleteDialog();
 		} catch {
 			return;
 		}
+		closeDeleteDialog();
 	}
 </script>
 
@@ -294,7 +326,9 @@
 						onSelect={() => (ownerFilter = 'all')}
 					>
 						All owners
-						{#if ownerFilter === 'all'}<Check class="ml-auto h-3 w-3 text-emerald-400" />{/if}
+						{#if ownerFilter === 'all'}
+							<Check class="ml-auto h-3 w-3 text-emerald-400" />
+						{/if}
 					</DropdownMenu.Item>
 					<DropdownMenu.Separator class="bg-muted" />
 					{#each ownerOptions as owner (owner.email)}
@@ -329,7 +363,9 @@
 						onSelect={() => (typeFilter = 'all')}
 					>
 						All types
-						{#if typeFilter === 'all'}<Check class="ml-auto h-3 w-3 text-emerald-400" />{/if}
+						{#if typeFilter === 'all'}
+							<Check class="ml-auto h-3 w-3 text-emerald-400" />
+						{/if}
 					</DropdownMenu.Item>
 					<DropdownMenu.Separator class="bg-muted" />
 					{#each typeOptions as vmTypeName (vmTypeName)}
@@ -361,7 +397,9 @@
 						onSelect={() => (statusFilter = 'all')}
 					>
 						All statuses
-						{#if statusFilter === 'all'}<Check class="ml-auto h-3 w-3 text-emerald-400" />{/if}
+						{#if statusFilter === 'all'}
+							<Check class="ml-auto h-3 w-3 text-emerald-400" />
+						{/if}
 					</DropdownMenu.Item>
 					<DropdownMenu.Separator class="bg-muted" />
 					{#each statusOptions as status (status)}
@@ -377,10 +415,10 @@
 					{/each}
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
-			<label class="flex items-center gap-2 text-xs text-muted-foreground">
-				<Switch bind:checked={showDeleted} />
-				Show deleted
-			</label>
+			<div class="flex items-center gap-2 text-xs text-muted-foreground">
+				<Switch id="admin-vms-show-deleted" bind:checked={showDeleted} />
+				<label for="admin-vms-show-deleted">Show deleted</label>
+			</div>
 			<Button
 				variant="outline"
 				size="sm"
@@ -403,8 +441,7 @@
 				<p class="text-sm">No servers found</p>
 			</div>
 		{:else}
-			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-			<div class="overflow-x-auto rounded-md border border-border/60" tabindex="0">
+			<div class="overflow-x-auto rounded-md border border-border/60">
 				<table class="w-full text-left text-xs">
 					<thead>
 						<tr
@@ -427,7 +464,7 @@
 							{@const saving = admin.adminVmSaving[vm.id]}
 							<tr
 								class="cursor-pointer transition-colors hover:bg-muted/20"
-								onclick={() => openVmSheet(vm)}
+								onclick={(event) => openVmSheetFromRow(event, vm)}
 							>
 								<td class="px-4 py-3">
 									<div class="flex flex-col gap-0.5">
@@ -474,7 +511,7 @@
 									{vm.liveStatus === 'running' ? formatUptime(vm.uptime) : '-'}
 								</td>
 								<td class="px-4 py-3 text-muted-foreground">{formatDate(vm.createdAt)}</td>
-								<td class="px-4 py-3 text-right" onclick={(event) => event.stopPropagation()}>
+								<td class="px-4 py-3 text-right" data-row-actions>
 									<DropdownMenu.Root>
 										<DropdownMenu.Trigger
 											disabled={Boolean(saving)}
@@ -550,7 +587,9 @@
 <Dialog.Root
 	bind:open={deleteDialogOpen}
 	onOpenChange={(value) => {
-		if (!value) closeDeleteDialog();
+		if (!value) {
+			closeDeleteDialog();
+		}
 	}}
 >
 	<Dialog.Content class="border-border bg-background sm:max-w-md">
@@ -567,7 +606,7 @@
 			class="flex flex-col gap-4 pt-4"
 			onsubmit={(event) => {
 				event.preventDefault();
-				void confirmDelete();
+				confirmDelete();
 			}}
 		>
 			<div

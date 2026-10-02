@@ -1,8 +1,8 @@
-export type VmPlanCapacity = {
+export interface VmPlanCapacity {
 	cores: number;
 	ramCapacity: number;
 	storageAmount: number;
-};
+}
 
 export function findPlanDowngrades(current: VmPlanCapacity, target: VmPlanCapacity): string[] {
 	const downgrades: string[] = [];

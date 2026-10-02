@@ -4,8 +4,8 @@
 // the latency to this endpoint measures the time it takes for a round-trip to the PVE backend over VPC
 
 import { error } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
 import { getBackend } from '#lib/server/backends/index.js';
+import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async () => {
 	try {

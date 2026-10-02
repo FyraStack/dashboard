@@ -2,17 +2,17 @@
 	import QRCode from 'qrcode';
 	import { authClient } from '#lib/auth-client.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import Check from '~icons/lucide/check';
 	import Copy from '~icons/nucleo/copy';
 	import ShieldCheck from '~icons/nucleo/shield-check';
 
-	type Props = {
-		open?: boolean;
+	interface Props {
 		onComplete?: () => void;
-	};
+		open?: boolean;
+	}
 
 	let { open = $bindable(false), onComplete }: Props = $props();
 
@@ -38,7 +38,7 @@
 		}
 
 		let cancelled = false;
-		void QRCode.toDataURL(uri, {
+		QRCode.toDataURL(uri, {
 			width: 180,
 			margin: 0,
 			color: {
@@ -46,9 +46,17 @@
 				light: '#27272a'
 			},
 			errorCorrectionLevel: 'M'
-		}).then((src) => {
-			if (!cancelled) qrCodeSrc = src;
-		});
+		})
+			.then((src) => {
+				if (!cancelled) {
+					qrCodeSrc = src;
+				}
+			})
+			.catch(() => {
+				if (!cancelled) {
+					qrCodeSrc = '';
+				}
+			});
 
 		return () => {
 			cancelled = true;
@@ -69,7 +77,9 @@
 	};
 
 	async function enableTotp() {
-		if (!setupPassword) return;
+		if (!setupPassword) {
+			return;
+		}
 		setupSubmitting = true;
 		verifyError = '';
 		const { data, error } = await authClient.twoFactor.enable({
@@ -91,7 +101,9 @@
 	}
 
 	async function verifyTotp() {
-		if (!normalizedVerifyCode) return;
+		if (!normalizedVerifyCode) {
+			return;
+		}
 		verifying = true;
 		verifyError = '';
 		const { error } = await authClient.twoFactor.verifyTotp({

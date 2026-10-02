@@ -1,23 +1,14 @@
 import { and, asc, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { organization } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	billingMeters,
-	billingUsageEvents,
-	organization,
-	vms,
-	vmTypes,
 	type billingResourceTypeEnum,
-	type vmStatusEnum
+	billingUsageEvents,
+	type vmStatusEnum,
+	vms,
+	vmTypes
 } from '#lib/server/db/schema.js';
-import { billedQuantity, hoursBetween, requireVmFeatureId, usageIdempotencyKey } from './features';
-import {
-	billingCyclePeriod,
-	calendarMonthPeriod,
-	capHoursFor,
-	sliceCapUsage,
-	type CapPeriod,
-	type CapSegment
-} from './caps';
 import {
 	autumnStatus,
 	createAutumnClient,
@@ -29,6 +20,15 @@ import {
 	lookupProjectBillingPeriod,
 	type ProjectBillingPeriodLookup
 } from './autumn';
+import {
+	billingCyclePeriod,
+	type CapPeriod,
+	type CapSegment,
+	calendarMonthPeriod,
+	capHoursFor,
+	sliceCapUsage
+} from './caps';
+import { billedQuantity, hoursBetween, requireVmFeatureId, usageIdempotencyKey } from './features';
 
 type BillingResourceType = (typeof billingResourceTypeEnum.enumValues)[number];
 type VmStatus = (typeof vmStatusEnum.enumValues)[number];
@@ -40,7 +40,9 @@ const MAX_METERING_GAP_MS = 48 * 3_600_000;
 
 function meteringWindowStart(meter: Pick<BillingMeter, 'id' | 'lastMeteredAt'>, now: number) {
 	const earliest = now - MAX_METERING_GAP_MS;
-	if (meter.lastMeteredAt >= earliest) return meter.lastMeteredAt;
+	if (meter.lastMeteredAt >= earliest) {
+		return meter.lastMeteredAt;
+	}
 
 	const skippedHours = hoursBetween(meter.lastMeteredAt, earliest).toFixed(2);
 	console.error(
@@ -56,7 +58,9 @@ type SegmentInsert = Pick<
 
 function segmentEventValues(meter: SegmentInsert, segment: CapSegment, now: number) {
 	const quantity = billedQuantity(meter.units, segment.billableHours);
-	if (quantity <= 0) return null;
+	if (quantity <= 0) {
+		return null;
+	}
 
 	return {
 		projectId: meter.projectId,
@@ -86,16 +90,20 @@ async function recordMeterUsage(
 	periodAt: (at: number) => CapPeriod
 ) {
 	const db = initDrizzle();
-	if (now <= meter.lastMeteredAt) return [];
+	if (now <= meter.lastMeteredAt) {
+		return [];
+	}
 
-	return db.transaction(async (tx) => {
+	return await db.transaction(async (tx) => {
 		const [locked] = await tx
 			.select()
 			.from(billingMeters)
 			.where(and(eq(billingMeters.id, meter.id), eq(billingMeters.active, true)))
 			.for('update');
 
-		if (!locked || now <= locked.lastMeteredAt) return [];
+		if (!locked || now <= locked.lastMeteredAt) {
+			return [];
+		}
 
 		const { segments, state } = sliceCapUsage({
 			from: meteringWindowStart(locked, now),
@@ -107,7 +115,7 @@ async function recordMeterUsage(
 
 		const values = segments
 			.map((segment) => segmentEventValues(locked, segment, now))
-			.filter((value) => value != null);
+			.filter((value) => value !== null);
 
 		await tx
 			.update(billingMeters)
@@ -119,7 +127,9 @@ async function recordMeterUsage(
 			})
 			.where(eq(billingMeters.id, meter.id));
 
-		if (values.length === 0) return [];
+		if (values.length === 0) {
+			return [];
+		}
 
 		return tx
 			.insert(billingUsageEvents)
@@ -156,7 +166,6 @@ export async function createBillingMeter(input: {
 
 export async function reconcileMissingMeters(now = Date.now(), limit = 100, projectId?: string) {
 	const db = initDrizzle();
-	let created = 0;
 
 	const missing = await db
 		.select({
@@ -180,28 +189,40 @@ export async function reconcileMissingMeters(now = Date.now(), limit = 100, proj
 		)
 		.limit(limit);
 
-	for (const vm of missing) {
-		if (!vm.ownerProjectId) continue;
+	const reseeded = await Promise.all(missing.map((vm) => reseedMissingMeter(vm, now)));
+	return { created: reseeded.filter(Boolean).length };
+}
 
-		try {
-			await createBillingMeter({
-				projectId: vm.ownerProjectId,
-				resourceType: 'vm',
-				resourceId: vm.id,
-				featureId: requireVmFeatureId(vm.vmType),
-				units: 1,
-				now
-			});
-			created += 1;
-			console.error(
-				`Reseeded missing billing meter for VM ${vm.id} (project ${vm.ownerProjectId}, created ${new Date(vm.createdAt).toISOString()}); metering resumes from now`
-			);
-		} catch (err) {
-			console.warn(`Skipping billing meter reconciliation for VM ${vm.id}`, err);
-		}
+async function reseedMissingMeter(
+	vm: {
+		id: string;
+		ownerProjectId: string | null;
+		createdAt: number;
+		vmType: Parameters<typeof requireVmFeatureId>[0];
+	},
+	now: number
+) {
+	if (!vm.ownerProjectId) {
+		return false;
 	}
 
-	return { created };
+	try {
+		await createBillingMeter({
+			projectId: vm.ownerProjectId,
+			resourceType: 'vm',
+			resourceId: vm.id,
+			featureId: requireVmFeatureId(vm.vmType),
+			units: 1,
+			now
+		});
+		console.error(
+			`Reseeded missing billing meter for VM ${vm.id} (project ${vm.ownerProjectId}, created ${new Date(vm.createdAt).toISOString()}); metering resumes from now`
+		);
+		return true;
+	} catch (err) {
+		console.warn(`Skipping billing meter reconciliation for VM ${vm.id}`, err);
+		return false;
+	}
 }
 
 async function vmTypeBilledByMeter(meter: Pick<BillingMeter, 'featureId' | 'resourceId'>) {
@@ -211,7 +232,9 @@ async function vmTypeBilledByMeter(meter: Pick<BillingMeter, 'featureId' | 'reso
 		.from(vmTypes)
 		.where(eq(vmTypes.autumnFeatureId, meter.featureId))
 		.limit(1);
-	if (byFeature) return byFeature;
+	if (byFeature) {
+		return byFeature;
+	}
 
 	const [byVm] = await db
 		.select({ rate: vmTypes.rate, cap: vmTypes.cap })
@@ -223,7 +246,7 @@ async function vmTypeBilledByMeter(meter: Pick<BillingMeter, 'featureId' | 'reso
 }
 
 async function meterCapContext(meter: BillingMeter) {
-	let capHours = Infinity;
+	let capHours = Number.POSITIVE_INFINITY;
 	if (meter.resourceType === 'vm') {
 		const vmType = await vmTypeBilledByMeter(meter);
 		capHours = capHoursFor(vmType?.rate, vmType?.cap);
@@ -264,7 +287,7 @@ export async function hasUnsyncedUsageEvents(
 		),
 		columns: { id: true }
 	});
-	return pending != null;
+	return pending !== undefined;
 }
 
 function logUnbillableProject(projectId: string) {
@@ -291,7 +314,9 @@ export async function meterResourceThrough(
 		)
 	});
 
-	if (!meter) return null;
+	if (!meter) {
+		return null;
+	}
 
 	const { capHours, periodAt, billable } = await meterCapContext(meter);
 
@@ -302,7 +327,9 @@ export async function meterResourceThrough(
 			.where(and(eq(billingMeters.id, meter.id), eq(billingMeters.active, true)))
 			.for('update');
 
-		if (!locked) return [];
+		if (!locked) {
+			return [];
+		}
 
 		const { segments, state } = sliceCapUsage({
 			from: meteringWindowStart(locked, Math.max(now, locked.lastMeteredAt)),
@@ -315,7 +342,7 @@ export async function meterResourceThrough(
 		const values = billable
 			? segments
 					.map((segment) => segmentEventValues(locked, segment, now))
-					.filter((value) => value != null)
+					.filter((value) => value !== null)
 			: [];
 
 		const inserted =
@@ -344,8 +371,11 @@ export async function meterResourceThrough(
 
 	let syncStatus: Awaited<ReturnType<typeof syncUsageEvent>> = null;
 	for (const event of events) {
+		// biome-ignore lint/performance/noAwaitInLoops: usage events are pushed to Autumn in creation order, one at a time
 		const status = await syncUsageEvent(event.id);
-		if (syncStatus !== 'failed') syncStatus = status;
+		if (syncStatus !== 'failed') {
+			syncStatus = status;
+		}
 	}
 
 	return { events, syncStatus };
@@ -375,7 +405,9 @@ async function rotateMeterFeature(
 			.where(and(eq(billingMeters.id, meter.id), eq(billingMeters.active, true)))
 			.for('update');
 
-		if (!locked || locked.featureId !== meter.featureId) return [];
+		if (!locked || locked.featureId !== meter.featureId) {
+			return [];
+		}
 
 		const { segments } = sliceCapUsage({
 			from: meteringWindowStart(locked, closeAt),
@@ -387,7 +419,7 @@ async function rotateMeterFeature(
 
 		const values = segments
 			.map((segment) => segmentEventValues(locked, segment, closeAt))
-			.filter((value) => value != null);
+			.filter((value) => value !== null);
 
 		await tx
 			.update(billingMeters)
@@ -400,7 +432,9 @@ async function rotateMeterFeature(
 			})
 			.where(eq(billingMeters.id, meter.id));
 
-		if (values.length === 0) return [];
+		if (values.length === 0) {
+			return [];
+		}
 
 		return tx
 			.insert(billingUsageEvents)
@@ -435,7 +469,9 @@ export async function reconcileOrphanedMeters(now = Date.now(), limit = 100) {
 		)
 		.limit(limit);
 
-	if (orphans.length === 0) return { closed: 0 };
+	if (orphans.length === 0) {
+		return { closed: 0 };
+	}
 
 	await db
 		.update(billingMeters)
@@ -519,7 +555,9 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 		let lookup = lookups.get(projectId);
 		if (!lookup) {
 			lookup = lookupProjectBillingPeriod(projectId).then((result) => {
-				if (result.customer === 'missing') logUnbillableProject(projectId);
+				if (result.customer === 'missing') {
+					logUnbillableProject(projectId);
+				}
 				return result;
 			});
 			lookups.set(projectId, lookup);
@@ -532,7 +570,7 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 	};
 
 	let events = 0;
-	let skipped = { errored: 0, unbillable: 0 };
+	const skipped = { errored: 0, unbillable: 0 };
 	await runBounded(
 		meters,
 		METER_CONCURRENCY,
@@ -571,10 +609,10 @@ function vmIsUnbillable(status: VmStatus | null | undefined) {
 type ProjectTargetStatus = 'ok' | 'failed' | 'gone';
 type EventTargetStatus = 'ready' | 'failed' | 'abandoned';
 
-type EnsureCaches = {
-	projects: Map<string, Promise<ProjectTargetStatus>>;
+interface EnsureCaches {
 	entities: Map<string, Promise<boolean>>;
-};
+	projects: Map<string, Promise<ProjectTargetStatus>>;
+}
 
 const SYNC_CONCURRENCY = 6;
 const METER_CONCURRENCY = 5;
@@ -583,7 +621,10 @@ async function runBounded<T>(items: T[], limit: number, worker: (item: T) => Pro
 	let index = 0;
 	const runner = async () => {
 		while (index < items.length) {
-			await worker(items[index++]);
+			const item = items[index];
+			index += 1;
+			// biome-ignore lint/performance/noAwaitInLoops: each runner is one lane of a bounded worker pool and must finish an item before taking the next
+			await worker(item);
 		}
 	};
 	await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runner));
@@ -613,7 +654,7 @@ async function projectIsGone(projectId: string) {
 		.where(eq(organization.id, projectId))
 		.limit(1);
 
-	return !org || org.deletedAt != null;
+	return !org || org.deletedAt !== null;
 }
 
 async function markUsageEventSynced(eventId: string) {
@@ -624,15 +665,20 @@ async function markUsageEventSynced(eventId: string) {
 		.where(eq(billingUsageEvents.id, eventId));
 }
 
+async function resolveProjectTargetStatus(projectId: string): Promise<ProjectTargetStatus> {
+	try {
+		await ensureProjectCustomer(projectId);
+		return 'ok';
+	} catch {
+		const gone = await projectIsGone(projectId).catch(() => false);
+		return gone ? 'gone' : 'failed';
+	}
+}
+
 function ensureProjectTarget(projectId: string, caches: EnsureCaches) {
 	let ensured = caches.projects.get(projectId);
 	if (!ensured) {
-		ensured = ensureProjectCustomer(projectId)
-			.then((): ProjectTargetStatus => 'ok')
-			.catch(async (): Promise<ProjectTargetStatus> => {
-				const gone = await projectIsGone(projectId).catch(() => false);
-				return gone ? 'gone' : 'failed';
-			});
+		ensured = resolveProjectTargetStatus(projectId);
 		caches.projects.set(projectId, ensured);
 	}
 
@@ -751,16 +797,24 @@ async function syncUsageEvents(events: BillingUsageEvent[]) {
 			return;
 		}
 		const target = await ensureEventTarget(event, caches);
-		if (target === 'ready') ready.push(event);
-		else if (target === 'abandoned') abandoned += 1;
-		else failed += 1;
+		if (target === 'ready') {
+			ready.push(event);
+		} else if (target === 'abandoned') {
+			abandoned += 1;
+		} else {
+			failed += 1;
+		}
 	});
 
 	await runBounded(ready, SYNC_CONCURRENCY, async (event) => {
 		const status = await trackUsageEvent(event);
-		if (status === 'synced') synced += 1;
-		else if (status === 'abandoned') abandoned += 1;
-		else failed += 1;
+		if (status === 'synced') {
+			synced += 1;
+		} else if (status === 'abandoned') {
+			abandoned += 1;
+		} else {
+			failed += 1;
+		}
 	});
 
 	return { synced, failed, abandoned };
@@ -772,8 +826,12 @@ export async function syncUsageEvent(id: string) {
 		where: eq(billingUsageEvents.id, id)
 	});
 
-	if (!event) return null;
-	if (event.syncStatus === 'synced') return 'synced' as const;
+	if (!event) {
+		return null;
+	}
+	if (event.syncStatus === 'synced') {
+		return 'synced' as const;
+	}
 	if (await isProjectBillingExempt(event.projectId)) {
 		await markUsageEventSynced(event.id);
 		return 'synced' as const;
@@ -781,8 +839,9 @@ export async function syncUsageEvent(id: string) {
 
 	const caches: EnsureCaches = { projects: new Map(), entities: new Map() };
 	const target = await ensureEventTarget(event, caches);
-	if (target !== 'ready')
+	if (target !== 'ready') {
 		return target === 'abandoned' ? ('abandoned' as const) : ('failed' as const);
+	}
 
 	return trackUsageEvent(event);
 }

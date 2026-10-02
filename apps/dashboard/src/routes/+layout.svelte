@@ -1,9 +1,9 @@
 <script lang="ts">
 	import './layout.css';
-	import NavigationProgress from '#lib/components/navigation-progress.svelte';
-	import { onMount } from 'svelte';
 	import { ModeWatcher } from 'mode-watcher';
+	import { onMount } from 'svelte';
 	import { initPostHog } from '#lib/analytics/posthog.js';
+	import NavigationProgress from '#lib/components/navigation-progress.svelte';
 
 	let { children } = $props();
 

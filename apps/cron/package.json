@@ -1,14 +1,14 @@
 {
 	"name": "stack-dashboard-cron",
-	"private": true,
 	"version": "0.0.1",
+	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "wrangler dev",
-		"check": "tsc --noEmit",
 		"cf:deploy": "wrangler deploy --env=\"\"",
 		"cf:deploy:preview": "wrangler deploy --env preview",
-		"cf:typegen": "wrangler types"
+		"cf:typegen": "wrangler types",
+		"check": "tsc --noEmit",
+		"dev": "wrangler dev"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^5.20261002.1",

@@ -35,13 +35,15 @@
 								variant="ghost"
 								size="sm"
 								class="h-7 w-7 p-0 text-emerald-500"
-								onclick={saveName}><Check class="h-3 w-3" /></Button
+								onclick={saveName}
+								><Check class="h-3 w-3" /></Button
 							>
 							<Button
 								variant="ghost"
 								size="sm"
 								class="h-7 w-7 p-0"
-								onclick={() => (editingName = false)}><X class="h-3 w-3" /></Button
+								onclick={() => (editingName = false)}
+								><X class="h-3 w-3" /></Button
 							>
 						</div>
 					{:else}
@@ -60,7 +62,12 @@
 					</Button>
 				{/if}
 			</div>
-			{#each [['Rack Size', colo.selectedUnit.rackSize], ['Location', colo.selectedUnit.location], ['Monthly Rate', `${colo.selectedUnit.monthlyRate}/mo`], ['Created', colo.selectedUnit.created]] as [label, value] (label)}
+			{#each [
+				['Rack Size', colo.selectedUnit.rackSize],
+				['Location', colo.selectedUnit.location],
+				['Monthly Rate', `${colo.selectedUnit.monthlyRate}/mo`],
+				['Created', colo.selectedUnit.created]
+			] as [label, value] (label)}
 				<div class="flex items-center justify-between px-5 py-3">
 					<span class="text-sm text-muted-foreground">{label}</span>
 					<span class="text-sm text-foreground">{value}</span>

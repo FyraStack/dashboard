@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { authClient } from '#lib/auth-client.js';
+	import TotpResetFlow from '#lib/components/totp-reset-flow.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import TotpResetFlow from '#lib/components/totp-reset-flow.svelte';
+	import { goto } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertCircle from '~icons/nucleo/alert-circle';
 	import ShieldCheck from '~icons/nucleo/shield-check';
@@ -18,13 +18,15 @@
 	);
 
 	let code = $state('');
-	let error = $state('');
+	let errorMessage = $state('');
 	let loading = $state(false);
 	let normalizedCode = $derived(code.replace(/\D/g, ''));
 
 	async function handleVerify() {
-		if (!normalizedCode) return;
-		error = '';
+		if (!normalizedCode) {
+			return;
+		}
+		errorMessage = '';
 		loading = true;
 
 		const { error: err } = await authClient.twoFactor.verifyTotp({
@@ -34,7 +36,7 @@
 		loading = false;
 
 		if (err) {
-			error = err.message ?? 'Invalid code. Please try again.';
+			errorMessage = err.message ?? 'Invalid code. Please try again.';
 			return;
 		}
 
@@ -89,12 +91,12 @@
 					</p>
 				</div>
 
-				{#if error}
+				{#if errorMessage}
 					<div
 						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 					>
 						<AlertCircle class="size-4 shrink-0" />
-						{error}
+						{errorMessage}
 					</div>
 				{/if}
 

@@ -1,32 +1,30 @@
 <script lang="ts">
-	import { goto, invalidate } from '$app/navigation';
-	import { resolve } from '$app/paths';
+	import { Dialog as DialogPrimitive } from 'bits-ui';
+	import { setMode, userPrefersMode } from 'mode-watcher';
 	import { untrack } from 'svelte';
-	import type { UserSettingsTab } from '#lib/state/user-settings.svelte.js';
+	import { toast } from 'svelte-sonner';
+	import { authClient } from '#lib/auth-client.js';
+	import * as Avatar from '#lib/components/ui/avatar/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
-	import * as Avatar from '#lib/components/ui/avatar/index.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
-	import { authClient } from '#lib/auth-client.js';
-	import TotpOnboardingDialog from './totp-onboarding-dialog.svelte';
-	import PasskeyOnboardingDialog from './passkey-onboarding-dialog.svelte';
-	import PasswordVerificationDialog from './password-verification-dialog.svelte';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { createApiToken, listApiTokens, revokeApiToken } from '#lib/remote/api-tokens.remote.js';
+	import { getPendingEmailChange, requestEmailChange } from '#lib/remote/email-change.remote.js';
+	import { hasPassword } from '#lib/remote/password-change.remote.js';
 	import {
 		createSshKey as createSshKeyRpc,
 		deleteSshKey,
 		listSshKeys
 	} from '#lib/remote/ssh-keys.remote.js';
-	import { listApiTokens, createApiToken, revokeApiToken } from '#lib/remote/api-tokens.remote.js';
-	import { getPendingEmailChange, requestEmailChange } from '#lib/remote/email-change.remote.js';
 	import { disableTwoFactorWithVerification } from '#lib/remote/two-factor.remote.js';
-	import { hasPassword } from '#lib/remote/password-change.remote.js';
-	import { toast } from 'svelte-sonner';
+	import type { UserSettingsTab } from '#lib/state/user-settings.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
-	import { confirmDestructive } from '#lib/confirm.svelte.js';
-
+	import { goto, invalidate } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Minus from '~icons/lucide/minus';
@@ -47,8 +45,9 @@
 	import Terminal from '~icons/nucleo/terminal';
 	import Trash2 from '~icons/nucleo/trash';
 	import User from '~icons/nucleo/user';
-	import { Dialog as DialogPrimitive } from 'bits-ui';
-	import { userPrefersMode, setMode } from 'mode-watcher';
+	import PasskeyOnboardingDialog from './passkey-onboarding-dialog.svelte';
+	import PasswordVerificationDialog from './password-verification-dialog.svelte';
+	import TotpOnboardingDialog from './totp-onboarding-dialog.svelte';
 
 	type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -58,12 +57,12 @@
 		{ value: 'system', label: 'Auto', icon: Monitor }
 	];
 
-	type Props = {
-		open?: boolean;
+	interface Props {
 		activeTab?: UserSettingsTab;
+		open?: boolean;
 		profileName?: string;
 		user: { name?: string | null; email?: string | null };
-	};
+	}
 
 	let {
 		open = $bindable(false),
@@ -86,7 +85,9 @@
 	const profileSaveDisabled = $derived(profileSaving || !profileEmail.trim());
 
 	$effect(() => {
-		if (!open) return;
+		if (!open) {
+			return;
+		}
 		untrack(() => {
 			profileSaved = false;
 			profileError = '';
@@ -97,7 +98,9 @@
 	});
 
 	async function saveProfile() {
-		if (profileSaving) return;
+		if (profileSaving) {
+			return;
+		}
 		profileSaving = true;
 		profileSaved = false;
 		profileError = '';
@@ -148,7 +151,11 @@
 	}
 
 	async function loadPendingProfileEmailChange() {
-		pendingProfileEmail = (await getPendingEmailChange()) ?? '';
+		try {
+			pendingProfileEmail = (await getPendingEmailChange()) ?? '';
+		} catch {
+			pendingProfileEmail = '';
+		}
 		profileEmailChangePending = Boolean(pendingProfileEmail);
 	}
 
@@ -162,16 +169,20 @@
 	let passwordVerificationPreparing = $state(false);
 	let userHasPassword = $state<boolean | null>(null);
 
+	async function loadUserHasPassword() {
+		try {
+			userHasPassword = await hasPassword();
+		} catch {
+			userHasPassword = null;
+		}
+	}
+
 	$effect(() => {
-		if (!open) return;
+		if (!open) {
+			return;
+		}
 		untrack(() => {
-			void (async () => {
-				try {
-					userHasPassword = await await hasPassword();
-				} catch {
-					userHasPassword = null;
-				}
-			})();
+			loadUserHasPassword();
 		});
 	});
 
@@ -297,7 +308,9 @@
 			confirmWord: passkey?.name,
 			confirmLabel: 'Remove passkey'
 		});
-		if (!ok) return;
+		if (!ok) {
+			return;
+		}
 		removingPasskey = id;
 		try {
 			await authClient.passkey.deletePasskey({ id });
@@ -319,13 +332,15 @@
 	let newKeyNameFocused = $state(false);
 
 	$effect(() => {
-		if (!newKeyNameFocused && newKeyValue != '' && newKeyName == '') {
+		if (!newKeyNameFocused && newKeyValue !== '' && newKeyName === '') {
 			newKeyName = newKeyValue.split(' ')[2] ?? '';
 		}
 	});
 
 	async function loadSshKeys() {
-		if (sshKeysLoaded || sshKeysLoading) return;
+		if (sshKeysLoaded || sshKeysLoading) {
+			return;
+		}
 		sshKeysLoading = true;
 		try {
 			sshKeys = await listSshKeys();
@@ -338,7 +353,9 @@
 	}
 
 	async function addSshKey() {
-		if (!newKeyName.trim() || !newKeyValue.trim() || sshKeyAdding) return;
+		if (!(newKeyName.trim() && newKeyValue.trim()) || sshKeyAdding) {
+			return;
+		}
 		sshKeyAdding = true;
 		try {
 			const res = await createSshKeyRpc({ name: newKeyName.trim(), publicKey: newKeyValue.trim() });
@@ -361,34 +378,41 @@
 	}
 
 	async function removeSshKey(id: string) {
-		if (sshKeyRemoving) return;
+		if (sshKeyRemoving) {
+			return;
+		}
 		const key = sshKeys.find((k) => k.id === id);
+		if (!key) {
+			return;
+		}
 		const ok = await confirmDestructive({
 			title: 'Delete SSH key',
-			description: `Anything relying on ${key?.name ?? 'this key'} for access will stop working.`,
-			confirmWord: key?.name,
+			description: `Anything relying on ${key.name} for access will stop working.`,
+			confirmWord: key.name,
 			confirmLabel: 'Delete SSH key'
 		});
-		if (!ok) return;
+		if (!ok) {
+			return;
+		}
 		sshKeyRemoving = id;
 		sshKeys = sshKeys.filter((k) => k.id !== id);
 		try {
 			await deleteSshKey({ keyId: id });
 			await invalidate('app:ssh-keys');
 		} catch (err) {
-			sshKeys = [...sshKeys, key!];
+			sshKeys = [...sshKeys, key];
 			toast.error(getErrorMessage(err, 'Failed to remove SSH key'));
 		} finally {
 			sshKeyRemoving = null;
 		}
 	}
 
-	type ApiTokenState = {
-		id: string;
-		name: string;
+	interface ApiTokenState {
 		created: string;
+		id: string;
 		lastUsedAt: number | null;
-	};
+		name: string;
+	}
 	let tokens = $state<ApiTokenState[]>([]);
 	let tokensLoading = $state(false);
 	let newTokenName = $state('');
@@ -396,7 +420,9 @@
 	let copiedTokenId = $state<string | null>(null);
 
 	async function loadTokens() {
-		if (tokensLoading || tokens.length > 0) return;
+		if (tokensLoading || tokens.length > 0) {
+			return;
+		}
 		tokensLoading = true;
 		try {
 			const result = await listApiTokens();
@@ -414,7 +440,9 @@
 	}
 
 	async function generateToken() {
-		if (!newTokenName.trim()) return;
+		if (!newTokenName.trim()) {
+			return;
+		}
 		const name = newTokenName.trim();
 		const tempId = `temp-${Date.now()}`;
 		const now = new Date().toISOString().slice(0, 10);
@@ -425,7 +453,9 @@
 			const result = await createApiToken({ name });
 			generatedToken = result.token;
 			const idx = tokens.findIndex((t) => t.id === tempId);
-			if (idx !== -1) tokens[idx] = { ...tokens[idx], id: result.id };
+			if (idx !== -1) {
+				tokens[idx] = { ...tokens[idx], id: result.id };
+			}
 		} catch (err) {
 			tokens = tokens.filter((t) => t.id !== tempId);
 			toast.error(getErrorMessage(err, 'Failed to create API token'));
@@ -436,7 +466,9 @@
 
 	async function revokeToken(id: string) {
 		const idx = tokens.findIndex((t) => t.id === id);
-		if (idx === -1) return;
+		if (idx === -1) {
+			return;
+		}
 		const tokenToRemove = tokens[idx];
 		const ok = await confirmDestructive({
 			title: 'Revoke API token',
@@ -444,7 +476,9 @@
 			confirmWord: tokenToRemove.name,
 			confirmLabel: 'Revoke token'
 		});
-		if (!ok) return;
+		if (!ok) {
+			return;
+		}
 		tokens = tokens.filter((t) => t.id !== id);
 
 		try {
@@ -456,7 +490,9 @@
 	}
 
 	function copyToken(tokenId: string, showFullToken: string | null) {
-		if (!showFullToken) return;
+		if (!showFullToken) {
+			return;
+		}
 		navigator.clipboard.writeText(showFullToken);
 		copiedTokenId = tokenId;
 		setTimeout(() => (copiedTokenId = null), 1500);
@@ -468,9 +504,11 @@
 	}
 
 	$effect(() => {
-		if (!open) return;
+		if (!open) {
+			return;
+		}
 		untrack(() => {
-			void Promise.all([
+			Promise.all([
 				loadSshKeys(),
 				loadTokens(),
 				loadTwoFactorStatus(),
@@ -486,7 +524,9 @@
 		showCloseButton={false}
 	>
 		<DialogPrimitive.Close data-slot="dialog-close" class="absolute top-3 right-3 z-50">
-			{#snippet child({ props })}
+			{#snippet child({
+				props
+			})}
 				<button
 					type="button"
 					class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none"
@@ -667,7 +707,8 @@
 									{#if passwordVerificationPreparing}
 										Preparing...
 									{:else if passwordSaved}
-										<Check class="h-3 w-3" /> Updated
+										<Check class="h-3 w-3" />
+										Updated
 									{:else}
 										Update Password
 									{/if}
@@ -714,7 +755,8 @@
 										variant="outline"
 										size="sm"
 										class="h-7 gap-1.5 text-xs"
-										onclick={() => (totpDialogOpen = true)}><Plus class="h-3 w-3" />Set Up</Button
+										onclick={() => (totpDialogOpen = true)}
+										><Plus class="h-3 w-3" />Set Up</Button
 									>
 								{/if}
 							</div>
@@ -735,7 +777,8 @@
 										variant="outline"
 										size="sm"
 										class="h-7 w-20 gap-1.5 text-xs"
-										onclick={() => (passkeyDialogOpen = true)}><Plus class="h-3 w-3" />Add</Button
+										onclick={() => (passkeyDialogOpen = true)}
+										><Plus class="h-3 w-3" />Add</Button
 									>
 								</div>
 
@@ -878,7 +921,7 @@
 									size="sm"
 									class="w-fit gap-1.5 text-xs"
 									onclick={addSshKey}
-									disabled={!newKeyName.trim() || !newKeyValue.trim() || sshKeyAdding}
+									disabled={!(newKeyName.trim() && newKeyValue.trim()) || sshKeyAdding}
 								>
 									{#if sshKeyAdding}
 										<Loader2 class="h-3 w-3 animate-spin" />
@@ -1051,7 +1094,7 @@
 				class="flex flex-col gap-4 py-4"
 				onsubmit={(e) => {
 					e.preventDefault();
-					void disableTotp();
+					disableTotp();
 				}}
 			>
 				<div class="flex flex-col gap-1.5">

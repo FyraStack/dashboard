@@ -1,30 +1,30 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
 	import { authClient } from '#lib/auth-client.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
-	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { Separator } from '#lib/components/ui/separator/index.js';
-	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import { beginDeleteUser, type AdminUser } from '#lib/remote/admin-users.remote.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { Separator } from '#lib/components/ui/separator/index.js';
+	import * as Sheet from '#lib/components/ui/sheet/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import { type AdminUser, beginDeleteUser } from '#lib/remote/admin-users.remote.js';
+	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
-	import { AdminState, type AdminPageData } from '#lib/state/admin.svelte.js';
-	import Calendar from '~icons/nucleo/calendar';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import Check from '~icons/lucide/check';
 	import ChevronDown from '~icons/lucide/chevron-down';
 	import ChevronLeft from '~icons/lucide/chevron-left';
 	import ChevronRight from '~icons/lucide/chevron-right';
-	import Clock from '~icons/nucleo/clock';
 	import Loader2 from '~icons/lucide/loader-2';
 	import X from '~icons/lucide/x';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
+	import Calendar from '~icons/nucleo/calendar';
+	import Clock from '~icons/nucleo/clock';
 	import CreditCard from '~icons/nucleo/credit-card';
 	import Crown from '~icons/nucleo/crown';
 	import Fingerprint from '~icons/nucleo/fingerprint';
@@ -54,27 +54,30 @@
 	const usersBase = resolve('admin/users');
 
 	function openUser(userId: string) {
-		void goto(resolve(`admin/users/${userId}`), { reset: false });
+		goto(resolve(`admin/users/${userId}`), { reset: false });
 	}
 
 	function closeUser() {
-		void goto(usersBase, { reset: false });
+		goto(usersBase, { reset: false });
 	}
 
 	$effect(() => {
-		const id = page.params.id;
+		const { id } = page.params;
 		if (!id) {
-			if (admin.userSheetOpen) admin.closeUserSheet();
+			if (admin.userSheetOpen) {
+				admin.closeUserSheet();
+			}
 			return;
 		}
 		const target = admin.adminUsers.find((account) => account.id === id);
-		if (target) admin.openUserSheet(target);
+		if (target) {
+			admin.openUserSheet(target);
+		}
 	});
 
 	const adminCount = $derived(admin.adminUsers.filter((u) => u.isAdmin).length);
 	const userCount = $derived(admin.adminUsers.length);
 	const verifiedCount = $derived(admin.adminUsers.filter((u) => u.emailVerified).length);
-	const disabledCount = $derived(admin.adminUsers.filter((u) => u.disabled).length);
 	const has2faCount = $derived(
 		admin.adminUsers.filter((u) => u.twoFactorEnabled || u.passkeyCount > 0).length
 	);
@@ -109,8 +112,12 @@
 	);
 	const sortedUsers = $derived(
 		[...admin.adminUsers].sort((a, b) => {
-			if (a.isAdmin && !b.isAdmin) return -1;
-			if (!a.isAdmin && b.isAdmin) return 1;
+			if (a.isAdmin && !b.isAdmin) {
+				return -1;
+			}
+			if (!a.isAdmin && b.isAdmin) {
+				return 1;
+			}
 			return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
 		})
 	);
@@ -140,21 +147,39 @@
 	);
 
 	function matchesStatusFilter(account: AdminUser) {
-		if (statusFilter === 'verified') return account.emailVerified;
-		if (statusFilter === 'unverified') return !account.emailVerified;
-		if (statusFilter === 'twofa') return account.twoFactorEnabled || account.passkeyCount > 0;
-		if (statusFilter === 'disabled') return account.disabled;
-		if (statusFilter === 'exempt') return account.billingExempt;
+		if (statusFilter === 'verified') {
+			return account.emailVerified;
+		}
+		if (statusFilter === 'unverified') {
+			return !account.emailVerified;
+		}
+		if (statusFilter === 'twofa') {
+			return account.twoFactorEnabled || account.passkeyCount > 0;
+		}
+		if (statusFilter === 'disabled') {
+			return account.disabled;
+		}
+		if (statusFilter === 'exempt') {
+			return account.billingExempt;
+		}
 		return true;
 	}
 
 	const tableUsers = $derived(
 		sortedUsers.filter((account) => {
-			if (roleFilter === 'admin' && !account.isAdmin) return false;
-			if (roleFilter === 'user' && account.isAdmin) return false;
-			if (!matchesStatusFilter(account)) return false;
+			if (roleFilter === 'admin' && !account.isAdmin) {
+				return false;
+			}
+			if (roleFilter === 'user' && account.isAdmin) {
+				return false;
+			}
+			if (!matchesStatusFilter(account)) {
+				return false;
+			}
 			const term = userSearch.trim().toLowerCase();
-			if (!term) return true;
+			if (!term) {
+				return true;
+			}
 			return [account.name, account.email, account.id].some((value) =>
 				value.toLowerCase().includes(term)
 			);
@@ -180,6 +205,17 @@
 			.toUpperCase();
 	}
 
+	function twoFactorSummary(account: AdminUser) {
+		const hasPasskey = account.passkeyCount > 0;
+		if (account.twoFactorEnabled && hasPasskey) {
+			return 'Authenticator app and passkey';
+		}
+		if (account.twoFactorEnabled) {
+			return 'Authenticator app enabled';
+		}
+		return hasPasskey ? 'Passkey enabled' : 'Not enabled';
+	}
+
 	function avatarColor(name: string) {
 		const colors = [
 			'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
@@ -192,7 +228,10 @@
 			'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
 		];
 		let hash = 0;
-		for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+		for (let i = 0; i < name.length; i += 1) {
+			// biome-ignore lint/suspicious/noBitwiseOperators: string hash relies on int32 truncation
+			hash = name.charCodeAt(i) + ((hash << 5) - hash);
+		}
 		return colors[Math.abs(hash) % colors.length];
 	}
 
@@ -223,7 +262,9 @@
 	}
 
 	async function openDeleteDialog(user: AdminUser) {
-		if (deletePreparing || deleteVerifying) return;
+		if (deletePreparing || deleteVerifying) {
+			return;
+		}
 
 		deletePreparing = true;
 		deleteError = '';
@@ -248,7 +289,9 @@
 	}
 
 	async function confirmDeleteUser() {
-		if (deleteVerificationDisabled) return;
+		if (deleteVerificationDisabled) {
+			return;
+		}
 
 		deleteVerifying = true;
 		deleteError = '';
@@ -377,7 +420,9 @@
 							onSelect={() => (roleFilter = 'all')}
 						>
 							All roles
-							{#if roleFilter === 'all'}<Check class="ml-auto h-3 w-3 text-emerald-400" />{/if}
+							{#if roleFilter === 'all'}
+								<Check class="ml-auto h-3 w-3 text-emerald-400" />
+							{/if}
 						</DropdownMenu.Item>
 						<DropdownMenu.Separator class="bg-muted" />
 						{#each roleFilterOptions as option (option.value)}
@@ -409,7 +454,9 @@
 							onSelect={() => (statusFilter = 'all')}
 						>
 							All statuses
-							{#if statusFilter === 'all'}<Check class="ml-auto h-3 w-3 text-emerald-400" />{/if}
+							{#if statusFilter === 'all'}
+								<Check class="ml-auto h-3 w-3 text-emerald-400" />
+							{/if}
 						</DropdownMenu.Item>
 						<DropdownMenu.Separator class="bg-muted" />
 						{#each statusFilterOptions as option (option.value)}
@@ -432,8 +479,7 @@
 					<p class="text-sm">No users found</p>
 				</div>
 			{:else}
-				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-				<div class="overflow-x-auto rounded-md border border-border/60" tabindex="0">
+				<div class="overflow-x-auto rounded-md border border-border/60">
 					<table class="w-full text-left text-xs">
 						<thead>
 							<tr
@@ -543,7 +589,17 @@
 										{formatDateShort(account.createdAt)}
 									</td>
 									<td class="px-4 py-2.5 text-right">
-										<ChevronRight class="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+										<button
+											type="button"
+											class="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+											aria-label="Open {account.name}"
+											onclick={(event) => {
+												event.stopPropagation();
+												openUser(account.id);
+											}}
+										>
+											<ChevronRight class="h-3.5 w-3.5" />
+										</button>
 									</td>
 								</tr>
 							{/each}
@@ -640,7 +696,8 @@
 								>
 									<option.icon class="h-3.5 w-3.5 text-muted-foreground" />
 									{option.label}
-									{#if (u.isAdmin && option.value === 'admin') || (!u.isAdmin && option.value === 'user')}
+									{#if (u.isAdmin && option.value === 'admin') ||
+										(!u.isAdmin && option.value === 'user')}
 										<Check class="ml-auto h-3 w-3 text-emerald-400" />
 									{/if}
 								</DropdownMenu.Item>
@@ -675,7 +732,8 @@
 							</div>
 						</div>
 						<div class="flex items-center gap-2">
-							{#if admin.userSheetSaving[u.id]?.field === 'disabled' && admin.userSheetSaving[u.id]?.saving}
+							{#if admin.userSheetSaving[u.id]?.field === 'disabled' &&
+								admin.userSheetSaving[u.id]?.saving}
 								<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 							{/if}
 							<Switch
@@ -696,18 +754,13 @@
 							<div class="flex flex-col">
 								<span class="text-sm font-medium text-foreground">Two-factor auth</span>
 								<span class="text-[11px] text-muted-foreground">
-									{u.twoFactorEnabled && u.passkeyCount > 0
-										? 'Authenticator app and passkey'
-										: u.twoFactorEnabled
-											? 'Authenticator app enabled'
-											: u.passkeyCount > 0
-												? 'Passkey enabled'
-												: 'Not enabled'}
+									{twoFactorSummary(u)}
 								</span>
 							</div>
 						</div>
 						<div class="flex items-center gap-2">
-							{#if admin.userSheetSaving[u.id]?.field === 'twoFactor' && admin.userSheetSaving[u.id]?.saving}
+							{#if admin.userSheetSaving[u.id]?.field === 'twoFactor' &&
+								admin.userSheetSaving[u.id]?.saving}
 								<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 							{/if}
 							<Switch
@@ -743,7 +796,8 @@
 							</div>
 						</div>
 						<div class="flex items-center gap-2">
-							{#if admin.userSheetSaving[u.id]?.field === 'billingExempt' && admin.userSheetSaving[u.id]?.saving}
+							{#if admin.userSheetSaving[u.id]?.field === 'billingExempt' &&
+								admin.userSheetSaving[u.id]?.saving}
 								<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 							{/if}
 							<Switch
@@ -796,9 +850,11 @@
 									? 'text-emerald-400'
 									: 'text-muted-foreground'}"
 							>
-								{#if u.emailVerified}<Check class="h-3 w-3" />{:else}<AlertTriangle
-										class="h-3 w-3"
-									/>{/if}
+								{#if u.emailVerified}
+									<Check class="h-3 w-3" />
+								{:else}
+									<AlertTriangle class="h-3 w-3" />
+								{/if}
 								{u.emailVerified ? 'Yes' : 'No'}
 							</span>
 						</div>
@@ -845,6 +901,7 @@
 					>
 					<div class="grid grid-cols-2 gap-2">
 						<button
+							type="button"
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.sessionCount > 0 && admin.loadUserResources(u.id, 'session')}
 						>
@@ -858,6 +915,7 @@
 							{/if}
 						</button>
 						<button
+							type="button"
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.accountCount > 0 && admin.loadUserResources(u.id, 'account')}
 						>
@@ -871,6 +929,7 @@
 							{/if}
 						</button>
 						<button
+							type="button"
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.orgCount > 0 && admin.loadUserResources(u.id, 'org')}
 						>
@@ -884,6 +943,7 @@
 							{/if}
 						</button>
 						<button
+							type="button"
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.sshKeyCount > 0 && admin.loadUserResources(u.id, 'sshKey')}
 						>
@@ -897,6 +957,7 @@
 							{/if}
 						</button>
 						<button
+							type="button"
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.apiTokenCount > 0 && admin.loadUserResources(u.id, 'apiToken')}
 						>
@@ -970,7 +1031,8 @@
 										<div class="flex flex-col">
 											<span class="text-xs text-foreground">{vol.name}</span>
 											<span class="text-[11px] text-muted-foreground"
-												>{vol.size} GB · {new Date(vol.createdAt).toLocaleString()}</span
+												>{vol.size}
+												GB · {new Date(vol.createdAt).toLocaleString()}</span
 											>
 										</div>
 									</div>
@@ -1044,6 +1106,7 @@
 						<div class="flex flex-col gap-0 divide-y divide-border/50">
 							{#each admin.userOrgs as o (o.id)}
 								<button
+									type="button"
 									class="flex items-center justify-between py-2.5 text-left transition-colors"
 									onclick={() => admin.loadOrgResources(o)}
 								>
@@ -1094,7 +1157,9 @@
 <Dialog.Root
 	bind:open={deleteDialogOpen}
 	onOpenChange={(value) => {
-		if (!value && !deleteVerifying) resetDeleteDialog();
+		if (!(value || deleteVerifying)) {
+			resetDeleteDialog();
+		}
 	}}
 >
 	<Dialog.Content class="border-border bg-background sm:max-w-md">
@@ -1109,7 +1174,7 @@
 			class="flex flex-col gap-4 pt-4"
 			onsubmit={(event) => {
 				event.preventDefault();
-				void confirmDeleteUser();
+				confirmDeleteUser();
 			}}
 		>
 			<div
@@ -1117,8 +1182,8 @@
 			>
 				<p class="font-medium text-red-200">This action cannot be undone.</p>
 				<p>
-					Deleting {deleteUserEmail} permanently removes their account, sessions, sign-in methods, SSH
-					keys, and API tokens.
+					Deleting {deleteUserEmail} permanently removes their account, sessions, sign-in methods,
+					SSH keys, and API tokens.
 				</p>
 				<p>
 					If they are the only member of an organization, that organization and all of its servers,
@@ -1198,8 +1263,8 @@
 		<Dialog.Header>
 			<Dialog.Title class="text-base text-foreground">Disable two-factor auth?</Dialog.Title>
 			<Dialog.Description class="text-xs text-muted-foreground">
-				{admin.selectedUser?.name ?? 'This user'} will be required to reconfigure 2FA on their next sign-in.
-				This reduces account security.
+				{admin.selectedUser?.name ?? 'This user'}
+				will be required to reconfigure 2FA on their next sign-in. This reduces account security.
 			</Dialog.Description>
 		</Dialog.Header>
 		<Dialog.Footer class="flex items-center gap-2 pt-4">
@@ -1207,7 +1272,8 @@
 				variant="outline"
 				size="sm"
 				class="border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-				onclick={() => admin.cancel2FAConfirm()}>Cancel</Button
+				onclick={() => admin.cancel2FAConfirm()}
+				>Cancel</Button
 			>
 
 			<Button size="sm" class="text-xs" onclick={() => admin.commit2FAConfirm()}>

@@ -1,26 +1,26 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
-	import { goto, invalidate } from '$app/navigation';
-	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
-	import {
-		getServer,
-		getServerWithFallback,
-		requestServerStatusRefresh
-	} from '#lib/state/servers.svelte.js';
+	import { toast } from 'svelte-sonner';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
-	import { deleteVm, renameVm } from '#lib/remote/vms.remote.js';
 	import { isValidPtrHostname } from '#lib/ptr.js';
+	import { deleteVm, renameVm } from '#lib/remote/vms.remote.js';
+	import {
+		getServer,
+		getServerWithFallback,
+		requestServerStatusRefresh
+	} from '#lib/state/servers.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
-	import { toast } from 'svelte-sonner';
+	import { goto, invalidate } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import Check from '~icons/lucide/check';
 	import X from '~icons/lucide/x';
 	import Pencil from '~icons/nucleo/pencil';
+	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -38,7 +38,9 @@
 	let hostnameValid = $derived(isValidPtrHostname(nameValue.trim()));
 
 	$effect(() => {
-		if (selectedServer.id === syncedServerId && selectedServer.name === syncedServerName) return;
+		if (selectedServer.id === syncedServerId && selectedServer.name === syncedServerName) {
+			return;
+		}
 
 		syncedServerId = selectedServer.id;
 		syncedServerName = selectedServer.name;
@@ -50,7 +52,9 @@
 	});
 
 	function openRenameDialog() {
-		if (!editingName || !nameChanged || renaming) return;
+		if (!(editingName && nameChanged) || renaming) {
+			return;
+		}
 		updateHostname = false;
 		renameError = '';
 		renameDialogOpen = true;
@@ -62,7 +66,9 @@
 	}
 
 	function closeRenameDialog() {
-		if (renaming) return;
+		if (renaming) {
+			return;
+		}
 		renameDialogOpen = false;
 		updateHostname = false;
 		renameError = '';
@@ -71,7 +77,9 @@
 	async function handleRename() {
 		const name = nameValue.trim();
 		const shouldUpdateHostname = updateHostname;
-		if (!nameChanged || renaming || (shouldUpdateHostname && !hostnameValid)) return;
+		if (!nameChanged || renaming || (shouldUpdateHostname && !hostnameValid)) {
+			return;
+		}
 
 		renaming = true;
 		renameError = '';
@@ -99,7 +107,9 @@
 	}
 
 	async function handleDelete() {
-		if (deleting) return;
+		if (deleting) {
+			return;
+		}
 		const server = selectedServer;
 		const projectId = page.params.projectid;
 		const ok = await confirmDestructive({
@@ -108,7 +118,9 @@
 			confirmWord: server.name,
 			confirmLabel: 'Delete server'
 		});
-		if (!ok) return;
+		if (!ok) {
+			return;
+		}
 
 		deleting = true;
 		deleteError = '';
@@ -116,9 +128,13 @@
 		try {
 			await deleteVm({ vmId: server.id });
 			const current = getServer(server.id);
-			if (current) current.status = 'deleting';
+			if (current) {
+				current.status = 'deleting';
+			}
 			requestServerStatusRefresh();
-			if (page.params.projectid !== projectId || page.params.id !== server.id) return;
+			if (page.params.projectid !== projectId || page.params.id !== server.id) {
+				return;
+			}
 
 			await goto(resolve(`projects/${projectId}/servers`), { invalidate: ['project:vms'] });
 		} catch {
@@ -144,8 +160,12 @@
 				bind:value={nameValue}
 				disabled={!editingName || renaming}
 				onkeydown={(event) => {
-					if (event.key === 'Enter') openRenameDialog();
-					if (event.key === 'Escape') cancelNameEdit();
+					if (event.key === 'Enter') {
+						openRenameDialog();
+					}
+					if (event.key === 'Escape') {
+						cancelNameEdit();
+					}
 				}}
 			/>
 			{#if editingName}
@@ -177,7 +197,8 @@
 					class="size-7 p-0"
 					disabled={selectedServer.status === 'provisioning' ||
 						selectedServer.status === 'deleting'}
-					onclick={() => (editingName = true)}><Pencil class="size-3" /></Button
+					onclick={() => (editingName = true)}
+					><Pencil class="size-3" /></Button
 				>
 			{/if}
 		</div>
@@ -186,7 +207,8 @@
 		</p>
 	</div>
 	<div class="space-y-2">
-		<Label for="server-id-input">Server ID</Label><Input
+		<Label for="server-id-input">Server ID</Label>
+		<Input
 			id="server-id-input"
 			name="serverId"
 			value={selectedServer.id}
@@ -213,15 +235,18 @@
 <Dialog.Root
 	bind:open={renameDialogOpen}
 	onOpenChange={(open) => {
-		if (!open) closeRenameDialog();
+		if (!open) {
+			closeRenameDialog();
+		}
 	}}
 >
 	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Rename server?</Dialog.Title>
 			<Dialog.Description class="text-base text-pretty sm:text-sm">
-				This changes <strong>{selectedServer.name}</strong> to <strong>{nameValue.trim()}</strong> in
-				the dashboard.
+				This changes <strong>{selectedServer.name}</strong> to
+				<strong>{nameValue.trim()}</strong>
+				in the dashboard.
 			</Dialog.Description>
 		</Dialog.Header>
 
@@ -233,9 +258,9 @@
 						id="update-server-hostname-description"
 						class="text-base text-pretty text-muted-foreground sm:text-sm"
 					>
-						Also set the VM hostname to <span class="font-mono text-foreground"
-							>{nameValue.trim()}</span
-						>. This takes effect after the next reboot and re-runs first-boot setup.
+						Also set the VM hostname to
+						<span class="font-mono text-foreground">{nameValue.trim()}</span>. This takes effect
+						after the next reboot and re-runs first-boot setup.
 					</p>
 				</div>
 				<Switch
@@ -265,7 +290,8 @@
 				size="sm"
 				loading={renaming}
 				disabled={!nameChanged || (updateHostname && !hostnameValid)}
-				onclick={handleRename}>Rename</Button
+				onclick={handleRename}
+				>Rename</Button
 			>
 		</Dialog.Footer>
 	</Dialog.Content>

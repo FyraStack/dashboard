@@ -1,18 +1,16 @@
 type ServerStatus =
-	'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'error' | 'unknown';
+	| 'running'
+	| 'stopped'
+	| 'restarting'
+	| 'provisioning'
+	| 'deleting'
+	| 'error'
+	| 'unknown';
 
-type VmSummary = {
-	id: string;
-	name: string;
+interface VmSummary {
 	active: boolean;
 	creationDate: string;
-	status?: string | null;
-	vmType: {
-		name: string;
-		cores: number;
-		ramCapacity: number;
-		storageAmount: number;
-	} | null;
+	id: string;
 	live: {
 		name?: string | null;
 		cores?: number | null;
@@ -36,56 +34,74 @@ type VmSummary = {
 			diskWrite?: number | null;
 		} | null;
 	} | null;
-};
+	name: string;
+	status?: string | null;
+	vmType: {
+		name: string;
+		cores: number;
+		ramCapacity: number;
+		storageAmount: number;
+	} | null;
+}
 
 type NetworkInterfaces = NonNullable<NonNullable<VmSummary['live']>['networkInterfaces']>;
-type ServerMetrics = {
+interface ServerMetrics {
 	cpu?: number | null;
-	memory?: number | null;
 	disk?: number | null;
-	networkIn?: number | null;
-	networkOut?: number | null;
 	diskRead?: number | null;
 	diskWrite?: number | null;
-};
+	memory?: number | null;
+	networkIn?: number | null;
+	networkOut?: number | null;
+}
 
-export type ServerInfo = {
-	id: string;
-	name: string;
-	liveLoaded: boolean;
-	vcpu: number;
-	ram: string;
+export interface ServerInfo {
+	agentConnected: boolean;
+	backups: boolean;
+	created: string;
 	disk: string;
+	id: string;
 	ip: string;
 	ipv6: string;
-	status: ServerStatus;
-	agentConnected: boolean;
-	region: string;
-	created: string;
-	uptime: string;
-	plan: string;
-	backups: boolean;
+	liveLoaded: boolean;
 	metrics: ServerMetrics | null;
-};
+	name: string;
+	plan: string;
+	ram: string;
+	region: string;
+	status: ServerStatus;
+	uptime: string;
+	vcpu: number;
+}
 
 export function primaryAddress(server: Pick<ServerInfo, 'ip' | 'ipv6'>): string | null {
-	if (server.ip && server.ip !== '-') return server.ip;
-	if (server.ipv6 && server.ipv6 !== '-') return server.ipv6;
+	if (server.ip && server.ip !== '-') {
+		return server.ip;
+	}
+	if (server.ipv6 && server.ipv6 !== '-') {
+		return server.ipv6;
+	}
 	return null;
 }
 
 export function formatBytes(bytes: number): string {
-	if (!bytes) return '0B';
+	if (!bytes) {
+		return '0B';
+	}
 	const gb = bytes / (1024 * 1024 * 1024);
-	if (gb >= 1) return `${gb.toFixed(0)}GB`;
+	if (gb >= 1) {
+		return `${gb.toFixed(0)}GB`;
+	}
 	const mb = bytes / (1024 * 1024);
 	return `${mb.toFixed(0)}MB`;
 }
 
 function formatUptime(seconds: number): string {
-	if (!seconds) return '-';
-	const d = Math.floor(seconds / 86400);
-	const h = Math.floor((seconds % 86400) / 3600);
+	if (!seconds) {
+		return '-';
+	}
+	const d = Math.floor(seconds / 86_400);
+	const h = Math.floor((seconds % 86_400) / 3600);
 	const m = Math.floor((seconds % 3600) / 60);
 	return `${d}d ${h}h ${m}m`;
 }
@@ -94,13 +110,31 @@ function getFirstIp(
 	networkInterfaces: NetworkInterfaces | null | undefined,
 	match: (address: string) => boolean
 ): string {
-	if (!networkInterfaces) return '-';
+	if (!networkInterfaces) {
+		return '-';
+	}
 
 	return (
 		Object.values(networkInterfaces)
 			.flatMap((networkInterface) => networkInterface.ipAddresses ?? [])
 			.find((address) => address && match(address)) ?? '-'
 	);
+}
+
+function resolveServerStatus(vm: VmSummary): ServerStatus {
+	if (vm.status === 'deleting' || vm.status === 'error' || vm.status === 'provisioning') {
+		return vm.status;
+	}
+	switch (vm.live?.status) {
+		case 'running':
+			return 'running';
+		case 'paused':
+			return 'restarting';
+		case 'stopped':
+			return 'stopped';
+		default:
+			return 'unknown';
+	}
 }
 
 export function toServerInfo(vm: VmSummary): ServerInfo {
@@ -115,19 +149,10 @@ export function toServerInfo(vm: VmSummary): ServerInfo {
 		disk: formatBytes(vm.live?.disk ?? (vm.vmType?.storageAmount ?? 0) * 1024 * 1024 * 1024),
 		ip: getFirstIp(
 			vm.live?.networkInterfaces,
-			(address) => !address.startsWith('127.') && !address.includes(':')
+			(address) => !(address.startsWith('127.') || address.includes(':'))
 		),
 		ipv6: getFirstIp(vm.live?.networkInterfaces, (address) => address.includes(':')),
-		status:
-			vm.status === 'deleting' || vm.status === 'error' || vm.status === 'provisioning'
-				? vm.status
-				: vm.live?.status === 'running'
-					? 'running'
-					: vm.live?.status === 'paused'
-						? 'restarting'
-						: vm.live?.status === 'stopped'
-							? 'stopped'
-							: 'unknown',
+		status: resolveServerStatus(vm),
 		agentConnected: vm.live?.status === 'running',
 		region: 'Chicago',
 		created: vm.creationDate,

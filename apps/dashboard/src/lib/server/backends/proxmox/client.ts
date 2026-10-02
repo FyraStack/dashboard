@@ -1,20 +1,20 @@
-import ky, { HTTPError, type KyInstance } from 'ky';
 import type { Fetcher } from '@cloudflare/workers-types';
+import ky, { HTTPError, type KyInstance } from 'ky';
 import { createVpcFetch, insecureDirectFetch } from '#lib/server/vpc.js';
 import type {
-	PveTaskLogLine,
-	PveResponse,
+	PveAgentNetworkInterface,
+	PveClusterResource,
+	PveCreateQemuParams,
 	PveNode,
-	PveQemuVm,
 	PveQemuConfig,
-	PveQemuStatus,
 	PveQemuRrdData,
+	PveQemuStatus,
+	PveQemuVm,
+	PveResponse,
 	PveStorage,
 	PveStorageContent,
-	PveTaskStatus,
-	PveCreateQemuParams,
-	PveClusterResource,
-	PveAgentNetworkInterface
+	PveTaskLogLine,
+	PveTaskStatus
 } from './types';
 
 export interface ProxmoxClientConfig {
@@ -25,20 +25,23 @@ export interface ProxmoxClientConfig {
 	vpc?: Fetcher;
 }
 
+const TRAILING_SLASHES = /\/+$/;
+const WARNING_LOG_LINE = /^WARN/;
+
 const isTaskWarning = (exitstatus?: string): exitstatus is string =>
 	!!exitstatus && exitstatus.startsWith('WARNINGS:');
 
 export class ProxmoxClient {
-	private api: KyInstance;
+	private readonly api: KyInstance;
 
 	constructor(config: ProxmoxClientConfig) {
 		const { baseUrl, tokenId, tokenSecret, verifySsl = true, vpc } = config;
 
-		const usingInsecureDirectFetch = !vpc && !verifySsl;
+		const usingInsecureDirectFetch = !(vpc || verifySsl);
 		const directFetch = usingInsecureDirectFetch ? insecureDirectFetch : globalThis.fetch;
 
 		this.api = ky.create({
-			prefix: `${baseUrl.replace(/\/+$/, '')}/api2/json`,
+			prefix: `${baseUrl.replace(TRAILING_SLASHES, '')}/api2/json`,
 			headers: {
 				Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}`,
 				Accept: 'application/json',
@@ -99,7 +102,9 @@ export class ProxmoxClient {
 	async getNode(node: string): Promise<PveNode> {
 		const nodes = await this.listNodes();
 		const found = nodes.find((n) => n.node === node);
-		if (!found) throw new Error(`Proxmox node "${node}" not found`);
+		if (!found) {
+			throw new Error(`Proxmox node "${node}" not found`);
+		}
 		return found;
 	}
 
@@ -240,7 +245,9 @@ export class ProxmoxClient {
 				})
 				.json<PveResponse<null>>();
 		} catch (error) {
-			if (error instanceof HTTPError && error.response.status === 400) return;
+			if (error instanceof HTTPError && error.response.status === 400) {
+				return;
+			}
 			await this.logHttpError(`createQemuFirewallIpset(${node}, ${vmid}, ${name})`, error, {
 				name
 			});
@@ -279,8 +286,12 @@ export class ProxmoxClient {
 		options?: { purge?: boolean; destroyUnreferencedDisks?: boolean }
 	): Promise<string> {
 		const searchParams: Record<string, string> = {};
-		if (options?.purge) searchParams.purge = '1';
-		if (options?.destroyUnreferencedDisks) searchParams['destroy-unreferenced-disks'] = '1';
+		if (options?.purge) {
+			searchParams.purge = '1';
+		}
+		if (options?.destroyUnreferencedDisks) {
+			searchParams['destroy-unreferenced-disks'] = '1';
+		}
 
 		const res = await this.api
 			.delete(`nodes/${encodeURIComponent(node)}/qemu/${vmid}`, { searchParams, timeout: 120_000 })
@@ -340,7 +351,9 @@ export class ProxmoxClient {
 		content?: 'iso' | 'vztmpl' | 'backup' | 'images' | 'rootdir' | 'import'
 	): Promise<PveStorageContent[]> {
 		const searchParams: Record<string, string> = {};
-		if (content) searchParams['content'] = content;
+		if (content) {
+			searchParams.content = content;
+		}
 
 		const res = await this.api
 			.get(`nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content`, {
@@ -421,11 +434,12 @@ export class ProxmoxClient {
 		upid: string,
 		opts?: { intervalMs?: number; timeoutMs?: number }
 	): Promise<PveTaskStatus> {
-		const interval = opts?.intervalMs ?? 1_000;
+		const interval = opts?.intervalMs ?? 1000;
 		const timeout = opts?.timeoutMs ?? 120_000;
 		const deadline = Date.now() + timeout;
 
 		while (Date.now() < deadline) {
+			// biome-ignore lint/performance/noAwaitInLoops: polling a Proxmox task until it stops is inherently sequential
 			const status = await this.getTaskStatus(node, upid);
 			if (status.status === 'stopped') {
 				if (isTaskWarning(status.exitstatus)) {
@@ -446,7 +460,7 @@ export class ProxmoxClient {
 	private async logTaskWarnings(node: string, upid: string, exitstatus: string): Promise<void> {
 		try {
 			const lines = await this.getTaskLog(node, upid);
-			const warnings = lines.map((l) => l.t).filter((t) => /^WARN/.test(t));
+			const warnings = lines.map((l) => l.t).filter((t) => WARNING_LOG_LINE.test(t));
 			console.warn(`Proxmox task finished with ${exitstatus} (UPID: ${upid})`, warnings);
 		} catch (err) {
 			console.warn(
@@ -460,7 +474,9 @@ export class ProxmoxClient {
 
 	async getClusterResources(type?: 'vm' | 'storage' | 'node'): Promise<PveClusterResource[]> {
 		const searchParams: Record<string, string> = {};
-		if (type) searchParams['type'] = type;
+		if (type) {
+			searchParams.type = type;
+		}
 
 		const res = await this.api
 			.get('cluster/resources', { searchParams })

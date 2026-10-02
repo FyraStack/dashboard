@@ -14,8 +14,8 @@
 	import EmailHeader from './email-header.svelte';
 
 	interface Props {
-		organizationName: string;
 		invitationUrl: string;
+		organizationName: string;
 	}
 
 	let { organizationName, invitationUrl }: Props = $props();

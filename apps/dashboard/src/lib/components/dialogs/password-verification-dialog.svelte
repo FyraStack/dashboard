@@ -2,9 +2,9 @@
 	import { untrack } from 'svelte';
 	import { authClient } from '#lib/auth-client.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import {
 		confirmPasswordChangeWithEmail,
 		confirmPasswordChangeWithPasskey,
@@ -16,15 +16,15 @@
 
 	type VerificationMethod = 'passkey' | 'totp' | 'email';
 
-	type Props = {
-		open?: boolean;
-		hasPassword?: boolean;
-		hasPasskey?: boolean;
-		twoFactorEnabled: boolean;
+	interface Props {
 		currentPassword: string;
+		hasPasskey?: boolean;
+		hasPassword?: boolean;
 		newPassword: string;
 		onVerified?: () => void;
-	};
+		open?: boolean;
+		twoFactorEnabled: boolean;
+	}
 
 	let {
 		open = $bindable(false),
@@ -42,9 +42,12 @@
 	let passwordCodeSent = $state(false);
 	let passwordVerifying = $state(false);
 	let passwordVerificationError = $state('');
-	let verificationMethod: VerificationMethod = $derived(
-		hasPasskey ? 'passkey' : twoFactorEnabled ? 'totp' : 'email'
-	);
+	let verificationMethod: VerificationMethod = $derived.by(() => {
+		if (hasPasskey) {
+			return 'passkey';
+		}
+		return twoFactorEnabled ? 'totp' : 'email';
+	});
 	let normalizedPasswordVerificationCode = $derived(passwordVerificationCode.replace(/\D/g, ''));
 	let passwordVerificationDescription = $derived.by(() => {
 		if (verificationMethod === 'passkey') {
@@ -57,6 +60,9 @@
 	});
 	let passwordVerificationLabel = $derived(
 		verificationMethod === 'totp' ? 'Authenticator Code' : 'Email Verification Code'
+	);
+	let verifyButtonLabel = $derived(
+		verificationMethod === 'passkey' ? 'Verify with passkey' : 'Verify'
 	);
 	let passwordVerificationDisabled = $derived(
 		passwordVerifying ||
@@ -153,7 +159,7 @@
 	$effect(() => {
 		if (open && verificationMethod === 'email' && !passwordCodeRequested && !passwordCodeSending) {
 			untrack(() => {
-				void sendPasswordCode();
+				sendPasswordCode();
 			});
 		}
 	});
@@ -162,7 +168,9 @@
 <Dialog.Root
 	bind:open
 	onOpenChange={(value) => {
-		if (!value) resetPasswordVerification();
+		if (!value) {
+			resetPasswordVerification();
+		}
 	}}
 >
 	<Dialog.Content class="border-border bg-background sm:max-w-md">
@@ -175,7 +183,7 @@
 			class="flex flex-col gap-4 pt-4"
 			onsubmit={(e) => {
 				e.preventDefault();
-				void verifyPasswordChange();
+				verifyPasswordChange();
 			}}
 		>
 			{#if verificationMethod === 'passkey'}
@@ -227,11 +235,7 @@
 					Cancel
 				</Button>
 				<Button type="submit" class="gap-1.5" disabled={passwordVerificationDisabled}>
-					{passwordVerifying
-						? 'Verifying...'
-						: verificationMethod === 'passkey'
-							? 'Verify with passkey'
-							: 'Verify'}
+					{passwordVerifying ? 'Verifying...' : verifyButtonLabel}
 				</Button>
 			</Dialog.Footer>
 		</form>

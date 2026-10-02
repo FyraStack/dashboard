@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { Button } from '#lib/components/ui/button/index.js';
+	import CreateNetworkDialog from '#lib/components/dialogs/create-network-dialog.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
-	import CreateNetworkDialog from '#lib/components/dialogs/create-network-dialog.svelte';
 	import Check from '~icons/lucide/check';
 	import Plus from '~icons/lucide/plus';
 	import X from '~icons/lucide/x';
@@ -13,20 +13,20 @@
 	import Pencil from '~icons/nucleo/pencil';
 	import Trash2 from '~icons/nucleo/trash';
 
-	type IpAddress = {
+	interface IpAddress {
 		address: string;
-		type: string;
-		server: string;
 		rdns: string;
-	};
+		server: string;
+		type: string;
+	}
 
-	type PrivateNetwork = {
+	interface PrivateNetwork {
+		cidr: string;
+		enabled: boolean;
 		id: string;
 		name: string;
-		cidr: string;
 		servers: string[];
-		enabled: boolean;
-	};
+	}
 
 	let ips = $state<IpAddress[]>([
 		{
@@ -79,7 +79,9 @@
 	}
 
 	function saveEdit() {
-		if (editingIdx === null) return;
+		if (editingIdx === null) {
+			return;
+		}
 		ips[editingIdx].rdns = editValue;
 		editingIdx = null;
 	}
@@ -91,8 +93,10 @@
 	let netCounter = $state(1);
 
 	function createNetwork() {
-		if (!newNetName.trim()) return;
-		netCounter++;
+		if (!newNetName.trim()) {
+			return;
+		}
+		netCounter += 1;
 		networks.push({
 			id: `vpc-${String(netCounter).padStart(3, '0')}`,
 			name: newNetName.trim(),
@@ -136,9 +140,9 @@
 						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Address</th>
 						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Type</th>
 						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Server</th>
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground"
-							>Reverse DNS</th
-						>
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">
+							Reverse DNS
+						</th>
 						<th class="px-5 py-2.5 text-right text-xs font-medium text-muted-foreground"></th>
 					</tr>
 				</thead>

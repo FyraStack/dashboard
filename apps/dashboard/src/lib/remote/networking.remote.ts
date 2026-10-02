@@ -1,22 +1,26 @@
-import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { asc, eq } from 'drizzle-orm';
-import { initDrizzle } from '#lib/server/db/index.js';
-import { ipamAllocations, ipamPtrRecords, vms } from '#lib/server/db/schema.js';
+import type { PermissionLevel } from '#lib/auth/organization-permissions.js';
 import { requireProjectAccess } from '#lib/server/auth-context.js';
 import { isBunnyConfigured } from '#lib/server/bunny.js';
-import { setPtrRecord } from '#lib/server/ptr-records.js';
-import type { PermissionLevel } from '#lib/auth/organization-permissions.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { ipamAllocations, ipamPtrRecords, vms } from '#lib/server/db/schema.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { setPtrRecord } from '#lib/server/ptr-records.js';
+import { command, getRequestEvent, query } from '$app/server';
 
 async function requireVmAccess(vmId: string, level?: PermissionLevel) {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const vm = await db.query.vms.findFirst({ where: eq(vms.id, vmId) });
-	if (!vm) error(404, 'VM not found');
+	if (!vm) {
+		error(404, 'VM not found');
+	}
 	if (vm.ownerProjectId) {
 		await requireProjectAccess(db, event.locals.user.id, vm.ownerProjectId, level);
 	}
@@ -73,7 +77,9 @@ export const setVmPtrRecord = command(setPtrParams, async (params) => {
 	}
 
 	const address = params.address?.trim() || allocation.address;
-	if (!address) error(400, 'An IP address inside the subnet is required');
+	if (!address) {
+		error(400, 'An IP address inside the subnet is required');
+	}
 
 	const { ipamPrefix, ...rest } = allocation;
 	const result = await setPtrRecord(

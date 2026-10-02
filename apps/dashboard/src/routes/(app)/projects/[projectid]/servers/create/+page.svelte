@@ -1,18 +1,19 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
-	import { Button } from '#lib/components/ui/button/index.js';
+	import { onMount } from 'svelte';
 	import BillingSetupDialog from '#lib/components/billing-setup-dialog.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import type { FeatureFlags } from '#lib/feature-flags.js';
-	import { userSettingsHref } from '#lib/state/user-settings.svelte.js';
-	import { createVolume as createProjectVolume } from '#lib/remote/volumes.remote.js';
+	import { generateServerName } from '#lib/name-generator.js';
 	import { createVm } from '#lib/remote/vms.remote.js';
+	import { createVolume as createProjectVolume } from '#lib/remote/volumes.remote.js';
 	import { requestServerStatusRefresh } from '#lib/state/servers.svelte.js';
+	import { userSettingsHref } from '#lib/state/user-settings.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
-	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import ArrowLeft from '~icons/lucide/arrow-left';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';
@@ -28,80 +29,82 @@
 	import Key from '~icons/nucleo/key';
 	import Server from '~icons/nucleo/server';
 	import Upload from '~icons/nucleo/upload';
-	import { generateServerName } from '#lib/name-generator.js';
 
-	type PageData = {
+	interface PageData {
+		billing?: { status?: string; setupRequired?: boolean } | null;
+		canManageBilling?: boolean;
 		currentProject?: { id: string } | null;
+		dbImages?: DbImage[];
+		featureFlags?: FeatureFlags;
+		ipamAvailability?: {
+			ipv4: { available: boolean; availableCount: string };
+			ipv6: { available: boolean; availableCount: string };
+		};
 		sshKeys?: {
 			id: string;
 			name: string;
 			fingerprint: string;
 		}[];
 		vmTypes?: VmType[];
-		dbImages?: DbImage[];
 		volumes?: ExistingVolume[];
-		featureFlags?: FeatureFlags;
-		billing?: { status?: string; setupRequired?: boolean } | null;
-		ipamAvailability?: {
-			ipv4: { available: boolean; availableCount: string };
-			ipv6: { available: boolean; availableCount: string };
-		};
-		canManageBilling?: boolean;
-	};
+	}
 
 	type ImageTab = 'os' | 'snapshots' | 'apps';
 	let { data }: { data: PageData } = $props();
 	let imageTab = $state<ImageTab>('os');
 
-	type VmType = {
-		id: string;
-		name: string;
-		cores: number;
-		ramCapacity: number;
-		storageAmount: number;
-		rate: string;
+	interface VmType {
 		cap: string;
-	};
-
-	type DbImage = {
+		cores: number;
 		id: string;
 		name: string;
-		version: string;
+		ramCapacity: number;
+		rate: string;
+		storageAmount: number;
+	}
+
+	interface DbImage {
+		accentColor: string;
 		color: string;
-		icon: string | null;
-		filePath: string;
 		description: string;
+		filePath: string;
+		icon: string | null;
+		id: string;
+		imageType: string;
 		isOfficial: boolean;
 		logoSvg: string | null;
-		accentColor: string;
-		imageType: string;
-	};
+		name: string;
+		version: string;
+	}
 
-	type ExistingVolume = {
+	interface ExistingVolume {
+		associatedVmId: string | null;
 		id: string;
 		name: string;
 		size: number;
-		associatedVmId: string | null;
-	};
+	}
 
 	const vmTypes = $derived(data.vmTypes ?? []);
 	const dbImages = $derived(data.dbImages ?? []);
 	const officialDbImages = $derived(dbImages.filter((image) => image.isOfficial));
 	const customDbImages = $derived(dbImages.filter((image) => !image.isOfficial));
-	type ImageGroup = {
-		name: string;
-		description: string;
+	interface ImageGroup {
 		accentColor: string;
-		logoSvg: string | null;
+		description: string;
 		imageType: string;
+		logoSvg: string | null;
+		name: string;
 		versions: DbImage[];
-	};
+	}
 	const officialImageGroups = $derived.by(() => {
 		const groups = new Map<string, DbImage[]>();
 		for (const image of officialDbImages) {
 			const existing = groups.get(image.name);
-			if (existing) existing.push(image);
-			else groups.set(image.name, [image]);
+			if (existing) {
+				existing.push(image);
+			} else {
+				groups.set(image.name, [image]);
+			}
 		}
 		return Array.from(groups.values(), (versions) => {
 			const sorted = [...versions].sort((a, b) => compareVersionsDesc(a.version, b.version));
@@ -131,7 +134,8 @@
 	let selectedImageId = $state<string | null>(null);
 	let selectedImageVersion = $state<string | null>(null);
 	let selectedPlanId = $state<string | null>(null);
-	let networkingOption = $state<'both' | 'ipv6'>('both');
+	type NetworkingOption = 'both' | 'ipv6';
+	let networkingOption = $state<NetworkingOption>('both');
 	let selectedSshKeyIds = $state<string[]>([]);
 	let serverPassword = $state('');
 	let showServerPassword = $state(false);
@@ -142,7 +146,11 @@
 			(networkingOption === 'ipv6' && ipv6Available)
 	);
 
-	type SelectableVolume = { id: string; name: string; sizeGb: number };
+	interface SelectableVolume {
+		id: string;
+		name: string;
+		sizeGb: number;
+	}
 	let createdVolumes = $state<SelectableVolume[]>([]);
 	let newVolumeName = $state('');
 	let newVolumeSize = $state('10');
@@ -176,12 +184,12 @@
 			: 0
 	);
 
-	type Section = {
-		id: string;
-		label: string;
+	interface Section {
 		icon: typeof Server;
+		id: string;
 		isComplete: boolean;
-	};
+		label: string;
+	}
 
 	let sections = $derived<Section[]>([
 		{
@@ -245,11 +253,15 @@
 
 	onMount(() => {
 		serverPassword = generatePassword();
-		if (!billingReady) billingSetupOpen = true;
+		if (!billingReady) {
+			billingSetupOpen = true;
+		}
 	});
 
 	$effect(() => {
-		if (!bothNetworksAvailable && ipv6Available) networkingOption = 'ipv6';
+		if (!bothNetworksAvailable && ipv6Available) {
+			networkingOption = 'ipv6';
+		}
 	});
 
 	function randomIndex(max: number): number {
@@ -270,12 +282,16 @@
 	function compareVersionsDesc(a: string, b: string): number {
 		const na = Number.parseFloat(a);
 		const nb = Number.parseFloat(b);
-		if (!Number.isNaN(na) && !Number.isNaN(nb) && na !== nb) return nb - na;
+		if (!(Number.isNaN(na) || Number.isNaN(nb)) && na !== nb) {
+			return nb - na;
+		}
 		return b.localeCompare(a, undefined, { numeric: true });
 	}
 
 	function filteredOfficialGroups(): ImageGroup[] {
-		if (!imagesSearch.trim()) return officialImageGroups;
+		if (!imagesSearch.trim()) {
+			return officialImageGroups;
+		}
 		const q = imagesSearch.toLowerCase();
 		return officialImageGroups.filter(
 			(g) =>
@@ -296,7 +312,9 @@
 
 	function selectImageVersion(imageId: string) {
 		const img = dbImages.find((i) => i.id === imageId);
-		if (!img) return;
+		if (!img) {
+			return;
+		}
 		selectedImageId = img.id;
 		selectedImageVersion = img.version;
 	}
@@ -308,29 +326,37 @@
 		}
 	}
 
-	function formatBytes(bytes: number): string {
-		if (!bytes) return '0B';
-		const gb = bytes / (1024 * 1024 * 1024);
-		if (gb >= 1) return `${gb.toFixed(0)}GB`;
-		const mb = bytes / (1024 * 1024);
-		return `${mb.toFixed(0)}MB`;
+	function networkingOptionClass(option: { value: NetworkingOption; disabled: boolean }): string {
+		if (option.disabled) {
+			return 'cursor-not-allowed border-border text-muted-foreground';
+		}
+		if (networkingOption === option.value) {
+			return 'cursor-pointer border-red-500 bg-red-950/20 text-foreground';
+		}
+		return 'cursor-pointer border-border text-muted-foreground hover:border-ring';
 	}
 
 	function formatRam(mb: number): string {
-		if (mb >= 1024) return `${(mb / 1024).toFixed(0)}GB`;
+		if (mb >= 1024) {
+			return `${(mb / 1024).toFixed(0)}GB`;
+		}
 		return `${mb}MB`;
 	}
 
 	async function createVolume() {
-		if (!volumesEnabled || creatingVolume) return;
+		if (!volumesEnabled || creatingVolume) {
+			return;
+		}
 
 		const name = newVolumeName.trim();
-		const size = parseInt(newVolumeSize, 10);
-		const projectId = page.params.projectid;
-		if (!name || !size || size < 1 || !projectId) return;
+		const size = Number.parseInt(newVolumeSize, 10);
+		const routeProjectId = page.params.projectid;
+		if (!(name && size) || size < 1 || !routeProjectId) {
+			return;
+		}
 		creatingVolume = true;
 		try {
-			const created = await createProjectVolume({ projectId, name, size });
+			const created = await createProjectVolume({ projectId: routeProjectId, name, size });
 			createdVolumes = [...createdVolumes, { id: created.id, name, sizeGb: size }];
 			selectedVolumeIds = [...selectedVolumeIds, created.id];
 			newVolumeName = '';
@@ -344,12 +370,16 @@
 	}
 
 	function truncateFingerprint(fp: string): string {
-		if (fp.length <= 24) return fp;
+		if (fp.length <= 24) {
+			return fp;
+		}
 		return `${fp.slice(0, 12)}...${fp.slice(-8)}`;
 	}
 
 	async function copyServerPassword() {
-		if (!serverPassword) return;
+		if (!serverPassword) {
+			return;
+		}
 		await navigator.clipboard.writeText(serverPassword);
 		passwordCopied = true;
 		window.setTimeout(() => {
@@ -497,6 +527,7 @@
 										{@const isSelected = group.versions.some((v) => v.id === selectedImageId)}
 										<div class="flex flex-col">
 											<button
+												type="button"
 												aria-pressed={isSelected}
 												aria-label={group.name}
 												class="relative flex gap-4 overflow-hidden bg-background p-5 text-left transition-colors hover:bg-muted/40 {isSelected
@@ -530,9 +561,11 @@
 													<p
 														class="mt-auto pt-2 text-xs leading-none text-muted-foreground sm:text-[10px]"
 													>
-														x86 | {group.versions.length > 1
+														x86 |
+														{group.versions.length > 1
 															? `${group.versions.length} versions`
-															: group.versions[0].version} | {group.imageType}
+															: group.versions[0].version}
+														| {group.imageType}
 													</p>
 												</div>
 											</button>
@@ -570,6 +603,7 @@
 										<div class="mt-2 divide-y divide-border/30">
 											{#each customDbImages as img (img.id)}
 												<button
+													type="button"
 													aria-pressed={selectedImageId === img.id}
 													class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/20 sm:py-2.5 {selectedImageId ===
 													img.id
@@ -586,7 +620,8 @@
 													}}
 												>
 													<HardDrive class="size-4 shrink-0 text-muted-foreground" />
-													<span class="truncate text-sm text-foreground sm:text-xs">{img.name}</span
+													<span class="truncate text-sm text-foreground sm:text-xs"
+														>{img.name}</span
 													>
 													{#if img.version}
 														<span class="shrink-0 text-xs text-muted-foreground sm:text-[10px]"
@@ -643,6 +678,7 @@
 								<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
 									{#each vmTypes as plan (plan.id)}
 										<button
+											type="button"
 											aria-pressed={selectedPlanId === plan.id}
 											aria-label={`${plan.name} plan`}
 											class="flex flex-col gap-1 border p-4 text-left transition-colors sm:p-3 {selectedPlanId ===
@@ -761,9 +797,8 @@
 													type="button"
 													size="sm"
 													class="h-10 w-full px-3 text-sm sm:h-7 sm:w-auto sm:text-xs"
-													disabled={!newVolumeName.trim() ||
-														!parseInt(newVolumeSize, 10) ||
-														parseInt(newVolumeSize, 10) < 1 ||
+													disabled={!(newVolumeName.trim() && Number.parseInt(newVolumeSize, 10)) ||
+														Number.parseInt(newVolumeSize, 10) < 1 ||
 														creatingVolume}
 													onclick={createVolume}
 												>
@@ -830,13 +865,18 @@
 						</div>
 						<div class="mt-3">
 							<div class="flex flex-col gap-2">
-								{#each [{ value: 'both' as const, label: '1 Public IPv4 Address and an IPv6 block', disabled: !bothNetworksAvailable }, { value: 'ipv6' as const, label: 'IPv6 block only', disabled: !ipv6Available }] as opt (opt.value)}
+								{#each [
+									{
+										value: 'both' as const,
+										label: '1 Public IPv4 Address and an IPv6 block',
+										disabled: !bothNetworksAvailable
+									},
+									{ value: 'ipv6' as const, label: 'IPv6 block only', disabled: !ipv6Available }
+								] as opt (opt.value)}
 									<label
-										class="flex items-center gap-2 border p-3 text-sm transition-colors sm:text-xs {opt.disabled
-											? 'cursor-not-allowed border-border text-muted-foreground'
-											: networkingOption === opt.value
-												? 'cursor-pointer border-red-500 bg-red-950/20 text-foreground'
-												: 'cursor-pointer border-border text-muted-foreground hover:border-ring'}"
+										class="flex items-center gap-2 border p-3 text-sm transition-colors sm:text-xs {networkingOptionClass(
+											opt
+										)}"
 									>
 										<input
 											type="radio"
@@ -874,11 +914,13 @@
 						<div class="mt-3">
 							{#if data.sshKeys && data.sshKeys.length > 0}
 								<p class="mb-2 text-sm text-muted-foreground sm:text-xs">
-									Select one or more <a
+									Select one or more
+									<a
 										href="https://fyrastack.com/docs/vps/ssh"
 										target="_blank"
 										rel="noopener noreferrer"
-										class="text-red-400 transition-colors hover:text-red-300">SSH keys</a
+										class="text-red-400 transition-colors hover:text-red-300"
+										>SSH keys</a
 									>, or use the generated root password below.
 								</p>
 								<div class="flex flex-col gap-1">
@@ -915,18 +957,21 @@
 							{:else}
 								<div class="border border-border/50 bg-background/50 p-4 text-center">
 									<p class="text-sm text-muted-foreground sm:text-xs">
-										No <a
+										No
+										<a
 											href="https://fyrastack.com/docs/vps/ssh"
 											target="_blank"
 											rel="noopener noreferrer"
-											class="text-red-400 transition-colors hover:text-red-300">SSH keys</a
-										> available.
+											class="text-red-400 transition-colors hover:text-red-300"
+											>SSH keys</a
+										>
+										available.
 									</p>
 									<p class="mt-1 text-sm text-muted-foreground sm:text-[11px]">
 										Password authentication will be used instead.
 									</p>
 									<a
-										href={resolve(userSettingsHref('keys', page.url) as any)}
+										href={userSettingsHref('keys', page.url)}
 										data-sveltekit-reset="false"
 										class="mt-2 inline-flex py-1 text-sm font-medium text-red-400 transition-colors hover:text-red-300 sm:py-0 sm:text-[11px]"
 									>
@@ -1001,6 +1046,7 @@
 					<nav class="flex flex-col gap-1">
 						{#each sections as section (section.id)}
 							<button
+								type="button"
 								class="flex items-center gap-2 px-2 py-2.5 text-left text-sm transition-colors hover:bg-muted/50 sm:py-1.5 sm:text-xs"
 								onclick={() => scrollTosSection(section.id)}
 							>
@@ -1026,7 +1072,9 @@
 								<span class="text-muted-foreground">Image</span>
 								<span class="min-w-0 truncate text-right text-foreground">
 									{selectedImage?.name ?? '-'}
-									{#if selectedImageVersion}/ {selectedImageVersion}{/if}
+									{#if selectedImageVersion}
+										/ {selectedImageVersion}
+									{/if}
 								</span>
 							</div>
 							<div class="flex items-center justify-between gap-3 text-sm sm:text-xs">
@@ -1042,7 +1090,8 @@
 									<span class="text-muted-foreground">Disk</span>
 
 									<span class="min-w-0 truncate text-right text-foreground tabular-nums">
-										{selectedPlan.storageAmount}GB{#if selectedVolumeCount > 0}
+										{selectedPlan.storageAmount}GB
+										{#if selectedVolumeCount > 0}
 											+ {selectedVolumeCount} vol
 										{/if}
 									</span>
@@ -1058,9 +1107,8 @@
 								<div class="flex items-center justify-between gap-3 text-sm sm:text-xs">
 									<span class="text-muted-foreground">Authentication</span>
 									<span class="min-w-0 truncate text-right text-foreground"
-										>{selectedSshKeyIds.length} SSH key{selectedSshKeyIds.length === 1
-											? ''
-											: 's'}</span
+										>{selectedSshKeyIds.length}
+										SSH key{selectedSshKeyIds.length === 1 ? '' : 's'}</span
 									>
 								</div>
 							{:else}
@@ -1093,9 +1141,7 @@
 					{/if}
 					<Button
 						class="h-11 w-full text-sm sm:h-9"
-						disabled={!serverName.trim() ||
-							!selectedImageId ||
-							!selectedPlanId ||
+						disabled={!(serverName.trim() && selectedImageId && selectedPlanId) ||
 							(usePasswordAuthentication && !serverPassword.trim()) ||
 							!networkingReady ||
 							creating}

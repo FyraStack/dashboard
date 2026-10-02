@@ -1,16 +1,16 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
-	import { invalidate } from '$app/navigation';
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import { getVm, resizeVm } from '#lib/remote/vms.remote.js';
-	import { listVmTypes } from '#lib/remote/vm-types.remote.js';
-	import { findPlanDowngrades } from '#lib/vm-plans.js';
-	import { getErrorMessage } from '#lib/utils.js';
 	import { toast } from 'svelte-sonner';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
-	import { formatBytes } from '../../lib/server-summary';
+	import type { listVmTypes } from '#lib/remote/vm-types.remote.js';
+	import { getVm, resizeVm } from '#lib/remote/vms.remote.js';
+	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
+	import { getErrorMessage } from '#lib/utils.js';
+	import { findPlanDowngrades } from '#lib/vm-plans.js';
+	import { invalidate } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
+	import { formatBytes } from '../../lib/server-summary';
+	import type { PageProps } from './$types';
 
 	type VmPlan = Awaited<ReturnType<typeof listVmTypes>>[number];
 
@@ -38,13 +38,17 @@
 	}
 
 	async function handleResize(plan: VmPlan) {
-		if (resizingId || plan.id === data.vmTypeId || isDowngrade(plan)) return;
+		if (resizingId || plan.id === data.vmTypeId || isDowngrade(plan)) {
+			return;
+		}
 		const ok = await confirmDestructive({
 			title: `Resize to ${plan.name}?`,
 			description: `This changes ${selectedServer.name} to ${describePlan(plan)}. ${resizeCaveats}`,
 			confirmLabel: `Resize to ${plan.name}`
 		});
-		if (!ok) return;
+		if (!ok) {
+			return;
+		}
 
 		resizingId = plan.id;
 		resizeError = '';
@@ -67,11 +71,11 @@
 	<div>
 		<h2 class="text-sm font-semibold text-foreground">Resize Server</h2>
 		<p class="mt-1 text-xs text-muted-foreground">
-			Change the plan for {selectedServer.name}. Current plan: {data.vmType?.name ??
-				selectedServer.plan}
+			Change the plan for {selectedServer.name}. Current plan:
+			{data.vmType?.name ?? selectedServer.plan}
 			{#if data.vmType}
-				({data.vmType.cores} vCPU • {formatRam(data.vmType.ramCapacity)} RAM • {data.vmType
-					.storageAmount}GB disk)
+				({data.vmType.cores}
+				vCPU • {formatRam(data.vmType.ramCapacity)} RAM • {data.vmType.storageAmount}GB disk)
 			{/if}
 		</p>
 	</div>
@@ -104,7 +108,8 @@
 						<span class="text-sm text-muted-foreground">${plan.cap}/mo</span>
 					</div>
 					<p class="mt-2 text-xs text-muted-foreground">
-						{plan.cores} vCPU • {formatRam(plan.ramCapacity)} RAM • {plan.storageAmount}GB disk
+						{plan.cores}
+						vCPU • {formatRam(plan.ramCapacity)} RAM • {plan.storageAmount}GB disk
 					</p>
 					<Button
 						variant="outline"

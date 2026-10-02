@@ -1,16 +1,16 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
-	import { browser } from '$app/env';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { getVmMetricsHistory } from '#lib/remote/vms.remote.js';
+	import { getServerWithFallback, serversState } from '#lib/state/servers.svelte.js';
+	import { browser } from '$app/env';
 	import Check from '~icons/lucide/check';
-	import FileText from '~icons/nucleo/file-text';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
 	import Copy from '~icons/nucleo/copy';
+	import FileText from '~icons/nucleo/file-text';
 	import Terminal from '~icons/nucleo/terminal';
 	import Trash2 from '~icons/nucleo/trash';
-	import { getServerWithFallback, serversState } from '#lib/state/servers.svelte.js';
-	import { getVmMetricsHistory } from '#lib/remote/vms.remote.js';
 	import { primaryAddress } from '../lib/server-summary';
+	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -21,24 +21,28 @@
 		browser ? getVmMetricsHistory({ vmId: data.serverId, timeframe: 'hour' }) : null
 	);
 
-	type ChartSample = {
-		time?: number;
-		cpu: number | null;
-		memory: number | null;
+	interface ChartSample {
 		bandwidth: number | null;
+		cpu: number | null;
 		diskIo: number | null;
-	};
+		memory: number | null;
+		time?: number;
+	}
 
 	let liveChartSamplesByServer = $state<Record<string, ChartSample[]>>({});
 	let lastSampleKeyByServer = $state<Record<string, string>>({});
 
 	function formatPercent(value: number | null) {
-		if (value == null) return '-';
+		if (value === null) {
+			return '-';
+		}
 		return `${Math.round(value * 100)}%`;
 	}
 
 	function formatRate(bytes: number | null) {
-		if (bytes == null) return '-';
+		if (bytes === null) {
+			return '-';
+		}
 		const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
 		let value = bytes;
 		let unit = 0;
@@ -53,7 +57,7 @@
 		values: (number | null)[],
 		maxValue = Math.max(...values.map((v) => v ?? 0), 1)
 	) {
-		const points = values.filter((value): value is number => value != null);
+		const points = values.filter((value): value is number => value !== null);
 
 		return points
 			.map((value, index) => {
@@ -66,8 +70,10 @@
 	}
 
 	function serverMetricsSample(): ChartSample | null {
-		if (!selectedServer.liveLoaded) return null;
-		const metrics = selectedServer.metrics;
+		if (!selectedServer.liveLoaded) {
+			return null;
+		}
+		const { metrics } = selectedServer;
 		return {
 			cpu: metrics?.cpu ?? null,
 			memory: metrics?.memory ?? null,
@@ -88,9 +94,13 @@
 
 	$effect(() => {
 		const sample = serverMetricsSample();
-		if (!sample) return;
+		if (!sample) {
+			return;
+		}
 		const key = sampleKey(sample);
-		if (lastSampleKeyByServer[selectedServer.id] === key) return;
+		if (lastSampleKeyByServer[selectedServer.id] === key) {
+			return;
+		}
 
 		lastSampleKeyByServer[selectedServer.id] = key;
 		liveChartSamplesByServer[selectedServer.id] = [
@@ -115,7 +125,9 @@
 		const lastValue = (key: 'cpu' | 'memory' | 'bandwidth' | 'diskIo') => {
 			for (let index = samples.length - 1; index >= 0; index -= 1) {
 				const value = samples[index][key];
-				if (value != null) return value;
+				if (typeof value === 'number') {
+					return value;
+				}
 			}
 			return null;
 		};
@@ -221,9 +233,17 @@
 				{/if}
 			</div>
 			<div>
-				<svg viewBox="0 0 240 80" class="block h-28 w-full" preserveAspectRatio="none">
+				<svg
+					viewBox="0 0 240 80"
+					class="block h-28 w-full"
+					preserveAspectRatio="none"
+					aria-hidden="true"
+				>
 					{#if chart.loaded}
-						<polygon points="{chart.points} 240,80 0,80" fill={chart.color} opacity="0.08"
+						<polygon
+							points="{chart.points} 240,80 0,80"
+							fill={chart.color}
+							opacity="0.08"
 						></polygon>
 
 						<polyline
@@ -260,7 +280,15 @@
 		<div class="px-5 py-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
 			Server Details
 		</div>
-		{#each [['Plan', selectedServer.plan], ['Region', selectedServer.region], ['vCPU', `${selectedServer.vcpu}`], ['RAM', selectedServer.ram], ['Disk', selectedServer.disk], ['Created', selectedServer.created], ['Uptime', selectedServer.uptime]] as [label, value] (label)}
+		{#each [
+			['Plan', selectedServer.plan],
+			['Region', selectedServer.region],
+			['vCPU', `${selectedServer.vcpu}`],
+			['RAM', selectedServer.ram],
+			['Disk', selectedServer.disk],
+			['Created', selectedServer.created],
+			['Uptime', selectedServer.uptime]
+		] as [label, value] (label)}
 			<div class="flex items-center justify-between px-5 py-2">
 				<span class="text-xs text-muted-foreground">{label}</span>
 				{#if !liveLoaded && isLiveDetail(label)}
@@ -276,13 +304,16 @@
 				{#if liveLoaded}
 					<span class="font-mono text-xs text-foreground">{selectedServer.ip}</span>
 					<button
+						type="button"
 						class="text-muted-foreground hover:text-foreground"
 						aria-label="Copy IPv4 address"
 						onclick={() => copyToClipboard(selectedServer.ip, 'ipv4')}
 					>
-						{#if copied === 'ipv4'}<Check class="h-3 w-3 text-emerald-500" />{:else}<Copy
-								class="h-3 w-3"
-							/>{/if}
+						{#if copied === 'ipv4'}
+							<Check class="h-3 w-3 text-emerald-500" />
+						{:else}
+							<Copy class="h-3 w-3" />
+						{/if}
 					</button>
 				{:else}
 					<span class="h-2.5 w-24 animate-pulse rounded bg-muted"></span>
@@ -295,13 +326,16 @@
 				{#if liveLoaded}
 					<span class="font-mono text-[11px] text-foreground">{selectedServer.ipv6}</span>
 					<button
+						type="button"
 						class="text-muted-foreground hover:text-foreground"
 						aria-label="Copy IPv6 address"
 						onclick={() => copyToClipboard(selectedServer.ipv6, 'ipv6')}
 					>
-						{#if copied === 'ipv6'}<Check class="h-3 w-3 text-emerald-500" />{:else}<Copy
-								class="h-3 w-3"
-							/>{/if}
+						{#if copied === 'ipv6'}
+							<Check class="h-3 w-3 text-emerald-500" />
+						{:else}
+							<Copy class="h-3 w-3" />
+						{/if}
 					</button>
 				{:else}
 					<span class="h-2.5 w-28 animate-pulse rounded bg-muted"></span>
@@ -329,23 +363,28 @@
 						<div class="flex items-center gap-2 border border-border bg-background px-3 py-1.5">
 							<span class="text-xs text-muted-foreground">ssh root@{sshAddress}</span>
 							<button
+								type="button"
 								class="text-muted-foreground hover:text-foreground"
 								aria-label="Copy SSH command"
 								onclick={() => copyToClipboard(`ssh root@${sshAddress}`, 'ssh-console')}
 							>
-								{#if copied === 'ssh-console'}<Check class="h-3 w-3 text-emerald-500" />{:else}<Copy
-										class="h-3 w-3"
-									/>{/if}
+								{#if copied === 'ssh-console'}
+									<Check class="h-3 w-3 text-emerald-500" />
+								{:else}
+									<Copy class="h-3 w-3" />
+								{/if}
 							</button>
 						</div>
 						<p class="text-[11px] text-muted-foreground">
-							Connect over <a
+							Connect over
+							<a
 								href="https://fyrastack.com/docs/vps/ssh"
 								target="_blank"
 								rel="noopener noreferrer"
 								class="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
 								>SSH</a
-							> in the meantime.
+							>
+							in the meantime.
 						</p>
 					{/if}
 				</div>
@@ -408,23 +447,28 @@
 					<div class="flex items-center gap-2 border border-border bg-background px-3 py-1.5">
 						<span class="text-muted-foreground">ssh root@{sshAddress} journalctl -f</span>
 						<button
+							type="button"
 							class="text-muted-foreground hover:text-foreground"
 							aria-label="Copy logs command"
 							onclick={() => copyToClipboard(`ssh root@${sshAddress} journalctl -f`, 'ssh-logs')}
 						>
-							{#if copied === 'ssh-logs'}<Check class="h-3 w-3 text-emerald-500" />{:else}<Copy
-									class="h-3 w-3"
-								/>{/if}
+							{#if copied === 'ssh-logs'}
+								<Check class="h-3 w-3 text-emerald-500" />
+							{:else}
+								<Copy class="h-3 w-3" />
+							{/if}
 						</button>
 					</div>
 					<p class="text-muted-foreground">
-						Tail logs over <a
+						Tail logs over
+						<a
 							href="https://fyrastack.com/docs/vps/ssh"
 							target="_blank"
 							rel="noopener noreferrer"
 							class="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
 							>SSH</a
-						> in the meantime.
+						>
+						in the meantime.
 					</p>
 				{/if}
 			</div>

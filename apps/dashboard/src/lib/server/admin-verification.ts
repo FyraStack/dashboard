@@ -1,10 +1,10 @@
 import { error } from '@sveltejs/kit';
 import { and, eq, gt } from 'drizzle-orm';
-import { getRequestEvent } from '$app/server';
 import { initAuth } from '#lib/server/auth.js';
+import { passkey, twoFactor, verification } from '#lib/server/db/auth.schema.js';
 import type { initDrizzle } from '#lib/server/db/index.js';
-import { passkey, twoFactor, verification } from '#lib/server/db/schema.js';
 import { ulid } from '#lib/server/id.js';
+import { getRequestEvent } from '$app/server';
 
 export const ADMIN_VERIFICATION_CODE_LENGTH = 6;
 export const ADMIN_VERIFICATION_CODE_TTL_MS = 10 * 60 * 1000;
@@ -32,12 +32,12 @@ export function normalizeVerificationCode(code: string) {
 
 function generateVerificationCode() {
 	const max = 10 ** ADMIN_VERIFICATION_CODE_LENGTH;
-	const upperBound = 0x1_0000_0000;
+	const upperBound = 0x1_00_00_00_00;
 	const limit = Math.floor(upperBound / max) * max;
 	let value: number;
 
 	do {
-		value = crypto.getRandomValues(new Uint32Array(1))[0];
+		[value] = crypto.getRandomValues(new Uint32Array(1));
 	} while (value >= limit);
 
 	return (value % max).toString().padStart(ADMIN_VERIFICATION_CODE_LENGTH, '0');
@@ -59,7 +59,9 @@ export async function getAdminVerificationMethod(
 		.where(eq(passkey.userId, adminUserId))
 		.limit(1);
 
-	if (registeredPasskey) return 'passkey';
+	if (registeredPasskey) {
+		return 'passkey';
+	}
 
 	const [registeredTotp] = await db
 		.select({ id: twoFactor.id })
@@ -119,7 +121,9 @@ async function consumePasskeyVerification(db: Db, adminUserId: string, targetId:
 		)
 		.limit(1);
 
-	if (!record) error(400, 'Verify with your passkey before performing this action.');
+	if (!record) {
+		error(400, 'Verify with your passkey before performing this action.');
+	}
 	await db.delete(verification).where(eq(verification.id, record.id));
 }
 
@@ -130,8 +134,9 @@ async function consumeEmailVerification(
 	code: string
 ) {
 	const normalizedCode = normalizeVerificationCode(code);
-	if (normalizedCode.length !== ADMIN_VERIFICATION_CODE_LENGTH)
+	if (normalizedCode.length !== ADMIN_VERIFICATION_CODE_LENGTH) {
 		error(400, 'Enter the verification code from your email.');
+	}
 
 	const identifier = emailIdentifier(adminUserId, targetId);
 	const value = await hashVerificationCode(adminUserId, targetId, normalizedCode);
@@ -147,7 +152,9 @@ async function consumeEmailVerification(
 		)
 		.limit(1);
 
-	if (!record) error(400, 'Invalid or expired verification code.');
+	if (!record) {
+		error(400, 'Invalid or expired verification code.');
+	}
 	await db.delete(verification).where(eq(verification.id, record.id));
 }
 
@@ -159,7 +166,9 @@ export async function consumeAdminVerification(
 	code: string | undefined
 ) {
 	const required = await getAdminVerificationMethod(db, adminUserId);
-	if (method !== required) error(400, 'Use the required verification method for this account.');
+	if (method !== required) {
+		error(400, 'Use the required verification method for this account.');
+	}
 
 	if (required === 'passkey') {
 		await consumePasskeyVerification(db, adminUserId, targetId);
@@ -168,8 +177,9 @@ export async function consumeAdminVerification(
 
 	if (required === 'totp') {
 		const normalizedCode = normalizeVerificationCode(code ?? '');
-		if (normalizedCode.length !== ADMIN_VERIFICATION_CODE_LENGTH)
+		if (normalizedCode.length !== ADMIN_VERIFICATION_CODE_LENGTH) {
 			error(400, 'Enter the verification code from your authenticator app.');
+		}
 
 		const auth = initAuth();
 		await auth.api.verifyTOTP({

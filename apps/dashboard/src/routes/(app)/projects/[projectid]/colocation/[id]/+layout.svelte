@@ -1,26 +1,28 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
+	import type { Snippet } from 'svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
 	import Activity from '~icons/nucleo/activity';
+	import Warehouse from '~icons/nucleo/box';
 	import Disc from '~icons/nucleo/disc';
 	import Globe from '~icons/nucleo/globe';
 	import Power from '~icons/nucleo/power';
 	import Settings from '~icons/nucleo/settings';
-	import Warehouse from '~icons/nucleo/box';
-	import type { Snippet } from 'svelte';
 	import {
-		setColocationContext,
 		type ColocationContext,
+		type ColocationHref,
 		type ColocationTab,
-		type ColoUnit
+		type ColoUnit,
+		type ColoUnitStatus,
+		setColocationContext
 	} from '../colocation-context.svelte';
 
 	let { children }: { children: Snippet } = $props();
@@ -81,7 +83,33 @@
 		'6U': '$280/mo'
 	};
 
-	type TabDef = { id: ColocationTab; label: string; icon: typeof Activity };
+	function powerBudgetFor(rackSize: string): string {
+		if (rackSize === '1U') {
+			return '350W';
+		}
+		return rackSize === '2U' ? '500W' : '700W';
+	}
+
+	const statusDotClass: Record<ColoUnitStatus, string> = {
+		online: 'bg-emerald-500',
+		provisioning: 'animate-pulse bg-amber-500',
+		offline: 'bg-red-500'
+	};
+
+	const statusBadgeClass: Record<ColoUnitStatus, string> = {
+		online:
+			'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400',
+		provisioning:
+			'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400',
+		offline:
+			'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
+	};
+
+	interface TabDef {
+		icon: typeof Activity;
+		id: ColocationTab;
+		label: string;
+	}
 	const tabs: TabDef[] = [
 		{ id: 'overview', label: 'Overview', icon: Activity },
 		{ id: 'networking', label: 'Networking', icon: Globe },
@@ -99,13 +127,15 @@
 	let selectedUnit = $derived(units.find((unit) => unit.id === selectedUnitId));
 	let selectedUnitIdx = $derived(units.findIndex((unit) => unit.id === selectedUnitId));
 
-	function tabHref(tab: ColocationTab, unitId = selectedUnitId) {
-		const base = `/projects/${page.params.projectid}/colocation/${encodeURIComponent(unitId)}`;
+	function tabHref(tab: ColocationTab, unitId = selectedUnitId): ColocationHref {
+		const base: ColocationHref = `projects/${page.params.projectid}/colocation/${encodeURIComponent(unitId)}`;
 		return tab === 'overview' ? base : `${base}/${tab}`;
 	}
 
 	async function addUnit() {
-		if (!newName.trim() || addingUnit) return;
+		if (!newName.trim() || addingUnit) {
+			return;
+		}
 		addingUnit = true;
 		try {
 			unitCounter += 1;
@@ -115,17 +145,19 @@
 				rackSize: newRackSize,
 				location: `Rack B03, Slot ${unitCounter * 2}`,
 				powerDraw: '0W',
-				powerBudget: newRackSize === '1U' ? '350W' : newRackSize === '2U' ? '500W' : '700W',
+				powerBudget: powerBudgetFor(newRackSize),
 				ip: `23.193.50.${12 + unitCounter}`,
 				status: 'provisioning',
 				monthlyRate: rackPrices[newRackSize].replace('/mo', ''),
 				created: new Date().toISOString().slice(0, 10)
 			};
 			units.push(unit);
-			await goto(resolve(tabHref(activeTab, unit.id) as any));
+			await goto(resolve(tabHref(activeTab, unit.id)));
 			setTimeout(() => {
 				const idx = units.findIndex((u) => u.id === unit.id);
-				if (idx !== -1) units[idx].status = 'online';
+				if (idx !== -1) {
+					units[idx].status = 'online';
+				}
 			}, 3000);
 			newName = '';
 			newRackSize = '1U';
@@ -136,7 +168,9 @@
 	}
 
 	function updateSelectedUnit(changes: Partial<ColoUnit>) {
-		if (selectedUnitIdx === -1) return;
+		if (selectedUnitIdx === -1) {
+			return;
+		}
 		Object.assign(units[selectedUnitIdx], changes);
 	}
 
@@ -146,15 +180,18 @@
 	}
 
 	async function deleteSelectedUnit() {
-		if (!selectedUnit || deleteConfirm !== selectedUnit.id || deletingUnit) return;
+		if (!selectedUnit || deleteConfirm !== selectedUnit.id || deletingUnit) {
+			return;
+		}
 		deletingUnit = true;
+		const deletedUnitId = selectedUnit.id;
 		try {
-			units = units.filter((unit) => unit.id !== selectedUnit!.id);
+			units = units.filter((unit) => unit.id !== deletedUnitId);
 			await goto(
 				resolve(
-					(units[0]
+					units[0]
 						? tabHref(activeTab, units[0].id)
-						: `/projects/${page.params.projectid}/colocation`) as any
+						: `projects/${page.params.projectid}/colocation`
 				)
 			);
 			deleteOpen = false;
@@ -209,23 +246,20 @@
 					unit.id
 						? 'bg-muted/60'
 						: 'hover:bg-muted/30'}"
-					href={resolve(tabHref(activeTab, unit.id) as any)}
+					href={resolve(tabHref(activeTab, unit.id))}
 				>
 					<div class="min-w-0">
 						<p class="truncate text-sm font-semibold text-foreground">{unit.name}</p>
 						<p class="mt-0.5 text-xs text-muted-foreground">
-							{unit.rackSize} &bull; {unit.location}
+							{unit.rackSize}
+							&bull; {unit.location}
 						</p>
 					</div>
 					<span
 						role="img"
 						aria-label={`Status: ${unit.status}`}
 						title={unit.status}
-						class="ml-2 h-2 w-2 shrink-0 rounded-full {unit.status === 'online'
-							? 'bg-emerald-500'
-							: unit.status === 'provisioning'
-								? 'animate-pulse bg-amber-500'
-								: 'bg-red-500'}"
+						class="ml-2 h-2 w-2 shrink-0 rounded-full {statusDotClass[unit.status]}"
 					></span>
 				</a>
 			{/each}
@@ -243,14 +277,7 @@
 			<div class="flex h-10 shrink-0 items-center justify-between border-b border-border px-5">
 				<div class="flex items-center gap-2">
 					<span class="text-sm font-medium text-foreground">{selectedUnit.name}</span>
-					<Badge
-						variant="outline"
-						class="text-[10px] {selectedUnit.status === 'online'
-							? 'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400'
-							: selectedUnit.status === 'provisioning'
-								? 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400'
-								: 'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'}"
-					>
+					<Badge variant="outline" class="text-[10px] {statusBadgeClass[selectedUnit.status]}">
 						{selectedUnit.status}
 					</Badge>
 				</div>
@@ -265,7 +292,7 @@
 						tab.id
 							? 'border-b-2 border-red-500 text-foreground'
 							: 'text-muted-foreground hover:text-foreground'}"
-						href={resolve(tabHref(tab.id) as any)}
+						href={resolve(tabHref(tab.id))}
 					>
 						<tab.icon class="h-3 w-3" />
 						{tab.label}
@@ -296,6 +323,7 @@
 				<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
 					{#each rackSizes as size (size)}
 						<button
+							type="button"
 							class="border px-3 py-2 text-center text-sm transition-colors {newRackSize === size
 								? 'border-red-500 bg-red-950/20 text-foreground'
 								: 'border-border text-muted-foreground hover:border-ring'}"
@@ -313,7 +341,9 @@
 				>Cancel</Button
 			>
 			<Button size="sm" onclick={addUnit} disabled={!newName.trim() || addingUnit}>
-				{#if addingUnit}<Loader2 class="h-3 w-3 animate-spin" />{/if}
+				{#if addingUnit}
+					<Loader2 class="h-3 w-3 animate-spin" />
+				{/if}
 				{addingUnit ? 'Requesting...' : 'Request Slot'}
 			</Button>
 		</Dialog.Footer>
@@ -344,7 +374,8 @@
 					variant="outline"
 					size="sm"
 					onclick={() => (deleteOpen = false)}
-					disabled={deletingUnit}>Cancel</Button
+					disabled={deletingUnit}
+					>Cancel</Button
 				>
 				<Button
 					variant="outline"
@@ -353,7 +384,9 @@
 					disabled={deleteConfirm !== selectedUnit.id || deletingUnit}
 					onclick={deleteSelectedUnit}
 				>
-					{#if deletingUnit}<Loader2 class="h-3 w-3 animate-spin" />{/if}
+					{#if deletingUnit}
+						<Loader2 class="h-3 w-3 animate-spin" />
+					{/if}
 					{deletingUnit ? 'Removing...' : 'Remove Unit'}
 				</Button>
 			</Dialog.Footer>

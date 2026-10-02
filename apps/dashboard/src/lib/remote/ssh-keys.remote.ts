@@ -1,22 +1,19 @@
-import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { eq, and } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { sshKeys } from '#lib/server/db/schema.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { command, getRequestEvent, query } from '$app/server';
 
-type ListResult = {
-	id: string;
-	name: string;
-	fingerprint: string;
-	publicKey: string;
-	description: string | null;
-}[];
+const WHITESPACE_PATTERN = /\s+/;
+const TRAILING_PADDING_PATTERN = /[=]+$/;
 
-export const listSshKeys = query(async () => {
+export const listSshKeys = query(() => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 
@@ -30,18 +27,21 @@ const createParams = type({
 	publicKey: 'string',
 	description: 'string?'
 });
-type CreateResult = { id: string; fingerprint: string };
 
 export const createSshKey = command(createParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 
-	const parts = params.publicKey.trim().split(/\s+/);
-	if (parts.length < 2) error(400, 'Invalid SSH public key format');
+	const parts = params.publicKey.trim().split(WHITESPACE_PATTERN);
+	if (parts.length < 2) {
+		error(400, 'Invalid SSH public key format');
+	}
 
-	const keyData = parts[1];
+	const [, keyData] = parts;
 	let raw: Uint8Array;
 	try {
 		raw = Uint8Array.from(atob(keyData), (c) => c.charCodeAt(0));
@@ -52,7 +52,7 @@ export const createSshKey = command(createParams, async (params) => {
 	let fingerprint: string;
 	try {
 		const hash = await crypto.subtle.digest('SHA-256', raw as BufferSource);
-		fingerprint = 'SHA256:' + btoa(String.fromCharCode(...new Uint8Array(hash))).replace(/=+$/, '');
+		fingerprint = `SHA256:${btoa(String.fromCharCode(...new Uint8Array(hash))).replace(TRAILING_PADDING_PATTERN, '')}`;
 	} catch {
 		error(400, 'Invalid SSH public key: could not compute fingerprint');
 	}
@@ -76,7 +76,9 @@ export const createSshKey = command(createParams, async (params) => {
 const deleteParams = type({ keyId: 'string' });
 export const deleteSshKey = command(deleteParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 
@@ -84,7 +86,9 @@ export const deleteSshKey = command(deleteParams, async (params) => {
 		where: and(eq(sshKeys.id, params.keyId), eq(sshKeys.userId, event.locals.user.id))
 	});
 
-	if (!key) error(404, 'SSH key not found');
+	if (!key) {
+		error(404, 'SSH key not found');
+	}
 
 	await db
 		.delete(sshKeys)

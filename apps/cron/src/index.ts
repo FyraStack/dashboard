@@ -1,7 +1,7 @@
 interface Env {
+	BILLING_DISABLED?: string;
 	DASHBOARD: Fetcher;
 	INTERNAL_CRON_SECRET: string;
-	BILLING_DISABLED?: string;
 }
 
 const METER_PATH = '/api/internal/billing/meter';
@@ -26,7 +26,7 @@ function billingDisabled(env: Env) {
 }
 
 export default {
-	async scheduled(_event, env, ctx): Promise<void> {
+	scheduled(_event, env, ctx): void {
 		if (billingDisabled(env)) {
 			console.warn('billing meter skipped: BILLING_DISABLED is true');
 		} else {
@@ -34,7 +34,7 @@ export default {
 		}
 		ctx.waitUntil(runInternalCronRoute(env, IPAM_RECONCILE_PATH, 'ipam reconcile'));
 	},
-	async fetch(): Promise<Response> {
+	fetch(): Response {
 		return new Response('stack-dashboard-cron: billing meter worker', { status: 200 });
 	}
 } satisfies ExportedHandler<Env>;

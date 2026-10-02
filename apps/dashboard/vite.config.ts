@@ -29,7 +29,10 @@ export default defineConfig(({ mode }) => {
 				autoUploadSourceMaps: Boolean(env.SENTRY_AUTH_TOKEN),
 				org: env.SENTRY_ORG,
 				project: env.SENTRY_PROJECT,
-				authToken: env.SENTRY_AUTH_TOKEN
+				authToken: env.SENTRY_AUTH_TOKEN,
+				// Bundles CJS deps like `pg` into the SSR output, which crashes under workerd
+				// We should open an issue for this
+				buildTimeInstrumentation: false
 			}),
 
 			sveltekit({

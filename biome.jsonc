@@ -5,6 +5,7 @@
 		"includes": [
 			"!!apps/dashboard/static",
 			"!!apps/dashboard/drizzle",
+			"!apps/dashboard/src/lib/components/ui",
 			"!!**/.factory",
 			"!!**/*.svg"
 		]
@@ -72,7 +73,7 @@
 			"performance": {
 				"noAwaitInLoops": "warn",
 				"noBarrelFile": "warn",
-				"noNamespaceImport": "warn",
+				"noNamespaceImport": "off",
 				"useTopLevelRegex": "warn"
 			},
 			"style": {

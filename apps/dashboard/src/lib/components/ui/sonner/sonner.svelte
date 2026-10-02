@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { mode } from 'mode-watcher';
 	import { Toaster as Sonner, type ToasterProps as SonnerProps } from 'svelte-sonner';
-	import CircleCheckIcon from '~icons/lucide/circle-check';
-	import InfoIcon from '~icons/lucide/info';
+	import { mode } from 'mode-watcher';
 	import Loader2Icon from '~icons/lucide/loader-2';
+	import CircleCheckIcon from '~icons/lucide/circle-check';
 	import OctagonXIcon from '~icons/lucide/octagon-x';
+	import InfoIcon from '~icons/lucide/info';
 	import TriangleAlertIcon from '~icons/lucide/triangle-alert';
 
 	let { ...restProps }: SonnerProps = $props();

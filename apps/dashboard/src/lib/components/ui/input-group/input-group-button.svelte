@@ -2,7 +2,7 @@
 	import { tv, type VariantProps } from 'tailwind-variants';
 
 	const inputGroupButtonVariants = tv({
-		base: 'flex items-center gap-2 text-sm shadow-none',
+		base: 'gap-2 text-sm flex items-center shadow-none',
 		variants: {
 			size: {
 				xs: "h-6 gap-1 rounded-[calc(var(--radius)-3px)] px-1.5 [&>svg:not([class*='size-'])]:size-3.5",
@@ -20,9 +20,9 @@
 </script>
 
 <script lang="ts">
+	import { cn } from '#lib/utils.js';
 	import type { ComponentProps } from 'svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { cn } from '#lib/utils.js';
 
 	let {
 		ref = $bindable(null),

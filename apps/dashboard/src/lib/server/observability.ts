@@ -4,13 +4,13 @@ import { STACK_TIMING_SPAM } from '$app/env/private';
 
 type SpanAttributes = Record<string, string | number | boolean | undefined>;
 
-type TraceSpan = {
-	setAttribute(key: string, value: string | number | boolean | undefined): void;
-};
+interface TraceSpan {
+	setAttribute: (key: string, value: string | number | boolean | undefined) => void;
+}
 
-type TracingApi = {
-	enterSpan<T>(name: string, callback: (span: TraceSpan) => T): T;
-};
+interface TracingApi {
+	enterSpan: <T>(name: string, callback: (span: TraceSpan) => T) => T;
+}
 
 let tracingLoader: Promise<TracingApi | null> | undefined;
 
@@ -18,12 +18,16 @@ function roundMs(value: number): number {
 	return Math.round(value * 100) / 100;
 }
 
-function timingLogsEnabled(): boolean {
-	let value: string | undefined;
+function readPlatformTimingSpam(): string | undefined {
 	try {
-		value = platformEnv.STACK_TIMING_SPAM;
-	} catch {}
-	value ??= STACK_TIMING_SPAM;
+		return platformEnv.STACK_TIMING_SPAM;
+	} catch {
+		return undefined;
+	}
+}
+
+function timingLogsEnabled(): boolean {
+	const value = readPlatformTimingSpam() ?? STACK_TIMING_SPAM;
 	return value === undefined ? dev : value === 'true';
 }
 

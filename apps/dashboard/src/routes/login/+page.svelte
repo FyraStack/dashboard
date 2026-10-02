@@ -12,10 +12,10 @@
 	import Fingerprint from '~icons/nucleo/fingerprint';
 	import type { PageData } from './$types';
 
-	type SignInDataWithTwoFactor = {
-		twoFactorRedirect?: boolean;
+	interface SignInDataWithTwoFactor {
 		twoFactorMethods?: string[] | null;
-	};
+		twoFactorRedirect?: boolean;
+	}
 
 	let { data }: { data: PageData } = $props();
 	const redirectTo = $derived(data.redirectTo ?? '/');
@@ -27,7 +27,7 @@
 	let email = $state('');
 	let password = $state('');
 	let showPassword = $state(false);
-	let error = $state('');
+	let errorMessage = $state('');
 	let loading = $state(false);
 	let passkeyLoading = $state(false);
 	let socialLoading = $state<'github' | null>(null);
@@ -36,16 +36,16 @@
 		if (socialLoading) {
 			return;
 		}
-		error = '';
+		errorMessage = '';
 		socialLoading = provider;
 		try {
 			const { error: err } = await authClient.signIn.social({ provider, callbackURL: redirectTo });
 			if (err) {
-				error = err.message ?? 'Unable to sign in.';
+				errorMessage = err.message ?? 'Unable to sign in.';
 				socialLoading = null;
 			}
 		} catch {
-			error = 'Unable to sign in.';
+			errorMessage = 'Unable to sign in.';
 			socialLoading = null;
 		}
 	}
@@ -59,13 +59,13 @@
 		if (!(email && password)) {
 			return;
 		}
-		error = '';
+		errorMessage = '';
 		loading = true;
 
 		const res = await authClient.signIn.email({ email, password });
 
 		if (res.error) {
-			error = res.error.message ?? 'Invalid credentials';
+			errorMessage = res.error.message ?? 'Invalid credentials';
 			loading = false;
 			return;
 		}
@@ -90,7 +90,7 @@
 	}
 
 	async function handlePasskeySignIn() {
-		error = '';
+		errorMessage = '';
 		passkeyLoading = true;
 
 		const { error: err } = await authClient.signIn.passkey({ autoFill: false });
@@ -98,7 +98,7 @@
 		passkeyLoading = false;
 
 		if (err) {
-			error = err.message ?? 'Unable to sign in with passkey.';
+			errorMessage = err.message ?? 'Unable to sign in with passkey.';
 			return;
 		}
 
@@ -120,12 +120,12 @@
 		<div class="space-y-5">
 			<h1 class="text-center text-lg font-medium text-foreground">Sign in</h1>
 
-			{#if error}
+			{#if errorMessage}
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
 					<AlertCircle class="size-4 shrink-0" />
-					{error}
+					{errorMessage}
 				</div>
 			{/if}
 

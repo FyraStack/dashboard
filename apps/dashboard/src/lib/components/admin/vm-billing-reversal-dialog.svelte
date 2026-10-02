@@ -14,7 +14,11 @@
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
 	import CreditCard from '~icons/nucleo/credit-card';
 
-	type ReversalTarget = { id: string; name: string; projectName: string | null };
+	interface ReversalTarget {
+		id: string;
+		name: string;
+		projectName: string | null;
+	}
 
 	let { open = $bindable(false), vm = null }: { open?: boolean; vm?: ReversalTarget | null } =
 		$props();
@@ -65,11 +69,12 @@
 			usage = null;
 			return;
 		}
-		void loadUsage(target.id, periodStart, periodEnd);
+		loadUsage(target.id, periodStart, periodEnd);
 	});
 
 	async function loadUsage(vmId: string, start: number, end: number) {
-		const current = ++request;
+		request += 1;
+		const current = request;
 		loading = true;
 		loadError = '';
 		try {
@@ -110,7 +115,7 @@
 				...(note.trim() ? { note: note.trim() } : {})
 			});
 			const amount =
-				result.estimatedAmount == null ? '' : ` (about $${result.estimatedAmount.toFixed(2)})`;
+				result.estimatedAmount === null ? '' : ` (about $${result.estimatedAmount.toFixed(2)})`;
 			if (result.syncStatus === 'synced') {
 				toast.success(`Reversed ${result.reversedHours} unit-hours${amount} for ${vm.name}`);
 			} else {
@@ -195,7 +200,7 @@
 							unit-hours</span
 						>
 					</div>
-					{#if usage.estimatedAmount != null}
+					{#if usage.estimatedAmount !== null}
 						<div class="flex items-center justify-between text-xs">
 							<span class="text-muted-foreground">Estimated credit (before caps)</span>
 							<span class="font-medium text-violet-400">${usage.estimatedAmount.toFixed(2)}</span>

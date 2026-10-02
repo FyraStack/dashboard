@@ -11,21 +11,21 @@
 	import Shield from '~icons/nucleo/shield';
 	import Trash2 from '~icons/nucleo/trash';
 
-	type FirewallRule = {
-		id: number;
+	interface FirewallRule {
 		direction: 'inbound' | 'outbound';
-		protocol: string;
-		ports: string;
-		source: string;
 		enabled: boolean;
-	};
+		id: number;
+		ports: string;
+		protocol: string;
+		source: string;
+	}
 
-	type FirewallGroup = {
+	interface FirewallGroup {
 		id: string;
 		name: string;
-		servers: string[];
 		rules: FirewallRule[];
-	};
+		servers: string[];
+	}
 
 	let ruleIdCounter = $state(10);
 
@@ -132,7 +132,7 @@
 			return;
 		}
 		addingRule = true;
-		ruleIdCounter++;
+		ruleIdCounter += 1;
 		const groupIdx = groups.findIndex((g) => g.id === selectedGroup.id);
 		if (groupIdx === -1) {
 			return;
@@ -166,7 +166,7 @@
 			return;
 		}
 		creatingGroup = true;
-		groupCounter++;
+		groupCounter += 1;
 		const newG: FirewallGroup = {
 			id: `fw-${groupCounter}`,
 			name: newGroupName.trim(),
@@ -215,6 +215,7 @@
 			<div class="flex-1 overflow-y-auto">
 				{#each groups as group (group.id)}
 					<button
+						type="button"
 						class="flex w-full items-center justify-between border-b border-border px-4 py-3 text-left transition-colors duration-100 {selectedGroupId ===
 						group.id
 							? 'bg-muted/60'

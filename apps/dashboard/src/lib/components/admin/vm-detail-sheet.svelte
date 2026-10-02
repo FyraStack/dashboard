@@ -58,11 +58,12 @@
 			return;
 		}
 		loadedVmId = target.id;
-		void loadUsage(target.id);
+		loadUsage(target.id);
 	});
 
 	async function loadUsage(vmId: string) {
-		const current = ++usageRequest;
+		usageRequest += 1;
+		const current = usageRequest;
 		usageLoading = true;
 		usageError = '';
 		usage = null;
@@ -252,7 +253,7 @@
 							{vm.liveStatus === 'running' ? formatUptime(vm.uptime) : '-'}
 						</span>
 					</div>
-					{#if vm.cpuUsage != null}
+					{#if vm.cpuUsage !== null}
 						<div class="flex items-center justify-between">
 							<span class="flex items-center gap-2 text-xs text-muted-foreground">
 								<Cpu class="h-3 w-3" />CPU
@@ -260,8 +261,8 @@
 							<span class="text-xs text-muted-foreground">{formatPercent(vm.cpuUsage)}</span>
 						</div>
 					{/if}
-					{#if vm.memoryUsageBytes != null &&
-						vm.memoryTotalBytes != null &&
+					{#if vm.memoryUsageBytes !== null &&
+						vm.memoryTotalBytes !== null &&
 						vm.memoryTotalBytes > 0}
 						<div class="flex items-center justify-between">
 							<span class="flex items-center gap-2 text-xs text-muted-foreground">
@@ -405,7 +406,7 @@
 								<span class="text-muted-foreground">Reversed</span>
 								<span class="text-foreground">{usage.reversedHours.toFixed(2)} unit-hours</span>
 							</div>
-							{#if usage.estimatedAmount != null}
+							{#if usage.estimatedAmount !== null}
 								<div class="flex items-center justify-between text-xs">
 									<span class="text-muted-foreground">Estimated charge (before caps)</span>
 									<span class="text-foreground">${usage.estimatedAmount.toFixed(2)}</span>

@@ -21,26 +21,26 @@
 		browser ? getVmMetricsHistory({ vmId: data.serverId, timeframe: 'hour' }) : null
 	);
 
-	type ChartSample = {
-		time?: number;
-		cpu: number | null;
-		memory: number | null;
+	interface ChartSample {
 		bandwidth: number | null;
+		cpu: number | null;
 		diskIo: number | null;
-	};
+		memory: number | null;
+		time?: number;
+	}
 
 	let liveChartSamplesByServer = $state<Record<string, ChartSample[]>>({});
 	let lastSampleKeyByServer = $state<Record<string, string>>({});
 
 	function formatPercent(value: number | null) {
-		if (value == null) {
+		if (value === null) {
 			return '-';
 		}
 		return `${Math.round(value * 100)}%`;
 	}
 
 	function formatRate(bytes: number | null) {
-		if (bytes == null) {
+		if (bytes === null) {
 			return '-';
 		}
 		const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
@@ -57,7 +57,7 @@
 		values: (number | null)[],
 		maxValue = Math.max(...values.map((v) => v ?? 0), 1)
 	) {
-		const points = values.filter((value): value is number => value != null);
+		const points = values.filter((value): value is number => value !== null);
 
 		return points
 			.map((value, index) => {
@@ -73,7 +73,7 @@
 		if (!selectedServer.liveLoaded) {
 			return null;
 		}
-		const metrics = selectedServer.metrics;
+		const { metrics } = selectedServer;
 		return {
 			cpu: metrics?.cpu ?? null,
 			memory: metrics?.memory ?? null,
@@ -125,7 +125,7 @@
 		const lastValue = (key: 'cpu' | 'memory' | 'bandwidth' | 'diskIo') => {
 			for (let index = samples.length - 1; index >= 0; index -= 1) {
 				const value = samples[index][key];
-				if (value != null) {
+				if (typeof value === 'number') {
 					return value;
 				}
 			}
@@ -233,7 +233,12 @@
 				{/if}
 			</div>
 			<div>
-				<svg viewBox="0 0 240 80" class="block h-28 w-full" preserveAspectRatio="none">
+				<svg
+					viewBox="0 0 240 80"
+					class="block h-28 w-full"
+					preserveAspectRatio="none"
+					aria-hidden="true"
+				>
 					{#if chart.loaded}
 						<polygon
 							points="{chart.points} 240,80 0,80"
@@ -299,6 +304,7 @@
 				{#if liveLoaded}
 					<span class="font-mono text-xs text-foreground">{selectedServer.ip}</span>
 					<button
+						type="button"
 						class="text-muted-foreground hover:text-foreground"
 						aria-label="Copy IPv4 address"
 						onclick={() => copyToClipboard(selectedServer.ip, 'ipv4')}
@@ -320,6 +326,7 @@
 				{#if liveLoaded}
 					<span class="font-mono text-[11px] text-foreground">{selectedServer.ipv6}</span>
 					<button
+						type="button"
 						class="text-muted-foreground hover:text-foreground"
 						aria-label="Copy IPv6 address"
 						onclick={() => copyToClipboard(selectedServer.ipv6, 'ipv6')}
@@ -356,6 +363,7 @@
 						<div class="flex items-center gap-2 border border-border bg-background px-3 py-1.5">
 							<span class="text-xs text-muted-foreground">ssh root@{sshAddress}</span>
 							<button
+								type="button"
 								class="text-muted-foreground hover:text-foreground"
 								aria-label="Copy SSH command"
 								onclick={() => copyToClipboard(`ssh root@${sshAddress}`, 'ssh-console')}
@@ -439,6 +447,7 @@
 					<div class="flex items-center gap-2 border border-border bg-background px-3 py-1.5">
 						<span class="text-muted-foreground">ssh root@{sshAddress} journalctl -f</span>
 						<button
+							type="button"
 							class="text-muted-foreground hover:text-foreground"
 							aria-label="Copy logs command"
 							onclick={() => copyToClipboard(`ssh root@${sshAddress} journalctl -f`, 'ssh-logs')}

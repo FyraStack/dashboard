@@ -19,15 +19,15 @@
 			: `/login/two-factor/totp?redirectTo=${encodeURIComponent(redirectTo)}`
 	);
 
-	let error = $state('');
+	let errorMessage = $state('');
 	let loading = $state(false);
 
 	onMount(() => {
-		void handlePasskeySignIn();
+		handlePasskeySignIn();
 	});
 
 	async function handlePasskeySignIn() {
-		error = '';
+		errorMessage = '';
 		loading = true;
 
 		const { error: err } = await authClient.signIn.passkey({ autoFill: false });
@@ -35,7 +35,7 @@
 		loading = false;
 
 		if (err) {
-			error = err.message ?? 'Unable to sign in with passkey.';
+			errorMessage = err.message ?? 'Unable to sign in with passkey.';
 			return;
 		}
 
@@ -65,12 +65,12 @@
 				</p>
 			</div>
 
-			{#if error}
+			{#if errorMessage}
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
 					<AlertCircle class="size-4 shrink-0" />
-					{error}
+					{errorMessage}
 				</div>
 			{/if}
 

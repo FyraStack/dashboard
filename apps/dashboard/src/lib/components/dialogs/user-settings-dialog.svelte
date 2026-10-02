@@ -57,12 +57,12 @@
 		{ value: 'system', label: 'Auto', icon: Monitor }
 	];
 
-	type Props = {
-		open?: boolean;
+	interface Props {
 		activeTab?: UserSettingsTab;
+		open?: boolean;
 		profileName?: string;
 		user: { name?: string | null; email?: string | null };
-	};
+	}
 
 	let {
 		open = $bindable(false),
@@ -151,7 +151,11 @@
 	}
 
 	async function loadPendingProfileEmailChange() {
-		pendingProfileEmail = (await getPendingEmailChange()) ?? '';
+		try {
+			pendingProfileEmail = (await getPendingEmailChange()) ?? '';
+		} catch {
+			pendingProfileEmail = '';
+		}
 		profileEmailChangePending = Boolean(pendingProfileEmail);
 	}
 
@@ -165,18 +169,20 @@
 	let passwordVerificationPreparing = $state(false);
 	let userHasPassword = $state<boolean | null>(null);
 
+	async function loadUserHasPassword() {
+		try {
+			userHasPassword = await hasPassword();
+		} catch {
+			userHasPassword = null;
+		}
+	}
+
 	$effect(() => {
 		if (!open) {
 			return;
 		}
 		untrack(() => {
-			void (async () => {
-				try {
-					userHasPassword = await await hasPassword();
-				} catch {
-					userHasPassword = null;
-				}
-			})();
+			loadUserHasPassword();
 		});
 	});
 
@@ -326,7 +332,7 @@
 	let newKeyNameFocused = $state(false);
 
 	$effect(() => {
-		if (!newKeyNameFocused && newKeyValue != '' && newKeyName == '') {
+		if (!newKeyNameFocused && newKeyValue !== '' && newKeyName === '') {
 			newKeyName = newKeyValue.split(' ')[2] ?? '';
 		}
 	});
@@ -376,10 +382,13 @@
 			return;
 		}
 		const key = sshKeys.find((k) => k.id === id);
+		if (!key) {
+			return;
+		}
 		const ok = await confirmDestructive({
 			title: 'Delete SSH key',
-			description: `Anything relying on ${key?.name ?? 'this key'} for access will stop working.`,
-			confirmWord: key?.name,
+			description: `Anything relying on ${key.name} for access will stop working.`,
+			confirmWord: key.name,
 			confirmLabel: 'Delete SSH key'
 		});
 		if (!ok) {
@@ -391,19 +400,19 @@
 			await deleteSshKey({ keyId: id });
 			await invalidate('app:ssh-keys');
 		} catch (err) {
-			sshKeys = [...sshKeys, key!];
+			sshKeys = [...sshKeys, key];
 			toast.error(getErrorMessage(err, 'Failed to remove SSH key'));
 		} finally {
 			sshKeyRemoving = null;
 		}
 	}
 
-	type ApiTokenState = {
-		id: string;
-		name: string;
+	interface ApiTokenState {
 		created: string;
+		id: string;
 		lastUsedAt: number | null;
-	};
+		name: string;
+	}
 	let tokens = $state<ApiTokenState[]>([]);
 	let tokensLoading = $state(false);
 	let newTokenName = $state('');
@@ -499,7 +508,7 @@
 			return;
 		}
 		untrack(() => {
-			void Promise.all([
+			Promise.all([
 				loadSshKeys(),
 				loadTokens(),
 				loadTwoFactorStatus(),
@@ -1085,7 +1094,7 @@
 				class="flex flex-col gap-4 py-4"
 				onsubmit={(e) => {
 					e.preventDefault();
-					void disableTotp();
+					disableTotp();
 				}}
 			>
 				<div class="flex flex-col gap-1.5">

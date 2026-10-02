@@ -46,70 +46,8 @@
 	},
 	"linter": {
 		"rules": {
-			"a11y": {
-				"noLabelWithoutControl": "warn",
-				"noNoninteractiveElementInteractions": "warn",
-				"noNoninteractiveTabindex": "warn",
-				"noSvgWithoutTitle": "warn",
-				"useAnchorContent": "warn",
-				"useAriaPropsSupportedByRole": "warn",
-				"useButtonType": "warn",
-				"useKeyWithClickEvents": "warn",
-				"useSemanticElements": "warn"
-			},
-			"complexity": {
-				"noExcessiveCognitiveComplexity": "warn",
-				"noVoid": "warn",
-				"useLiteralKeys": "warn",
-				"useOptionalChain": "warn",
-				"useSimplifiedLogicExpression": "warn"
-			},
-			"correctness": {
-				"noUnusedFunctionParameters": "warn",
-				"noUnusedPrivateClassMembers": "warn",
-				"noUnusedVariables": "warn",
-				"useParseIntRadix": "warn"
-			},
 			"performance": {
-				"noAwaitInLoops": "warn",
-				"noBarrelFile": "warn",
-				"noNamespaceImport": "off",
-				"useTopLevelRegex": "warn"
-			},
-			"style": {
-				"noExportedImports": "warn",
-				"noIncrementDecrement": "warn",
-				"noNamespace": "warn",
-				"noNestedTernary": "warn",
-				"noNonNullAssertion": "warn",
-				"noParameterProperties": "warn",
-				"noRestrictedGlobals": "warn",
-				"useAtIndex": "warn",
-				"useConsistentBuiltinInstantiation": "warn",
-				"useConsistentMethodSignatures": "warn",
-				"useConsistentTypeDefinitions": "warn",
-				"useDefaultSwitchClause": "warn",
-				"useDestructuring": "warn",
-				"useErrorCause": "warn",
-				"useReadonlyClassProperties": "warn",
-				"useTemplate": "warn"
-			},
-			"suspicious": {
-				"noAssignInExpressions": "warn",
-				"noBitwiseOperators": "warn",
-				"noDoubleEquals": "warn",
-				"noEmptyBlockStatements": "warn",
-				"noEqualsToNull": "warn",
-				"noEvolvingTypes": "warn",
-				"noExplicitAny": "warn",
-				"noImplicitAnyLet": "warn",
-				"noNestedPromises": "warn",
-				"noReturnAssign": "warn",
-				"noShadow": "warn",
-				"noUnnecessaryConditions": "warn",
-				"noUnusedExpressions": "warn",
-				"useAwait": "warn",
-				"useIterableCallbackReturn": "warn"
+				"noNamespaceImport": "off"
 			}
 		}
 	},
@@ -120,6 +58,30 @@
 				"rules": {
 					"suspicious": {
 						"noReturnAssign": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"apps/dashboard/src/lib/ptr.ts",
+				"apps/dashboard/src/lib/server/ipam.ts",
+				"apps/dashboard/src/lib/server/backends/proxmox/index.ts"
+			],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noBitwiseOperators": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["apps/dashboard/src/app.d.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noNamespace": "off"
 					}
 				}
 			}

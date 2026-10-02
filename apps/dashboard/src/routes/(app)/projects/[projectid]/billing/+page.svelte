@@ -28,22 +28,22 @@
 		unit?: string;
 	};
 
-	type CreditsDetails = {
+	interface CreditsDetails {
+		estimatedOverageCost?: number | null;
+		overageUsage?: number;
+		prepaidPrice?: { amount: number | null; billingUnits: number } | null;
 		remaining?: number;
 		usage?: number;
-		overageUsage?: number;
-		estimatedOverageCost?: number | null;
-		prepaidPrice?: { amount: number | null; billingUnits: number } | null;
-	};
+	}
 
-	type InvoiceDetails = {
-		stripeId: string;
-		status: string;
-		total: number;
-		currency: string;
+	interface InvoiceDetails {
 		createdAt: number;
+		currency: string;
 		hostedInvoiceUrl: string | null;
-	};
+		status: string;
+		stripeId: string;
+		total: number;
+	}
 
 	type BillingDetails = Record<string, unknown> & {
 		activeResourceCount?: number;
@@ -85,20 +85,22 @@
 	);
 	const canBuyCredits = $derived(Boolean(credits) && canManageBilling && billingReady);
 	const creditRate = $derived(
-		credits?.prepaidPrice?.amount != null && credits.prepaidPrice.billingUnits > 0
+		typeof credits?.prepaidPrice?.amount === 'number' && credits.prepaidPrice.billingUnits > 0
 			? credits.prepaidPrice.amount / credits.prepaidPrice.billingUnits
 			: null
 	);
+
+	const billingActionLabel = $derived.by(() => {
+		if (portalLoading) {
+			return 'Opening portal...';
+		}
+		return billingReady ? 'Open billing portal' : 'Set up billing';
+	});
 
 	function formatCredits(value: number | undefined) {
 		return new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(
 			typeof value === 'number' ? value : 0
 		);
-	}
-
-	function readString(source: Record<string, unknown> | null | undefined, key: string) {
-		const value = source?.[key];
-		return typeof value === 'string' && value.trim() ? value : undefined;
 	}
 
 	function formatHours(value: number | undefined) {
@@ -303,6 +305,7 @@
 				<div class="flex items-center gap-2">
 					{#if canBuyCredits}
 						<button
+							type="button"
 							class="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/50"
 							onclick={() => (buyCreditsOpen = true)}
 						>
@@ -311,16 +314,13 @@
 						</button>
 					{/if}
 					<button
+						type="button"
 						class="flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
 						onclick={handleBillingAction}
 						disabled={portalLoading}
 					>
 						<CreditCard class="size-3.5" />
-						{portalLoading
-							? 'Opening portal...'
-							: billingReady
-								? 'Open billing portal'
-								: 'Set up billing'}
+						{billingActionLabel}
 					</button>
 				</div>
 			</div>
@@ -360,7 +360,7 @@
 							<p class="text-xs font-medium text-muted-foreground">Credits</p>
 						</div>
 						<p class="mt-2 text-2xl font-semibold text-foreground tabular-nums">
-							{creditRate == null
+							{creditRate === null
 								? formatCredits(credits.remaining)
 								: formatCost((credits.remaining ?? 0) * creditRate)}
 						</p>

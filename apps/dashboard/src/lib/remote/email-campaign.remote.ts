@@ -170,6 +170,7 @@ export const sendCampaignEmails = command(sendParams, async (params) => {
 			if (subject === '') {
 				throw new Error('Subject is empty for this recipient');
 			}
+			// biome-ignore lint/performance/noAwaitInLoops: campaign sends go out one at a time to stay under the email provider's rate limit
 			const html = await renderCampaignHtml(meta, component, params.fields, row);
 			const text = await emailToPlainText(html);
 			await sendEmail({ subject, to, html, text });

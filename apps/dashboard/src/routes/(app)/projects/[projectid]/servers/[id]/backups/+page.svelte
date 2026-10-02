@@ -1,9 +1,6 @@
 <script lang="ts">
 	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 
-	let { data } = $props();
-	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
 	const backups = [
 		{ id: 'bk-001', date: '2026-04-05 03:00', size: '3.9 GB', status: 'completed' },
 		{ id: 'bk-002', date: '2026-04-04 03:00', size: '3.9 GB', status: 'completed' },

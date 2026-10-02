@@ -1,10 +1,10 @@
 import { and, asc, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { organization } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	billingMeters,
 	type billingResourceTypeEnum,
 	billingUsageEvents,
-	organization,
 	type vmStatusEnum,
 	vms,
 	vmTypes
@@ -94,7 +94,7 @@ async function recordMeterUsage(
 		return [];
 	}
 
-	return db.transaction(async (tx) => {
+	return await db.transaction(async (tx) => {
 		const [locked] = await tx
 			.select()
 			.from(billingMeters)
@@ -115,7 +115,7 @@ async function recordMeterUsage(
 
 		const values = segments
 			.map((segment) => segmentEventValues(locked, segment, now))
-			.filter((value) => value != null);
+			.filter((value) => value !== null);
 
 		await tx
 			.update(billingMeters)
@@ -166,7 +166,6 @@ export async function createBillingMeter(input: {
 
 export async function reconcileMissingMeters(now = Date.now(), limit = 100, projectId?: string) {
 	const db = initDrizzle();
-	let created = 0;
 
 	const missing = await db
 		.select({
@@ -190,30 +189,40 @@ export async function reconcileMissingMeters(now = Date.now(), limit = 100, proj
 		)
 		.limit(limit);
 
-	for (const vm of missing) {
-		if (!vm.ownerProjectId) {
-			continue;
-		}
+	const reseeded = await Promise.all(missing.map((vm) => reseedMissingMeter(vm, now)));
+	return { created: reseeded.filter(Boolean).length };
+}
 
-		try {
-			await createBillingMeter({
-				projectId: vm.ownerProjectId,
-				resourceType: 'vm',
-				resourceId: vm.id,
-				featureId: requireVmFeatureId(vm.vmType),
-				units: 1,
-				now
-			});
-			created += 1;
-			console.error(
-				`Reseeded missing billing meter for VM ${vm.id} (project ${vm.ownerProjectId}, created ${new Date(vm.createdAt).toISOString()}); metering resumes from now`
-			);
-		} catch (err) {
-			console.warn(`Skipping billing meter reconciliation for VM ${vm.id}`, err);
-		}
+async function reseedMissingMeter(
+	vm: {
+		id: string;
+		ownerProjectId: string | null;
+		createdAt: number;
+		vmType: Parameters<typeof requireVmFeatureId>[0];
+	},
+	now: number
+) {
+	if (!vm.ownerProjectId) {
+		return false;
 	}
 
-	return { created };
+	try {
+		await createBillingMeter({
+			projectId: vm.ownerProjectId,
+			resourceType: 'vm',
+			resourceId: vm.id,
+			featureId: requireVmFeatureId(vm.vmType),
+			units: 1,
+			now
+		});
+		console.error(
+			`Reseeded missing billing meter for VM ${vm.id} (project ${vm.ownerProjectId}, created ${new Date(vm.createdAt).toISOString()}); metering resumes from now`
+		);
+		return true;
+	} catch (err) {
+		console.warn(`Skipping billing meter reconciliation for VM ${vm.id}`, err);
+		return false;
+	}
 }
 
 async function vmTypeBilledByMeter(meter: Pick<BillingMeter, 'featureId' | 'resourceId'>) {
@@ -278,7 +287,7 @@ export async function hasUnsyncedUsageEvents(
 		),
 		columns: { id: true }
 	});
-	return pending != null;
+	return pending !== undefined;
 }
 
 function logUnbillableProject(projectId: string) {
@@ -333,7 +342,7 @@ export async function meterResourceThrough(
 		const values = billable
 			? segments
 					.map((segment) => segmentEventValues(locked, segment, now))
-					.filter((value) => value != null)
+					.filter((value) => value !== null)
 			: [];
 
 		const inserted =
@@ -362,6 +371,7 @@ export async function meterResourceThrough(
 
 	let syncStatus: Awaited<ReturnType<typeof syncUsageEvent>> = null;
 	for (const event of events) {
+		// biome-ignore lint/performance/noAwaitInLoops: usage events are pushed to Autumn in creation order, one at a time
 		const status = await syncUsageEvent(event.id);
 		if (syncStatus !== 'failed') {
 			syncStatus = status;
@@ -409,7 +419,7 @@ async function rotateMeterFeature(
 
 		const values = segments
 			.map((segment) => segmentEventValues(locked, segment, closeAt))
-			.filter((value) => value != null);
+			.filter((value) => value !== null);
 
 		await tx
 			.update(billingMeters)
@@ -599,10 +609,10 @@ function vmIsUnbillable(status: VmStatus | null | undefined) {
 type ProjectTargetStatus = 'ok' | 'failed' | 'gone';
 type EventTargetStatus = 'ready' | 'failed' | 'abandoned';
 
-type EnsureCaches = {
-	projects: Map<string, Promise<ProjectTargetStatus>>;
+interface EnsureCaches {
 	entities: Map<string, Promise<boolean>>;
-};
+	projects: Map<string, Promise<ProjectTargetStatus>>;
+}
 
 const SYNC_CONCURRENCY = 6;
 const METER_CONCURRENCY = 5;
@@ -611,7 +621,10 @@ async function runBounded<T>(items: T[], limit: number, worker: (item: T) => Pro
 	let index = 0;
 	const runner = async () => {
 		while (index < items.length) {
-			await worker(items[index++]);
+			const item = items[index];
+			index += 1;
+			// biome-ignore lint/performance/noAwaitInLoops: each runner is one lane of a bounded worker pool and must finish an item before taking the next
+			await worker(item);
 		}
 	};
 	await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runner));
@@ -641,7 +654,7 @@ async function projectIsGone(projectId: string) {
 		.where(eq(organization.id, projectId))
 		.limit(1);
 
-	return !org || org.deletedAt != null;
+	return !org || org.deletedAt !== null;
 }
 
 async function markUsageEventSynced(eventId: string) {
@@ -652,15 +665,20 @@ async function markUsageEventSynced(eventId: string) {
 		.where(eq(billingUsageEvents.id, eventId));
 }
 
+async function resolveProjectTargetStatus(projectId: string): Promise<ProjectTargetStatus> {
+	try {
+		await ensureProjectCustomer(projectId);
+		return 'ok';
+	} catch {
+		const gone = await projectIsGone(projectId).catch(() => false);
+		return gone ? 'gone' : 'failed';
+	}
+}
+
 function ensureProjectTarget(projectId: string, caches: EnsureCaches) {
 	let ensured = caches.projects.get(projectId);
 	if (!ensured) {
-		ensured = ensureProjectCustomer(projectId)
-			.then((): ProjectTargetStatus => 'ok')
-			.catch(async (): Promise<ProjectTargetStatus> => {
-				const gone = await projectIsGone(projectId).catch(() => false);
-				return gone ? 'gone' : 'failed';
-			});
+		ensured = resolveProjectTargetStatus(projectId);
 		caches.projects.set(projectId, ensured);
 	}
 

@@ -85,14 +85,22 @@
 				>{filteredLogs.length}/{currentLogs.length}</span
 			>
 			{#if logSevFilter}
-				<button aria-label="Clear severity filter" onclick={() => (logSevFilter = null)}>
+				<button
+					type="button"
+					aria-label="Clear severity filter"
+					onclick={() => (logSevFilter = null)}
+				>
 					<Badge variant="outline" class="cursor-pointer gap-1 text-[8px] {sevColors[logSevFilter]}"
 						>{logSevFilter.toUpperCase()}<X class="h-2 w-2" /></Badge
 					>
 				</button>
 			{/if}
 			{#if logSourceFilter}
-				<button aria-label="Clear source filter" onclick={() => (logSourceFilter = null)}>
+				<button
+					type="button"
+					aria-label="Clear source filter"
+					onclick={() => (logSourceFilter = null)}
+				>
 					<Badge variant="secondary" class="cursor-pointer gap-1 text-[8px]"
 						>{logSourceFilter}<X class="h-2 w-2" /></Badge
 					>
@@ -112,7 +120,11 @@
 			/>
 		</div>
 		{#if hasLogFilters}
-			<button class="text-[9px] text-red-400 hover:text-red-300" onclick={clearLogFilters}>
+			<button
+				type="button"
+				class="text-[9px] text-red-400 hover:text-red-300"
+				onclick={clearLogFilters}
+			>
 				Clear
 			</button>
 		{/if}
@@ -157,6 +169,7 @@
 			<div class="flex items-baseline gap-0 px-4 py-px leading-[1.6] hover:bg-muted/20">
 				<span class="w-[148px] shrink-0 text-muted-foreground">{entry.timestamp}</span
 				><button
+					type="button"
 					class="w-[42px] shrink-0 cursor-pointer text-left font-semibold uppercase {sevColors[
 						entry.severity
 					]} {logSevFilter === entry.severity ? 'underline' : ''}"
@@ -164,6 +177,7 @@
 				>
 					{entry.severity.slice(0, 4)}
 				</button><button
+					type="button"
 					class="w-[72px] shrink-0 cursor-pointer text-left text-muted-foreground hover:text-muted-foreground {logSourceFilter ===
 					entry.source
 						? 'text-foreground'

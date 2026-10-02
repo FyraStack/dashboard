@@ -3,39 +3,42 @@ import { getRuntimeEnv } from '#lib/server/env.js';
 
 export const bunnyDnsRecordTypePtr = 10;
 
-export type BunnyDnsZone = {
-	Id: number;
+export interface BunnyDnsZone {
 	Domain: string;
-};
+	Id: number;
+}
 
-type BunnyDnsZoneList = {
-	Items: BunnyDnsZone[];
+interface BunnyDnsZoneList {
 	CurrentPage: number;
 	HasMoreItems: boolean;
-};
+	Items: BunnyDnsZone[];
+}
 
-export type BunnyDnsRecord = {
+export interface BunnyDnsRecord {
 	Id: number;
-	Type: number;
 	Name: string;
+	Type: number;
 	Value: string;
-};
+}
+
+function stringifyErrorDetails(details: unknown): string {
+	try {
+		return JSON.stringify(details);
+	} catch {
+		return 'Unable to stringify details';
+	}
+}
 
 export class BunnyError extends Error {
-	constructor(
-		message: string,
-		readonly status: number,
-		readonly details: unknown
-	) {
-		let detailsString;
-		try {
-			detailsString = JSON.stringify(details);
-		} catch {
-			detailsString = 'Unable to stringify details';
-		}
+	readonly status: number;
+	readonly details: unknown;
 
-		super(`${message} - ${status} - ${detailsString}`);
+	constructor(message: string, options: ErrorOptions & { status: number; details: unknown }) {
+		const { status, details } = options;
+		super(`${message} - ${status} - ${stringifyErrorDetails(details)}`, options);
 		this.name = 'BunnyError';
+		this.status = status;
+		this.details = details;
 	}
 }
 
@@ -53,12 +56,12 @@ export function isBunnyConfigured() {
 }
 
 export class BunnyClient {
-	private api: KyInstance;
+	private readonly api: KyInstance;
 
 	constructor() {
 		const config = getBunnyConfig();
 		if (!config) {
-			throw new BunnyError('Bunny.net API key is not configured', 500, '');
+			throw new BunnyError('Bunny.net API key is not configured', { status: 500, details: '' });
 		}
 
 		this.api = ky.create({
@@ -81,11 +84,10 @@ export class BunnyClient {
 		const raw = await response.text();
 
 		if (!response.ok) {
-			throw new BunnyError(
-				`Bunny ${method.toUpperCase()} ${endpoint} failed`,
-				response.status,
-				raw.slice(0, 500)
-			);
+			throw new BunnyError(`Bunny ${method.toUpperCase()} ${endpoint} failed`, {
+				status: response.status,
+				details: raw.slice(0, 500)
+			});
 		}
 		if (!raw) {
 			return undefined as T;
@@ -93,18 +95,18 @@ export class BunnyClient {
 
 		try {
 			return JSON.parse(raw) as T;
-		} catch {
+		} catch (parseError) {
 			throw new BunnyError(
 				`Bunny ${method.toUpperCase()} ${endpoint} returned a non-JSON response`,
-				response.status,
-				raw.slice(0, 500)
+				{ status: response.status, details: raw.slice(0, 500), cause: parseError }
 			);
 		}
 	}
 
 	async listDnsZones(search?: string): Promise<BunnyDnsZone[]> {
 		const zones: BunnyDnsZone[] = [];
-		for (let page = 1; page <= 10; page++) {
+		for (let page = 1; page <= 10; page += 1) {
+			// biome-ignore lint/performance/noAwaitInLoops: each page request depends on the previous page's HasMoreItems
 			const result = await this.request<BunnyDnsZoneList>('get', 'dnszone', {
 				searchParams: {
 					page: String(page),
@@ -126,7 +128,7 @@ export class BunnyClient {
 		return zones.find((zone) => zone.Domain.toLowerCase() === normalized) ?? null;
 	}
 
-	async createPtrRecord(zoneId: number, name: string, value: string): Promise<BunnyDnsRecord> {
+	createPtrRecord(zoneId: number, name: string, value: string): Promise<BunnyDnsRecord> {
 		return this.request<BunnyDnsRecord>('put', `dnszone/${zoneId}/records`, {
 			json: { Type: bunnyDnsRecordTypePtr, Name: name, Value: value, Ttl: 300 }
 		});
@@ -142,11 +144,10 @@ export class BunnyClient {
 		const response = await this.api.delete(`dnszone/${zoneId}/records/${recordId}`);
 		if (!response.ok && response.status !== 404) {
 			const raw = await response.text();
-			throw new BunnyError(
-				`Bunny DELETE dnszone/${zoneId}/records/${recordId} failed`,
-				response.status,
-				raw.slice(0, 500)
-			);
+			throw new BunnyError(`Bunny DELETE dnszone/${zoneId}/records/${recordId} failed`, {
+				status: response.status,
+				details: raw.slice(0, 500)
+			});
 		}
 	}
 }

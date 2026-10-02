@@ -11,6 +11,7 @@
 		extractPlaceholders,
 		fieldToken
 	} from '#lib/emails/campaign-registry.js';
+	import type { AdminUser } from '#lib/remote/admin-users.remote.js';
 	import {
 		previewCampaignEmail,
 		renderCampaignEditor,
@@ -32,8 +33,6 @@
 	$effect(() => {
 		admin.sync(data);
 	});
-
-	const userCount = $derived(admin.adminUsers.length);
 
 	let selectedTemplateKey = $state(campaignTemplates[0].key);
 	let subject = $state(campaignTemplates[0].defaultSubject);
@@ -59,7 +58,7 @@
 		selectedTemplateKey = key;
 		subject = campaignTemplates.find((entry) => entry.key === key)?.defaultSubject ?? '';
 		fieldValues = defaultFieldValues(key);
-		void loadEditor();
+		loadEditor();
 	}
 
 	let editorHtml = $state('');
@@ -81,7 +80,8 @@
 	}
 
 	async function loadEditor() {
-		const request = ++editorRequest;
+		editorRequest += 1;
+		const request = editorRequest;
 		editorLoading = true;
 		editorError = '';
 		try {
@@ -110,7 +110,7 @@
 
 	function scheduleEditorRefresh() {
 		clearTimeout(refreshTimer);
-		refreshTimer = setTimeout(() => void loadEditor(), 500);
+		refreshTimer = setTimeout(() => loadEditor(), 500);
 	}
 
 	function hydrateFields(node: HTMLElement) {
@@ -140,7 +140,7 @@
 	}
 
 	onMount(() => {
-		void loadEditor();
+		loadEditor();
 		return () => clearTimeout(refreshTimer);
 	});
 
@@ -164,7 +164,7 @@
 	const vmTypeOptions = $derived(
 		[
 			...new Set(
-				admin.adminVms.filter((vm) => vm.active && vm.vmTypeName).map((vm) => vm.vmTypeName!)
+				admin.adminVms.flatMap((vm) => (vm.active && vm.vmTypeName ? [vm.vmTypeName] : []))
 			)
 		].sort()
 	);
@@ -179,7 +179,11 @@
 		| 'totp'
 		| 'twoFactor'
 		| 'passkey';
-	type AudienceCondition = { field: AudienceField; op: string; value: string };
+	interface AudienceCondition {
+		field: AudienceField;
+		op: string;
+		value: string;
+	}
 
 	const audienceFieldDefs: Record<
 		AudienceField,
@@ -229,53 +233,69 @@
 
 	let audienceConditions = $state<AudienceCondition[]>([defaultCondition('vmCount')]);
 
+	function matchesFlag(actual: boolean, condition: AudienceCondition) {
+		return actual === (condition.value === 'yes');
+	}
+
+	function matchesSignedUp(createdAt: Date, condition: AudienceCondition) {
+		if (!condition.value) {
+			return true;
+		}
+		const cutoff = new Date(condition.value).getTime();
+		if (Number.isNaN(cutoff)) {
+			return true;
+		}
+		const created = new Date(createdAt).getTime();
+		return condition.op === 'before' ? created < cutoff : created > cutoff;
+	}
+
+	function matchesVmCount(ownedCount: number, condition: AudienceCondition) {
+		const target = Number.parseInt(condition.value, 10);
+		if (Number.isNaN(target)) {
+			return true;
+		}
+		return condition.op === 'gte' ? ownedCount >= target : ownedCount === target;
+	}
+
+	function matchesVmType(ownedTypes: Set<string> | undefined, condition: AudienceCondition) {
+		if (!condition.value) {
+			return true;
+		}
+		const hasType = ownedTypes?.has(condition.value) ?? false;
+		return condition.op === 'is' ? hasType : !hasType;
+	}
+
+	function matchesAudienceCondition(account: AdminUser, condition: AudienceCondition): boolean {
+		const owned = activeVmsByOwnerEmail.get(account.email);
+		switch (condition.field) {
+			case 'signedUp':
+				return matchesSignedUp(account.createdAt, condition);
+			case 'vmCount':
+				return matchesVmCount(owned?.count ?? 0, condition);
+			case 'vmType':
+				return matchesVmType(owned?.types, condition);
+			case 'verified':
+				return matchesFlag(account.emailVerified, condition);
+			case 'billingExempt':
+				return matchesFlag(account.billingExempt, condition);
+			case 'disabled':
+				return matchesFlag(account.disabled, condition);
+			case 'totp':
+				return matchesFlag(account.twoFactorEnabled, condition);
+			case 'twoFactor':
+				return matchesFlag(account.twoFactorEnabled || account.passkeyCount > 0, condition);
+			case 'passkey':
+				return matchesFlag(account.passkeyCount > 0, condition);
+			default: {
+				const unhandledField: never = condition.field;
+				return unhandledField;
+			}
+		}
+	}
+
 	const queryRecipients = $derived(
 		admin.adminUsers.filter((account) =>
-			audienceConditions.every((condition) => {
-				const owned = activeVmsByOwnerEmail.get(account.email);
-				switch (condition.field) {
-					case 'signedUp': {
-						if (!condition.value) {
-							return true;
-						}
-						const cutoff = new Date(condition.value).getTime();
-						if (Number.isNaN(cutoff)) {
-							return true;
-						}
-						const created = new Date(account.createdAt).getTime();
-						return condition.op === 'before' ? created < cutoff : created > cutoff;
-					}
-					case 'vmCount': {
-						const target = Number.parseInt(condition.value, 10);
-						if (Number.isNaN(target)) {
-							return true;
-						}
-						const ownedCount = owned?.count ?? 0;
-						return condition.op === 'gte' ? ownedCount >= target : ownedCount === target;
-					}
-					case 'vmType': {
-						if (!condition.value) {
-							return true;
-						}
-						const hasType = owned?.types.has(condition.value) ?? false;
-						return condition.op === 'is' ? hasType : !hasType;
-					}
-					case 'verified':
-						return account.emailVerified === (condition.value === 'yes');
-					case 'billingExempt':
-						return account.billingExempt === (condition.value === 'yes');
-					case 'disabled':
-						return account.disabled === (condition.value === 'yes');
-					case 'totp':
-						return account.twoFactorEnabled === (condition.value === 'yes');
-					case 'twoFactor':
-						return (
-							(account.twoFactorEnabled || account.passkeyCount > 0) === (condition.value === 'yes')
-						);
-					case 'passkey':
-						return account.passkeyCount > 0 === (condition.value === 'yes');
-				}
-			})
+			audienceConditions.every((condition) => matchesAudienceCondition(account, condition))
 		)
 	);
 	const queryLabel = $derived(
@@ -372,6 +392,7 @@
 		const fields = $state.snapshot(fieldValues);
 		try {
 			for (let i = 0; i < rows.length; i += CAMPAIGN_BATCH_SIZE) {
+				// biome-ignore lint/performance/noAwaitInLoops: batches go out one at a time to stay under the email provider's rate limit and report progress
 				const result = await sendCampaignEmails({
 					template: selectedTemplateKey,
 					subject,

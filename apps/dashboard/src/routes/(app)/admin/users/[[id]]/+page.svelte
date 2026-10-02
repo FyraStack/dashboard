@@ -54,15 +54,15 @@
 	const usersBase = resolve('admin/users');
 
 	function openUser(userId: string) {
-		void goto(resolve(`admin/users/${userId}`), { reset: false });
+		goto(resolve(`admin/users/${userId}`), { reset: false });
 	}
 
 	function closeUser() {
-		void goto(usersBase, { reset: false });
+		goto(usersBase, { reset: false });
 	}
 
 	$effect(() => {
-		const id = page.params.id;
+		const { id } = page.params;
 		if (!id) {
 			if (admin.userSheetOpen) {
 				admin.closeUserSheet();
@@ -78,7 +78,6 @@
 	const adminCount = $derived(admin.adminUsers.filter((u) => u.isAdmin).length);
 	const userCount = $derived(admin.adminUsers.length);
 	const verifiedCount = $derived(admin.adminUsers.filter((u) => u.emailVerified).length);
-	const disabledCount = $derived(admin.adminUsers.filter((u) => u.disabled).length);
 	const has2faCount = $derived(
 		admin.adminUsers.filter((u) => u.twoFactorEnabled || u.passkeyCount > 0).length
 	);
@@ -206,6 +205,17 @@
 			.toUpperCase();
 	}
 
+	function twoFactorSummary(account: AdminUser) {
+		const hasPasskey = account.passkeyCount > 0;
+		if (account.twoFactorEnabled && hasPasskey) {
+			return 'Authenticator app and passkey';
+		}
+		if (account.twoFactorEnabled) {
+			return 'Authenticator app enabled';
+		}
+		return hasPasskey ? 'Passkey enabled' : 'Not enabled';
+	}
+
 	function avatarColor(name: string) {
 		const colors = [
 			'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
@@ -218,7 +228,8 @@
 			'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
 		];
 		let hash = 0;
-		for (let i = 0; i < name.length; i++) {
+		for (let i = 0; i < name.length; i += 1) {
+			// biome-ignore lint/suspicious/noBitwiseOperators: string hash relies on int32 truncation
 			hash = name.charCodeAt(i) + ((hash << 5) - hash);
 		}
 		return colors[Math.abs(hash) % colors.length];
@@ -468,8 +479,7 @@
 					<p class="text-sm">No users found</p>
 				</div>
 			{:else}
-				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-				<div class="overflow-x-auto rounded-md border border-border/60" tabindex="0">
+				<div class="overflow-x-auto rounded-md border border-border/60">
 					<table class="w-full text-left text-xs">
 						<thead>
 							<tr
@@ -734,13 +744,7 @@
 							<div class="flex flex-col">
 								<span class="text-sm font-medium text-foreground">Two-factor auth</span>
 								<span class="text-[11px] text-muted-foreground">
-									{u.twoFactorEnabled && u.passkeyCount > 0
-										? 'Authenticator app and passkey'
-										: u.twoFactorEnabled
-											? 'Authenticator app enabled'
-											: u.passkeyCount > 0
-												? 'Passkey enabled'
-												: 'Not enabled'}
+									{twoFactorSummary(u)}
 								</span>
 							</div>
 						</div>
@@ -887,6 +891,7 @@
 					>
 					<div class="grid grid-cols-2 gap-2">
 						<button
+							type="button"
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.sessionCount > 0 && admin.loadUserResources(u.id, 'session')}
 						>
@@ -900,6 +905,7 @@
 							{/if}
 						</button>
 						<button
+							type="button"
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.accountCount > 0 && admin.loadUserResources(u.id, 'account')}
 						>
@@ -913,6 +919,7 @@
 							{/if}
 						</button>
 						<button
+							type="button"
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.orgCount > 0 && admin.loadUserResources(u.id, 'org')}
 						>
@@ -926,6 +933,7 @@
 							{/if}
 						</button>
 						<button
+							type="button"
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.sshKeyCount > 0 && admin.loadUserResources(u.id, 'sshKey')}
 						>
@@ -939,6 +947,7 @@
 							{/if}
 						</button>
 						<button
+							type="button"
 							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
 							onclick={() => u.apiTokenCount > 0 && admin.loadUserResources(u.id, 'apiToken')}
 						>
@@ -1087,6 +1096,7 @@
 						<div class="flex flex-col gap-0 divide-y divide-border/50">
 							{#each admin.userOrgs as o (o.id)}
 								<button
+									type="button"
 									class="flex items-center justify-between py-2.5 text-left transition-colors"
 									onclick={() => admin.loadOrgResources(o)}
 								>
@@ -1154,7 +1164,7 @@
 			class="flex flex-col gap-4 pt-4"
 			onsubmit={(event) => {
 				event.preventDefault();
-				void confirmDeleteUser();
+				confirmDeleteUser();
 			}}
 		>
 			<div

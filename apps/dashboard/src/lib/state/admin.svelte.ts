@@ -57,84 +57,84 @@ import { page } from '$app/state';
 
 export type VmIsa = 'x86';
 
-export type VmType = {
-	id: string;
-	name: string;
-	isa: string;
-	cores: number;
-	ramCapacity: number;
-	storageAmount: number;
-	rate: string;
-	cap: string;
+export interface VmType {
 	autumnFeatureId: string | null;
-};
-
-export type BaseImage = {
+	cap: string;
+	cores: number;
 	id: string;
+	isa: string;
 	name: string;
-	version: string;
-	description: string;
-	icon: string | null | undefined;
+	ramCapacity: number;
+	rate: string;
+	storageAmount: number;
+}
+
+export interface BaseImage {
+	accentColor: string;
 	color: string;
+	description: string;
+	filePath: string;
+	icon: string | null | undefined;
+	id: string;
+	imageType: string;
+	isa: string;
 	isOfficial: boolean;
 	logoSvg: string | null | undefined;
-	accentColor: string;
-	imageType: string;
-	secureBoot: boolean;
-	filePath: string;
-	isa: string;
-};
-
-export type PveImage = {
-	volid: string;
-	filename: string;
-	size: number;
-	node: string;
-	storage: string;
-	content: 'import';
-	format: string;
-};
-
-export type PveImageImportTarget = {
-	node: string;
-	storage: string;
-};
-
-export type IpamPrefix = {
-	id: string;
 	name: string;
-	cidr: string;
-	family: 'ipv4' | 'ipv6';
-	disabled: boolean;
-	ipv6UseTransitAddress: boolean;
-	whitelistStart: string | null;
-	whitelistEnd: string | null;
-	gatewayAddress: string | null;
-	bunnyDnsZone: string | null;
+	secureBoot: boolean;
+	version: string;
+}
+
+export interface PveImage {
+	content: 'import';
+	filename: string;
+	format: string;
+	node: string;
+	size: number;
+	storage: string;
+	volid: string;
+}
+
+export interface PveImageImportTarget {
+	node: string;
+	storage: string;
+}
+
+export interface IpamPrefix {
 	allocated: number;
-	capacity: string;
 	available: string;
+	bunnyDnsZone: string | null;
+	capacity: string;
+	cidr: string;
+	disabled: boolean;
+	family: 'ipv4' | 'ipv6';
+	gatewayAddress: string | null;
 	hasCapacity: boolean;
-};
+	id: string;
+	ipv6UseTransitAddress: boolean;
+	name: string;
+	whitelistEnd: string | null;
+	whitelistStart: string | null;
+}
 
 type ImportChecksumAlgorithm = '' | 'md5' | 'sha1' | 'sha224' | 'sha256' | 'sha384' | 'sha512';
-type ImportTask = {
+interface ImportTask {
+	exitstatus?: string;
 	node: string;
+	status: 'starting' | 'running' | 'stopped';
 	storage: string;
 	upid: string;
-	status: 'starting' | 'running' | 'stopped';
-	exitstatus?: string;
-};
+}
 
-export type AdminPageData = {
-	vmTypes?: VmType[];
-	images?: BaseImage[];
-	featureFlags?: FeatureFlags;
-	adminUsers?: AdminUser[];
-	ipamPrefixes?: IpamPrefix[];
-	adminVms?: AdminVm[];
+export interface AdminPageData {
 	adminProjects?: AdminProject[];
-};
+	adminUsers?: AdminUser[];
+	adminVms?: AdminVm[];
+	featureFlags?: FeatureFlags;
+	images?: BaseImage[];
+	ipamPrefixes?: IpamPrefix[];
+	vmTypes?: VmType[];
+}
 
 export const colorOptions = [
 	'bg-blue-500',
@@ -294,7 +294,7 @@ export class AdminState {
 		this.selectedUser = null;
 	}
 
-	private updateUserField(userId: string, field: string, updater: (user: AdminUser) => AdminUser) {
+	private updateUserField(userId: string, updater: (user: AdminUser) => AdminUser) {
 		this.adminUsers = this.adminUsers.map((u) => (u.id === userId ? updater(u) : u));
 		if (this.selectedUser?.id === userId) {
 			this.selectedUser = updater({ ...this.selectedUser });
@@ -309,15 +309,11 @@ export class AdminState {
 		this.userSheetSaving[userId] = { field: '', saving: false };
 	}
 
-	private isSheetSaving(userId: string) {
-		return this.userSheetSaving[userId]?.saving ?? false;
-	}
-
 	async setUserDisabled(userId: string, disabled: boolean) {
 		const previousUsers = this.adminUsers.map((u) => ({ ...u }));
 		this.adminUserError = '';
 		this.startUserSheetSave(userId, 'disabled');
-		this.updateUserField(userId, 'disabled', (u) => ({ ...u, disabled }));
+		this.updateUserField(userId, (u) => ({ ...u, disabled }));
 		try {
 			await setUserDisabled({ userId, disabled });
 			await invalidate('app:admin-users');
@@ -333,7 +329,7 @@ export class AdminState {
 		const previousUsers = this.adminUsers.map((u) => ({ ...u }));
 		this.adminUserError = '';
 		this.startUserSheetSave(userId, 'billingExempt');
-		this.updateUserField(userId, 'billingExempt', (u) => ({ ...u, billingExempt }));
+		this.updateUserField(userId, (u) => ({ ...u, billingExempt }));
 		try {
 			await setUserBillingExempt({ userId, billingExempt });
 			await invalidate('app:admin-users');
@@ -426,7 +422,7 @@ export class AdminState {
 		const previousUsers = this.adminUsers.map((u) => ({ ...u }));
 		this.adminUserError = '';
 		this.startUserSheetSave(userId, 'twoFactor');
-		this.updateUserField(userId, 'twoFactorEnabled', (u) => ({ ...u, twoFactorEnabled }));
+		this.updateUserField(userId, (u) => ({ ...u, twoFactorEnabled }));
 		try {
 			await setUserTwoFactor({ userId, twoFactorEnabled });
 			await invalidate('app:admin-users');
@@ -444,7 +440,7 @@ export class AdminState {
 		const previousUsers = this.adminUsers.map((u) => ({ ...u }));
 		this.adminUserError = '';
 		this.startUserSheetSave(userId, 'role');
-		this.updateUserField(userId, 'role', (u) => ({
+		this.updateUserField(userId, (u) => ({
 			...u,
 			role,
 			isAdmin: role === 'admin'
@@ -715,7 +711,9 @@ export class AdminState {
 			this.importStorage = result.storage;
 			this.importTasks = result.tasks.map((task) => ({ ...task, status: 'starting' as const }));
 
-			while (true) {
+			let polling = true;
+			while (polling) {
+				// biome-ignore lint/performance/noAwaitInLoops: polls Proxmox task status on an interval until every import task stops
 				await this.waitForTaskPoll();
 				const statuses = await Promise.all(
 					this.importTasks.map(async (task) => {
@@ -736,7 +734,7 @@ export class AdminState {
 				if (statuses.every((task) => task.status === 'stopped')) {
 					await this.loadPveImages();
 					this.importDialogOpen = false;
-					break;
+					polling = false;
 				}
 			}
 		} catch (err) {

@@ -39,12 +39,19 @@
 	import Shield from '~icons/nucleo/shield';
 	import User from '~icons/nucleo/user';
 
+	const PROJECT_PATH_PATTERN = /^\/projects\/([^/]+)/;
+	const PROJECT_SECTION_PATTERN = /^\/projects\/[^/]+\/([^/]+)/;
+
 	let { children, data } = $props();
 	let mobileNavOpen = $state(false);
 	const featureFlags = $derived((data.featureFlags ?? {}) as FeatureFlags);
 
 	type ProjectRole = 'owner' | 'admin' | 'read_write' | 'read';
-	type Project = { id: string; projectName: string; role: ProjectRole };
+	interface Project {
+		id: string;
+		projectName: string;
+		role: ProjectRole;
+	}
 	let projects = $state<Project[]>([]);
 	let selectedProjectId = $state('');
 	let switchingProjectId = $state<string | null>(null);
@@ -73,7 +80,7 @@
 	const isRootPage = $derived(page.url.pathname === '/');
 	const isAdminPage = $derived(page.url.pathname.startsWith('/admin'));
 	const currentProjectSection = $derived.by(() => {
-		const segment = page.url.pathname.match(/^\/projects\/[^/]+\/([^/]+)/)?.[1];
+		const segment = page.url.pathname.match(PROJECT_SECTION_PATTERN)?.[1];
 		if (!segment) {
 			return '';
 		}
@@ -83,29 +90,27 @@
 			.join(' ');
 	});
 
-	const projectUrlPrefix = $derived(currentProject ? `/projects/${currentProject.id}` : '');
-
 	const navItems = $derived.by(() => {
-		const items: { icon: IconComponent; label: string; href: string }[] = [];
+		const items: { icon: IconComponent; label: string; pathname: `projects/${string}` }[] = [];
 		if (!currentProject) {
 			return items;
 		}
-		const prefix = `/projects/${currentProject.id}`;
-		items.push({ icon: Server, label: 'Servers', href: `${prefix}/servers` });
+		const prefix: `projects/${string}` = `projects/${currentProject.id}`;
+		items.push({ icon: Server, label: 'Servers', pathname: `${prefix}/servers` });
 		if (featureFlags.colocation) {
-			items.push({ icon: Warehouse, label: 'Colocation', href: `${prefix}/colocation` });
+			items.push({ icon: Warehouse, label: 'Colocation', pathname: `${prefix}/colocation` });
 		}
 		if (featureFlags.volumes) {
-			items.push({ icon: HardDrive, label: 'Volumes', href: `${prefix}/volumes` });
+			items.push({ icon: HardDrive, label: 'Volumes', pathname: `${prefix}/volumes` });
 		}
 		if (featureFlags.firewall) {
-			items.push({ icon: Shield, label: 'Firewall', href: `${prefix}/firewall` });
+			items.push({ icon: Shield, label: 'Firewall', pathname: `${prefix}/firewall` });
 		}
 		if (featureFlags.images) {
-			items.push({ icon: Disc, label: 'Images', href: `${prefix}/images` });
+			items.push({ icon: Disc, label: 'Images', pathname: `${prefix}/images` });
 		}
-		items.push({ icon: CreditCard, label: 'Billing', href: `${prefix}/billing` });
-		items.push({ icon: Settings, label: 'Settings', href: `${prefix}/settings` });
+		items.push({ icon: CreditCard, label: 'Billing', pathname: `${prefix}/billing` });
+		items.push({ icon: Settings, label: 'Settings', pathname: `${prefix}/settings` });
 		return items;
 	});
 
@@ -119,21 +124,18 @@
 		return page.url.pathname.startsWith(href);
 	}
 
-	function withProjectContext(href: string, projectId = selectedProjectId) {
-		if (!projectId) {
-			return href;
+	function projectSectionHref(section: string) {
+		if (!selectedProjectId) {
+			return section;
 		}
-		if (href.startsWith('/projects/')) {
-			return href;
-		}
-		return `/projects/${projectId}${href}`;
+		return resolve(`projects/${selectedProjectId}${section}`);
 	}
 
 	$effect(() => {
 		if (isOnProjectRoute) {
-			const match = page.url.pathname.match(/^\/projects\/([^/]+)/);
-			if (match) {
-				selectedProjectId = match[1];
+			const routeProjectId = page.url.pathname.match(PROJECT_PATH_PATTERN)?.[1];
+			if (routeProjectId) {
+				selectedProjectId = routeProjectId;
 			}
 		}
 	});
@@ -159,7 +161,7 @@
 	let profileName = $state('');
 
 	$effect(() => {
-		const user = data.user;
+		const { user } = data;
 		untrack(() => {
 			if (user) {
 				profileName = user.name ?? '';
@@ -172,13 +174,13 @@
 	}
 
 	$effect(() => {
-		const url = page.url;
+		const { url } = page;
 		if (!userSettings.urlHasSettingsTab(url)) {
 			return;
 		}
 		userSettings.syncFromUrl(url);
 		untrack(() =>
-			goto(resolve(clearUserSettingsHref(url) as any), {
+			goto(clearUserSettingsHref(url), {
 				shallow: true,
 				replace: true,
 				state: page.state
@@ -190,19 +192,19 @@
 	let commandSearch = $state('');
 	type CmdFilter = 'all' | 'navigate' | 'servers' | 'account';
 	let cmdFilter = $state<CmdFilter>('all');
-	type CommandServer = {
+	interface CommandServer {
+		detail: string;
 		id: string;
 		name: string;
 		plan: string;
 		status: string;
-		detail: string;
-	};
-	type CommandEntry = {
+	}
+	interface CommandEntry {
+		action?: () => void | Promise<void>;
+		href?: string;
 		icon: IconComponent;
 		label: string;
-		href?: string;
-		action?: () => void | Promise<void>;
-	};
+	}
 	let commandServers = $state.raw<CommandServer[]>([]);
 	let commandServersLoading = $state(false);
 	let commandServersLoadedProjectId = $state<string | null>(null);
@@ -296,7 +298,8 @@
 		if (!projectId || commandServersLoading || commandServersLoadedProjectId === projectId) {
 			return;
 		}
-		const requestId = ++commandServersRequestId;
+		commandServersRequestId += 1;
+		const requestId = commandServersRequestId;
 		commandServersLoading = true;
 
 		try {
@@ -339,7 +342,7 @@
 		commandSearch = '';
 		cmdFilter = 'all';
 		commandOpen = true;
-		void loadCommandServers();
+		loadCommandServers();
 	}
 
 	$effect(() => {
@@ -401,6 +404,7 @@
 			<div class="flex min-w-0 items-center gap-2">
 				{#if navItems.length > 0}
 					<button
+						type="button"
 						class="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground lg:hidden"
 						aria-label="Open navigation menu"
 						onclick={() => (mobileNavOpen = true)}
@@ -471,6 +475,7 @@
 				{/if}
 
 				<button
+					type="button"
 					class="flex shrink-0 items-center gap-2 border border-border bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
 					aria-label="Search"
 					onclick={openCommandPalette}
@@ -484,6 +489,7 @@
 				</button>
 
 				<button
+					type="button"
 					class="flex min-w-0 items-center gap-2.5 rounded-xs px-2 py-1 transition-colors hover:bg-muted"
 					aria-label={`Account settings for ${profileName || data.user?.email}`}
 					aria-haspopup="dialog"
@@ -524,16 +530,16 @@
 								})}
 									<a
 										{...props}
-										href={resolve(withProjectContext(item.href) as any)}
-										aria-label={item.label}
-										aria-current={isActive(item.href) ? 'page' : undefined}
+										href={resolve(item.pathname)}
+										aria-current={isActive(`/${item.pathname}`) ? 'page' : undefined}
 										class="flex h-8 w-8 items-center justify-center transition-colors duration-100 {isActive(
-											item.href
+											`/${item.pathname}`
 										)
 											? 'border border-red-500 text-foreground'
 											: 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
 									>
 										<item.icon class="h-4 w-4" />
+										<span class="sr-only">{item.label}</span>
 									</a>
 								{/snippet}
 							</Tooltip.Trigger>
@@ -561,11 +567,11 @@
 			<nav class="flex flex-col p-2">
 				{#each navItems as item (item.label)}
 					<a
-						href={resolve(withProjectContext(item.href) as any)}
-						aria-current={isActive(item.href) ? 'page' : undefined}
+						href={resolve(item.pathname)}
+						aria-current={isActive(`/${item.pathname}`) ? 'page' : undefined}
 						onclick={() => (mobileNavOpen = false)}
 						class="flex items-center gap-3 px-3 py-2.5 text-sm transition-colors {isActive(
-							item.href
+							`/${item.pathname}`
 						)
 							? 'bg-muted text-foreground'
 							: 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
@@ -586,6 +592,7 @@
 						</p>
 						{#each projects as project (project.id)}
 							<button
+								type="button"
 								onclick={() => {
 									mobileNavOpen = false;
 									selectProject(project.id);
@@ -644,6 +651,7 @@
 		<div class="flex gap-1 border-b border-border px-3 py-2">
 			{#each cmdFilters as f (f.id)}
 				<button
+					type="button"
 					class="flex items-center gap-1 px-2 py-1 text-[11px] font-medium transition-colors {cmdFilter ===
 					f.id
 						? 'bg-muted text-foreground'
@@ -693,8 +701,7 @@
 				<Command.Group heading="Navigate">
 					{#each filteredNavigateCommands as command (command.label)}
 						<Command.Item
-							onSelect={() =>
-								runCommand(() => goto(resolve(withProjectContext(command.href ?? '/') as any)))}
+							onSelect={() => runCommand(() => goto(projectSectionHref(command.href ?? '/')))}
 							class="gap-2"
 						>
 							<command.icon class="h-3.5 w-3.5 text-muted-foreground" />

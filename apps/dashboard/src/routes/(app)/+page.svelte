@@ -21,7 +21,11 @@
 	import Settings from '~icons/nucleo/settings';
 	import Trash2 from '~icons/nucleo/trash';
 
-	type Project = { id: string; projectName: string; role: string };
+	interface Project {
+		id: string;
+		projectName: string;
+		role: string;
+	}
 
 	let { data } = $props();
 	let projects = $derived<Project[]>(data.projects ?? []);
@@ -212,6 +216,7 @@
 						</div>
 					{/each}
 					<button
+						type="button"
 						class="flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-background/70"
 						onclick={openCreateDialog}
 					>

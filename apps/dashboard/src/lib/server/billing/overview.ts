@@ -126,7 +126,7 @@ export async function getProjectBillingOverview(projectId: string) {
 			resourceType: 'vm' as const,
 			count: group.count,
 			hours: Number(hours.toFixed(2)),
-			cost: rate == null ? null : Number((hours * rate).toFixed(2))
+			cost: rate === null ? null : Number((hours * rate).toFixed(2))
 		};
 	});
 

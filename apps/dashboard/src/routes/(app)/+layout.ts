@@ -1,9 +1,11 @@
 import type { LayoutLoad } from './$types';
 
+const PROJECT_PATH_PATTERN = /^\/projects\/([^/]+)/;
+
 export const load: LayoutLoad = ({ data, url }) => {
 	// URL changes only select from data we already have; they need no server reload.
 	const requestedProjectId = url.searchParams.get('projectId');
-	const pathProjectId = url.pathname.match(/^\/projects\/([^/]+)/)?.[1];
+	const pathProjectId = url.pathname.match(PROJECT_PATH_PATTERN)?.[1];
 	const activeProjectId = requestedProjectId ?? pathProjectId ?? data.activeProjectId;
 	const currentProject =
 		url.pathname === '/'

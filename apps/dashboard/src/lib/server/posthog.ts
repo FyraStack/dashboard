@@ -6,11 +6,11 @@ import { getRequestEvent } from '$app/server';
 
 type EventProperties = Record<string, string | number | boolean | null | undefined>;
 
-type CaptureOptions = {
+interface CaptureOptions {
 	distinctId?: string;
 	projectId?: string | null;
 	set?: EventProperties;
-};
+}
 
 function ingestHost(): string {
 	return PUBLIC_POSTHOG_HOST?.includes('eu.')
@@ -34,7 +34,7 @@ function currentEvent(): RequestEvent | null {
 	}
 }
 
-function dispatch(event: RequestEvent | null, send: (client: PostHog) => Promise<void>) {
+function dispatch(send: (client: PostHog) => Promise<void>) {
 	const client = createClient();
 	if (!client) {
 		return;
@@ -71,7 +71,7 @@ export function captureServerEvent(
 
 	const projectId = options.projectId ?? event?.locals.activeProjectId ?? undefined;
 
-	dispatch(event, async (client) => {
+	dispatch(async (client) => {
 		client.capture({
 			distinctId,
 			event: name,
@@ -89,7 +89,7 @@ export function captureServerEvent(
 
 export function captureServerException(error: unknown, event: RequestEvent) {
 	const distinctId = event.locals.user?.id ?? 'anonymous-server';
-	dispatch(event, (client) =>
+	dispatch((client) =>
 		client.captureExceptionImmediate(error, distinctId, {
 			...requestContext(event),
 			project_id: event.locals.activeProjectId ?? undefined

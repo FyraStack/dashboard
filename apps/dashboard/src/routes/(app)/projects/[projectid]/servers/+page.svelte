@@ -43,7 +43,7 @@
 		</div>
 	</div>
 {:else}
-	<div class="flex h-full flex-col" aria-busy="true" aria-label="Loading server">
+	<div class="flex h-full flex-col" role="status" aria-busy="true" aria-label="Loading server">
 		<div class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-4">
 			<Skeleton class="h-3.5 w-32" />
 			<Skeleton class="h-4 w-16 rounded-full" />

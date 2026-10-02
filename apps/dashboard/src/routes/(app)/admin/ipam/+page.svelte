@@ -7,7 +7,6 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
-	import { featureFlagKeys } from '#lib/feature-flags.js';
 	import { reverseDnsZoneForCidr } from '#lib/ptr.js';
 	import {
 		createIpamPrefix,
@@ -56,8 +55,6 @@
 	let ptrFormatIpv4 = $state('');
 	let ptrFormatIpv6 = $state('');
 
-	const userCount = $derived(admin.adminUsers.length);
-	const enabledCount = $derived(featureFlagKeys.filter((key) => admin.featureFlags[key]).length);
 	const ipv4Count = $derived(
 		admin.ipamPrefixes.filter((prefix) => prefix.family === 'ipv4').length
 	);
@@ -77,6 +74,13 @@
 		return `${parsed / 1_000_000_000n}B+`;
 	}
 
+	function allocationUnitLabel(prefix: IpamPrefix) {
+		if (prefix.family !== 'ipv6') {
+			return '/32 addresses';
+		}
+		return prefix.ipv6UseTransitAddress ? '/128 transit' : '/64 prefixes';
+	}
+
 	function openCreate() {
 		editing = null;
 		name = '';
@@ -93,14 +97,11 @@
 
 	function openEdit(prefix: IpamPrefix) {
 		editing = prefix;
-		name = prefix.name;
-		cidr = prefix.cidr;
+		({ name, cidr, disabled, ipv6UseTransitAddress } = prefix);
 		whitelistStart = prefix.whitelistStart ?? '';
 		whitelistEnd = prefix.whitelistEnd ?? '';
 		gatewayAddress = prefix.gatewayAddress ?? '';
 		bunnyDnsZone = prefix.bunnyDnsZone ?? '';
-		disabled = prefix.disabled;
-		ipv6UseTransitAddress = prefix.ipv6UseTransitAddress;
 		formError = '';
 		dialogOpen = true;
 	}
@@ -282,11 +283,7 @@
 						</td>
 						<td class="px-5 py-3">
 							<Badge variant="outline" class="text-[10px]">
-								{prefix.family === 'ipv6'
-									? prefix.ipv6UseTransitAddress
-										? '/128 transit'
-										: '/64 prefixes'
-									: '/32 addresses'}
+								{allocationUnitLabel(prefix)}
 							</Badge>
 						</td>
 						<td class="px-5 py-3 font-mono text-xs text-muted-foreground">

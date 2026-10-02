@@ -13,20 +13,20 @@
 	import Pencil from '~icons/nucleo/pencil';
 	import Trash2 from '~icons/nucleo/trash';
 
-	type IpAddress = {
+	interface IpAddress {
 		address: string;
-		type: string;
-		server: string;
 		rdns: string;
-	};
+		server: string;
+		type: string;
+	}
 
-	type PrivateNetwork = {
+	interface PrivateNetwork {
+		cidr: string;
+		enabled: boolean;
 		id: string;
 		name: string;
-		cidr: string;
 		servers: string[];
-		enabled: boolean;
-	};
+	}
 
 	let ips = $state<IpAddress[]>([
 		{
@@ -96,7 +96,7 @@
 		if (!newNetName.trim()) {
 			return;
 		}
-		netCounter++;
+		netCounter += 1;
 		networks.push({
 			id: `vpc-${String(netCounter).padStart(3, '0')}`,
 			name: newNetName.trim(),

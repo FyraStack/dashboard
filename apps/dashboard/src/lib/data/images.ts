@@ -1,23 +1,23 @@
 export type ImageType = 'iso' | 'img' | 'qcow2';
 
-export type ImageVersion = {
-	version: string;
+export interface ImageVersion {
 	archs: string[];
 	size: string;
 	type: ImageType;
-};
+	version: string;
+}
 
-export type OfficialImage = {
+export interface OfficialImage {
+	color: string;
+	description: string;
+	icon?: string;
+	iconColor: string;
 	id: string;
 	name: string;
-	description: string;
-	color: string;
-	iconColor: string;
-	icon?: string;
 	paid: boolean;
 	price?: string;
 	versions: ImageVersion[];
-};
+}
 
 export const officialImages: OfficialImage[] = [
 	{

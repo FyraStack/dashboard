@@ -145,9 +145,8 @@
 						ondrop={(event) => imgDrop(event, index)}
 					>
 						<td class="px-3 py-3">
-							<span
-								role="button"
-								tabindex="0"
+							<button
+								type="button"
 								aria-label={`Drag or use arrow keys to reorder ${img.name}`}
 								draggable="true"
 								class="flex h-7 w-5 cursor-grab items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus:text-muted-foreground focus:outline-none active:cursor-grabbing"
@@ -156,7 +155,7 @@
 								onkeydown={(event) => imgHandleKeydown(event, index)}
 							>
 								<GripVertical class="h-3.5 w-3.5" />
-							</span>
+							</button>
 						</td>
 						<td class="px-5 py-3">
 							<div class="flex items-center gap-2.5">

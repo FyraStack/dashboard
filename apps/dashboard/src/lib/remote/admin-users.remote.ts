@@ -13,76 +13,73 @@ import {
 } from '#lib/server/admin-verification.js';
 import { hasAdminRole, requireAdmin } from '#lib/server/auth-context.js';
 import { updateProjectCustomer } from '#lib/server/billing/autumn.js';
-import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	account,
-	apiTokens,
 	member,
 	organization,
 	passkey,
 	session,
-	sshKeys,
-	user,
-	vms,
-	volumes
-} from '#lib/server/db/schema.js';
+	user
+} from '#lib/server/db/auth.schema.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { apiTokens, sshKeys, vms, volumes } from '#lib/server/db/schema.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
 import { command, getRequestEvent, query } from '$app/server';
 
-export type UserSession = {
-	id: string;
+export interface UserSession {
 	createdAt: Date;
+	id: string;
 	ipAddress: string | null;
 	userAgent: string | null;
-};
+}
 
-export type UserAccount = {
-	id: string;
-	providerId: string;
+export interface UserAccount {
 	accountId: string;
 	createdAt: Date;
-};
+	id: string;
+	providerId: string;
+}
 
-export type UserOrganization = {
+export interface UserOrganization {
 	id: string;
 	name: string;
 	role: string;
-};
+}
 
-export type UserSshKey = {
-	id: string;
-	name: string;
+export interface UserSshKey {
 	fingerprint: string;
-};
-
-export type UserApiToken = {
 	id: string;
 	name: string;
+}
+
+export interface UserApiToken {
 	createdAt: number;
-};
-
-export type AdminUser = {
 	id: string;
 	name: string;
-	email: string;
-	image: string | null;
-	emailVerified: boolean;
-	role: string | null;
-	isAdmin: boolean;
-	disabled: boolean;
-	billingExempt: boolean;
-	twoFactorEnabled: boolean;
-	passkeyCount: number;
-	createdAt: Date;
-	updatedAt: Date;
-	sessionCount: number;
+}
+
+export interface AdminUser {
 	accountCount: number;
-	orgCount: number;
-	sshKeyCount: number;
 	apiTokenCount: number;
-};
+	billingExempt: boolean;
+	createdAt: Date;
+	disabled: boolean;
+	email: string;
+	emailVerified: boolean;
+	id: string;
+	image: string | null;
+	isAdmin: boolean;
+	name: string;
+	orgCount: number;
+	passkeyCount: number;
+	role: string | null;
+	sessionCount: number;
+	sshKeyCount: number;
+	twoFactorEnabled: boolean;
+	updatedAt: Date;
+}
 
 async function requireCurrentAdmin() {
 	const event = getRequestEvent();
@@ -112,9 +109,7 @@ async function assertCanDeleteUser(
 
 	if (hasAdminRole(target.role) || target.isAdmin) {
 		const adminRows = await db.select({ role: user.role, isAdmin: user.isAdmin }).from(user);
-		const adminCount = adminRows.filter(
-			(account) => hasAdminRole(account.role) || account.isAdmin
-		).length;
+		const adminCount = adminRows.filter((row) => hasAdminRole(row.role) || row.isAdmin).length;
 		if (adminCount <= 1) {
 			error(400, 'At least one admin is required.');
 		}
@@ -137,6 +132,7 @@ async function settleUserOrganizations(db: ReturnType<typeof initDrizzle>, targe
 		.where(eq(member.userId, targetUserId));
 
 	for (const membership of memberships) {
+		// biome-ignore lint/performance/noAwaitInLoops: each organization settlement syncs Autumn and tears down backend resources, so run them one at a time
 		const otherMembers = await db
 			.select({ id: member.id, userId: member.userId, createdAt: member.createdAt })
 			.from(member)
@@ -215,19 +211,19 @@ export const listAdminUsers = query(async (): Promise<AdminUser[]> => {
 	const apiTokenMap = makeCountMap(apiTokensData);
 	const passkeyMap = makeCountMap(passkeysData);
 
-	return users.map(({ legacyIsAdmin, role, ...account }) => ({
-		...account,
+	return users.map(({ legacyIsAdmin, role, ...userRow }) => ({
+		...userRow,
 		role,
-		disabled: account.disabled ?? false,
-		billingExempt: account.billingExempt ?? false,
-		twoFactorEnabled: account.twoFactorEnabled ?? false,
-		passkeyCount: passkeyMap.get(account.id) ?? 0,
+		disabled: userRow.disabled ?? false,
+		billingExempt: userRow.billingExempt ?? false,
+		twoFactorEnabled: userRow.twoFactorEnabled ?? false,
+		passkeyCount: passkeyMap.get(userRow.id) ?? 0,
 		isAdmin: hasAdminRole(role) || legacyIsAdmin,
-		sessionCount: sessionMap.get(account.id) ?? 0,
-		accountCount: accountMap.get(account.id) ?? 0,
-		orgCount: memberMap.get(account.id) ?? 0,
-		sshKeyCount: sshKeyMap.get(account.id) ?? 0,
-		apiTokenCount: apiTokenMap.get(account.id) ?? 0
+		sessionCount: sessionMap.get(userRow.id) ?? 0,
+		accountCount: accountMap.get(userRow.id) ?? 0,
+		orgCount: memberMap.get(userRow.id) ?? 0,
+		sshKeyCount: sshKeyMap.get(userRow.id) ?? 0,
+		apiTokenCount: apiTokenMap.get(userRow.id) ?? 0
 	}));
 });
 

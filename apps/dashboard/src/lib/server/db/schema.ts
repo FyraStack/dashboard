@@ -17,8 +17,6 @@ import {
 import { ulid } from '#lib/server/id.js';
 import { organization } from './auth.schema';
 
-export * from './auth.schema';
-
 const ulidPk = () => text('id').primaryKey().$defaultFn(ulid);
 const ulidFk = (name: string) => text(name);
 

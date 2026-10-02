@@ -9,10 +9,10 @@
 	import Copy from '~icons/nucleo/copy';
 	import ShieldCheck from '~icons/nucleo/shield-check';
 
-	type Props = {
-		open?: boolean;
+	interface Props {
 		onComplete?: () => void;
-	};
+		open?: boolean;
+	}
 
 	let { open = $bindable(false), onComplete }: Props = $props();
 
@@ -38,7 +38,7 @@
 		}
 
 		let cancelled = false;
-		void QRCode.toDataURL(uri, {
+		QRCode.toDataURL(uri, {
 			width: 180,
 			margin: 0,
 			color: {
@@ -46,11 +46,17 @@
 				light: '#27272a'
 			},
 			errorCorrectionLevel: 'M'
-		}).then((src) => {
-			if (!cancelled) {
-				qrCodeSrc = src;
-			}
-		});
+		})
+			.then((src) => {
+				if (!cancelled) {
+					qrCodeSrc = src;
+				}
+			})
+			.catch(() => {
+				if (!cancelled) {
+					qrCodeSrc = '';
+				}
+			});
 
 		return () => {
 			cancelled = true;

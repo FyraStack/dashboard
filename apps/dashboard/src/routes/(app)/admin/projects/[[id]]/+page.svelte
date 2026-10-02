@@ -64,9 +64,11 @@
 	const ownerOptions = $derived(
 		[
 			...new Map(
-				admin.adminProjects
-					.filter((project) => project.ownerEmail)
-					.map((project) => [project.ownerEmail!, project.ownerName ?? project.ownerEmail!])
+				admin.adminProjects.flatMap((project) =>
+					project.ownerEmail
+						? [[project.ownerEmail, project.ownerName ?? project.ownerEmail] as const]
+						: []
+				)
 			).entries()
 		]
 			.map(([email, name]) => ({ email, name }))
@@ -106,9 +108,9 @@
 				return true;
 			}
 
-			return [project.name, project.slug, project.ownerName, project.ownerEmail, project.id]
-				.filter(Boolean)
-				.some((value) => value!.toLowerCase().includes(term));
+			return [project.name, project.slug, project.ownerName, project.ownerEmail, project.id].some(
+				(value) => value?.toLowerCase().includes(term)
+			);
 		})
 	);
 
@@ -130,11 +132,11 @@
 	);
 
 	function openProjectSheet(project: AdminProject) {
-		void goto(resolve(`admin/projects/${project.id}`), { reset: false });
+		goto(resolve(`admin/projects/${project.id}`), { reset: false });
 	}
 
 	function closeProjectSheet() {
-		void goto(projectsBase, { reset: false });
+		goto(projectsBase, { reset: false });
 	}
 
 	function projectVms(projectId: string) {
@@ -251,7 +253,7 @@
 			await invalidate('app:admin-projects');
 			createProjectOpen = false;
 			toast.success('Project created');
-			void goto(resolve(`admin/projects/${created.id}`), { reset: false });
+			goto(resolve(`admin/projects/${created.id}`), { reset: false });
 		} catch (err) {
 			createProjectError = getErrorMessage(err, 'Failed to create project');
 		} finally {
@@ -291,7 +293,7 @@
 		createVmError = '';
 		createVmOpen = true;
 		if (project.ownerId) {
-			void loadOwnerSshKeys(project.ownerId);
+			loadOwnerSshKeys(project.ownerId);
 		}
 	}
 
@@ -491,9 +493,7 @@
 		if (!ok) {
 			return;
 		}
-		try {
-			await admin.adminVmDelete(vm.id);
-		} catch {}
+		await admin.adminVmDelete(vm.id).catch(() => undefined);
 	}
 </script>
 
@@ -985,8 +985,7 @@
 				<p class="text-sm">No projects found</p>
 			</div>
 		{:else}
-			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-			<div class="overflow-x-auto rounded-md border border-border/60" tabindex="0">
+			<div class="overflow-x-auto rounded-md border border-border/60">
 				<table class="w-full text-left text-xs">
 					<thead>
 						<tr
@@ -1101,7 +1100,7 @@
 			class="flex flex-col gap-4 pt-2"
 			onsubmit={(event) => {
 				event.preventDefault();
-				void submitCreateProject();
+				submitCreateProject();
 			}}
 		>
 			<div class="flex flex-col gap-1.5">
@@ -1194,7 +1193,7 @@
 			class="flex flex-col gap-4 pt-2"
 			onsubmit={(event) => {
 				event.preventDefault();
-				void submitCreateVm();
+				submitCreateVm();
 			}}
 		>
 			<div class="flex flex-col gap-1.5">
@@ -1400,7 +1399,7 @@
 			class="flex flex-col gap-4 pt-4"
 			onsubmit={(event) => {
 				event.preventDefault();
-				void confirmDeleteProject();
+				confirmDeleteProject();
 			}}
 		>
 			<div

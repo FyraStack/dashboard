@@ -13,19 +13,19 @@
 
 	type Severity = 'info' | 'warn' | 'error' | 'debug';
 
-	type LogEntry = {
+	interface LogEntry {
 		id: number;
-		timestamp: string;
+		message: string;
 		severity: Severity;
 		source: string;
-		message: string;
-	};
+		timestamp: string;
+	}
 
-	type ServerLog = {
+	interface ServerLog {
 		id: string;
 		name: string;
 		status: 'running' | 'stopped';
-	};
+	}
 
 	const serverList: ServerLog[] = [
 		{ id: 'vps-747762', name: 'vps-747762', status: 'running' },
@@ -102,7 +102,7 @@
 		const msgs = sampleMessages[severity];
 		const message = msgs[Math.floor(Math.random() * msgs.length)];
 		const source = sources[Math.floor(Math.random() * sources.length)];
-		logId++;
+		logId += 1;
 		return { id: logId, timestamp: makeTimestamp(), severity, source, message };
 	}
 
@@ -182,6 +182,13 @@
 		serverLogs[selectedServerId] = [];
 	}
 
+	const severityMessageColors: Record<Severity, string> = {
+		error: 'text-red-400',
+		warn: 'text-amber-400/80',
+		info: 'text-muted-foreground',
+		debug: 'text-muted-foreground'
+	};
+
 	const severityColors: Record<Severity, string> = {
 		info: 'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-400',
 		warn: 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400',
@@ -211,6 +218,7 @@
 		<div class="flex-1 overflow-y-auto">
 			{#each serverList as server (server.id)}
 				<button
+					type="button"
 					class="flex w-full items-center justify-between border-b border-border px-4 py-2.5 text-left transition-colors duration-100 {selectedServerId ===
 					server.id
 						? 'bg-muted/60'
@@ -254,6 +262,7 @@
 				<div class="flex items-center border border-border">
 					{#each filterOptions as opt (opt.value)}
 						<button
+							type="button"
 							class="px-2 py-1 text-[11px] font-medium transition-colors duration-100 {filter ===
 							opt.value
 								? 'bg-muted text-foreground'
@@ -267,7 +276,11 @@
 				{#if sourceFilter}
 					<Badge variant="secondary" class="gap-1 text-[10px]">
 						{sourceFilter}
-						<button aria-label="Clear source filter" onclick={() => (sourceFilter = null)}>
+						<button
+							type="button"
+							aria-label="Clear source filter"
+							onclick={() => (sourceFilter = null)}
+						>
 							<X class="h-2.5 w-2.5" />
 						</button>
 					</Badge>
@@ -314,7 +327,10 @@
 						class="flex items-start gap-3 border-b border-border/20 px-5 py-1.5 transition-colors duration-100 hover:bg-background/50"
 					>
 						<span class="shrink-0 pt-0.5 text-muted-foreground">{entry.timestamp}</span>
-						<button onclick={() => (filter = filter === entry.severity ? 'all' : entry.severity)}>
+						<button
+							type="button"
+							onclick={() => (filter = filter === entry.severity ? 'all' : entry.severity)}
+						>
 							<Badge
 								variant="outline"
 								class="shrink-0 cursor-pointer text-[9px] {severityColors[
@@ -325,6 +341,7 @@
 							</Badge>
 						</button>
 						<button
+							type="button"
 							class="w-16 shrink-0 text-left text-muted-foreground hover:text-muted-foreground {sourceFilter ===
 							entry.source
 								? 'text-foreground underline'
@@ -333,13 +350,7 @@
 						>
 							{entry.source}
 						</button>
-						<span
-							class={entry.severity === 'error'
-								? 'text-red-400'
-								: entry.severity === 'warn'
-									? 'text-amber-400/80'
-									: 'text-muted-foreground'}
-						>
+						<span class={severityMessageColors[entry.severity]}>
 							{entry.message}
 						</span>
 					</div>
@@ -367,6 +378,7 @@
 			</span>
 			{#if !streaming}
 				<button
+					type="button"
 					class="flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
 					onclick={() => (streaming = true)}
 				>

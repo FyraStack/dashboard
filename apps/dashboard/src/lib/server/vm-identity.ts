@@ -16,6 +16,7 @@ export async function allocateProxmoxVmid(db: Database, backend: VmBackend): Pro
 	const usedIds = (await backend.listUsedProxmoxIds?.()) ?? new Set<number>();
 	let candidate = await nextSequenceValue(db);
 	while (usedIds.has(candidate)) {
+		// biome-ignore lint/performance/noAwaitInLoops: each sequence value is only drawn after the previous candidate was found taken
 		candidate = await nextSequenceValue(db);
 	}
 	return candidate;

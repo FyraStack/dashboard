@@ -1,19 +1,22 @@
 import { hoursBetween } from './features';
 
-export type CapPeriod = { start: number; end: number };
+export interface CapPeriod {
+	end: number;
+	start: number;
+}
 
-export type CapMeterState = {
-	capPeriodStart: number | null;
+export interface CapMeterState {
 	capPeriodEnd: number | null;
+	capPeriodStart: number | null;
 	hoursThisPeriod: number | string;
-};
+}
 
-export type CapSegment = {
-	periodStart: number;
-	periodEnd: number;
+export interface CapSegment {
 	billableHours: number;
 	capped: boolean;
-};
+	periodEnd: number;
+	periodStart: number;
+}
 
 export function capHoursFor(
 	rate: number | string | null | undefined,
@@ -113,7 +116,7 @@ export function sliceCapUsage(input: {
 
 	let cursor = input.from;
 	while (cursor < input.to) {
-		if (periodStart == null || periodEnd == null || cursor >= periodEnd) {
+		if (periodStart === null || periodEnd === null || cursor >= periodEnd) {
 			const period = input.periodAt(cursor);
 			periodStart = period.start;
 			periodEnd = Math.max(period.end, cursor + 1);

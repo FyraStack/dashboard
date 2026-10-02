@@ -8,12 +8,12 @@ import { ipAssignments, paymentPeriods, vms, volumes } from '#lib/server/db/sche
 import { releaseVmNetworking } from '#lib/server/ipam.js';
 import { getRequestEvent } from '$app/server';
 
-type DeletableVm = {
-	id: string;
+interface DeletableVm {
 	backend: 'proxmox';
-	proxmoxId: number | null;
+	id: string;
 	ownerProjectId: string | null;
-};
+	proxmoxId: number | null;
+}
 
 export async function queueVmDeletion(db: Database, row: DeletableVm): Promise<void> {
 	await meterResourceThrough('vm', row.id).catch((err) => {

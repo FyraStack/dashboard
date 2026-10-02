@@ -33,10 +33,7 @@ const moduleLoadedAt = performance.now();
 let isFirstRequestOnIsolate = true;
 let authPrewarmScheduled = false;
 
-function scheduleAuthPrewarm(
-	event: Parameters<Handle>[0]['event'],
-	requestAttrs: Record<string, string | number | boolean | undefined>
-) {
+function scheduleAuthPrewarm(requestAttrs: Record<string, string | number | boolean | undefined>) {
 	if (authPrewarmScheduled) {
 		return;
 	}
@@ -162,7 +159,7 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 			requestAttrs
 		);
 	} finally {
-		scheduleAuthPrewarm(event, requestAttrs);
+		scheduleAuthPrewarm(requestAttrs);
 		timingLog('request.closeRequestDb.schedule', requestAttrs);
 		closeRequestDb(event);
 		timingLog('request.handle.exit', requestAttrs);
@@ -176,10 +173,13 @@ const handleSentryInit: Handle = (input) => {
 		return input.resolve(input.event);
 	}
 
-	const requestHandle = (sentryRequestHandle ??= initCloudflareSentryHandle({
-		dsn: PUBLIC_SENTRY_DSN,
-		environment: dev ? 'development' : 'production'
-	}));
+	const requestHandle =
+		sentryRequestHandle ??
+		initCloudflareSentryHandle({
+			dsn: PUBLIC_SENTRY_DSN,
+			environment: dev ? 'development' : 'production'
+		});
+	sentryRequestHandle = requestHandle;
 	return requestHandle(input);
 };
 

@@ -1,19 +1,12 @@
-export type ServerInfo = {
-	id: string;
-	name: string;
-	liveLoaded: boolean;
-	vcpu: number;
-	ram: string;
+export interface ServerInfo {
+	agentConnected: boolean;
+	backups: boolean;
+	created: string;
 	disk: string;
+	id: string;
 	ip: string;
 	ipv6: string;
-	status: 'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'error' | 'unknown';
-	agentConnected: boolean;
-	region: string;
-	created: string;
-	uptime: string;
-	plan: string;
-	backups: boolean;
+	liveLoaded: boolean;
 	metrics: {
 		cpu?: number | null;
 		memory?: number | null;
@@ -23,7 +16,14 @@ export type ServerInfo = {
 		diskRead?: number | null;
 		diskWrite?: number | null;
 	} | null;
-};
+	name: string;
+	plan: string;
+	ram: string;
+	region: string;
+	status: 'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'error' | 'unknown';
+	uptime: string;
+	vcpu: number;
+}
 
 export const serversState = $state({
 	projectId: null as string | null,

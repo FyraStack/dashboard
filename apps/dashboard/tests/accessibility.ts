@@ -1,9 +1,9 @@
 import AxeBuilder from '@axe-core/playwright';
 import { test as base } from '@playwright/test';
 
-type AxeFixture = {
+interface AxeFixture {
 	makeAxeBuilder: () => AxeBuilder;
-};
+}
 
 export const localURL = 'http://127.0.0.1:4173';
 
@@ -42,5 +42,3 @@ export const test = base.extend<AxeFixture>({
 		await use(makeAxeBuilder);
 	}
 });
-
-export { expect } from '@playwright/test';

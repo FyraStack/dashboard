@@ -7,7 +7,7 @@
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	let error = $state('');
+	let errorMessage = $state('');
 	let accepting = $state(false);
 	let declining = $state(false);
 	let switching = $state(false);
@@ -16,13 +16,13 @@
 		if (accepting || declining) {
 			return;
 		}
-		error = '';
+		errorMessage = '';
 		accepting = true;
 		const { data: res, error: err } = await authClient.organization.acceptInvitation({
 			invitationId: data.invitationId
 		});
 		if (err || !res) {
-			error = err?.message ?? 'Unable to accept invitation.';
+			errorMessage = err?.message ?? 'Unable to accept invitation.';
 			accepting = false;
 			return;
 		}
@@ -33,13 +33,13 @@
 		if (accepting || declining) {
 			return;
 		}
-		error = '';
+		errorMessage = '';
 		declining = true;
 		const { error: err } = await authClient.organization.rejectInvitation({
 			invitationId: data.invitationId
 		});
 		if (err) {
-			error = err.message ?? 'Unable to decline invitation.';
+			errorMessage = err.message ?? 'Unable to decline invitation.';
 			declining = false;
 			return;
 		}
@@ -101,12 +101,12 @@
 					.
 				</p>
 
-				{#if error}
+				{#if errorMessage}
 					<div
 						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 					>
 						<AlertCircle class="size-4 shrink-0" />
-						{error}
+						{errorMessage}
 					</div>
 				{/if}
 

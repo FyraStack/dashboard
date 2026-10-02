@@ -24,7 +24,7 @@ const purchaseCreditsParams = type({ projectId: 'string', credits: 'number.integ
 const MAX_CREDITS_PER_PURCHASE = 1_000_000;
 
 function safeReturnPath(value: string | undefined, fallback: string) {
-	if (!(value && value.startsWith('/')) || value.startsWith('//')) {
+	if (!value?.startsWith('/') || value.startsWith('//')) {
 		return fallback;
 	}
 

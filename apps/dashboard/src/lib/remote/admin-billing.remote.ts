@@ -4,31 +4,26 @@ import { and, desc, eq, gt, lte, sql } from 'drizzle-orm';
 import { requireAdmin } from '#lib/server/auth-context.js';
 import { capHoursFor } from '#lib/server/billing/caps.js';
 import { syncUsageEvent } from '#lib/server/billing/metering.js';
+import { organization } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
-import {
-	billingMeters,
-	billingUsageEvents,
-	organization,
-	vms,
-	vmTypes
-} from '#lib/server/db/schema.js';
+import { billingMeters, billingUsageEvents, vms, vmTypes } from '#lib/server/db/schema.js';
 import { command, getRequestEvent, query } from '$app/server';
 
-export type VmBillingUsage = {
-	vmId: string;
-	vmName: string;
+export interface VmBillingUsage {
+	billedHours: number;
+	estimatedAmount: number | null;
+	eventCount: number;
+	featureId: string | null;
+	periodEnd: number;
+	periodStart: number;
 	projectId: string | null;
 	projectName: string | null;
-	featureId: string | null;
-	periodStart: number;
-	periodEnd: number;
-	billedHours: number;
+	ratePerHour: string | null;
 	reversedHours: number;
 	reversibleHours: number;
-	eventCount: number;
-	ratePerHour: string | null;
-	estimatedAmount: number | null;
-};
+	vmId: string;
+	vmName: string;
+}
 
 async function requireCurrentAdmin() {
 	const event = getRequestEvent();
@@ -105,7 +100,7 @@ async function computeVmUsage(
 	reversedHours = roundHours(reversedHours);
 	const reversibleHours = roundHours(Math.max(0, billedHours - reversedHours));
 	const featureId = eventFeatureId ?? vm.vmTypeFeatureId;
-	const rate = vm.ratePerHour == null ? null : Number(vm.ratePerHour);
+	const rate = vm.ratePerHour === null ? null : Number(vm.ratePerHour);
 
 	return {
 		vmId: vm.id,
@@ -121,7 +116,7 @@ async function computeVmUsage(
 		eventCount,
 		ratePerHour: vm.ratePerHour,
 		estimatedAmount:
-			rate == null || Number.isNaN(rate) ? null : Number((reversibleHours * rate).toFixed(2))
+			rate === null || Number.isNaN(rate) ? null : Number((reversibleHours * rate).toFixed(2))
 	};
 }
 
@@ -221,8 +216,9 @@ export const reverseVmBillingUsage = command(reverseParams, async (params) => {
 	}
 
 	if (
-		meter?.capPeriodStart != null &&
-		meter.capPeriodEnd != null &&
+		meter !== undefined &&
+		meter.capPeriodStart !== null &&
+		meter.capPeriodEnd !== null &&
 		currentPeriodReversibleHours > 0
 	) {
 		const meterUnits = Number(meter.units);

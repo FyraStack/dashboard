@@ -33,12 +33,11 @@
 	let discountCode = $state('');
 
 	const title = $derived(billingReady ? 'Manage billing' : 'Set up billing');
+	const blockedResource = $derived(mode === 'server-create' ? 'servers' : 'resources');
 	const description = $derived(
 		billingReady
 			? 'Manage payment methods, invoices, and project billing settings.'
-			: mode === 'server-create'
-				? 'This project needs a payment method before servers can be created.'
-				: 'This project needs a payment method before resources can be created.'
+			: `This project needs a payment method before ${blockedResource} can be created.`
 	);
 	const primaryLabel = $derived(billingReady ? 'Open billing portal' : 'Add payment method');
 

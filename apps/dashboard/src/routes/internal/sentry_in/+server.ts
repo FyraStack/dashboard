@@ -1,13 +1,23 @@
 import { error, type RequestHandler } from '@sveltejs/kit';
 import { PUBLIC_SENTRY_DSN } from '$app/env/public';
 
+const LEADING_SLASH = /^\//;
+
 function allowedProject(): { host: string; projectId: string } | null {
 	const dsn = PUBLIC_SENTRY_DSN;
 	if (!dsn) {
 		return null;
 	}
 	const url = new URL(dsn);
-	return { host: url.hostname, projectId: url.pathname.replace(/^\//, '') };
+	return { host: url.hostname, projectId: url.pathname.replace(LEADING_SLASH, '') };
+}
+
+function parseEnvelopeDsn(headerLine: string): URL | null {
+	try {
+		return new URL(JSON.parse(headerLine).dsn);
+	} catch {
+		return null;
+	}
 }
 
 export const POST: RequestHandler = async ({ request, fetch }) => {
@@ -17,16 +27,14 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
 	}
 
 	const envelope = await request.arrayBuffer();
-	const headerLine = new TextDecoder().decode(envelope).split('\n')[0];
+	const [headerLine] = new TextDecoder().decode(envelope).split('\n');
 
-	let dsn: URL;
-	try {
-		dsn = new URL(JSON.parse(headerLine).dsn);
-	} catch {
+	const dsn = parseEnvelopeDsn(headerLine);
+	if (!dsn) {
 		throw error(400, 'Invalid Sentry envelope');
 	}
 
-	const projectId = dsn.pathname.replace(/^\//, '');
+	const projectId = dsn.pathname.replace(LEADING_SLASH, '');
 	if (dsn.hostname !== allowed.host || projectId !== allowed.projectId) {
 		throw error(403, 'Envelope does not match the configured Sentry project');
 	}

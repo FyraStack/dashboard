@@ -14,8 +14,8 @@ import {
 	ensureProjectCustomer,
 	updateProjectCustomer
 } from '#lib/server/billing/autumn.js';
+import { member, organization } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
-import { member, organization } from '#lib/server/db/schema.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
 import { command, getRequestEvent, query } from '$app/server';
@@ -28,22 +28,27 @@ type ListResult = {
 	role: ProjectRole;
 }[];
 
-type ProjectListCacheEntry = {
-	projects?: ListResult;
+interface ProjectListCacheEntry {
 	expiresAt: number;
+	projects?: ListResult;
 	promise?: Promise<ListResult>;
-};
+}
 
-type MemberInfo = { userId: string; name: string; email: string; permissions: ProjectRole };
-type GetResult = {
-	id: string;
-	projectName: string;
-	ownerUserId: string;
-	ownerName: string;
-	ownerEmail: string;
+interface MemberInfo {
+	email: string;
+	name: string;
+	permissions: ProjectRole;
+	userId: string;
+}
+interface GetResult {
 	creationDate: number;
+	id: string;
 	members: MemberInfo[];
-};
+	ownerEmail: string;
+	ownerName: string;
+	ownerUserId: string;
+	projectName: string;
+}
 
 const PROJECT_LIST_CACHE_TTL_MS = 5000;
 const projectListCache = new Map<string, ProjectListCacheEntry>();
@@ -87,19 +92,22 @@ async function loadProjectsForUser(userId: string): Promise<ListResult> {
 		with: { organization: { with: { members: true } } }
 	});
 
-	return memberships
-		.filter((membership) => membership.organization && membership.organization.deletedAt == null)
-		.map((membership) => {
-			const org = membership.organization!;
-			const owner = org.members.find((item: { role: string }) => item.role === 'owner');
-			return {
+	return memberships.flatMap((membership) => {
+		const org = membership.organization;
+		if (!org || org.deletedAt !== null) {
+			return [];
+		}
+		const owner = org.members.find((item: { role: string }) => item.role === 'owner');
+		return [
+			{
 				id: org.id,
 				projectName: org.name,
 				ownerUserId: owner?.userId ?? userId,
 				creationDate: org.createdAt.getTime(),
 				role: toProjectRole(membership.role)
-			};
-		}) satisfies ListResult;
+			}
+		];
+	}) satisfies ListResult;
 }
 
 async function getCachedProjectsForUser(userId: string): Promise<ListResult> {
@@ -136,7 +144,7 @@ async function getCachedProjectsForUser(userId: string): Promise<ListResult> {
 	return cloneProjects(await promise);
 }
 
-export const listProjects = query(async () => {
+export const listProjects = query(() => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) {
 		error(401, 'Authentication required');

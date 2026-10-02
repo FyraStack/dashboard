@@ -18,7 +18,6 @@ export type {
 	VmResizeParams,
 	VmStatus
 } from './types';
-export { VmNotFoundError, VmResizeError } from './types';
 
 let cached: { key: string; backend: VmBackend } | null = null;
 
@@ -94,7 +93,7 @@ export function getBackend(name: string): VmBackend {
 	const cacheHit = !dev && cached?.key === name;
 	timingLog('backend.get.start', { 'backend.name': name, 'backend.cache_hit': cacheHit });
 	if (!dev && cached?.key === name) {
-		const backend = cached.backend;
+		const { backend } = cached;
 		timingLog('backend.get.end', {
 			'backend.name': name,
 			'backend.cache_hit': true,

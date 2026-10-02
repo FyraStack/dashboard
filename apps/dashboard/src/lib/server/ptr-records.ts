@@ -15,20 +15,21 @@ type Db = ReturnType<typeof initDrizzle>;
 type Transaction = Parameters<Parameters<Db['transaction']>[0]>[0];
 type QueryableDb = Db | Transaction;
 
-export type PtrAllocation = {
-	id: string;
-	family: 'ipv4' | 'ipv6';
+export interface PtrAllocation {
 	address: string | null;
+	family: 'ipv4' | 'ipv6';
+	id: string;
 	prefix: string | null;
 	sourcePrefix: { bunnyDnsZone: string | null };
-};
+}
 
-export type IpamPtrDefaults = {
+export interface IpamPtrDefaults {
 	defaultPtrFormatIpv4: string;
 	defaultPtrFormatIpv6: string;
-};
+}
 
 const settingsRowId = 'default';
+const TRAILING_DOT = /\.$/;
 
 export async function getIpamPtrDefaults(db: QueryableDb): Promise<IpamPtrDefaults> {
 	const row = await db.query.ipamSettings.findFirst({
@@ -114,7 +115,7 @@ export async function setPtrRecord(
 		error(400, `${address} is not part of this allocation`);
 	}
 
-	const value = rawValue.trim().replace(/\.$/, '').toLowerCase();
+	const value = rawValue.trim().replace(TRAILING_DOT, '').toLowerCase();
 	if (!value) {
 		return clearPtrRecord(db, allocation, address);
 	}
@@ -137,7 +138,7 @@ export async function setPtrRecord(
 	}
 
 	let bunnyRecordId = existing?.bunnyRecordId ?? null;
-	if (bunnyRecordId != null) {
+	if (bunnyRecordId !== null) {
 		try {
 			await client.updatePtrRecord(zone.Id, bunnyRecordId, recordName, value);
 		} catch (err) {
@@ -149,7 +150,7 @@ export async function setPtrRecord(
 		}
 	}
 	let createdRecordId: number | null = null;
-	if (bunnyRecordId == null) {
+	if (bunnyRecordId === null) {
 		const created = await client.createPtrRecord(zone.Id, recordName, value);
 		bunnyRecordId = created.Id;
 		createdRecordId = created.Id;
@@ -167,7 +168,7 @@ export async function setPtrRecord(
 
 		return { address: row.address, value: row.value };
 	} catch (err) {
-		if (createdRecordId != null) {
+		if (createdRecordId !== null) {
 			await client.deleteRecord(zone.Id, createdRecordId).catch((cleanupErr) => {
 				console.warn(`Failed to roll back Bunny PTR record for ${address}`, cleanupErr);
 			});
@@ -184,7 +185,7 @@ export async function clearPtrRecord(db: QueryableDb, allocation: PtrAllocation,
 		return null;
 	}
 
-	if (existing.bunnyRecordId != null && isBunnyConfigured()) {
+	if (existing.bunnyRecordId !== null && isBunnyConfigured()) {
 		const zoneDomain = allocation.sourcePrefix.bunnyDnsZone;
 		if (zoneDomain) {
 			const client = new BunnyClient();
@@ -226,6 +227,7 @@ export async function applyDefaultPtrRecords(db: QueryableDb, allocations: PtrAl
 		}
 
 		try {
+			// biome-ignore lint/performance/noAwaitInLoops: db may be a transaction, which cannot run queries concurrently, and Bunny writes are paced one at a time
 			await setPtrRecord(db, allocation, allocation.address, value);
 		} catch (err) {
 			console.warn(`Failed to apply default PTR record for ${allocation.address}`, err);
@@ -254,7 +256,7 @@ export async function deletePtrRecords(db: QueryableDb, allocations: PtrAllocati
 		);
 		const client = new BunnyClient();
 		for (const row of rows) {
-			if (row.bunnyRecordId == null) {
+			if (row.bunnyRecordId === null) {
 				continue;
 			}
 			const zoneDomain = zonesByAllocation.get(row.ipamAllocationId);
@@ -263,6 +265,7 @@ export async function deletePtrRecords(db: QueryableDb, allocations: PtrAllocati
 			}
 
 			try {
+				// biome-ignore lint/performance/noAwaitInLoops: Bunny DNS deletes are sent one at a time to stay within its rate limits
 				const zone = await client.findDnsZone(zoneDomain);
 				if (zone) {
 					await client.deleteRecord(zone.Id, row.bunnyRecordId);

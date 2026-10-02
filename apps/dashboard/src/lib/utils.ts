@@ -63,7 +63,7 @@ export function getErrorMessage(err: unknown, fallback: string): string {
 			typeof (err as { body: unknown }).body === 'object' &&
 			(err as { body: unknown }).body !== null
 		) {
-			const body = (err as { body: Record<string, unknown> }).body;
+			const { body } = err as { body: Record<string, unknown> };
 			if ('message' in body) {
 				return String(body.message);
 			}
@@ -72,9 +72,7 @@ export function getErrorMessage(err: unknown, fallback: string): string {
 	return fallback;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type WithoutChild<T> = T extends { child?: any } ? Omit<T, 'child'> : T;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type WithoutChildren<T> = T extends { children?: any } ? Omit<T, 'children'> : T;
+export type WithoutChild<T> = T extends { child?: unknown } ? Omit<T, 'child'> : T;
+export type WithoutChildren<T> = T extends { children?: unknown } ? Omit<T, 'children'> : T;
 export type WithoutChildrenOrChild<T> = WithoutChildren<WithoutChild<T>>;
 export type WithElementRef<T, U extends HTMLElement = HTMLElement> = T & { ref?: U | null };

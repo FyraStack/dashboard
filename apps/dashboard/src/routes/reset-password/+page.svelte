@@ -14,7 +14,7 @@
 	let password = $state('');
 	let confirmPassword = $state('');
 	let showPassword = $state(false);
-	let error = $state('');
+	let errorMessage = $state('');
 	let loading = $state(false);
 
 	async function handleSubmit() {
@@ -23,11 +23,11 @@
 		}
 
 		if (password !== confirmPassword) {
-			error = 'Passwords do not match';
+			errorMessage = 'Passwords do not match';
 			return;
 		}
 
-		error = '';
+		errorMessage = '';
 		loading = true;
 
 		const { error: err } = await authClient.resetPassword({
@@ -36,7 +36,7 @@
 		});
 
 		if (err) {
-			error = err.message ?? 'Unable to reset password.';
+			errorMessage = err.message ?? 'Unable to reset password.';
 			loading = false;
 			return;
 		}
@@ -76,12 +76,12 @@
 					</a>
 				</p>
 			{:else}
-				{#if error}
+				{#if errorMessage}
 					<div
 						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 					>
 						<AlertCircle class="size-4 shrink-0" />
-						{error}
+						{errorMessage}
 					</div>
 				{/if}
 

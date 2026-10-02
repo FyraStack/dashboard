@@ -15,9 +15,16 @@ const pendingTwoFactorCookieNames = ['__Secure-better-auth.two_factor', 'better-
 
 export type TotpResetChoice = 'reset' | 'disable';
 
-export type TotpResetCodeRecord = { hash: string; attempts: number };
+export interface TotpResetCodeRecord {
+	attempts: number;
+	hash: string;
+}
 
-export type TotpResetUser = { id: string; email: string; name: string };
+export interface TotpResetUser {
+	email: string;
+	id: string;
+	name: string;
+}
 
 type VerifyPassword = (hash: string, password: string) => Promise<boolean>;
 
@@ -139,6 +146,7 @@ export async function resolvePendingTwoFactorUser(
 			continue;
 		}
 
+		// biome-ignore lint/performance/noAwaitInLoops: cookie names are checked in priority order and the first valid one wins
 		const identifier = await verifySignedCookieValue(raw, secret);
 		if (!identifier) {
 			continue;

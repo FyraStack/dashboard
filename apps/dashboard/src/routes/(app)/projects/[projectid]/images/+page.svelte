@@ -7,30 +7,30 @@
 	import Disc from '~icons/nucleo/disc';
 	import Search from '~icons/nucleo/search';
 
-	type PageData = {
+	interface PageData {
 		images?: DbImage[];
 		proxmoxIsos?: ProxmoxIso[];
-	};
+	}
 
-	type DbImage = {
-		id: string;
-		name: string;
-		version: string;
+	interface DbImage {
+		accentColor: string;
 		description: string;
+		filePath: string;
+		id: string;
+		imageType: string;
+		isa: string;
 		isOfficial: boolean;
 		logoSvg: string | null | undefined;
-		accentColor: string;
-		imageType: string;
-		filePath: string;
-		isa: string;
-	};
+		name: string;
+		version: string;
+	}
 
-	type ProxmoxIso = {
-		volid: string;
+	interface ProxmoxIso {
 		filename: string;
-		size: number;
 		node: string;
-	};
+		size: number;
+		volid: string;
+	}
 
 	let { data }: { data: PageData } = $props();
 
@@ -128,19 +128,21 @@
 			{#if totalPages > 1 && !selectedImage}
 				<div class="flex items-center gap-1.5">
 					<button
+						type="button"
 						aria-label="Previous page"
 						class="flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
 						disabled={page === 0}
-						onclick={() => page--}
+						onclick={() => (page -= 1)}
 					>
 						<ChevronLeft class="h-3.5 w-3.5" />
 					</button>
 					<span class="text-[10px] text-muted-foreground">{page + 1}/{totalPages}</span>
 					<button
+						type="button"
 						aria-label="Next page"
 						class="flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
 						disabled={page >= totalPages - 1}
-						onclick={() => page++}
+						onclick={() => (page += 1)}
 					>
 						<ChevronRight class="h-3.5 w-3.5" />
 					</button>
@@ -152,6 +154,7 @@
 			<div class="grid grid-cols-3 gap-px bg-background">
 				{#each pagedImages as image (image.id)}
 					<button
+						type="button"
 						class="relative flex gap-4 overflow-hidden bg-background p-5 text-left transition-colors hover:bg-muted/40"
 						onclick={() => openDetail(image)}
 					>
@@ -209,6 +212,7 @@
 			<div class="divide-y divide-border/20">
 				{#each filteredCustomImages as image (image.id)}
 					<button
+						type="button"
 						class="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-muted/20"
 						onclick={() => openDetail(image)}
 					>

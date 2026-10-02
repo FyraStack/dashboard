@@ -89,9 +89,10 @@
 									>ipmi-{colo.selectedUnit.id}.stack.sh</span
 								>
 								<button
+									type="button"
 									class="text-muted-foreground hover:text-foreground"
 									aria-label="Copy IPMI address"
-									onclick={() => copyText(`ipmi-${colo.selectedUnit!.id}.stack.sh`, 'ipmi-host')}
+									onclick={() => copyText(`ipmi-${colo.selectedUnitId}.stack.sh`, 'ipmi-host')}
 								>
 									{#if copied === 'ipmi-host'}
 										<Check class="h-3 w-3 text-emerald-500" />
@@ -112,6 +113,7 @@
 									>{ipmiPassword}</code
 								>
 								<button
+									type="button"
 									class="text-muted-foreground hover:text-foreground"
 									aria-label="Copy IPMI password"
 									onclick={() => copyText(ipmiPassword, 'ipmi-pw')}

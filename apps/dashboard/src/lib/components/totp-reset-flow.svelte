@@ -25,12 +25,12 @@
 
 	export type TotpResetCompletedChoice = 'reset' | 'disable';
 
-	type Props = {
+	interface Props {
 		centered?: boolean;
-		userEmail?: string | null;
 		onComplete?: (choice: TotpResetCompletedChoice) => void;
 		onPasskeyChallenge?: () => void;
-	};
+		userEmail?: string | null;
+	}
 
 	let { centered = false, userEmail = null, onComplete, onPasskeyChallenge }: Props = $props();
 
@@ -74,6 +74,10 @@
 				return 'Scan the code with your authenticator app, then enter a code to finish.';
 			case 'disable':
 				return 'Confirm your password to turn off two-factor authentication.';
+			default: {
+				const unhandledStep: never = step;
+				return unhandledStep;
+			}
 		}
 	});
 
@@ -239,7 +243,7 @@
 	$effect(() => {
 		if (step === 'email' && !codeRequested && !codeSending) {
 			untrack(() => {
-				void sendCode();
+				sendCode();
 			});
 		}
 	});
@@ -252,7 +256,7 @@
 		}
 
 		let cancelled = false;
-		void QRCode.toDataURL(uri, {
+		QRCode.toDataURL(uri, {
 			width: 180,
 			margin: 0,
 			color: {
@@ -260,11 +264,17 @@
 				light: '#27272a'
 			},
 			errorCorrectionLevel: 'M'
-		}).then((src) => {
-			if (!cancelled) {
-				qrCodeSrc = src;
-			}
-		});
+		})
+			.then((src) => {
+				if (!cancelled) {
+					qrCodeSrc = src;
+				}
+			})
+			.catch(() => {
+				if (!cancelled) {
+					qrCodeSrc = '';
+				}
+			});
 
 		return () => {
 			cancelled = true;
@@ -283,7 +293,7 @@
 			class="flex flex-col gap-4 py-4"
 			onsubmit={(e) => {
 				e.preventDefault();
-				void verifyEmail();
+				verifyEmail();
 			}}
 		>
 			<div class="flex flex-col gap-1.5">
@@ -328,16 +338,19 @@
 	{:else if step === 'choice'}
 		<div class="flex flex-col gap-4 py-4">
 			<div class="flex flex-col gap-2" role="radiogroup" aria-label="Two-factor action">
-				<button
-					type="button"
-					role="radio"
-					aria-checked={choice === 'reset-totp'}
-					onclick={() => (choice = 'reset-totp')}
-					class="flex items-start gap-3 border px-3 py-3 text-left transition-colors {choice ===
+				<label
+					class="flex cursor-pointer items-start gap-3 border px-3 py-3 text-left transition-colors has-focus-visible:outline-2 has-focus-visible:outline-ring {choice ===
 					'reset-totp'
 						? 'border-primary bg-primary/10'
 						: 'border-border hover:border-ring'}"
 				>
+					<input
+						type="radio"
+						name="two-factor-action"
+						value="reset-totp"
+						bind:group={choice}
+						class="sr-only"
+					/>
 					<ShieldCheck class="mt-0.5 size-4 shrink-0 text-red-400" />
 					<span>
 						<span class="block text-sm font-medium text-foreground">
@@ -347,17 +360,20 @@
 							Remove the old authenticator and scan a new code with your app.
 						</span>
 					</span>
-				</button>
-				<button
-					type="button"
-					role="radio"
-					aria-checked={choice === 'disable-totp'}
-					onclick={() => (choice = 'disable-totp')}
-					class="flex items-start gap-3 border px-3 py-3 text-left transition-colors {choice ===
+				</label>
+				<label
+					class="flex cursor-pointer items-start gap-3 border px-3 py-3 text-left transition-colors has-focus-visible:outline-2 has-focus-visible:outline-ring {choice ===
 					'disable-totp'
 						? 'border-primary bg-primary/10'
 						: 'border-border hover:border-ring'}"
 				>
+					<input
+						type="radio"
+						name="two-factor-action"
+						value="disable-totp"
+						bind:group={choice}
+						class="sr-only"
+					/>
 					<Minus class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
 					<span>
 						<span class="block text-sm font-medium text-foreground">
@@ -367,7 +383,7 @@
 							Signing in will only require your email and password.
 						</span>
 					</span>
-				</button>
+				</label>
 			</div>
 
 			<div class={footerClass}>
@@ -379,7 +395,7 @@
 			class="flex flex-col gap-4 py-4"
 			onsubmit={(e) => {
 				e.preventDefault();
-				void confirmResetPassword();
+				confirmResetPassword();
 			}}
 		>
 			<div class="flex flex-col gap-1.5">
@@ -490,7 +506,7 @@
 			class="flex flex-col gap-4 py-4"
 			onsubmit={(e) => {
 				e.preventDefault();
-				void confirmDisable();
+				confirmDisable();
 			}}
 		>
 			<div class="rounded-xs border border-red-500/20 bg-red-500/5 p-3">

@@ -5,7 +5,11 @@
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
 	import type { FeatureFlags } from '#lib/feature-flags.js';
 	import { killVm, rebootVm, startVm, stopVm } from '#lib/remote/vms.remote.js';
-	import { getServerWithFallback, requestServerStatusRefresh } from '#lib/state/servers.svelte.js';
+	import {
+		getServerWithFallback,
+		requestServerStatusRefresh,
+		type ServerInfo
+	} from '#lib/state/servers.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -44,6 +48,47 @@
 		const tab = page.url.pathname.split('/').pop();
 		return visibleServerTabs.some((entry) => entry.id === tab) ? (tab as ServerTab) : 'overview';
 	});
+
+	const statusBadgeClasses = {
+		danger:
+			'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400',
+		running:
+			'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400',
+		provisioning:
+			'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-400',
+		restarting:
+			'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400',
+		unloaded: 'border-border bg-background/40 text-muted-foreground'
+	};
+
+	function statusBadgeClass(server: ServerInfo): string {
+		if (server.status === 'deleting') {
+			return statusBadgeClasses.danger;
+		}
+		if (!server.liveLoaded) {
+			return statusBadgeClasses.unloaded;
+		}
+		switch (server.status) {
+			case 'running':
+				return statusBadgeClasses.running;
+			case 'provisioning':
+				return statusBadgeClasses.provisioning;
+			case 'restarting':
+				return statusBadgeClasses.restarting;
+			default:
+				return statusBadgeClasses.danger;
+		}
+	}
+
+	function statusBadgeLabel(server: ServerInfo): string {
+		if (server.status === 'deleting') {
+			return 'deleting...';
+		}
+		if (!server.liveLoaded) {
+			return 'unknown';
+		}
+		return server.status === 'provisioning' ? 'provisioning...' : server.status;
+	}
 
 	function tabHref(tab: ServerTab): ServerTabHref {
 		const base = `projects/${page.params.projectid}/servers/${serverId}`;
@@ -98,27 +143,8 @@
 <div class="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
 	<div class="flex min-w-0 items-center gap-2">
 		<span class="truncate text-sm font-medium text-foreground">{selectedServer.name}</span>
-		<Badge
-			variant="outline"
-			class="text-[10px] {selectedServer.status === 'deleting'
-				? 'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
-				: selectedServer.liveLoaded
-					? selectedServer.status === 'running'
-						? 'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400'
-						: selectedServer.status === 'provisioning'
-							? 'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-400'
-							: selectedServer.status === 'restarting'
-								? 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400'
-								: 'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
-					: 'border-border bg-background/40 text-muted-foreground'}"
-		>
-			{selectedServer.status === 'deleting'
-				? 'deleting...'
-				: selectedServer.liveLoaded
-					? selectedServer.status === 'provisioning'
-						? 'provisioning...'
-						: selectedServer.status
-					: 'unknown'}
+		<Badge variant="outline" class="text-[10px] {statusBadgeClass(selectedServer)}">
+			{statusBadgeLabel(selectedServer)}
 		</Badge>
 	</div>
 	<div class="flex shrink-0 items-center gap-1.5">

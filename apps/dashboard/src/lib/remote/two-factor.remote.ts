@@ -26,7 +26,7 @@ const disableTwoFactorParams = type({ password: 'string', method: 'string', code
 
 export const disableTwoFactorWithVerification = command(disableTwoFactorParams, async (params) => {
 	const event = getRequestEvent();
-	const user = event.locals.user;
+	const { user } = event.locals;
 	if (!user) {
 		error(401, 'Authentication required');
 	}

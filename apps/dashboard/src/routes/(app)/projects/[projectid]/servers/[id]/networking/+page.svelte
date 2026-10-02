@@ -16,11 +16,13 @@
 	import Pencil from '~icons/nucleo/pencil';
 	import type { PageProps } from './$types';
 
+	const PREFIX_LENGTH_SUFFIX = /::\/\d+$/;
+
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
 	let allocations = $state(untrack(() => data.networking.allocations));
 	$effect(() => {
-		allocations = data.networking.allocations;
+		({ allocations } = data.networking);
 	});
 
 	type Allocation = (typeof allocations)[number];
@@ -29,13 +31,13 @@
 	let editingKey = $state<string | null>(null);
 	let rdnsValue = $state('');
 	let savingKey = $state<string | null>(null);
-	type PtrEntry = {
+	interface PtrEntry {
 		key: number;
-		suffix: string;
-		value: string;
 		originalAddress: string | null;
 		originalValue: string | null;
-	};
+		suffix: string;
+		value: string;
+	}
 
 	let subnetDialogOpen = $state(false);
 	let subnetDialogAllocation = $state<Allocation | null>(null);
@@ -115,7 +117,7 @@
 	}
 
 	function prefixBase(prefix: string | null) {
-		return prefix?.replace(/::\/\d+$/, '') ?? '';
+		return prefix?.replace(PREFIX_LENGTH_SUFFIX, '') ?? '';
 	}
 
 	function entrySuffix(address: string, prefix: string | null) {
@@ -125,9 +127,15 @@
 			: address;
 	}
 
+	function takeEntryKey(): number {
+		const key = nextEntryKey;
+		nextEntryKey += 1;
+		return key;
+	}
+
 	function blankEntry(): PtrEntry {
 		return {
-			key: nextEntryKey++,
+			key: takeEntryKey(),
 			suffix: '',
 			value: '',
 			originalAddress: null,
@@ -138,7 +146,7 @@
 	function openSubnetDialog(allocation: Allocation) {
 		subnetDialogAllocation = allocation;
 		subnetEntries = allocation.ptrRecords.map((record) => ({
-			key: nextEntryKey++,
+			key: takeEntryKey(),
 			suffix: entrySuffix(record.address, allocation.prefix),
 			value: record.value,
 			originalAddress: record.address,
@@ -178,6 +186,7 @@
 		subnetSaving = true;
 		try {
 			for (const record of removed) {
+				// biome-ignore lint/performance/noAwaitInLoops: Bunny DNS PTR writes are applied one at a time so each result updates state in order
 				const result = await setVmPtrRecord({
 					vmId: data.serverId,
 					allocationId: allocation.id,
@@ -197,6 +206,7 @@
 					entry.originalAddress &&
 					entry.originalAddress.toLowerCase() !== entry.address.toLowerCase()
 				) {
+					// biome-ignore lint/performance/noAwaitInLoops: the old PTR must be cleared in Bunny DNS before the renamed address is written
 					const result = await setVmPtrRecord({
 						vmId: data.serverId,
 						allocationId: allocation.id,
@@ -291,6 +301,7 @@
 					<p class="mt-0.5 font-mono text-xs text-muted-foreground">{allocation.address}</p>
 				</div>
 				<button
+					type="button"
 					aria-label="Copy IPv4 address"
 					class="text-muted-foreground hover:text-foreground"
 					onclick={() => copyToClipboard(allocation.address ?? '', `ipv4-${allocation.id}`)}
@@ -315,6 +326,7 @@
 					<p class="mt-0.5 font-mono text-xs text-muted-foreground">{allocation.address}</p>
 				</div>
 				<button
+					type="button"
 					aria-label="Copy IPv6 address"
 					class="text-muted-foreground hover:text-foreground"
 					onclick={() => copyToClipboard(allocation.address ?? '', `ipv6-${allocation.id}`)}
@@ -354,6 +366,7 @@
 						</Button>
 					{/if}
 					<button
+						type="button"
 						aria-label="Copy IPv6 subnet"
 						class="text-muted-foreground hover:text-foreground"
 						onclick={() => copyToClipboard(allocation.prefix ?? '', `prefix-${allocation.id}`)}
@@ -384,6 +397,7 @@
 					<p class="mt-0.5 font-mono text-xs text-muted-foreground">{selectedServer.ip}</p>
 				</div>
 				<button
+					type="button"
 					aria-label="Copy IPv4 address"
 					class="text-muted-foreground hover:text-foreground"
 					onclick={() => copyToClipboard(selectedServer.ip, 'net-ipv4')}
@@ -403,6 +417,7 @@
 					<p class="mt-0.5 font-mono text-xs text-muted-foreground">{selectedServer.ipv6}</p>
 				</div>
 				<button
+					type="button"
 					aria-label="Copy IPv6 address"
 					class="text-muted-foreground hover:text-foreground"
 					onclick={() => copyToClipboard(selectedServer.ipv6, 'net-ipv6')}
@@ -461,6 +476,7 @@
 				</div>
 			{/each}
 			<button
+				type="button"
 				class="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border py-2 text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
 				disabled={subnetSaving}
 				onclick={() => (subnetEntries = [...subnetEntries, blankEntry()])}

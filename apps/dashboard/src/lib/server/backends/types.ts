@@ -123,41 +123,41 @@ export class VmResizeError extends Error {
 }
 
 export interface VmBackend {
-	createVm(params: VmCreateParams): Promise<VmCreateResult>;
-	deleteVm(id: string, proxmoxId?: number): Promise<void>;
-	finishProvisioning(
+	createVm: (params: VmCreateParams) => Promise<VmCreateResult>;
+	deleteVm: (id: string, proxmoxId?: number) => Promise<void>;
+	finishProvisioning: (
 		id: string,
 		proxmoxId: number | undefined,
 		params: { diskGb: number },
 		options?: Pick<VmLookupOptions, 'proxmoxNode'>
-	): Promise<boolean>;
-	getTaskStatus(
+	) => Promise<boolean>;
+	getTaskStatus: (
 		node: string,
 		upid: string
-	): Promise<{ status: 'running' | 'stopped'; exitstatus?: string }>;
-	getVm(id: string, proxmoxId?: number, options?: VmLookupOptions): Promise<VmInfo>;
-	getVmMetricsHistory(
+	) => Promise<{ status: 'running' | 'stopped'; exitstatus?: string }>;
+	getVm: (id: string, proxmoxId?: number, options?: VmLookupOptions) => Promise<VmInfo>;
+	getVmMetricsHistory: (
 		id: string,
 		proxmoxId: number | undefined,
 		timeframe: VmMetricsTimeframe,
 		options?: Pick<VmLookupOptions, 'proxmoxNode'>
-	): Promise<VmMetricsHistorySample[]>;
-	getVmNetworkInterfaces?(
+	) => Promise<VmMetricsHistorySample[]>;
+	getVmNetworkInterfaces?: (
 		id: string,
 		proxmoxId?: number,
 		options?: Pick<VmLookupOptions, 'proxmoxNode'>
-	): Promise<VmInfo['networkInterfaces']>;
-	importImageFromUrl(params: BackendImageImportParams): Promise<string>;
-	killVm(id: string, proxmoxId?: number): Promise<void>;
-	listImageImportTargets(): Promise<BackendImageImportTarget[]>;
-	listImages(): Promise<BackendImage[]>;
-	listUsedProxmoxIds?(): Promise<Set<number>>;
-	listVms(): Promise<VmInfo[]>;
+	) => Promise<VmInfo['networkInterfaces']>;
+	importImageFromUrl: (params: BackendImageImportParams) => Promise<string>;
+	killVm: (id: string, proxmoxId?: number) => Promise<void>;
+	listImageImportTargets: () => Promise<BackendImageImportTarget[]>;
+	listImages: () => Promise<BackendImage[]>;
+	listUsedProxmoxIds?: () => Promise<Set<number>>;
+	listVms: () => Promise<VmInfo[]>;
 	readonly name: string;
-	ping(): Promise<void>;
-	rebootVm(id: string, proxmoxId?: number): Promise<void>;
-	resizeVm(id: string, params: VmResizeParams, proxmoxId?: number): Promise<void>;
-	startVm(id: string, proxmoxId?: number): Promise<void>;
-	stopVm(id: string, proxmoxId?: number): Promise<void>;
-	updateVmHostname(id: string, hostname: string, proxmoxId?: number): Promise<void>;
+	ping: () => Promise<void>;
+	rebootVm: (id: string, proxmoxId?: number) => Promise<void>;
+	resizeVm: (id: string, params: VmResizeParams, proxmoxId?: number) => Promise<void>;
+	startVm: (id: string, proxmoxId?: number) => Promise<void>;
+	stopVm: (id: string, proxmoxId?: number) => Promise<void>;
+	updateVmHostname: (id: string, hostname: string, proxmoxId?: number) => Promise<void>;
 }

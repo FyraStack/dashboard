@@ -1,12 +1,9 @@
 <script lang="ts">
 	import ComingSoon from '#lib/components/coming-soon.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 	import Camera from '~icons/nucleo/camera';
 	import Trash2 from '~icons/nucleo/trash';
 
-	let { data } = $props();
-	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
 	let snapshots = $state([
 		{ id: 'snap-001', name: 'pre-deploy-v2.4', size: '4.2 GB', date: '2026-04-03' },
 		{ id: 'snap-002', name: 'weekly-backup', size: '3.8 GB', date: '2026-03-29' }

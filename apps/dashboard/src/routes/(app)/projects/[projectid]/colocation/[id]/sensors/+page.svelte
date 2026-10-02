@@ -29,14 +29,34 @@
 	});
 
 	let powerPct = $derived.by(() => {
-		const selectedUnit = colo.selectedUnit;
+		const { selectedUnit } = colo;
 		if (!selectedUnit) {
 			return 0;
 		}
-		const draw = Number.parseInt(selectedUnit.powerDraw);
-		const budget = Number.parseInt(selectedUnit.powerBudget);
+		const draw = Number.parseInt(selectedUnit.powerDraw, 10);
+		const budget = Number.parseInt(selectedUnit.powerBudget, 10);
 		return budget > 0 ? (draw / budget) * 100 : 0;
 	});
+
+	function cpuTempClass(temp: number): string {
+		if (temp > 70) {
+			return 'text-red-400';
+		}
+		if (temp > 55) {
+			return 'text-amber-400';
+		}
+		return 'text-foreground';
+	}
+
+	function powerBarClass(pct: number): string {
+		if (pct > 80) {
+			return 'bg-red-500';
+		}
+		if (pct > 50) {
+			return 'bg-amber-500';
+		}
+		return 'bg-emerald-500';
+	}
 </script>
 
 {#if colo.selectedUnit}
@@ -49,16 +69,7 @@
 					>
 				</div>
 				{#each [
-					[
-						'CPU Package',
-						`${sensorData.cpuTemp}°C`,
-						sensorData.cpuTemp > 70
-							? 'text-red-400'
-							: sensorData.cpuTemp > 55
-								? 'text-amber-400'
-								: 'text-foreground',
-						85
-					],
+					['CPU Package', `${sensorData.cpuTemp}°C`, cpuTempClass(sensorData.cpuTemp), 85],
 					['Inlet Ambient', `${sensorData.inletTemp}°C`, 'text-foreground', 40],
 					[
 						'Exhaust',
@@ -85,7 +96,7 @@
 						<div class="h-1 flex-1 bg-muted">
 							<div
 								class="h-full bg-muted-foreground transition-all"
-								style:width={`${(Number.parseInt(String(value)) / Number(max)) * 100}%`}
+								style:width={`${(Number.parseInt(String(value), 10) / Number(max)) * 100}%`}
 							></div>
 						</div>
 						<span class="w-12 shrink-0 text-right text-xs font-medium {color}">{value}</span>
@@ -163,11 +174,7 @@
 				<div class="px-5 py-3">
 					<div class="h-1.5 w-full bg-muted">
 						<div
-							class="h-full transition-all duration-500 {powerPct > 80
-								? 'bg-red-500'
-								: powerPct > 50
-									? 'bg-amber-500'
-									: 'bg-emerald-500'}"
+							class="h-full transition-all duration-500 {powerBarClass(powerPct)}"
 							style:width={`${powerPct}%`}
 						></div>
 					</div>

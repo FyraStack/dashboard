@@ -11,7 +11,11 @@
 	import Pencil from '~icons/nucleo/pencil';
 	import { getColocationContext } from '../../colocation-context.svelte';
 
-	type ColoIp = { address: string; rdns: string; type: 'Primary' | 'Additional' };
+	interface ColoIp {
+		address: string;
+		rdns: string;
+		type: 'Primary' | 'Additional';
+	}
 
 	const colo = getColocationContext();
 	let copied = $state('');
@@ -134,6 +138,7 @@
 					{#if editingRdns !== idx}
 						<div class="flex items-center gap-1">
 							<button
+								type="button"
 								class="text-muted-foreground hover:text-foreground"
 								aria-label="Copy IP address"
 								onclick={() => copyText(ip.address, `colo-ip-${idx}`)}

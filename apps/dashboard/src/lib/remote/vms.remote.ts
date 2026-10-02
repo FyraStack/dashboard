@@ -11,9 +11,9 @@ import {
 	getBackend,
 	type VmBackend,
 	type VmInfo,
-	type VmMetricsTimeframe,
-	VmResizeError
+	type VmMetricsTimeframe
 } from '#lib/server/backends/index.js';
+import { VmResizeError } from '#lib/server/backends/types.js';
 import { runInBackground } from '#lib/server/background.js';
 import {
 	isBillingConfigured,
@@ -34,28 +34,28 @@ import {
 import { findPlanDowngrades } from '#lib/vm-plans.js';
 import { command, getRequestEvent, query } from '$app/server';
 
-type VmRow = {
-	id: string;
-	name: string;
-	proxmoxId: number | null;
-	proxmoxNode: string | null;
+interface VmRow extends Record<string, unknown> {
 	active: boolean;
-	ownerProjectId: string | null;
-	vmTypeId: string;
-	creationDate: string;
-	createdAt: number;
 	backend: 'proxmox';
-	status: 'provisioning' | 'ready' | 'error' | 'deleting';
+	createdAt: number;
+	creationDate: string;
+	id: string;
+	lastKnownAt: number | null;
 	lastKnownIpv4: string | null;
 	lastKnownIpv6: string | null;
 	lastKnownStatus: VmInfo['status'] | null;
 	lastKnownUptime: number;
-	lastKnownAt: number | null;
-	vmTypeName: string | null;
+	name: string;
+	ownerProjectId: string | null;
+	proxmoxId: number | null;
+	proxmoxNode: string | null;
+	status: 'provisioning' | 'ready' | 'error' | 'deleting';
 	vmTypeCores: number | null;
+	vmTypeId: string;
+	vmTypeName: string | null;
 	vmTypeRamCapacity: number | null;
 	vmTypeStorageAmount: number | null;
-};
+}
 
 function getKnownNetworkInterfaces(row: VmRow): VmInfo['networkInterfaces'] | undefined {
 	if (!(row.lastKnownIpv4 || row.lastKnownIpv6)) {
@@ -79,7 +79,7 @@ function baseKnownLive(row: VmRow): VmInfo {
 		cores: row.vmTypeCores ?? 0,
 		memory: (row.vmTypeRamCapacity ?? 0) * 1024 * 1024,
 		disk: (row.vmTypeStorageAmount ?? 0) * 1024 * 1024 * 1024,
-		uptime: row.lastKnownUptime ?? 0,
+		uptime: row.lastKnownUptime,
 		networkInterfaces: getKnownNetworkInterfaces(row),
 		metrics: undefined
 	};
@@ -231,7 +231,7 @@ function persistLiveState(db: Database, entries: { id: string; live: VmInfo }[])
 }
 
 function refreshVmNetworkInterfaces(db: Database, row: VmRow, backend: VmBackend): void {
-	if (!backend.getVmNetworkInterfaces || row.proxmoxId == null) {
+	if (!backend.getVmNetworkInterfaces || row.proxmoxId === null) {
 		return;
 	}
 
@@ -354,7 +354,7 @@ export const getVm = query(getParams, async (params) => {
 		where ${vms.id} = ${params.vmId}
 		limit 1
 	`);
-	const row = (result.rows as VmRow[])[0];
+	const [row] = result.rows as VmRow[];
 	timingLog('remote.vms.getVm.db.end', {
 		'vm.id': params.vmId,
 		duration_ms: Math.round((performance.now() - started) * 100) / 100
@@ -601,14 +601,14 @@ export const createVm = command(createParams, async (params) => {
 		await requireProjectBillingActive(params.projectId);
 	}
 
-	const keys = params.sshKeyIds?.length
-		? await db.query.sshKeys.findMany({
-				where: eq(sshKeys.userId, event.locals.user.id)
-			})
-		: [];
-	const publicKeys = params.sshKeyIds?.length
-		? keys.filter((key) => params.sshKeyIds!.includes(key.id)).map((key) => key.publicKey)
-		: [];
+	const sshKeyIds = params.sshKeyIds ?? [];
+	const keys =
+		sshKeyIds.length > 0
+			? await db.query.sshKeys.findMany({
+					where: eq(sshKeys.userId, event.locals.user.id)
+				})
+			: [];
+	const publicKeys = keys.filter((key) => sshKeyIds.includes(key.id)).map((key) => key.publicKey);
 
 	const created = await provisionVm(db, {
 		projectId: params.projectId,

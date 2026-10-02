@@ -61,6 +61,7 @@ export function createVpcFetch(services: Array<Fetcher | undefined>, fallback: V
 					const send = service.fetch.bind(service) as unknown as VpcFetch;
 
 					try {
+						// biome-ignore lint/performance/noAwaitInLoops: routers are tried in failover order and only on failure of the previous one
 						return await send(url, normalizedInit);
 					} catch (error) {
 						lastError = error;

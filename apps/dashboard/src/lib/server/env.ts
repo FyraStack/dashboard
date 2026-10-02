@@ -3,37 +3,37 @@ import type { Fetcher, KVNamespace, SendEmail } from '@cloudflare/workers-types'
 import { accessibilityFixtureEnabled } from '#lib/server/accessibility-fixtures.js';
 import { dev } from '$app/env';
 
-export type RuntimeEnv = {
-	ORIGIN: string;
+export interface RuntimeEnv {
+	AUTUMN_CREDITS_FEATURE_ID?: string;
+	AUTUMN_DEFAULT_PLAN_ID?: string;
+	AUTUMN_ENABLED?: string;
+	AUTUMN_SECRET?: string;
+	AUTUMN_SERVER_ENTITY_FEATURE_ID?: string;
 	BETTER_AUTH_SECRET: string;
-	VYOS_API_URL?: string;
-	VYOS_API_KEY?: string;
-	VYOS_VERIFY_SSL?: string;
-	VYOS_USE_VPC?: string;
-	VYOS_VPC_01?: Fetcher;
-	VYOS_VPC_02?: Fetcher;
 	BUNNY_API_KEY?: string;
+	CLOUDFLARE_ACCOUNT_ID?: string;
+	CLOUDFLARE_API_TOKEN?: string;
+	CLOUDFLARE_EMAIL_API_TOKEN?: string;
+	DATABASE_URL?: string;
 	EMAIL?: SendEmail;
 	EMAIL_FROM_ADDRESS: string;
 	EMAIL_FROM_NAME: string;
 	EMAIL_REPLY_TO: string;
-	CLOUDFLARE_ACCOUNT_ID?: string;
-	CLOUDFLARE_API_TOKEN?: string;
-	CLOUDFLARE_EMAIL_API_TOKEN?: string;
-	AUTUMN_ENABLED?: string;
-	AUTUMN_SECRET?: string;
-	AUTUMN_DEFAULT_PLAN_ID?: string;
-	AUTUMN_SERVER_ENTITY_FEATURE_ID?: string;
-	AUTUMN_CREDITS_FEATURE_ID?: string;
-	DATABASE_URL?: string;
+	FEATURE_FLAGS?: KVNamespace;
+	GITHUB_CLIENT_ID?: string;
+	GITHUB_CLIENT_SECRET?: string;
 	HYPERDRIVE?: {
 		connectionString: string;
 	};
-	FEATURE_FLAGS?: KVNamespace;
 	INTERNAL_CRON_SECRET?: string;
-	GITHUB_CLIENT_ID?: string;
-	GITHUB_CLIENT_SECRET?: string;
-};
+	ORIGIN: string;
+	VYOS_API_KEY?: string;
+	VYOS_API_URL?: string;
+	VYOS_USE_VPC?: string;
+	VYOS_VERIFY_SSL?: string;
+	VYOS_VPC_01?: Fetcher;
+	VYOS_VPC_02?: Fetcher;
+}
 
 function required(name: keyof RuntimeEnv, value: string | undefined): string {
 	if (!value) {

@@ -6,6 +6,10 @@ export const TOTP_RESET_UI_CHOICES: TotpResetUiChoice[] = ['reset-totp', 'disabl
 
 export const TOTP_RESET_FLOW_STEP_COUNT = 3;
 
+function assertNever(value: never): never {
+	throw new Error(`Unexpected TOTP reset step: ${String(value)}`);
+}
+
 export function totpResetStepNumber(step: TotpResetFlowStep): number {
 	switch (step) {
 		case 'email':
@@ -16,6 +20,8 @@ export function totpResetStepNumber(step: TotpResetFlowStep): number {
 		case 'setup':
 		case 'disable':
 			return 3;
+		default:
+			return assertNever(step);
 	}
 }
 
@@ -31,6 +37,8 @@ export function totpResetStepLabel(step: TotpResetFlowStep): string {
 			return 'Set up your authenticator';
 		case 'disable':
 			return 'Disable two-factor authentication';
+		default:
+			return assertNever(step);
 	}
 }
 

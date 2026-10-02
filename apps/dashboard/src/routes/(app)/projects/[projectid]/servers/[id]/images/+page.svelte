@@ -27,15 +27,14 @@
 	let mountedImage = $state<string | null>(null);
 	let rebuildFromImage = $state<{ name: string; version: string } | null>(null);
 	let rebuildImageConfirm = $state('');
-	let imgUploadOpen = $state(false);
 
-	type UserImage = {
+	interface UserImage {
 		id: string;
 		name: string;
-		type: ImageType;
 		size: string;
+		type: ImageType;
 		uploaded: string;
-	};
+	}
 
 	let vmUserImages = $state<UserImage[]>([
 		{
@@ -176,17 +175,19 @@
 			{#if imgTotalPages > 1}
 				<div class="flex items-center gap-1.5">
 					<button
+						type="button"
 						class="flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
 						disabled={imgPage === 0}
-						onclick={() => imgPage--}
+						onclick={() => (imgPage -= 1)}
 					>
 						<ChevronLeft class="h-3.5 w-3.5" />
 					</button>
 					<span class="text-[10px] text-muted-foreground">{imgPage + 1}/{imgTotalPages}</span>
 					<button
+						type="button"
 						class="flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
 						disabled={imgPage >= imgTotalPages - 1}
-						onclick={() => imgPage++}
+						onclick={() => (imgPage += 1)}
 					>
 						<ChevronRight class="h-3.5 w-3.5" />
 					</button>

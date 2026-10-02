@@ -22,15 +22,17 @@
 	import Upload from '~icons/nucleo/upload';
 	import { getColocationContext } from '../../colocation-context.svelte';
 
-	type UserImage = {
+	const FILE_EXTENSION_PATTERN = /\.[^.]+$/;
+
+	interface UserImage {
 		id: string;
 		name: string;
-		type: ImageType;
-		size: string;
-		uploaded: string;
-		status: 'ready' | 'uploading' | 'processing';
 		progress: number;
-	};
+		size: string;
+		status: 'ready' | 'uploading' | 'processing';
+		type: ImageType;
+		uploaded: string;
+	}
 
 	const colo = getColocationContext();
 	let userImages = $state<UserImage[]>([
@@ -98,6 +100,12 @@
 		mountedImage = `${name} ${version}`;
 	}
 
+	function mountSelectedImageVersion(version: string) {
+		if (selectedImage) {
+			mountOfficialVersion(selectedImage.name, version);
+		}
+	}
+
 	function mountUserImage(name: string) {
 		mountedImage = name;
 	}
@@ -136,7 +144,7 @@
 		uploadFile = file.name;
 		uploadDetectedType = detectImageType(file.name);
 		if (!uploadName) {
-			uploadName = file.name.replace(/\.[^.]+$/, '');
+			uploadName = file.name.replace(FILE_EXTENSION_PATTERN, '');
 		}
 	}
 
@@ -275,6 +283,7 @@
 				{#if imageTotalPages > 1}
 					<div class="flex items-center gap-1.5">
 						<button
+							type="button"
 							class="flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
 							disabled={imagePage === 0}
 							onclick={() => (imagePage -= 1)}
@@ -283,6 +292,7 @@
 						</button>
 						<span class="text-[10px] text-muted-foreground">{imagePage + 1}/{imageTotalPages}</span>
 						<button
+							type="button"
 							class="flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
 							disabled={imagePage >= imageTotalPages - 1}
 							onclick={() => (imagePage += 1)}
@@ -296,6 +306,7 @@
 				<div class="grid grid-cols-2 gap-px bg-background">
 					{#each pagedOfficialImages as image (image.id)}
 						<button
+							type="button"
 							class="relative flex gap-3 overflow-hidden bg-background p-4 text-left transition-colors hover:bg-muted/40"
 							onclick={() => openImageDetail(image)}
 						>
@@ -472,7 +483,7 @@
 									size="sm"
 									class="h-7 gap-1.5 px-3 text-xs"
 									disabled={bootingFromImage}
-									onclick={() => mountOfficialVersion(selectedImage!.name, version.version)}
+									onclick={() => mountSelectedImageVersion(version.version)}
 									><Disc class="h-3 w-3" />
 									Mount via IPMI</Button
 								>
@@ -482,7 +493,7 @@
 									class="h-7 gap-1.5 px-3 text-xs"
 									disabled={bootingFromImage}
 									onclick={() => {
-										mountOfficialVersion(selectedImage!.name, version.version);
+										mountSelectedImageVersion(version.version);
 										sheetOpen = false;
 										bootFromMountedImage();
 									}}
@@ -513,6 +524,7 @@
 					<Label>Source</Label>
 					<div class="flex gap-2">
 						<button
+							type="button"
 							class="flex-1 border px-3 py-2 text-center text-xs font-medium transition-colors {uploadMethod ===
 							'file'
 								? 'border-red-500 bg-red-950/20 text-foreground'
@@ -521,6 +533,7 @@
 						>
 							File Upload
 						</button><button
+							type="button"
 							class="flex-1 border px-3 py-2 text-center text-xs font-medium transition-colors {uploadMethod ===
 							'url'
 								? 'border-red-500 bg-red-950/20 text-foreground'
@@ -533,6 +546,7 @@
 				</div>
 				{#if uploadMethod === 'file'}
 					<label
+						aria-label="Upload image file"
 						class="flex cursor-pointer flex-col items-center justify-center border border-dashed border-ring bg-muted/30 px-4 py-6 text-center transition-colors hover:border-ring hover:bg-muted/50"
 					>
 						<Upload class="mb-2 h-6 w-6 text-muted-foreground" />

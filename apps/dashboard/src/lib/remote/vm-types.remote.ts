@@ -10,18 +10,6 @@ import { initDrizzle } from '#lib/server/db/index.js';
 import { vmTypes } from '#lib/server/db/schema.js';
 import { command, getRequestEvent, query } from '$app/server';
 
-type VmTypeRow = {
-	id: string;
-	name: string;
-	isa: string;
-	cores: number;
-	ramCapacity: number;
-	storageAmount: number;
-	rate: string;
-	cap: string;
-	autumnFeatureId: string | null;
-};
-
 export const listVmTypes = query(async () => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) {

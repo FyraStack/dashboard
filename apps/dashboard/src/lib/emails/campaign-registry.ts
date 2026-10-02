@@ -1,22 +1,22 @@
 export const CAMPAIGN_BATCH_SIZE = 25;
 
-export type CampaignField = {
-	name: string;
-	label: string;
-	inline: boolean;
-	required: boolean;
-	placeholder: string;
+export interface CampaignField {
 	defaultValue?: string;
+	inline: boolean;
+	label: string;
+	name: string;
 	options?: { value: string; label: string }[];
-};
+	placeholder: string;
+	required: boolean;
+}
 
-export type CampaignTemplate = {
+export interface CampaignTemplate {
+	defaultSubject: string;
+	description: string;
+	fields: CampaignField[];
 	key: string;
 	label: string;
-	description: string;
-	defaultSubject: string;
-	fields: CampaignField[];
-};
+}
 
 const userNameField: CampaignField = {
 	name: 'userName',

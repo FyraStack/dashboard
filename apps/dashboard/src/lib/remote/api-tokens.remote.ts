@@ -6,13 +6,6 @@ import { apiTokens } from '#lib/server/db/schema.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { command, getRequestEvent, query } from '$app/server';
 
-type ListResult = {
-	id: string;
-	name: string;
-	createdAt: number;
-	lastUsedAt: number | null;
-}[];
-
 export const listApiTokens = query(async () => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) {
@@ -47,7 +40,6 @@ async function hashToken(token: string): Promise<string> {
 }
 
 const createParams = type({ name: 'string' });
-type CreateResult = { id: string; token: string };
 
 export const createApiToken = command(createParams, async (params) => {
 	const event = getRequestEvent();

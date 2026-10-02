@@ -8,20 +8,6 @@
 	import SiRedhat from '@icons-pack/svelte-simple-icons/icons/SiRedhat';
 	import SiUbuntu from '@icons-pack/svelte-simple-icons/icons/SiUbuntu';
 
-	const icons = {
-		fedora: SiFedora,
-		debian: SiDebian,
-		ubuntu: SiUbuntu,
-		centos: SiCentos,
-		almalinux: SiAlmalinux,
-		'alma-linux': SiAlmalinux,
-		redhat: SiRedhat,
-		'red-hat': SiRedhat,
-		alpine: SiAlpinelinux,
-		linux: SiLinux,
-		ultramarine: SiLinux
-	} as const;
-
 	let {
 		name,
 		class: className = '',

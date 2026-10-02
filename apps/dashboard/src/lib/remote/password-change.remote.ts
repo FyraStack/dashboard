@@ -3,9 +3,8 @@ import { type } from 'arktype';
 import { and, eq, gt } from 'drizzle-orm';
 import PasswordChangeCodeEmail from '#lib/emails/password-change-code.svelte';
 import { initAuth } from '#lib/server/auth.js';
-import { account } from '#lib/server/db/auth.schema.js';
+import { account, verification } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
-import { verification } from '#lib/server/db/schema.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { ulid } from '#lib/server/id.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
@@ -70,7 +69,7 @@ async function changePassword(currentPassword: string, newPassword: string) {
 
 export const sendPasswordChangeCode = command(async () => {
 	const event = getRequestEvent();
-	const user = event.locals.user;
+	const { user } = event.locals;
 	if (!user) {
 		error(401, 'Authentication required');
 	}
@@ -97,7 +96,7 @@ const emailParams = type({ currentPassword: 'string', newPassword: 'string', cod
 export const hasPassword = command(async () => {
 	const db = initDrizzle();
 	const event = getRequestEvent();
-	const user = event.locals.user;
+	const { user } = event.locals;
 	if (!user) {
 		error(401, 'Authentication required');
 	}
@@ -112,7 +111,7 @@ export const hasPassword = command(async () => {
 
 export const confirmPasswordChangeWithEmail = command(emailParams, async (params) => {
 	const event = getRequestEvent();
-	const user = event.locals.user;
+	const { user } = event.locals;
 	if (!user) {
 		error(401, 'Authentication required');
 	}
@@ -181,7 +180,7 @@ const passkeyParams = type({ currentPassword: 'string', newPassword: 'string' })
 
 export const confirmPasswordChangeWithPasskey = command(passkeyParams, async (params) => {
 	const event = getRequestEvent();
-	const user = event.locals.user;
+	const { user } = event.locals;
 	if (!user) {
 		error(401, 'Authentication required');
 	}

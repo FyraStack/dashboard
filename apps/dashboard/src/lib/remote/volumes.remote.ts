@@ -7,14 +7,6 @@ import { vms, volumes } from '#lib/server/db/schema.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { command, getRequestEvent, query } from '$app/server';
 
-type ListParams = { projectId: string };
-type ListResult = {
-	id: string;
-	name: string;
-	size: number;
-	associatedVmId: string | null;
-}[];
-
 export const listVolumes = query(type({ projectId: 'string' }), async (params) => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) {

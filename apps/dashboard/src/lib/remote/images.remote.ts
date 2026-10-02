@@ -11,26 +11,15 @@ import { initDrizzle } from '#lib/server/db/index.js';
 import { baseImages } from '#lib/server/db/schema.js';
 import { command, getRequestEvent, query } from '$app/server';
 
-type ImageRow = {
-	id: string;
-	name: string;
-	version: string;
-	description: string;
-	icon: string | null;
-	color: string;
-	isOfficial: boolean;
-	logoSvg: string | null;
-	accentColor: string;
-	imageType: string;
-	secureBoot: boolean;
-	filePath: string;
-	isa: string;
-};
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+const SVG_EVENT_HANDLER_PATTERN = /\son[a-z]+\s*=/;
+const SVG_REMOTE_HREF_PATTERN = /\s(?:href|xlink:href)\s*=\s*["']https?:/i;
+const HTTP_URL_PATTERN = /^https?:\/\//i;
 
 const checksumAlgorithms = ['md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512'] as const;
 
 function validateAccentColor(value: string) {
-	if (!/^#[0-9a-fA-F]{6}$/.test(value)) {
+	if (!HEX_COLOR_PATTERN.test(value)) {
 		error(400, 'Accent color must be a hex color like #51A2DA');
 	}
 }
@@ -47,7 +36,7 @@ function validateLogoSvg(value: string | undefined, isOfficial: boolean) {
 	if (lower.includes('<script') || lower.includes('<foreignobject')) {
 		error(400, 'SVG logo contains unsupported markup');
 	}
-	if (/\son[a-z]+\s*=/.test(lower) || /\s(?:href|xlink:href)\s*=\s*["']https?:/i.test(svg)) {
+	if (SVG_EVENT_HANDLER_PATTERN.test(lower) || SVG_REMOTE_HREF_PATTERN.test(svg)) {
 		error(400, 'SVG logo contains unsafe attributes');
 	}
 	return svg;
@@ -291,7 +280,7 @@ export const importProxmoxImageFromUrl = command(importUrlParams, async (params)
 	}
 	await requireAdmin(initDrizzle(), event.locals.user.id);
 
-	if (!/^https?:\/\//i.test(params.url)) {
+	if (!HTTP_URL_PATTERN.test(params.url)) {
 		error(400, 'Image URL must start with http:// or https://');
 	}
 	if (!params.filename.trim()) {

@@ -53,9 +53,9 @@
 	const ownerOptions = $derived(
 		[
 			...new Map(
-				admin.adminVms
-					.filter((vm) => vm.ownerEmail)
-					.map((vm) => [vm.ownerEmail!, vm.ownerName ?? vm.ownerEmail!])
+				admin.adminVms.flatMap((vm) =>
+					vm.ownerEmail ? [[vm.ownerEmail, vm.ownerName ?? vm.ownerEmail] as const] : []
+				)
 			).entries()
 		]
 			.map(([email, name]) => ({ email, name }))
@@ -97,9 +97,9 @@
 				return true;
 			}
 
-			return [vm.name, vm.projectName, vm.ownerName, vm.ownerEmail, vm.lastKnownIpv4, vm.id]
-				.filter(Boolean)
-				.some((value) => value!.toLowerCase().includes(term));
+			return [vm.name, vm.projectName, vm.ownerName, vm.ownerEmail, vm.lastKnownIpv4, vm.id].some(
+				(value) => value?.toLowerCase().includes(term)
+			);
 		})
 	);
 
@@ -189,11 +189,19 @@
 	);
 
 	function openVmSheet(vm: AdminVm) {
-		void goto(resolve(`admin/vms/${vm.id}`), { reset: false });
+		goto(resolve(`admin/vms/${vm.id}`), { reset: false });
+	}
+
+	function openVmSheetFromRow(event: MouseEvent, vm: AdminVm) {
+		const startedInActions =
+			event.target instanceof Element && event.target.closest('[data-row-actions]') !== null;
+		if (!startedInActions) {
+			openVmSheet(vm);
+		}
 	}
 
 	function closeVmSheet() {
-		void goto(vmsBase, { reset: false });
+		goto(vmsBase, { reset: false });
 	}
 
 	function openDeleteDialog(vm: AdminVm) {
@@ -220,8 +228,10 @@
 		}
 		try {
 			await admin.adminVmDelete(deleteTarget.id);
-			closeDeleteDialog();
-		} catch {}
+		} catch {
+			return;
+		}
+		closeDeleteDialog();
 	}
 </script>
 
@@ -405,10 +415,10 @@
 					{/each}
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
-			<label class="flex items-center gap-2 text-xs text-muted-foreground">
-				<Switch bind:checked={showDeleted} />
-				Show deleted
-			</label>
+			<div class="flex items-center gap-2 text-xs text-muted-foreground">
+				<Switch id="admin-vms-show-deleted" bind:checked={showDeleted} />
+				<label for="admin-vms-show-deleted">Show deleted</label>
+			</div>
 			<Button
 				variant="outline"
 				size="sm"
@@ -431,8 +441,7 @@
 				<p class="text-sm">No servers found</p>
 			</div>
 		{:else}
-			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-			<div class="overflow-x-auto rounded-md border border-border/60" tabindex="0">
+			<div class="overflow-x-auto rounded-md border border-border/60">
 				<table class="w-full text-left text-xs">
 					<thead>
 						<tr
@@ -455,7 +464,7 @@
 							{@const saving = admin.adminVmSaving[vm.id]}
 							<tr
 								class="cursor-pointer transition-colors hover:bg-muted/20"
-								onclick={() => openVmSheet(vm)}
+								onclick={(event) => openVmSheetFromRow(event, vm)}
 							>
 								<td class="px-4 py-3">
 									<div class="flex flex-col gap-0.5">
@@ -502,7 +511,7 @@
 									{vm.liveStatus === 'running' ? formatUptime(vm.uptime) : '-'}
 								</td>
 								<td class="px-4 py-3 text-muted-foreground">{formatDate(vm.createdAt)}</td>
-								<td class="px-4 py-3 text-right" onclick={(event) => event.stopPropagation()}>
+								<td class="px-4 py-3 text-right" data-row-actions>
 									<DropdownMenu.Root>
 										<DropdownMenu.Trigger
 											disabled={Boolean(saving)}
@@ -597,7 +606,7 @@
 			class="flex flex-col gap-4 pt-4"
 			onsubmit={(event) => {
 				event.preventDefault();
-				void confirmDelete();
+				confirmDelete();
 			}}
 		>
 			<div

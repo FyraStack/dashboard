@@ -1,8 +1,9 @@
 import { error } from '@sveltejs/kit';
 import { Autumn } from 'autumn-js';
 import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
+import { member, organization, user } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
-import { member, organization, projectBillingCustomers, user } from '#lib/server/db/schema.js';
+import { projectBillingCustomers } from '#lib/server/db/schema.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import type { CapPeriod } from './caps';
 
@@ -69,7 +70,7 @@ async function getProjectCustomerData(projectId: string) {
 		with: { members: { with: { user: true } } }
 	});
 
-	if (!project || project.deletedAt != null) {
+	if (!project || project.deletedAt !== null) {
 		error(404, `Project "${projectId}" not found`);
 	}
 
@@ -257,6 +258,7 @@ export async function retryOrphanedProjectBillingCancellations(limit = 100) {
 
 	let cancelled = 0;
 	for (const { projectId } of orphans) {
+		// biome-ignore lint/performance/noAwaitInLoops: orphan cancellations hit Autumn one at a time to stay within its rate limits
 		if (await cancelProjectBilling(projectId)) {
 			await deleteLocalProjectBillingCustomer(projectId);
 			cancelled += 1;
@@ -481,9 +483,10 @@ export async function getProjectCreditsBalance(projectId: string) {
 		const breakdowns = balance.breakdown ?? [];
 		const overage = breakdowns.find((item) => item.price?.billingMethod === 'usage_based');
 		const prepaid = breakdowns.find((item) => item.price?.billingMethod === 'prepaid');
+		const overagePrice = overage?.price;
 		const overageRate =
-			overage?.price?.amount != null && overage.price.billingUnits > 0
-				? overage.price.amount / overage.price.billingUnits
+			overagePrice && typeof overagePrice.amount === 'number' && overagePrice.billingUnits > 0
+				? overagePrice.amount / overagePrice.billingUnits
 				: null;
 		const overageUsage = overage?.usage ?? 0;
 
@@ -494,7 +497,7 @@ export async function getProjectCreditsBalance(projectId: string) {
 			overageUsage,
 			overageRate,
 			estimatedOverageCost:
-				overageRate == null ? null : Number((overageUsage * overageRate).toFixed(2)),
+				overageRate === null ? null : Number((overageUsage * overageRate).toFixed(2)),
 			prepaidPrice: prepaid?.price
 				? { amount: prepaid.price.amount ?? null, billingUnits: prepaid.price.billingUnits }
 				: null,
@@ -579,6 +582,17 @@ export type ProjectBillingPeriodLookup =
 	| { customer: 'found'; anchor: CapPeriod | null }
 	| { customer: 'missing' };
 
+async function findAutumnCustomer(projectId: string) {
+	try {
+		return await createAutumnClient().customers.get({ customerId: projectId });
+	} catch (err) {
+		if (autumnStatus(err) === 404) {
+			return null;
+		}
+		throw err;
+	}
+}
+
 export async function lookupProjectBillingPeriod(
 	projectId: string
 ): Promise<ProjectBillingPeriodLookup> {
@@ -586,14 +600,9 @@ export async function lookupProjectBillingPeriod(
 		return { customer: 'found', anchor: null };
 	}
 
-	let customer;
-	try {
-		customer = await createAutumnClient().customers.get({ customerId: projectId });
-	} catch (err) {
-		if (autumnStatus(err) === 404) {
-			return { customer: 'missing' };
-		}
-		throw err;
+	const customer = await findAutumnCustomer(projectId);
+	if (!customer) {
+		return { customer: 'missing' };
 	}
 
 	const planId = defaultPlanId();

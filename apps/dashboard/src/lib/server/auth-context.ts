@@ -6,7 +6,8 @@ import {
 	accessibilityFixtureProject,
 	accessibilityFixtureUser
 } from '#lib/server/accessibility-fixtures.js';
-import { member, organization, user } from '#lib/server/db/schema.js';
+import { member, organization, user } from '#lib/server/db/auth.schema.js';
+import type { Database } from '#lib/server/db/index.js';
 import { getRequestEvent } from '$app/server';
 
 export function hasAdminRole(role: string | null | undefined): boolean {
@@ -15,7 +16,8 @@ export function hasAdminRole(role: string | null | undefined): boolean {
 
 function cachedLookup<T>(key: string, compute: () => Promise<T>): Promise<T> {
 	const { locals } = getRequestEvent();
-	const cache = (locals.accessCache ??= new Map());
+	locals.accessCache ??= new Map();
+	const cache = locals.accessCache;
 	const existing = cache.get(key) as Promise<T> | undefined;
 	if (existing) {
 		return existing;
@@ -33,7 +35,11 @@ type ProjectAccess = {
 	deletedAt: number | null;
 } | null;
 
-function loadProjectAccess(db: any, userId: string, projectId: string): Promise<ProjectAccess> {
+function loadProjectAccess(
+	db: Database,
+	userId: string,
+	projectId: string
+): Promise<ProjectAccess> {
 	return cachedLookup(`project-access:${userId}:${projectId}`, async () => {
 		const [projectAccess] = await db
 			.select({
@@ -51,7 +57,7 @@ function loadProjectAccess(db: any, userId: string, projectId: string): Promise<
 	});
 }
 
-export async function requireAdmin(db: any, userId: string): Promise<void> {
+export async function requireAdmin(db: Database, userId: string): Promise<void> {
 	if (accessibilityFixtureEnabled && userId === accessibilityFixtureUser.id) {
 		return;
 	}
@@ -79,7 +85,7 @@ export async function requireAdmin(db: any, userId: string): Promise<void> {
 }
 
 export async function requireProjectAccess(
-	db: any,
+	db: Database,
 	userId: string,
 	projectId: string,
 	minLevel: PermissionLevel | 'owner' = 'read'
@@ -94,7 +100,7 @@ export async function requireProjectAccess(
 
 	const projectAccess = await loadProjectAccess(db, userId, projectId);
 
-	if (!projectAccess || projectAccess.deletedAt != null) {
+	if (!projectAccess || projectAccess.deletedAt !== null) {
 		error(404, `Project "${projectId}" not found`);
 	}
 
@@ -108,7 +114,7 @@ export async function requireProjectAccess(
 }
 
 export async function getProjectMemberRole(
-	db: any,
+	db: Database,
 	userId: string,
 	projectId: string
 ): Promise<string | null> {

@@ -30,72 +30,72 @@
 	import Server from '~icons/nucleo/server';
 	import Upload from '~icons/nucleo/upload';
 
-	type PageData = {
+	interface PageData {
+		billing?: { status?: string; setupRequired?: boolean } | null;
+		canManageBilling?: boolean;
 		currentProject?: { id: string } | null;
+		dbImages?: DbImage[];
+		featureFlags?: FeatureFlags;
+		ipamAvailability?: {
+			ipv4: { available: boolean; availableCount: string };
+			ipv6: { available: boolean; availableCount: string };
+		};
 		sshKeys?: {
 			id: string;
 			name: string;
 			fingerprint: string;
 		}[];
 		vmTypes?: VmType[];
-		dbImages?: DbImage[];
 		volumes?: ExistingVolume[];
-		featureFlags?: FeatureFlags;
-		billing?: { status?: string; setupRequired?: boolean } | null;
-		ipamAvailability?: {
-			ipv4: { available: boolean; availableCount: string };
-			ipv6: { available: boolean; availableCount: string };
-		};
-		canManageBilling?: boolean;
-	};
+	}
 
 	type ImageTab = 'os' | 'snapshots' | 'apps';
 	let { data }: { data: PageData } = $props();
 	let imageTab = $state<ImageTab>('os');
 
-	type VmType = {
-		id: string;
-		name: string;
-		cores: number;
-		ramCapacity: number;
-		storageAmount: number;
-		rate: string;
+	interface VmType {
 		cap: string;
-	};
-
-	type DbImage = {
+		cores: number;
 		id: string;
 		name: string;
-		version: string;
+		ramCapacity: number;
+		rate: string;
+		storageAmount: number;
+	}
+
+	interface DbImage {
+		accentColor: string;
 		color: string;
-		icon: string | null;
-		filePath: string;
 		description: string;
+		filePath: string;
+		icon: string | null;
+		id: string;
+		imageType: string;
 		isOfficial: boolean;
 		logoSvg: string | null;
-		accentColor: string;
-		imageType: string;
-	};
+		name: string;
+		version: string;
+	}
 
-	type ExistingVolume = {
+	interface ExistingVolume {
+		associatedVmId: string | null;
 		id: string;
 		name: string;
 		size: number;
-		associatedVmId: string | null;
-	};
+	}
 
 	const vmTypes = $derived(data.vmTypes ?? []);
 	const dbImages = $derived(data.dbImages ?? []);
 	const officialDbImages = $derived(dbImages.filter((image) => image.isOfficial));
 	const customDbImages = $derived(dbImages.filter((image) => !image.isOfficial));
-	type ImageGroup = {
-		name: string;
-		description: string;
+	interface ImageGroup {
 		accentColor: string;
-		logoSvg: string | null;
+		description: string;
 		imageType: string;
+		logoSvg: string | null;
+		name: string;
 		versions: DbImage[];
-	};
+	}
 	const officialImageGroups = $derived.by(() => {
 		const groups = new Map<string, DbImage[]>();
 		for (const image of officialDbImages) {
@@ -134,7 +134,8 @@
 	let selectedImageId = $state<string | null>(null);
 	let selectedImageVersion = $state<string | null>(null);
 	let selectedPlanId = $state<string | null>(null);
-	let networkingOption = $state<'both' | 'ipv6'>('both');
+	type NetworkingOption = 'both' | 'ipv6';
+	let networkingOption = $state<NetworkingOption>('both');
 	let selectedSshKeyIds = $state<string[]>([]);
 	let serverPassword = $state('');
 	let showServerPassword = $state(false);
@@ -145,7 +146,11 @@
 			(networkingOption === 'ipv6' && ipv6Available)
 	);
 
-	type SelectableVolume = { id: string; name: string; sizeGb: number };
+	interface SelectableVolume {
+		id: string;
+		name: string;
+		sizeGb: number;
+	}
 	let createdVolumes = $state<SelectableVolume[]>([]);
 	let newVolumeName = $state('');
 	let newVolumeSize = $state('10');
@@ -179,12 +184,12 @@
 			: 0
 	);
 
-	type Section = {
-		id: string;
-		label: string;
+	interface Section {
 		icon: typeof Server;
+		id: string;
 		isComplete: boolean;
-	};
+		label: string;
+	}
 
 	let sections = $derived<Section[]>([
 		{
@@ -321,16 +326,14 @@
 		}
 	}
 
-	function formatBytes(bytes: number): string {
-		if (!bytes) {
-			return '0B';
+	function networkingOptionClass(option: { value: NetworkingOption; disabled: boolean }): string {
+		if (option.disabled) {
+			return 'cursor-not-allowed border-border text-muted-foreground';
 		}
-		const gb = bytes / (1024 * 1024 * 1024);
-		if (gb >= 1) {
-			return `${gb.toFixed(0)}GB`;
+		if (networkingOption === option.value) {
+			return 'cursor-pointer border-red-500 bg-red-950/20 text-foreground';
 		}
-		const mb = bytes / (1024 * 1024);
-		return `${mb.toFixed(0)}MB`;
+		return 'cursor-pointer border-border text-muted-foreground hover:border-ring';
 	}
 
 	function formatRam(mb: number): string {
@@ -347,13 +350,13 @@
 
 		const name = newVolumeName.trim();
 		const size = Number.parseInt(newVolumeSize, 10);
-		const projectId = page.params.projectid;
-		if (!(name && size) || size < 1 || !projectId) {
+		const routeProjectId = page.params.projectid;
+		if (!(name && size) || size < 1 || !routeProjectId) {
 			return;
 		}
 		creatingVolume = true;
 		try {
-			const created = await createProjectVolume({ projectId, name, size });
+			const created = await createProjectVolume({ projectId: routeProjectId, name, size });
 			createdVolumes = [...createdVolumes, { id: created.id, name, sizeGb: size }];
 			selectedVolumeIds = [...selectedVolumeIds, created.id];
 			newVolumeName = '';
@@ -524,6 +527,7 @@
 										{@const isSelected = group.versions.some((v) => v.id === selectedImageId)}
 										<div class="flex flex-col">
 											<button
+												type="button"
 												aria-pressed={isSelected}
 												aria-label={group.name}
 												class="relative flex gap-4 overflow-hidden bg-background p-5 text-left transition-colors hover:bg-muted/40 {isSelected
@@ -599,6 +603,7 @@
 										<div class="mt-2 divide-y divide-border/30">
 											{#each customDbImages as img (img.id)}
 												<button
+													type="button"
 													aria-pressed={selectedImageId === img.id}
 													class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/20 sm:py-2.5 {selectedImageId ===
 													img.id
@@ -673,6 +678,7 @@
 								<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
 									{#each vmTypes as plan (plan.id)}
 										<button
+											type="button"
 											aria-pressed={selectedPlanId === plan.id}
 											aria-label={`${plan.name} plan`}
 											class="flex flex-col gap-1 border p-4 text-left transition-colors sm:p-3 {selectedPlanId ===
@@ -868,11 +874,9 @@
 									{ value: 'ipv6' as const, label: 'IPv6 block only', disabled: !ipv6Available }
 								] as opt (opt.value)}
 									<label
-										class="flex items-center gap-2 border p-3 text-sm transition-colors sm:text-xs {opt.disabled
-											? 'cursor-not-allowed border-border text-muted-foreground'
-											: networkingOption === opt.value
-												? 'cursor-pointer border-red-500 bg-red-950/20 text-foreground'
-												: 'cursor-pointer border-border text-muted-foreground hover:border-ring'}"
+										class="flex items-center gap-2 border p-3 text-sm transition-colors sm:text-xs {networkingOptionClass(
+											opt
+										)}"
 									>
 										<input
 											type="radio"
@@ -967,7 +971,7 @@
 										Password authentication will be used instead.
 									</p>
 									<a
-										href={resolve(userSettingsHref('keys', page.url) as any)}
+										href={userSettingsHref('keys', page.url)}
 										data-sveltekit-reset="false"
 										class="mt-2 inline-flex py-1 text-sm font-medium text-red-400 transition-colors hover:text-red-300 sm:py-0 sm:text-[11px]"
 									>
@@ -1042,6 +1046,7 @@
 					<nav class="flex flex-col gap-1">
 						{#each sections as section (section.id)}
 							<button
+								type="button"
 								class="flex items-center gap-2 px-2 py-2.5 text-left text-sm transition-colors hover:bg-muted/50 sm:py-1.5 sm:text-xs"
 								onclick={() => scrollTosSection(section.id)}
 							>

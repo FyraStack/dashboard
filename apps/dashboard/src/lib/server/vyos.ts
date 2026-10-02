@@ -2,50 +2,55 @@ import ky, { type KyInstance } from 'ky';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import { createVpcFetch, insecureDirectFetch } from '#lib/server/vpc.js';
 
-type VyosApiResponse<T = unknown> = {
-	success: boolean;
+interface VyosApiResponse<T = unknown> {
 	data: T;
 	error: unknown;
-};
+	success: boolean;
+}
 
 type VyosCommandResponse = VyosApiResponse;
 
-type VyosStaticIpv6Route = {
+interface VyosStaticIpv6Route {
 	blackhole?: Record<string, never>;
 	'next-hop'?: Record<string, { interface?: string }>;
-};
+}
 
-type VyosStaticIpv6Routes = {
+interface VyosStaticIpv6Routes {
 	route6?: Record<string, VyosStaticIpv6Route>;
-};
+}
 
-export type VyosStaticNeighborParams = {
+export interface VyosStaticNeighborParams {
+	description: string;
 	ipaddress: string;
 	macAddress: string;
-	description: string;
-};
+}
 
-export type VyosStaticRouteParams = {
+export interface VyosStaticRouteParams {
+	description?: string;
 	destination: string;
 	gateway: string;
-	description?: string;
-};
+}
+
+const TRAILING_SLASHES = /\/+$/;
+
+function stringifyErrorDetails(details: unknown): string {
+	try {
+		return JSON.stringify(details);
+	} catch {
+		return 'Unable to stringify details';
+	}
+}
 
 export class VyosError extends Error {
-	constructor(
-		message: string,
-		readonly status: number,
-		readonly details: unknown
-	) {
-		let detailsString;
-		try {
-			detailsString = JSON.stringify(details);
-		} catch {
-			detailsString = 'Unable to stringify details';
-		}
+	readonly status: number;
+	readonly details: unknown;
 
-		super(`${message} - ${status} - ${detailsString}`);
+	constructor(message: string, options: ErrorOptions & { status: number; details: unknown }) {
+		const { status, details } = options;
+		super(`${message} - ${status} - ${stringifyErrorDetails(details)}`, options);
 		this.name = 'VyosError';
+		this.status = status;
+		this.details = details;
 	}
 }
 
@@ -59,7 +64,7 @@ function getVyosConfig() {
 		env.VYOS_USE_VPC === 'false' ? [] : [env.VYOS_VPC_01, env.VYOS_VPC_02];
 
 	return {
-		apiUrl: env.VYOS_API_URL.replace(/\/+$/, ''),
+		apiUrl: env.VYOS_API_URL.replace(TRAILING_SLASHES, ''),
 		apiKey: env.VYOS_API_KEY,
 		verifySsl: env.VYOS_VERIFY_SSL !== 'false',
 		routersInFailoverOrder
@@ -71,13 +76,13 @@ export function isVyosConfigured() {
 }
 
 export class VyosClient {
-	private api: KyInstance;
-	private apiKey: string;
+	private readonly api: KyInstance;
+	private readonly apiKey: string;
 
 	constructor() {
 		const config = getVyosConfig();
 		if (!config) {
-			throw new VyosError("Couldn't get VyOS config", 500, '');
+			throw new VyosError("Couldn't get VyOS config", { status: 500, details: '' });
 		}
 
 		this.apiKey = config.apiKey;
@@ -116,20 +121,18 @@ export class VyosClient {
 		let parsed: VyosApiResponse<T>;
 		try {
 			parsed = JSON.parse(raw) as VyosApiResponse<T>;
-		} catch {
+		} catch (parseError) {
 			throw new VyosError(
 				`VyOS ${endpoint} returned a non-JSON response (router proxy unreachable?)`,
-				response.status,
-				raw.slice(0, 500)
+				{ status: response.status, details: raw.slice(0, 500), cause: parseError }
 			);
 		}
 
 		if (!(response.ok && parsed.success)) {
-			throw new VyosError(
-				`VyOS ${endpoint} request failed`,
-				response.status,
-				parsed.error ?? parsed
-			);
+			throw new VyosError(`VyOS ${endpoint} request failed`, {
+				status: response.status,
+				details: parsed.error ?? parsed
+			});
 		}
 
 		return parsed;
@@ -140,7 +143,7 @@ export class VyosClient {
 	}
 
 	async getStaticIpv6Routes(): Promise<VyosStaticIpv6Routes> {
-		let response;
+		let response: VyosApiResponse<VyosStaticIpv6Routes | null>;
 		try {
 			response = await this.post<VyosStaticIpv6Routes | null>('retrieve', {
 				op: 'showConfig',

@@ -1,4 +1,5 @@
 import { pgSchema } from 'drizzle-orm/pg-core';
+import { member, organization, user } from './auth.schema';
 import {
 	apiTokens,
 	baseImages,
@@ -8,11 +9,8 @@ import {
 	ipamPrefixes,
 	ipamPtrRecords,
 	ipamSettings,
-	member,
-	organization,
 	projectBillingCustomers,
 	sshKeys,
-	user,
 	vms,
 	vmTypes,
 	volumes

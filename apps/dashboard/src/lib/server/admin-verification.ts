@@ -1,8 +1,8 @@
 import { error } from '@sveltejs/kit';
 import { and, eq, gt } from 'drizzle-orm';
 import { initAuth } from '#lib/server/auth.js';
+import { passkey, twoFactor, verification } from '#lib/server/db/auth.schema.js';
 import type { initDrizzle } from '#lib/server/db/index.js';
-import { passkey, twoFactor, verification } from '#lib/server/db/schema.js';
 import { ulid } from '#lib/server/id.js';
 import { getRequestEvent } from '$app/server';
 
@@ -37,7 +37,7 @@ function generateVerificationCode() {
 	let value: number;
 
 	do {
-		value = crypto.getRandomValues(new Uint32Array(1))[0];
+		[value] = crypto.getRandomValues(new Uint32Array(1));
 	} while (value >= limit);
 
 	return (value % max).toString().padStart(ADMIN_VERIFICATION_CODE_LENGTH, '0');

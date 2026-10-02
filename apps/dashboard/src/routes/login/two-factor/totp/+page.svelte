@@ -18,7 +18,7 @@
 	);
 
 	let code = $state('');
-	let error = $state('');
+	let errorMessage = $state('');
 	let loading = $state(false);
 	let normalizedCode = $derived(code.replace(/\D/g, ''));
 
@@ -26,7 +26,7 @@
 		if (!normalizedCode) {
 			return;
 		}
-		error = '';
+		errorMessage = '';
 		loading = true;
 
 		const { error: err } = await authClient.twoFactor.verifyTotp({
@@ -36,7 +36,7 @@
 		loading = false;
 
 		if (err) {
-			error = err.message ?? 'Invalid code. Please try again.';
+			errorMessage = err.message ?? 'Invalid code. Please try again.';
 			return;
 		}
 
@@ -91,12 +91,12 @@
 					</p>
 				</div>
 
-				{#if error}
+				{#if errorMessage}
 					<div
 						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 					>
 						<AlertCircle class="size-4 shrink-0" />
-						{error}
+						{errorMessage}
 					</div>
 				{/if}
 

@@ -1,3 +1,7 @@
+const IPV6_GROUP_PATTERN = /^[0-9a-f]{1,4}$/;
+const IPV4_OCTET_PATTERN = /^\d{1,3}$/;
+const HOSTNAME_LABEL_PATTERN = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/i;
+
 export function isIpv6(address: string) {
 	return address.includes(':');
 }
@@ -23,13 +27,13 @@ export function expandIpv6Groups(address: string): string[] | null {
 
 	const groups = [
 		...head,
-		...Array(doubleColonSplit.length === 2 ? missing : 0).fill('0'),
+		...new Array(doubleColonSplit.length === 2 ? missing : 0).fill('0'),
 		...tail
 	];
 	if (groups.length !== 8) {
 		return null;
 	}
-	if (!groups.every((group) => /^[0-9a-f]{1,4}$/.test(group))) {
+	if (!groups.every((group) => IPV6_GROUP_PATTERN.test(group))) {
 		return null;
 	}
 
@@ -43,7 +47,9 @@ export function parseIpv4Octets(address: string): number[] | null {
 		return null;
 	}
 
-	const parsed = octets.map((octet) => (/^\d{1,3}$/.test(octet) ? Number(octet) : Number.NaN));
+	const parsed = octets.map((octet) =>
+		IPV4_OCTET_PATTERN.test(octet) ? Number(octet) : Number.NaN
+	);
 	if (parsed.some((octet) => Number.isNaN(octet) || octet > 255)) {
 		return null;
 	}
@@ -199,5 +205,5 @@ export function isValidPtrHostname(value: string) {
 	if (value.length < 1 || value.length > 253) {
 		return false;
 	}
-	return value.split('.').every((label) => /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/i.test(label));
+	return value.split('.').every((label) => HOSTNAME_LABEL_PATTERN.test(label));
 }

@@ -6,16 +6,21 @@
 
 	const isNotFound = $derived(page.status === 404);
 	const isServerError = $derived(page.status >= 500);
-	const heading = $derived(
-		isNotFound ? 'Page not found' : isServerError ? 'Something went wrong' : 'Error'
-	);
-	const detail = $derived(
-		isNotFound
-			? "We couldn't find the page you're looking for."
-			: isServerError
-				? 'Something went wrong on our end. Please try again in a moment.'
-				: (page.error?.message ?? 'Something went wrong')
-	);
+	const heading = $derived.by(() => {
+		if (isNotFound) {
+			return 'Page not found';
+		}
+		return isServerError ? 'Something went wrong' : 'Error';
+	});
+	const detail = $derived.by(() => {
+		if (isNotFound) {
+			return "We couldn't find the page you're looking for.";
+		}
+		if (isServerError) {
+			return 'Something went wrong on our end. Please try again in a moment.';
+		}
+		return page.error?.message ?? 'Something went wrong';
+	});
 </script>
 
 <svelte:head>

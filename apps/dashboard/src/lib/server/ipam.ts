@@ -17,16 +17,16 @@ type QueryableDb = Db | Transaction;
 type IpamPrefix = typeof ipamPrefixes.$inferSelect;
 type IpamAllocation = typeof ipamAllocations.$inferSelect;
 
-export type IpamPrefixInput = {
-	name: string;
-	cidr: string;
-	whitelistStart?: string | null;
-	whitelistEnd?: string | null;
-	gatewayAddress?: string | null;
+export interface IpamPrefixInput {
 	bunnyDnsZone?: string | null;
+	cidr: string;
 	disabled?: boolean;
+	gatewayAddress?: string | null;
 	ipv6UseTransitAddress?: boolean;
-};
+	name: string;
+	whitelistEnd?: string | null;
+	whitelistStart?: string | null;
+}
 
 export type IpamPrefixWithStats = IpamPrefix & {
 	allocated: number;
@@ -35,17 +35,17 @@ export type IpamPrefixWithStats = IpamPrefix & {
 	hasCapacity: boolean;
 };
 
-export type IpamAvailability = {
+export interface IpamAvailability {
 	ipv4: { available: boolean; availableCount: string };
 	ipv6: { available: boolean; availableCount: string };
-};
+}
 
-type AddressRange = {
-	family: IpFamily;
-	start: bigint;
+interface AddressRange {
 	end: bigint;
+	family: IpFamily;
 	prefixLength: number;
-};
+	start: bigint;
+}
 
 type PendingAllocation = IpamAllocation & {
 	sourcePrefix: IpamPrefix;
@@ -57,6 +57,12 @@ const v6Bits = 128;
 const vmIpv4PrefixLength = 32;
 const vmIpv6PrefixLength = 64;
 const randomAllocationAttempts = 25;
+const TRAILING_DOT = /\.$/;
+const allocationKindLabels: Record<AllocationKind, string> = {
+	ipv4: 'IPv4 addresses',
+	'ipv6-transit': 'IPv6 transit addresses',
+	'ipv6-prefix': 'IPv6 prefixes'
+};
 
 function uniqueViolation(err: unknown) {
 	return (
@@ -158,58 +164,83 @@ function defaultWhitelistBounds(range: AddressRange) {
 	};
 }
 
+function vmPrefixLengthFor(family: IpFamily, ipv6UseTransitAddress: boolean) {
+	if (family === 'ipv4') {
+		return vmIpv4PrefixLength;
+	}
+	return ipv6UseTransitAddress ? v6Bits : vmIpv6PrefixLength;
+}
+
+function normalizeGatewayAddress(
+	family: IpFamily,
+	range: AddressRange,
+	rawGatewayAddress: string | null | undefined
+) {
+	if (family !== 'ipv4') {
+		return null;
+	}
+
+	const gatewayAddress = rawGatewayAddress?.trim() || null;
+	if (!gatewayAddress) {
+		error(400, 'Gateway address is required for IPv4 prefixes');
+	}
+	const gatewayValue = parseAddress('ipv4', gatewayAddress);
+	if (gatewayValue < range.start || gatewayValue > range.end) {
+		error(400, 'Gateway address must be inside the prefix');
+	}
+	return formatAddress('ipv4', gatewayValue);
+}
+
+function normalizeWhitelist(
+	family: IpFamily,
+	range: AddressRange,
+	rawStart: string | null | undefined,
+	rawEnd: string | null | undefined
+) {
+	const whitelistStart = rawStart?.trim() || null;
+	const whitelistEnd = rawEnd?.trim() || null;
+	if (!(whitelistStart || whitelistEnd)) {
+		return { whitelistStart, whitelistEnd };
+	}
+
+	const defaults = defaultWhitelistBounds(range);
+	const startValue = whitelistStart ? parseAddress(family, whitelistStart) : defaults.first;
+	const endValue = whitelistEnd ? parseAddress(family, whitelistEnd) : defaults.last;
+	if (startValue < range.start || startValue > range.end) {
+		error(400, 'Whitelist start must be inside the prefix');
+	}
+	if (endValue < range.start || endValue > range.end) {
+		error(400, 'Whitelist end must be inside the prefix');
+	}
+	if (startValue > endValue) {
+		error(400, 'Whitelist start must be <= whitelist end');
+	}
+
+	return {
+		whitelistStart: formatAddress(family, startValue),
+		whitelistEnd: formatAddress(family, endValue)
+	};
+}
+
 export function normalizeIpamPrefixInput(input: IpamPrefixInput) {
 	const normalized = normalizeCidr(input.cidr.trim());
 	const ipv6UseTransitAddress =
 		normalized.family === 'ipv6' && (input.ipv6UseTransitAddress ?? false);
-	const vmPrefixLength =
-		normalized.family === 'ipv4'
-			? vmIpv4PrefixLength
-			: ipv6UseTransitAddress
-				? v6Bits
-				: vmIpv6PrefixLength;
+	const vmPrefixLength = vmPrefixLengthFor(normalized.family, ipv6UseTransitAddress);
 	if (normalized.prefixLength > vmPrefixLength) {
 		error(400, `${normalized.family} prefix is too small for VM allocations`);
 	}
 
 	const range = parseCidr(normalized.cidr);
-	let gatewayAddress = input.gatewayAddress?.trim() || null;
-	if (normalized.family === 'ipv4') {
-		if (!gatewayAddress) {
-			error(400, 'Gateway address is required for IPv4 prefixes');
-		}
-		const gatewayValue = parseAddress('ipv4', gatewayAddress);
-		if (gatewayValue < range.start || gatewayValue > range.end) {
-			error(400, 'Gateway address must be inside the prefix');
-		}
-		gatewayAddress = formatAddress('ipv4', gatewayValue);
-	} else {
-		gatewayAddress = null;
-	}
+	const gatewayAddress = normalizeGatewayAddress(normalized.family, range, input.gatewayAddress);
+	const { whitelistStart, whitelistEnd } = normalizeWhitelist(
+		normalized.family,
+		range,
+		input.whitelistStart,
+		input.whitelistEnd
+	);
 
-	let whitelistStart = input.whitelistStart?.trim() || null;
-	let whitelistEnd = input.whitelistEnd?.trim() || null;
-	if (whitelistStart || whitelistEnd) {
-		const defaults = defaultWhitelistBounds(range);
-		const startValue = whitelistStart
-			? parseAddress(normalized.family, whitelistStart)
-			: defaults.first;
-		const endValue = whitelistEnd ? parseAddress(normalized.family, whitelistEnd) : defaults.last;
-		if (startValue < range.start || startValue > range.end) {
-			error(400, 'Whitelist start must be inside the prefix');
-		}
-		if (endValue < range.start || endValue > range.end) {
-			error(400, 'Whitelist end must be inside the prefix');
-		}
-		if (startValue > endValue) {
-			error(400, 'Whitelist start must be <= whitelist end');
-		}
-
-		whitelistStart = formatAddress(normalized.family, startValue);
-		whitelistEnd = formatAddress(normalized.family, endValue);
-	}
-
-	const bunnyDnsZone = input.bunnyDnsZone?.trim().replace(/\.$/, '').toLowerCase() || null;
+	const bunnyDnsZone = input.bunnyDnsZone?.trim().replace(TRAILING_DOT, '').toLowerCase() || null;
 	if (bunnyDnsZone && !isValidPtrHostname(bunnyDnsZone)) {
 		error(400, 'Bunny DNS zone must be a valid domain name');
 	}
@@ -268,39 +299,41 @@ function ipv4GatewayValue(prefix: IpamPrefix) {
 	return prefix.gatewayAddress ? parseAddress('ipv4', prefix.gatewayAddress) : null;
 }
 
-function prefixCapacity(prefix: IpamPrefix) {
-	const range = parseCidr(prefix.cidr);
-
-	if (prefix.family === 'ipv4') {
-		const usable = ipv4UsableRange(prefix);
-		if (!usable) {
-			return 0n;
-		}
-
-		let capacity: bigint;
-		let capacityStart: bigint;
-		let capacityEnd: bigint;
-		if (prefix.whitelistStart && prefix.whitelistEnd) {
-			// Whitelist set: only count IPs within the whitelist range
-			const start = parseAddress('ipv4', prefix.whitelistStart);
-			const end = parseAddress('ipv4', prefix.whitelistEnd);
-			capacityStart = start > usable.first ? start : usable.first;
-			capacityEnd = end < usable.last ? end : usable.last;
-		} else {
-			// No whitelist: entire usable range
-			capacityStart = usable.first;
-			capacityEnd = usable.last;
-		}
-
-		capacity = capacityStart <= capacityEnd ? capacityEnd - capacityStart + 1n : 0n;
-		const gateway = ipv4GatewayValue(prefix);
-		if (gateway !== null && gateway >= capacityStart && gateway <= capacityEnd) {
-			capacity -= 1n;
-		}
-
-		return capacity > 0n ? capacity : 0n;
+function ipv4CapacityBounds(prefix: IpamPrefix, usable: { first: bigint; last: bigint }) {
+	if (!(prefix.whitelistStart && prefix.whitelistEnd)) {
+		return { capacityStart: usable.first, capacityEnd: usable.last };
 	}
 
+	const start = parseAddress('ipv4', prefix.whitelistStart);
+	const end = parseAddress('ipv4', prefix.whitelistEnd);
+	return {
+		capacityStart: start > usable.first ? start : usable.first,
+		capacityEnd: end < usable.last ? end : usable.last
+	};
+}
+
+function ipv4PrefixCapacity(prefix: IpamPrefix) {
+	const usable = ipv4UsableRange(prefix);
+	if (!usable) {
+		return 0n;
+	}
+
+	const { capacityStart, capacityEnd } = ipv4CapacityBounds(prefix, usable);
+	let capacity = capacityStart <= capacityEnd ? capacityEnd - capacityStart + 1n : 0n;
+	const gateway = ipv4GatewayValue(prefix);
+	if (gateway !== null && gateway >= capacityStart && gateway <= capacityEnd) {
+		capacity -= 1n;
+	}
+
+	return capacity > 0n ? capacity : 0n;
+}
+
+function prefixCapacity(prefix: IpamPrefix) {
+	if (prefix.family === 'ipv4') {
+		return ipv4PrefixCapacity(prefix);
+	}
+
+	const range = parseCidr(prefix.cidr);
 	const bounds = ipv6WhitelistBounds(prefix);
 	if (!bounds) {
 		return 0n;
@@ -404,13 +437,12 @@ function randomBigIntBelow(maxExclusive: bigint) {
 	const maxRandom = 1n << BigInt(byteLength * 8);
 	const cutoff = maxRandom - (maxRandom % maxExclusive);
 
-	while (true) {
+	let value: bigint;
+	do {
 		const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
-		const value = bytes.reduce((total, byte) => (total << 8n) + BigInt(byte), 0n);
-		if (value < cutoff) {
-			return value % maxExclusive;
-		}
-	}
+		value = bytes.reduce((total, byte) => (total << 8n) + BigInt(byte), 0n);
+	} while (value >= cutoff);
+	return value % maxExclusive;
 }
 
 function chooseWeightedPrefix<T extends { available: bigint }>(candidates: T[]) {
@@ -532,7 +564,7 @@ function nextIpv4Address(prefix: IpamPrefix, used: Set<string>) {
 		return null;
 	}
 
-	for (let value = bounds.first; value <= bounds.last; value++) {
+	for (let value = bounds.first; value <= bounds.last; value += 1n) {
 		if (value === bounds.gateway || used.has(value.toString())) {
 			continue;
 		}
@@ -648,12 +680,13 @@ async function createRandomKindAllocation(
 ) {
 	const candidates = await eligiblePrefixesWithAvailableCounts(db, kind);
 
-	for (let attempt = 0; attempt < randomAllocationAttempts; attempt++) {
+	for (let attempt = 0; attempt < randomAllocationAttempts; attempt += 1) {
 		const selected = chooseWeightedPrefix(candidates);
 		if (!selected) {
 			return null;
 		}
 
+		// biome-ignore lint/performance/noAwaitInLoops: allocation retries run inside one transaction and each attempt must see the previous attempt's outcome
 		const allocations = await db.query.ipamAllocations.findMany({
 			where: eq(ipamAllocations.ipamPrefixId, selected.prefix.id),
 			columns: { address: true, prefix: true }
@@ -692,6 +725,7 @@ async function createSequentialKindAllocation(
 	const candidates = await eligiblePrefixesWithAvailableCounts(db, kind);
 
 	for (const { prefix } of candidates) {
+		// biome-ignore lint/performance/noAwaitInLoops: prefixes are tried in priority order inside one transaction and the first with room wins
 		const allocations = await db.query.ipamAllocations.findMany({
 			where: eq(ipamAllocations.ipamPrefixId, prefix.id),
 			columns: { address: true, prefix: true }
@@ -712,13 +746,7 @@ async function createSequentialKindAllocation(
 		return insertAllocation(db, kind, vmId, macAddress, prefix, next);
 	}
 
-	const label =
-		kind === 'ipv4'
-			? 'IPv4 addresses'
-			: kind === 'ipv6-transit'
-				? 'IPv6 transit addresses'
-				: 'IPv6 prefixes';
-	error(409, `No available ${label}`);
+	error(409, `No available ${allocationKindLabels[kind]}`);
 }
 
 async function createLocalAllocation(
@@ -732,8 +760,9 @@ async function createLocalAllocation(
 		return randomAllocation;
 	}
 
-	for (let attempt = 0; attempt < 5; attempt++) {
+	for (let attempt = 0; attempt < 5; attempt += 1) {
 		try {
+			// biome-ignore lint/performance/noAwaitInLoops: retries after a unique-constraint race must run one after another
 			return await createSequentialKindAllocation(db, kind, vmId, macAddress);
 		} catch (err) {
 			if (uniqueViolation(err)) {
@@ -743,13 +772,7 @@ async function createLocalAllocation(
 		}
 	}
 
-	const label =
-		kind === 'ipv4'
-			? 'IPv4 addresses'
-			: kind === 'ipv6-transit'
-				? 'IPv6 transit addresses'
-				: 'IPv6 prefixes';
-	error(409, `No available ${label}`);
+	error(409, `No available ${allocationKindLabels[kind]}`);
 }
 
 function tenantDescription(vmId: string, label: string) {
@@ -876,7 +899,7 @@ export async function allocateVmNetworking(
 
 		return allocations;
 	} catch (err) {
-		await releaseVmNetworking(db, params.vmId).catch(() => {});
+		await releaseVmNetworking(db, params.vmId).catch(() => undefined);
 		throw err;
 	}
 }
@@ -906,6 +929,7 @@ export async function reconcileOrphanedIpamAllocations(db: QueryableDb, limit = 
 	let failed = 0;
 	for (const { vmId } of orphaned) {
 		try {
+			// biome-ignore lint/performance/noAwaitInLoops: releasing networking writes VyOS and Bunny config, which must not race between VMs
 			await releaseVmNetworking(db, vmId);
 			released += 1;
 		} catch (err) {

@@ -28,10 +28,14 @@
 
 	type ProjectRole = 'owner' | 'admin' | 'read_write' | 'read';
 	type MemberRole = Exclude<ProjectRole, 'owner'>;
-	type ProjectMember = { userId: string; name: string; email: string; permissions: ProjectRole };
+	interface ProjectMember {
+		email: string;
+		name: string;
+		permissions: ProjectRole;
+		userId: string;
+	}
 
 	let projectName = $derived(data.project.projectName);
-	let projectOwnerId = $derived(data.project.ownerUserId);
 	let projectOwnerName = $derived(data.project.ownerName);
 	let projectOwnerEmail = $derived(data.project.ownerEmail);
 	let members = $derived<ProjectMember[]>([...data.project.members]);
@@ -142,7 +146,7 @@
 		if (!memberToRemove) {
 			return;
 		}
-		const userId = memberToRemove.userId;
+		const { userId } = memberToRemove;
 		memberToRemove = null;
 		removeMember(userId);
 	}

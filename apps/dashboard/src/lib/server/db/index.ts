@@ -6,7 +6,10 @@ import { getRuntimeEnv } from '#lib/server/env.js';
 import { instrument, summarizeStatement, timingLog } from '#lib/server/observability.js';
 import { dev } from '$app/env';
 import { getRequestEvent } from '$app/server';
-import * as schema from './schema';
+import * as authSchema from './auth.schema';
+import * as appSchema from './schema';
+
+const schema = { ...appSchema, ...authSchema };
 
 export type Database = ReturnType<typeof drizzle<typeof schema>>;
 
@@ -44,11 +47,11 @@ function withQueryTracing(pool: Pool): Pool {
 	const runQuery = pool.query.bind(pool) as (...args: unknown[]) => unknown;
 
 	pool.query = function instrumentedQuery(...args: unknown[]) {
-		if (typeof args[args.length - 1] === 'function') {
+		if (typeof args.at(-1) === 'function') {
 			return runQuery(...args);
 		}
 
-		const first = args[0];
+		const [first] = args;
 
 		const statement =
 			typeof first === 'string' ? first : (first as { text?: string } | undefined)?.text;
@@ -88,7 +91,8 @@ export function initDrizzle(): Database {
 	timingLog('db.initDrizzle.start', { 'app.dev': dev });
 
 	if (dev) {
-		devDb ??= drizzle((devPool ??= createPool(resolveConnectionString())), { schema });
+		devPool ??= createPool(resolveConnectionString());
+		devDb ??= drizzle(devPool, { schema });
 		event.locals.db = devDb;
 		timingLog('db.initDrizzle.end', {
 			'app.dev': dev,

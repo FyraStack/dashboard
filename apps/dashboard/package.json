@@ -51,7 +51,7 @@
 		"@axe-core/playwright": "^4.11.0",
 		"@better-auth/cli": "^1.4.22",
 		"@better-svelte-email/cli": "^2.1.1",
-		"@cloudflare/workers-types": "^5.20260717.1",
+		"@cloudflare/workers-types": "^5.20261002.1",
 		"@fontsource-variable/geist": "^5.2.9",
 		"@fontsource-variable/inter": "^5.2.8",
 		"@iconify-json/lucide": "^1.2.117",
@@ -85,6 +85,30 @@
 		"typescript": "^6.0.3",
 		"unplugin-icons": "^23.0.1",
 		"vite": "^8.1.5",
-		"wrangler": "^4.111.0"
+		"wrangler": "^4.146.0"
+	},
+	"dependencies": {
+		"@better-auth/core": "^1.6.24",
+		"@better-auth/passkey": "^1.6.24",
+		"@better-auth/telemetry": "^1.6.24",
+		"@better-auth/utils": "^0.4.2",
+		"@better-svelte-email/components": "^2.1.1",
+		"@better-svelte-email/server": "^2.1.1",
+		"@plausible-analytics/tracker": "^0.4.5",
+		"@sentry/sveltekit": "11.2.0",
+		"arktype": "^2.2.3",
+		"autumn-js": "1.2.33",
+		"ip-address": "^10.2.0",
+		"ky": "^2.0.2",
+		"posthog-js": "1.434.2",
+		"posthog-node": "^5.52.4",
+		"qrcode": "^1.5.4",
+		"ulid": "^3.0.2",
+		"undici": "^8.9.0",
+		"yaml": "^2.9.0"
+	},
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
 	}
 }

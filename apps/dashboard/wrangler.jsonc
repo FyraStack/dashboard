@@ -96,6 +96,9 @@
 	},
 	"observability": {
 		"enabled": true,
+		"issues": {
+			"enabled": true
+		},
 		"traces": {
 			"enabled": true,
 			"head_sampling_rate": 1,
@@ -178,6 +181,9 @@
 			},
 			"observability": {
 				"enabled": true,
+				"issues": {
+					"enabled": true
+				},
 				"traces": {
 					"enabled": true,
 					"head_sampling_rate": 1,

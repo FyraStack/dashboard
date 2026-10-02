@@ -5,7 +5,10 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2026-04-05",
 	"observability": {
-		"enabled": true
+		"enabled": true,
+		"issues": {
+			"enabled": true
+		}
 	},
 	"triggers": {
 		"crons": ["*/15 * * * *"]
@@ -22,7 +25,10 @@
 	"env": {
 		"preview": {
 			"observability": {
-				"enabled": true
+				"enabled": true,
+				"issues": {
+					"enabled": true
+				}
 			},
 			"triggers": {
 				"crons": []

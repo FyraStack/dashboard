@@ -1,5 +1,11 @@
 type ServerStatus =
-	'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'error' | 'unknown';
+	| 'running'
+	| 'stopped'
+	| 'restarting'
+	| 'provisioning'
+	| 'deleting'
+	| 'error'
+	| 'unknown';
 
 type VmSummary = {
 	id: string;
@@ -69,23 +75,33 @@ export type ServerInfo = {
 };
 
 export function primaryAddress(server: Pick<ServerInfo, 'ip' | 'ipv6'>): string | null {
-	if (server.ip && server.ip !== '-') return server.ip;
-	if (server.ipv6 && server.ipv6 !== '-') return server.ipv6;
+	if (server.ip && server.ip !== '-') {
+		return server.ip;
+	}
+	if (server.ipv6 && server.ipv6 !== '-') {
+		return server.ipv6;
+	}
 	return null;
 }
 
 export function formatBytes(bytes: number): string {
-	if (!bytes) return '0B';
+	if (!bytes) {
+		return '0B';
+	}
 	const gb = bytes / (1024 * 1024 * 1024);
-	if (gb >= 1) return `${gb.toFixed(0)}GB`;
+	if (gb >= 1) {
+		return `${gb.toFixed(0)}GB`;
+	}
 	const mb = bytes / (1024 * 1024);
 	return `${mb.toFixed(0)}MB`;
 }
 
 function formatUptime(seconds: number): string {
-	if (!seconds) return '-';
-	const d = Math.floor(seconds / 86400);
-	const h = Math.floor((seconds % 86400) / 3600);
+	if (!seconds) {
+		return '-';
+	}
+	const d = Math.floor(seconds / 86_400);
+	const h = Math.floor((seconds % 86_400) / 3600);
 	const m = Math.floor((seconds % 3600) / 60);
 	return `${d}d ${h}h ${m}m`;
 }
@@ -94,7 +110,9 @@ function getFirstIp(
 	networkInterfaces: NetworkInterfaces | null | undefined,
 	match: (address: string) => boolean
 ): string {
-	if (!networkInterfaces) return '-';
+	if (!networkInterfaces) {
+		return '-';
+	}
 
 	return (
 		Object.values(networkInterfaces)
@@ -115,7 +133,7 @@ export function toServerInfo(vm: VmSummary): ServerInfo {
 		disk: formatBytes(vm.live?.disk ?? (vm.vmType?.storageAmount ?? 0) * 1024 * 1024 * 1024),
 		ip: getFirstIp(
 			vm.live?.networkInterfaces,
-			(address) => !address.startsWith('127.') && !address.includes(':')
+			(address) => !(address.startsWith('127.') || address.includes(':'))
 		),
 		ipv6: getFirstIp(vm.live?.networkInterfaces, (address) => address.includes(':')),
 		status:

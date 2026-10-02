@@ -1,25 +1,25 @@
 <script lang="ts">
-	import { goto, invalidate } from '$app/navigation';
+	import { toast } from 'svelte-sonner';
+	import { isProjectRole, projectRoleLabels } from '#lib/auth/organization-permissions.js';
 	import { authClient } from '#lib/auth-client.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import {
 		createProject as createProjectRpc,
 		deleteProject as deleteProjectRpc
 	} from '#lib/remote/projects.remote.js';
+	import { getErrorMessage } from '#lib/utils.js';
+	import { goto, invalidate } from '$app/navigation';
 	import ArrowRight from '~icons/lucide/arrow-right';
-	import FolderOpen from '~icons/nucleo/folder-open';
 	import Loader2 from '~icons/lucide/loader-2';
 	import MoreHorizontal from '~icons/lucide/more-horizontal';
 	import Plus from '~icons/lucide/plus';
+	import FolderOpen from '~icons/nucleo/folder-open';
 	import Settings from '~icons/nucleo/settings';
 	import Trash2 from '~icons/nucleo/trash';
-	import { toast } from 'svelte-sonner';
-	import { getErrorMessage } from '#lib/utils.js';
-	import { isProjectRole, projectRoleLabels } from '#lib/auth/organization-permissions.js';
 
 	type Project = { id: string; projectName: string; role: string };
 
@@ -37,7 +37,9 @@
 	let deletingProject = $state(false);
 
 	async function handleCreateProject() {
-		if (!newProjectName.trim() || creatingProject) return;
+		if (!newProjectName.trim() || creatingProject) {
+			return;
+		}
 
 		creatingProject = true;
 		createProjectError = '';
@@ -67,15 +69,18 @@
 	}
 
 	function closeCreateDialog() {
-		if (creatingProject) return;
+		if (creatingProject) {
+			return;
+		}
 
 		createOpen = false;
 		createProjectError = '';
 	}
 
 	async function handleDeleteProject() {
-		if (!deleteTarget || deleteConfirm.trim() !== deleteTarget.projectName || deletingProject)
+		if (!deleteTarget || deleteConfirm.trim() !== deleteTarget.projectName || deletingProject) {
 			return;
+		}
 
 		deletingProject = true;
 		const target = deleteTarget;
@@ -100,7 +105,9 @@
 	}
 
 	function closeDeleteDialog() {
-		if (deletingProject) return;
+		if (deletingProject) {
+			return;
+		}
 
 		deleteOpen = false;
 		deleteTarget = null;
@@ -227,7 +234,9 @@
 <Dialog.Root
 	bind:open={createOpen}
 	onOpenChange={(v) => {
-		if (!v) closeCreateDialog();
+		if (!v) {
+			closeCreateDialog();
+		}
 	}}
 >
 	<Dialog.Content class="border-border bg-background sm:max-w-md">
@@ -272,15 +281,17 @@
 <Dialog.Root
 	bind:open={deleteOpen}
 	onOpenChange={(v) => {
-		if (!v) closeDeleteDialog();
+		if (!v) {
+			closeDeleteDialog();
+		}
 	}}
 >
 	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Delete Project</Dialog.Title>
 			<Dialog.Description>
-				This will permanently delete <strong>{deleteTarget?.projectName}</strong> and all its resources.
-				Type the project name to confirm.
+				This will permanently delete <strong>{deleteTarget?.projectName}</strong> and all its
+				resources. Type the project name to confirm.
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="flex flex-col gap-2 py-4">

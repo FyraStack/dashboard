@@ -1,18 +1,18 @@
-import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { desc, eq } from 'drizzle-orm';
+import {
+	accessibilityFixtureAdminVms,
+	accessibilityFixtureEnabled
+} from '#lib/server/accessibility-fixtures.js';
 import { requireAdmin } from '#lib/server/auth-context.js';
+import { getBackend, type VmInfo } from '#lib/server/backends/index.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { member, organization, user, vms, vmTypes } from '#lib/server/db/schema.js';
-import { getBackend, type VmInfo } from '#lib/server/backends/index.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 import { queueVmDeletion } from '#lib/server/vm-deletion.js';
 import { findLiveVm } from '#lib/server/vm-identity.js';
-import {
-	accessibilityFixtureEnabled,
-	accessibilityFixtureAdminVms
-} from '#lib/server/accessibility-fixtures.js';
-import { captureServerEvent } from '#lib/server/posthog.js';
+import { command, getRequestEvent, query } from '$app/server';
 
 export type AdminVm = {
 	id: string;
@@ -47,7 +47,9 @@ export type AdminVm = {
 
 async function requireCurrentAdmin() {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
@@ -56,7 +58,9 @@ async function requireCurrentAdmin() {
 }
 
 export const listAllAdminVms = query(async (): Promise<AdminVm[]> => {
-	if (accessibilityFixtureEnabled) return accessibilityFixtureAdminVms;
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureAdminVms;
+	}
 	const db = await requireCurrentAdmin();
 
 	const [rows, owners] = await Promise.all([
@@ -157,9 +161,15 @@ async function adminPowerAction(
 	const db = await requireCurrentAdmin();
 
 	const row = await db.query.vms.findFirst({ where: eq(vms.id, vmId) });
-	if (!row) error(404, `VM "${vmId}" not found`);
-	if (!row.active) error(400, `VM "${row.name}" is no longer active`);
-	if (row.status === 'deleting') error(409, `VM "${row.name}" is being deleted`);
+	if (!row) {
+		error(404, `VM "${vmId}" not found`);
+	}
+	if (!row.active) {
+		error(400, `VM "${row.name}" is no longer active`);
+	}
+	if (row.status === 'deleting') {
+		error(409, `VM "${row.name}" is being deleted`);
+	}
 
 	await getBackend(row.backend)[action](row.id, row.proxmoxId ?? undefined);
 	captureServerEvent(
@@ -180,8 +190,12 @@ export const adminDeleteVm = command(powerParams, async (params) => {
 	const db = await requireCurrentAdmin();
 
 	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
-	if (!row) error(404, `VM "${params.vmId}" not found`);
-	if (!row.active) return;
+	if (!row) {
+		error(404, `VM "${params.vmId}" not found`);
+	}
+	if (!row.active) {
+		return;
+	}
 
 	await queueVmDeletion(db, row);
 	captureServerEvent('admin_vm_deleted', { vm_id: row.id }, { projectId: row.ownerProjectId });

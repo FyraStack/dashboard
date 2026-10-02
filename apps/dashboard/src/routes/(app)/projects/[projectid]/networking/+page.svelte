@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { Button } from '#lib/components/ui/button/index.js';
+	import CreateNetworkDialog from '#lib/components/dialogs/create-network-dialog.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
-	import CreateNetworkDialog from '#lib/components/dialogs/create-network-dialog.svelte';
 	import Check from '~icons/lucide/check';
 	import Plus from '~icons/lucide/plus';
 	import X from '~icons/lucide/x';
@@ -79,7 +79,9 @@
 	}
 
 	function saveEdit() {
-		if (editingIdx === null) return;
+		if (editingIdx === null) {
+			return;
+		}
 		ips[editingIdx].rdns = editValue;
 		editingIdx = null;
 	}
@@ -91,7 +93,9 @@
 	let netCounter = $state(1);
 
 	function createNetwork() {
-		if (!newNetName.trim()) return;
+		if (!newNetName.trim()) {
+			return;
+		}
 		netCounter++;
 		networks.push({
 			id: `vpc-${String(netCounter).padStart(3, '0')}`,
@@ -136,9 +140,9 @@
 						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Address</th>
 						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Type</th>
 						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">Server</th>
-						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground"
-							>Reverse DNS</th
-						>
+						<th class="px-5 py-2.5 text-left text-xs font-medium text-muted-foreground">
+							Reverse DNS
+						</th>
 						<th class="px-5 py-2.5 text-right text-xs font-medium text-muted-foreground"></th>
 					</tr>
 				</thead>

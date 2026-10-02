@@ -1,10 +1,10 @@
-import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { eq, and } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { apiTokens } from '#lib/server/db/schema.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { command, getRequestEvent, query } from '$app/server';
 
 type ListResult = {
 	id: string;
@@ -15,7 +15,9 @@ type ListResult = {
 
 export const listApiTokens = query(async () => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const tokens = await db.query.apiTokens.findMany({
@@ -49,7 +51,9 @@ type CreateResult = { id: string; token: string };
 
 export const createApiToken = command(createParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const plainToken = generateToken();
@@ -74,14 +78,18 @@ const revokeParams = type({ tokenId: 'string' });
 
 export const revokeApiToken = command(revokeParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const token = await db.query.apiTokens.findFirst({
 		where: and(eq(apiTokens.id, params.tokenId), eq(apiTokens.userId, event.locals.user.id))
 	});
 
-	if (!token) error(404, 'API token not found');
+	if (!token) {
+		error(404, 'API token not found');
+	}
 
 	await db
 		.delete(apiTokens)

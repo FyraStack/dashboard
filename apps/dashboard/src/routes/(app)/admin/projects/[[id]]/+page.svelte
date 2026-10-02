@@ -1,33 +1,33 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { goto, invalidate } from '$app/navigation';
-	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
+	import { toast } from 'svelte-sonner';
 	import { authClient } from '#lib/auth-client.js';
+	import VmBillingReversalDialog from '#lib/components/admin/vm-billing-reversal-dialog.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { Separator } from '#lib/components/ui/separator/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import VmBillingReversalDialog from '#lib/components/admin/vm-billing-reversal-dialog.svelte';
+	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
 	import { generateServerName } from '#lib/name-generator.js';
 	import {
+		type AdminProject,
 		beginDeleteProject,
 		createAdminProject,
 		createAdminVm,
 		deleteProjectWithVerification,
-		setProjectDisabled,
-		type AdminProject
+		setProjectDisabled
 	} from '#lib/remote/admin-projects.remote.js';
 	import { getUserResources, type UserSshKey } from '#lib/remote/admin-users.remote.js';
 	import type { AdminVm } from '#lib/remote/admin-vms.remote.js';
-	import { AdminState, type AdminPageData } from '#lib/state/admin.svelte.js';
+	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
 	import { getErrorMessage, runQuery } from '#lib/utils.js';
-	import { toast } from 'svelte-sonner';
+	import { goto, invalidate } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import Check from '~icons/lucide/check';
 	import ChevronDown from '~icons/lucide/chevron-down';
 	import ChevronRight from '~icons/lucide/chevron-right';
@@ -91,14 +91,20 @@
 	);
 	const filteredProjects = $derived(
 		admin.adminProjects.filter((project) => {
-			if (ownerFilter !== 'all' && project.ownerEmail !== ownerFilter) return false;
+			if (ownerFilter !== 'all' && project.ownerEmail !== ownerFilter) {
+				return false;
+			}
 			if (billingFilter === 'exempt') {
-				if (!project.billingExempt && !project.ownerBillingExempt) return false;
+				if (!(project.billingExempt || project.ownerBillingExempt)) {
+					return false;
+				}
 			} else if (billingFilter !== 'all' && project.billingStatus !== billingFilter) {
 				return false;
 			}
 			const term = search.trim().toLowerCase();
-			if (!term) return true;
+			if (!term) {
+				return true;
+			}
 
 			return [project.name, project.slug, project.ownerName, project.ownerEmail, project.id]
 				.filter(Boolean)
@@ -136,58 +142,66 @@
 	}
 
 	function vmStatusInfo(vm: AdminVm) {
-		if (vm.status === 'deleting')
+		if (vm.status === 'deleting') {
 			return {
 				label: 'deleting',
 				class:
 					'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
 			};
-		if (vm.status === 'error')
+		}
+		if (vm.status === 'error') {
 			return {
 				label: 'error',
 				class:
 					'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
 			};
-		if (vm.status === 'provisioning')
+		}
+		if (vm.status === 'provisioning') {
 			return {
 				label: 'provisioning',
 				class:
 					'border-sky-300 bg-sky-100 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-400'
 			};
-		if (vm.liveStatus === 'running')
+		}
+		if (vm.liveStatus === 'running') {
 			return {
 				label: 'running',
 				class:
 					'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400'
 			};
-		if (vm.liveStatus === 'paused')
+		}
+		if (vm.liveStatus === 'paused') {
 			return {
 				label: 'paused',
 				class:
 					'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400'
 			};
+		}
 		return { label: 'stopped', class: 'border-ring/20 bg-muted/30 text-muted-foreground' };
 	}
 
 	function billingInfo(project: AdminProject) {
-		if (project.billingStatus === 'suspended')
+		if (project.billingStatus === 'suspended') {
 			return {
 				label: 'suspended',
 				class:
 					'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
 			};
-		if (project.billingStatus === 'past_due')
+		}
+		if (project.billingStatus === 'past_due') {
 			return {
 				label: 'past due',
 				class:
 					'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400'
 			};
-		if (project.billingStatus === 'configured')
+		}
+		if (project.billingStatus === 'configured') {
 			return {
 				label: 'configured',
 				class:
 					'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400'
 			};
+		}
 		return { label: 'no billing', class: 'border-ring/20 bg-muted/30 text-muted-foreground' };
 	}
 
@@ -208,7 +222,9 @@
 			.sort((a, b) => a.name.localeCompare(b.name))
 			.filter((account) => {
 				const term = createProjectOwnerSearch.trim().toLowerCase();
-				if (!term) return true;
+				if (!term) {
+					return true;
+				}
 				return [account.name, account.email].some((value) => value.toLowerCase().includes(term));
 			})
 	);
@@ -222,7 +238,9 @@
 	}
 
 	async function submitCreateProject() {
-		if (!createProjectName.trim() || !createProjectOwnerId || createProjectSaving) return;
+		if (!(createProjectName.trim() && createProjectOwnerId) || createProjectSaving) {
+			return;
+		}
 		createProjectSaving = true;
 		createProjectError = '';
 		try {
@@ -272,7 +290,9 @@
 		createVmOwnerKeys = [];
 		createVmError = '';
 		createVmOpen = true;
-		if (project.ownerId) void loadOwnerSshKeys(project.ownerId);
+		if (project.ownerId) {
+			void loadOwnerSshKeys(project.ownerId);
+		}
 	}
 
 	async function loadOwnerSshKeys(ownerId: string) {
@@ -294,7 +314,9 @@
 	}
 
 	async function submitCreateVm() {
-		if (!createVmProject || !createVmName.trim() || !createVmTypeId || createVmSaving) return;
+		if (!(createVmProject && createVmName.trim() && createVmTypeId) || createVmSaving) {
+			return;
+		}
 		createVmSaving = true;
 		createVmError = '';
 		try {
@@ -319,7 +341,9 @@
 
 	let disableSaving = $state(false);
 	async function toggleProjectDisabled(project: AdminProject) {
-		if (disableSaving) return;
+		if (disableSaving) {
+			return;
+		}
 		const disabling = !project.disabled;
 		const ok = await confirmDestructive({
 			title: disabling ? `Disable ${project.name}?` : `Enable ${project.name}?`,
@@ -328,7 +352,9 @@
 				: 'Members regain access to this project and provisioning is allowed again.',
 			confirmLabel: disabling ? 'Disable project' : 'Enable project'
 		});
-		if (!ok) return;
+		if (!ok) {
+			return;
+		}
 		disableSaving = true;
 		try {
 			await setProjectDisabled({ projectId: project.id, disabled: disabling });
@@ -380,7 +406,9 @@
 	}
 
 	async function openDeleteProject(project: AdminProject) {
-		if (deletePreparing || deleteVerifying) return;
+		if (deletePreparing || deleteVerifying) {
+			return;
+		}
 
 		const ok = await confirmDestructive({
 			title: `Delete ${project.name}?`,
@@ -389,7 +417,9 @@
 			confirmWord: project.name,
 			confirmLabel: 'Continue'
 		});
-		if (!ok) return;
+		if (!ok) {
+			return;
+		}
 
 		deletePreparing = true;
 		try {
@@ -409,7 +439,9 @@
 	}
 
 	async function confirmDeleteProject() {
-		if (deleteVerificationDisabled) return;
+		if (deleteVerificationDisabled) {
+			return;
+		}
 
 		deleteVerifying = true;
 		deleteError = '';
@@ -451,16 +483,17 @@
 	async function deleteVm(vm: AdminVm) {
 		const ok = await confirmDestructive({
 			title: `Delete ${vm.name}?`,
-			description: `This deprovisions the server in Proxmox, releases its networking, and records final usage.`,
+			description:
+				'This deprovisions the server in Proxmox, releases its networking, and records final usage.',
 			confirmWord: vm.name,
 			confirmLabel: 'Delete server'
 		});
-		if (!ok) return;
-		try {
-			await admin.adminVmDelete(vm.id);
-		} catch {
+		if (!ok) {
 			return;
 		}
+		try {
+			await admin.adminVmDelete(vm.id);
+		} catch {}
 	}
 </script>
 
@@ -468,7 +501,9 @@
 	<title>Projects</title>
 </svelte:head>
 
-{#snippet projectDetail(project: AdminProject)}
+{#snippet projectDetail(
+	project: AdminProject
+)}
 	{@const vmsForProject = projectVms(project.id)}
 	{@const billing = billingInfo(project)}
 	<div class="flex flex-col gap-6">
@@ -562,12 +597,14 @@
 						</div>
 					</div>
 					<div class="flex items-center gap-2">
-						{#if admin.userSheetSaving[ownerId]?.field === 'billingExempt' && admin.userSheetSaving[ownerId]?.saving}
+						{#if admin.userSheetSaving[ownerId]?.field === 'billingExempt' &&
+							admin.userSheetSaving[ownerId]?.saving}
 							<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 						{/if}
 						<Switch
 							bind:checked={
-								() => project.ownerBillingExempt, (v) => admin.setUserBillingExempt(ownerId, v)
+								() => project.ownerBillingExempt,
+								(v) => admin.setUserBillingExempt(ownerId, v)
 							}
 						/>
 					</div>
@@ -578,7 +615,8 @@
 		<Separator class="bg-muted" />
 
 		<div class="flex flex-col gap-3">
-			<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase">Billing</span
+			<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+				>Billing</span
 			>
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-2">
@@ -600,7 +638,8 @@
 					{/if}
 					<Switch
 						bind:checked={
-							() => project.billingExempt, (v) => admin.setProjectBillingExempt(project.id, v)
+							() => project.billingExempt,
+							(v) => admin.setProjectBillingExempt(project.id, v)
 						}
 					/>
 				</div>
@@ -636,11 +675,13 @@
 							<div class="flex min-w-0 flex-col gap-0.5">
 								<a
 									class="truncate text-xs font-medium text-foreground hover:underline"
-									href={resolve(`admin/vms/${vm.id}`)}>{vm.name}</a
+									href={resolve(`admin/vms/${vm.id}`)}
+									>{vm.name}</a
 								>
 
 								<span class="truncate font-mono text-[10px] text-muted-foreground"
-									>{vm.vmTypeName ?? '-'} · {vm.lastKnownIpv4 ?? vm.lastKnownIpv6 ?? vm.id}</span
+									>{vm.vmTypeName ?? '-'}
+									· {vm.lastKnownIpv4 ?? vm.lastKnownIpv6 ?? vm.id}</span
 								>
 							</div>
 							<div class="flex shrink-0 items-center gap-2">
@@ -715,7 +756,8 @@
 		<Separator class="bg-muted" />
 
 		<div class="flex flex-col gap-2">
-			<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase">Details</span
+			<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+				>Details</span
 			>
 			<div class="flex items-center justify-between">
 				<span class="flex items-center gap-2 text-xs text-muted-foreground">
@@ -880,7 +922,9 @@
 						onSelect={() => (ownerFilter = 'all')}
 					>
 						All owners
-						{#if ownerFilter === 'all'}<Check class="ml-auto h-3 w-3 text-emerald-400" />{/if}
+						{#if ownerFilter === 'all'}
+							<Check class="ml-auto h-3 w-3 text-emerald-400" />
+						{/if}
 					</DropdownMenu.Item>
 					<DropdownMenu.Separator class="bg-muted" />
 					{#each ownerOptions as owner (owner.email)}
@@ -915,7 +959,9 @@
 						onSelect={() => (billingFilter = 'all')}
 					>
 						All billing states
-						{#if billingFilter === 'all'}<Check class="ml-auto h-3 w-3 text-emerald-400" />{/if}
+						{#if billingFilter === 'all'}
+							<Check class="ml-auto h-3 w-3 text-emerald-400" />
+						{/if}
 					</DropdownMenu.Item>
 					<DropdownMenu.Separator class="bg-muted" />
 					{#each billingFilterOptions as option (option.value)}
@@ -1205,7 +1251,9 @@
 								onSelect={() => (createVmImageId = '')}
 							>
 								No image
-								{#if !createVmImageId}<Check class="ml-auto h-3 w-3 text-emerald-400" />{/if}
+								{#if !createVmImageId}
+									<Check class="ml-auto h-3 w-3 text-emerald-400" />
+								{/if}
 							</DropdownMenu.Item>
 							<DropdownMenu.Separator class="bg-muted" />
 							{#each admin.images as image (image.id)}
@@ -1233,8 +1281,10 @@
 						'both'
 							? 'border-ring/60 bg-muted/30 text-foreground'
 							: 'border-border/60 text-muted-foreground hover:bg-muted/20'}"
-						onclick={() => (createVmNetworking = 'both')}>IPv4 + IPv6</button
+						onclick={() => (createVmNetworking = 'both')}
 					>
+						IPv4 + IPv6
+					</button>
 
 					<button
 						type="button"
@@ -1242,8 +1292,10 @@
 						'ipv6'
 							? 'border-ring/60 bg-muted/30 text-foreground'
 							: 'border-border/60 text-muted-foreground hover:bg-muted/20'}"
-						onclick={() => (createVmNetworking = 'ipv6')}>IPv6 only</button
+						onclick={() => (createVmNetworking = 'ipv6')}
 					>
+						IPv6 only
+					</button>
 				</div>
 			</div>
 
@@ -1331,7 +1383,9 @@
 <Dialog.Root
 	bind:open={deleteDialogOpen}
 	onOpenChange={(value) => {
-		if (!value && !deleteVerifying) resetDeleteDialog();
+		if (!(value || deleteVerifying)) {
+			resetDeleteDialog();
+		}
 	}}
 >
 	<Dialog.Content class="border-border bg-background sm:max-w-md">
@@ -1354,8 +1408,8 @@
 			>
 				<p class="font-medium text-red-200">This action cannot be undone.</p>
 				<p>
-					Deleting {deleteProjectName} deprovisions every server, deletes volumes and invitations, records
-					final usage, and cancels billing for this project.
+					Deleting {deleteProjectName} deprovisions every server, deletes volumes and invitations,
+					records final usage, and cancels billing for this project.
 				</p>
 			</div>
 

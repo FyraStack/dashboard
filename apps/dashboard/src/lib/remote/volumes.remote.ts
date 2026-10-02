@@ -1,11 +1,11 @@
-import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { eq } from 'drizzle-orm';
-import { initDrizzle } from '#lib/server/db/index.js';
-import { volumes, vms } from '#lib/server/db/schema.js';
 import { requireProjectAccess } from '#lib/server/auth-context.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { vms, volumes } from '#lib/server/db/schema.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { command, getRequestEvent, query } from '$app/server';
 
 type ListParams = { projectId: string };
 type ListResult = {
@@ -17,7 +17,9 @@ type ListResult = {
 
 export const listVolumes = query(type({ projectId: 'string' }), async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId);
@@ -36,7 +38,9 @@ const createParams = type({
 });
 export const createVolume = command(createParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'read_write');
@@ -62,14 +66,18 @@ export const createVolume = command(createParams, async (params) => {
 const deleteParams = type({ volumeId: 'string' });
 export const deleteVolume = command(deleteParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const vol = await db.query.volumes.findFirst({
 		where: eq(volumes.id, params.volumeId)
 	});
 
-	if (!vol) error(404, 'Volume not found');
+	if (!vol) {
+		error(404, 'Volume not found');
+	}
 	await requireProjectAccess(db, event.locals.user.id, vol.ownerProjectId, 'admin');
 
 	if (vol.associatedVmId) {
@@ -87,13 +95,17 @@ export const deleteVolume = command(deleteParams, async (params) => {
 const attachParams = type({ volumeId: 'string', vmId: 'string' });
 export const attachVolume = command(attachParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const vol = await db.query.volumes.findFirst({
 		where: eq(volumes.id, params.volumeId)
 	});
-	if (!vol) error(404, 'Volume not found');
+	if (!vol) {
+		error(404, 'Volume not found');
+	}
 
 	await requireProjectAccess(db, event.locals.user.id, vol.ownerProjectId, 'read_write');
 
@@ -102,7 +114,9 @@ export const attachVolume = command(attachParams, async (params) => {
 	}
 
 	const vm = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
-	if (!vm) error(404, 'VM not found');
+	if (!vm) {
+		error(404, 'VM not found');
+	}
 	if (vm.ownerProjectId !== vol.ownerProjectId) {
 		error(400, 'Volume and VM must belong to the same project');
 	}
@@ -121,13 +135,17 @@ export const attachVolume = command(attachParams, async (params) => {
 const detachParams = type({ volumeId: 'string' });
 export const detachVolume = command(detachParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const vol = await db.query.volumes.findFirst({
 		where: eq(volumes.id, params.volumeId)
 	});
-	if (!vol) error(404, 'Volume not found');
+	if (!vol) {
+		error(404, 'Volume not found');
+	}
 
 	await requireProjectAccess(db, event.locals.user.id, vol.ownerProjectId, 'read_write');
 

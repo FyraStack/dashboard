@@ -1,12 +1,12 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
+import { getBackend } from '#lib/server/backends/index.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { projectBillingCustomers, vms } from '#lib/server/db/schema.js';
-import { getBackend } from '#lib/server/backends/index.js';
-import { getProjectBillingState, isBillingConfigured } from './autumn';
 import {
 	sendProjectPastDueEmail,
 	sendProjectSuspendedEmail
 } from '#lib/server/email-notifications.js';
+import { getProjectBillingState, isBillingConfigured } from './autumn';
 
 const GRACE_PERIOD_DAYS = 1000;
 const GRACE_PERIOD_MS = GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000;
@@ -33,7 +33,9 @@ async function suspendProjectVms(projectId: string) {
 }
 
 export async function enforceProjectBillingGrace(now = Date.now()) {
-	if (!isBillingConfigured()) return { checked: 0, suspended: 0 };
+	if (!isBillingConfigured()) {
+		return { checked: 0, suspended: 0 };
+	}
 
 	const db = initDrizzle();
 	const projects = await db
@@ -44,7 +46,9 @@ export async function enforceProjectBillingGrace(now = Date.now()) {
 
 	let suspended = 0;
 	for (const { projectId } of projects) {
-		if (!projectId) continue;
+		if (!projectId) {
+			continue;
+		}
 
 		const state = await getProjectBillingState(projectId, { live: true });
 		const customer = await db.query.projectBillingCustomers.findFirst({

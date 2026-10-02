@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { page } from '$app/state';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 
 	const isNotFound = $derived(page.status === 404);
 	const isServerError = $derived(page.status >= 500);

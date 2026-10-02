@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
-import type { Database } from '#lib/server/db/index.js';
 import type { VmBackend, VmInfo } from '#lib/server/backends/index.js';
+import type { Database } from '#lib/server/db/index.js';
 
 export function findLiveVm<T extends VmInfo>(liveVms: T[], row: { id: string }): T | null {
 	const stableId = row.id.toLowerCase();
@@ -15,6 +15,8 @@ async function nextSequenceValue(db: Database): Promise<number> {
 export async function allocateProxmoxVmid(db: Database, backend: VmBackend): Promise<number> {
 	const usedIds = (await backend.listUsedProxmoxIds?.()) ?? new Set<number>();
 	let candidate = await nextSequenceValue(db);
-	while (usedIds.has(candidate)) candidate = await nextSequenceValue(db);
+	while (usedIds.has(candidate)) {
+		candidate = await nextSequenceValue(db);
+	}
 	return candidate;
 }

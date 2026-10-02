@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { authClient } from '#lib/auth-client.js';
+	import TotpResetFlow from '#lib/components/totp-reset-flow.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import TotpResetFlow from '#lib/components/totp-reset-flow.svelte';
+	import { goto } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertCircle from '~icons/nucleo/alert-circle';
 	import ShieldCheck from '~icons/nucleo/shield-check';
@@ -23,7 +23,9 @@
 	let normalizedCode = $derived(code.replace(/\D/g, ''));
 
 	async function handleVerify() {
-		if (!normalizedCode) return;
+		if (!normalizedCode) {
+			return;
+		}
 		error = '';
 		loading = true;
 

@@ -1,6 +1,6 @@
-import type { RemoteQuery } from '$app/server';
-import { clsx, type ClassValue } from 'clsx';
+import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import type { RemoteQuery } from '$app/server';
 
 type ClientTimingAttributes = Record<string, string | number | boolean | undefined>;
 
@@ -13,7 +13,9 @@ function roundMs(value: number): number {
 }
 
 export function clientTimingLog(name: string, attributes?: ClientTimingAttributes) {
-	if (typeof window === 'undefined') return;
+	if (typeof window === 'undefined') {
+		return;
+	}
 
 	console.info({
 		message: `[timing] ${name}`,
@@ -46,17 +48,25 @@ export async function runQuery<T>(query: RemoteQuery<T>, label = 'remote.query')
 }
 
 export function getErrorMessage(err: unknown, fallback: string): string {
-	if (typeof err === 'string') return err;
-	if (err instanceof Error) return err.message;
+	if (typeof err === 'string') {
+		return err;
+	}
+	if (err instanceof Error) {
+		return err.message;
+	}
 	if (typeof err === 'object' && err !== null) {
-		if ('message' in err) return String((err as { message: unknown }).message);
+		if ('message' in err) {
+			return String((err as { message: unknown }).message);
+		}
 		if (
 			'body' in err &&
 			typeof (err as { body: unknown }).body === 'object' &&
 			(err as { body: unknown }).body !== null
 		) {
 			const body = (err as { body: Record<string, unknown> }).body;
-			if ('message' in body) return String(body.message);
+			if ('message' in body) {
+				return String(body.message);
+			}
 		}
 	}
 	return fallback;

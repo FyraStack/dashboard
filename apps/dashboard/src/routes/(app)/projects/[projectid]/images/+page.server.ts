@@ -1,6 +1,6 @@
-import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
 import { listImages } from '#lib/remote/images.remote.js';
+import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ parent }) => {
 	const { featureFlags } = await parent();

@@ -1,11 +1,11 @@
 import { error } from '@sveltejs/kit';
-import { Address4, Address6 } from 'ip-address';
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
-import { initDrizzle } from '#lib/server/db/index.js';
-import { ipamAllocations, ipamPrefixes, vms } from '#lib/server/db/schema.js';
-import { isVyosConfigured, VyosClient } from '#lib/server/vyos.js';
-import { deletePtrRecords } from '#lib/server/ptr-records.js';
+import { Address4, Address6 } from 'ip-address';
 import { isValidPtrHostname } from '#lib/ptr.js';
+import type { initDrizzle } from '#lib/server/db/index.js';
+import { ipamAllocations, ipamPrefixes, vms } from '#lib/server/db/schema.js';
+import { deletePtrRecords } from '#lib/server/ptr-records.js';
+import { isVyosConfigured, VyosClient } from '#lib/server/vyos.js';
 
 export type IpFamily = 'ipv4' | 'ipv6';
 export type VmNetworkingMode = 'both' | 'ipv6';
@@ -122,11 +122,15 @@ function normalizeCidr(cidr: string) {
 
 function parseAddress(family: IpFamily, value: string) {
 	if (family === 'ipv4') {
-		if (!Address4.isValid(value)) error(400, `Invalid IPv4 address "${value}"`);
+		if (!Address4.isValid(value)) {
+			error(400, `Invalid IPv4 address "${value}"`);
+		}
 		return new Address4(value).bigInt();
 	}
 
-	if (!Address6.isValid(value)) error(400, `Invalid IPv6 address "${value}"`);
+	if (!Address6.isValid(value)) {
+		error(400, `Invalid IPv6 address "${value}"`);
+	}
 	return new Address6(value).bigInt();
 }
 
@@ -171,7 +175,9 @@ export function normalizeIpamPrefixInput(input: IpamPrefixInput) {
 	const range = parseCidr(normalized.cidr);
 	let gatewayAddress = input.gatewayAddress?.trim() || null;
 	if (normalized.family === 'ipv4') {
-		if (!gatewayAddress) error(400, 'Gateway address is required for IPv4 prefixes');
+		if (!gatewayAddress) {
+			error(400, 'Gateway address is required for IPv4 prefixes');
+		}
 		const gatewayValue = parseAddress('ipv4', gatewayAddress);
 		if (gatewayValue < range.start || gatewayValue > range.end) {
 			error(400, 'Gateway address must be inside the prefix');
@@ -239,7 +245,9 @@ function ipv6AllocationSize(prefix: IpamPrefix) {
 }
 
 function ceilToMultiple(value: bigint, base: bigint, size: bigint) {
-	if (value <= base) return base;
+	if (value <= base) {
+		return base;
+	}
 	const offset = value - base;
 	return base + ((offset + size - 1n) / size) * size;
 }
@@ -265,7 +273,9 @@ function prefixCapacity(prefix: IpamPrefix) {
 
 	if (prefix.family === 'ipv4') {
 		const usable = ipv4UsableRange(prefix);
-		if (!usable) return 0n;
+		if (!usable) {
+			return 0n;
+		}
 
 		let capacity: bigint;
 		let capacityStart: bigint;
@@ -284,20 +294,27 @@ function prefixCapacity(prefix: IpamPrefix) {
 
 		capacity = capacityStart <= capacityEnd ? capacityEnd - capacityStart + 1n : 0n;
 		const gateway = ipv4GatewayValue(prefix);
-		if (gateway !== null && gateway >= capacityStart && gateway <= capacityEnd) capacity -= 1n;
+		if (gateway !== null && gateway >= capacityStart && gateway <= capacityEnd) {
+			capacity -= 1n;
+		}
 
 		return capacity > 0n ? capacity : 0n;
 	}
 
 	const bounds = ipv6WhitelistBounds(prefix);
-	if (!bounds) return 0n;
+	if (!bounds) {
+		return 0n;
+	}
 
 	const allocationSize = ipv6AllocationSize(prefix);
 	let first = ceilToMultiple(bounds.first, range.start, allocationSize);
-	if (prefix.ipv6UseTransitAddress && first === range.start && range.start < range.end)
+	if (prefix.ipv6UseTransitAddress && first === range.start && range.start < range.end) {
 		first += allocationSize;
+	}
 	const last = bounds.last - allocationSize + 1n;
-	if (first > last) return 0n;
+	if (first > last) {
+		return 0n;
+	}
 
 	return (last - first) / allocationSize + 1n;
 }
@@ -318,9 +335,12 @@ function allocatedCount(
 
 	const used = new Set(
 		allocations.flatMap((allocation) => {
-			if (allocation.prefix)
+			if (allocation.prefix) {
 				return [new Address6(allocation.prefix).startAddress().bigInt().toString()];
-			if (allocation.address) return [parseAddress('ipv6', allocation.address).toString()];
+			}
+			if (allocation.address) {
+				return [parseAddress('ipv6', allocation.address).toString()];
+			}
 			return [];
 		})
 	);
@@ -333,7 +353,7 @@ async function prefixStats(db: QueryableDb, prefix: IpamPrefix): Promise<IpamPre
 		where: eq(ipamAllocations.ipamPrefixId, prefix.id),
 		columns: { address: true, prefix: true }
 	});
-	const capacity = !prefix.disabled ? prefixCapacity(prefix) : 0n;
+	const capacity = prefix.disabled ? 0n : prefixCapacity(prefix);
 	const allocated = allocatedCount(prefix, allocations);
 	const available = capacity > allocated ? capacity - allocated : 0n;
 
@@ -375,7 +395,9 @@ export async function getIpamAvailability(db: QueryableDb): Promise<IpamAvailabi
 }
 
 function randomBigIntBelow(maxExclusive: bigint) {
-	if (maxExclusive <= 0n) throw new Error('maxExclusive must be greater than 0');
+	if (maxExclusive <= 0n) {
+		throw new Error('maxExclusive must be greater than 0');
+	}
 
 	const bitLength = maxExclusive.toString(2).length;
 	const byteLength = Math.ceil(bitLength / 8);
@@ -385,17 +407,23 @@ function randomBigIntBelow(maxExclusive: bigint) {
 	while (true) {
 		const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
 		const value = bytes.reduce((total, byte) => (total << 8n) + BigInt(byte), 0n);
-		if (value < cutoff) return value % maxExclusive;
+		if (value < cutoff) {
+			return value % maxExclusive;
+		}
 	}
 }
 
 function chooseWeightedPrefix<T extends { available: bigint }>(candidates: T[]) {
 	const total = candidates.reduce((sum, candidate) => sum + candidate.available, 0n);
-	if (total <= 0n) return null;
+	if (total <= 0n) {
+		return null;
+	}
 
 	let selected = randomBigIntBelow(total);
 	for (const candidate of candidates) {
-		if (selected < candidate.available) return candidate;
+		if (selected < candidate.available) {
+			return candidate;
+		}
 		selected -= candidate.available;
 	}
 
@@ -413,9 +441,12 @@ function usedIpv4AddressIndexes(allocations: Pick<IpamAllocation, 'address'>[]) 
 function usedIpv6AllocationIndexes(allocations: Pick<IpamAllocation, 'address' | 'prefix'>[]) {
 	return new Set(
 		allocations.flatMap((allocation) => {
-			if (allocation.prefix)
+			if (allocation.prefix) {
 				return [new Address6(allocation.prefix).startAddress().bigInt().toString()];
-			if (allocation.address) return [parseAddress('ipv6', allocation.address).toString()];
+			}
+			if (allocation.address) {
+				return [parseAddress('ipv6', allocation.address).toString()];
+			}
 			return [];
 		})
 	);
@@ -423,7 +454,9 @@ function usedIpv6AllocationIndexes(allocations: Pick<IpamAllocation, 'address' |
 
 function ipv4AllocationBounds(prefix: IpamPrefix) {
 	const usable = ipv4UsableRange(prefix);
-	if (!usable) return null;
+	if (!usable) {
+		return null;
+	}
 
 	const allocStart = prefix.whitelistStart
 		? parseAddress('ipv4', prefix.whitelistStart)
@@ -438,10 +471,14 @@ function ipv4AllocationBounds(prefix: IpamPrefix) {
 
 function randomIpv4Address(prefix: IpamPrefix, used: Set<string>) {
 	const bounds = ipv4AllocationBounds(prefix);
-	if (!bounds) return null;
+	if (!bounds) {
+		return null;
+	}
 
 	const value = bounds.first + randomBigIntBelow(bounds.last - bounds.first + 1n);
-	if (value === bounds.gateway || used.has(value.toString())) return null;
+	if (value === bounds.gateway || used.has(value.toString())) {
+		return null;
+	}
 
 	return formatAddress('ipv4', value);
 }
@@ -449,12 +486,15 @@ function randomIpv4Address(prefix: IpamPrefix, used: Set<string>) {
 function ipv6AllocationBounds(prefix: IpamPrefix) {
 	const range = parseCidr(prefix.cidr);
 	const bounds = ipv6WhitelistBounds(prefix);
-	if (!bounds) return null;
+	if (!bounds) {
+		return null;
+	}
 
 	const allocationSize = ipv6AllocationSize(prefix);
 	let first = ceilToMultiple(bounds.first, range.start, allocationSize);
-	if (prefix.ipv6UseTransitAddress && first === range.start && range.start < range.end)
+	if (prefix.ipv6UseTransitAddress && first === range.start && range.start < range.end) {
 		first += allocationSize;
+	}
 	const last = bounds.last - allocationSize + 1n;
 
 	return first <= last ? { first, last, allocationSize } : null;
@@ -473,21 +513,29 @@ function formatIpv6Allocation(prefix: IpamPrefix, value: bigint) {
 
 function randomIpv6Allocation(prefix: IpamPrefix, used: Set<string>) {
 	const bounds = ipv6AllocationBounds(prefix);
-	if (!bounds) return null;
+	if (!bounds) {
+		return null;
+	}
 
 	const slotCount = (bounds.last - bounds.first) / bounds.allocationSize + 1n;
 	const value = bounds.first + randomBigIntBelow(slotCount) * bounds.allocationSize;
-	if (used.has(value.toString())) return null;
+	if (used.has(value.toString())) {
+		return null;
+	}
 
 	return formatIpv6Allocation(prefix, value);
 }
 
 function nextIpv4Address(prefix: IpamPrefix, used: Set<string>) {
 	const bounds = ipv4AllocationBounds(prefix);
-	if (!bounds) return null;
+	if (!bounds) {
+		return null;
+	}
 
 	for (let value = bounds.first; value <= bounds.last; value++) {
-		if (value === bounds.gateway || used.has(value.toString())) continue;
+		if (value === bounds.gateway || used.has(value.toString())) {
+			continue;
+		}
 		return formatAddress('ipv4', value);
 	}
 
@@ -496,7 +544,9 @@ function nextIpv4Address(prefix: IpamPrefix, used: Set<string>) {
 
 function nextIpv6Allocation(prefix: IpamPrefix, used: Set<string>) {
 	const bounds = ipv6AllocationBounds(prefix);
-	if (!bounds) return null;
+	if (!bounds) {
+		return null;
+	}
 
 	// cap bounds.last to prevent incredibly long loops in the case of ipv6 /128 addresses.
 	// this should never be a problem in practice, but don't wanna crash the worker.
@@ -505,7 +555,9 @@ function nextIpv6Allocation(prefix: IpamPrefix, used: Set<string>) {
 	bounds.last = bounds.last < cappedLast ? bounds.last : cappedLast;
 
 	for (let value = bounds.first; value <= bounds.last; value += bounds.allocationSize) {
-		if (used.has(value.toString())) continue;
+		if (used.has(value.toString())) {
+			continue;
+		}
 		return formatIpv6Allocation(prefix, value);
 	}
 
@@ -513,9 +565,15 @@ function nextIpv6Allocation(prefix: IpamPrefix, used: Set<string>) {
 }
 
 function prefixMatchesKind(prefix: IpamPrefix, kind: AllocationKind) {
-	if (prefix.disabled) return false;
-	if (kind === 'ipv6-transit') return prefix.ipv6UseTransitAddress;
-	if (kind === 'ipv6-prefix') return !prefix.ipv6UseTransitAddress;
+	if (prefix.disabled) {
+		return false;
+	}
+	if (kind === 'ipv6-transit') {
+		return prefix.ipv6UseTransitAddress;
+	}
+	if (kind === 'ipv6-prefix') {
+		return !prefix.ipv6UseTransitAddress;
+	}
 	return true;
 }
 
@@ -535,7 +593,9 @@ async function eligiblePrefixesWithAvailableCounts(db: QueryableDb, kind: Alloca
 			.orderBy(asc(ipamPrefixes.createdAt), asc(ipamPrefixes.cidr))
 	).filter((prefix) => prefixMatchesKind(prefix, kind));
 
-	if (prefixes.length === 0) return [];
+	if (prefixes.length === 0) {
+		return [];
+	}
 
 	const counts = await db
 		.select({
@@ -590,7 +650,9 @@ async function createRandomKindAllocation(
 
 	for (let attempt = 0; attempt < randomAllocationAttempts; attempt++) {
 		const selected = chooseWeightedPrefix(candidates);
-		if (!selected) return null;
+		if (!selected) {
+			return null;
+		}
 
 		const allocations = await db.query.ipamAllocations.findMany({
 			where: eq(ipamAllocations.ipamPrefixId, selected.prefix.id),
@@ -604,12 +666,16 @@ async function createRandomKindAllocation(
 			kind === 'ipv4'
 				? { address: randomIpv4Address(selected.prefix, used), prefix: null }
 				: randomIpv6Allocation(selected.prefix, used);
-		if (!next?.address && !next?.prefix) continue;
+		if (!(next?.address || next?.prefix)) {
+			continue;
+		}
 
 		try {
 			return await insertAllocation(db, kind, vmId, macAddress, selected.prefix, next);
 		} catch (err) {
-			if (uniqueViolation(err)) continue;
+			if (uniqueViolation(err)) {
+				continue;
+			}
 			throw err;
 		}
 	}
@@ -640,7 +706,9 @@ async function createSequentialKindAllocation(
 				? { address: nextIpv4Address(prefix, used), prefix: null }
 				: nextIpv6Allocation(prefix, used);
 
-		if (!next?.address && !next?.prefix) continue;
+		if (!(next?.address || next?.prefix)) {
+			continue;
+		}
 		return insertAllocation(db, kind, vmId, macAddress, prefix, next);
 	}
 
@@ -660,13 +728,17 @@ async function createLocalAllocation(
 	macAddress: string
 ) {
 	const randomAllocation = await createRandomKindAllocation(db, kind, vmId, macAddress);
-	if (randomAllocation) return randomAllocation;
+	if (randomAllocation) {
+		return randomAllocation;
+	}
 
 	for (let attempt = 0; attempt < 5; attempt++) {
 		try {
 			return await createSequentialKindAllocation(db, kind, vmId, macAddress);
 		} catch (err) {
-			if (uniqueViolation(err)) continue;
+			if (uniqueViolation(err)) {
+				continue;
+			}
 			throw err;
 		}
 	}
@@ -685,7 +757,9 @@ function tenantDescription(vmId: string, label: string) {
 }
 
 export async function createVyosDelegatedRoute(allocations: PendingAllocation[], vmId: string) {
-	if (!isVyosConfigured()) return;
+	if (!isVyosConfigured()) {
+		return;
+	}
 
 	const ipv6TransitAllocation = allocations.find(
 		(allocation) => allocation.family === 'ipv6' && allocation.address
@@ -694,7 +768,9 @@ export async function createVyosDelegatedRoute(allocations: PendingAllocation[],
 		(allocation) => allocation.family === 'ipv6' && allocation.prefix
 	);
 
-	if (!ipv6PrefixAllocation?.prefix || !ipv6TransitAllocation?.address) return;
+	if (!(ipv6PrefixAllocation?.prefix && ipv6TransitAllocation?.address)) {
+		return;
+	}
 
 	const client = new VyosClient();
 	await client.createDelegatedRoute({
@@ -705,13 +781,17 @@ export async function createVyosDelegatedRoute(allocations: PendingAllocation[],
 }
 
 async function deleteVyosDelegatedRoute(allocations: PendingAllocation[]) {
-	if (!isVyosConfigured()) return;
+	if (!isVyosConfigured()) {
+		return;
+	}
 
 	const ipv6PrefixAllocation = allocations.find(
 		(allocation) => allocation.family === 'ipv6' && allocation.prefix
 	);
 
-	if (!ipv6PrefixAllocation?.prefix) return;
+	if (!ipv6PrefixAllocation?.prefix) {
+		return;
+	}
 
 	const client = new VyosClient();
 	await client.deleteDelegatedRoute(ipv6PrefixAllocation.prefix);

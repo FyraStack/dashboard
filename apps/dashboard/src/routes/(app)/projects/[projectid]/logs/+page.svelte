@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { Button } from '#lib/components/ui/button/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import ArrowDown from '~icons/lucide/arrow-down';
 	import ChevronRight from '~icons/lucide/chevron-right';
-	import FileText from '~icons/nucleo/file-text';
 	import X from '~icons/lucide/x';
+	import FileText from '~icons/nucleo/file-text';
 	import Pause from '~icons/nucleo/pause';
 	import Play from '~icons/nucleo/play';
 	import Search from '~icons/nucleo/search';
@@ -140,13 +140,19 @@
 
 	// Auto-stream new logs for running servers
 	$effect(() => {
-		if (!streaming) return;
+		if (!streaming) {
+			return;
+		}
 		const serverId = selectedServerId;
 		const server = serverList.find((s) => s.id === serverId);
-		if (!server || server.status === 'stopped') return;
+		if (!server || server.status === 'stopped') {
+			return;
+		}
 
 		const interval = setInterval(() => {
-			if (!serverLogs[serverId]) serverLogs[serverId] = [];
+			if (!serverLogs[serverId]) {
+				serverLogs[serverId] = [];
+			}
 			serverLogs[serverId].push(randomLog());
 			if (serverLogs[serverId].length > 200) {
 				serverLogs[serverId] = serverLogs[serverId].slice(-200);
@@ -159,7 +165,9 @@
 	$effect(() => {
 		const logCount = filtered.length;
 		const container = logContainer;
-		if (!streaming || !container) return;
+		if (!(streaming && container)) {
+			return;
+		}
 
 		const frame = requestAnimationFrame(() => {
 			if (logCount === filtered.length) {
@@ -259,9 +267,9 @@
 				{#if sourceFilter}
 					<Badge variant="secondary" class="gap-1 text-[10px]">
 						{sourceFilter}
-						<button aria-label="Clear source filter" onclick={() => (sourceFilter = null)}
-							><X class="h-2.5 w-2.5" /></button
-						>
+						<button aria-label="Clear source filter" onclick={() => (sourceFilter = null)}>
+							<X class="h-2.5 w-2.5" />
+						</button>
 					</Badge>
 				{/if}
 				<Button
@@ -351,7 +359,8 @@
 			class="flex h-7 shrink-0 items-center justify-between border-t border-border bg-background px-5"
 		>
 			<span class="text-[10px] text-muted-foreground">
-				{filtered.length} entries
+				{filtered.length}
+				entries
 				{#if filter !== 'all' || search.trim()}
 					(filtered from {currentLogs.length})
 				{/if}

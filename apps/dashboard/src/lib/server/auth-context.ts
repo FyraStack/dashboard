@@ -1,13 +1,13 @@
 import { error } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
-import { getRequestEvent } from '$app/server';
 import { hasProjectRole, type PermissionLevel } from '#lib/auth/organization-permissions.js';
-import { member, organization, user } from '#lib/server/db/schema.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureProject,
 	accessibilityFixtureUser
 } from '#lib/server/accessibility-fixtures.js';
+import { member, organization, user } from '#lib/server/db/schema.js';
+import { getRequestEvent } from '$app/server';
 
 export function hasAdminRole(role: string | null | undefined): boolean {
 	return role?.split(',').includes('admin') ?? false;
@@ -17,7 +17,9 @@ function cachedLookup<T>(key: string, compute: () => Promise<T>): Promise<T> {
 	const { locals } = getRequestEvent();
 	const cache = (locals.accessCache ??= new Map());
 	const existing = cache.get(key) as Promise<T> | undefined;
-	if (existing) return existing;
+	if (existing) {
+		return existing;
+	}
 
 	const lookup = compute();
 	cache.set(key, lookup);
@@ -50,14 +52,18 @@ function loadProjectAccess(db: any, userId: string, projectId: string): Promise<
 }
 
 export async function requireAdmin(db: any, userId: string): Promise<void> {
-	if (accessibilityFixtureEnabled && userId === accessibilityFixtureUser.id) return;
+	if (accessibilityFixtureEnabled && userId === accessibilityFixtureUser.id) {
+		return;
+	}
 
 	const isAdmin = await cachedLookup(`is-admin:${userId}`, async () => {
 		const currentUser = await db.query.user.findFirst({
 			where: eq(user.id, userId)
 		});
 
-		if (hasAdminRole(currentUser?.role)) return true;
+		if (hasAdminRole(currentUser?.role)) {
+			return true;
+		}
 
 		if (currentUser?.isAdmin) {
 			await db.update(user).set({ role: 'admin' }).where(eq(user.id, userId));
@@ -67,7 +73,9 @@ export async function requireAdmin(db: any, userId: string): Promise<void> {
 		return false;
 	});
 
-	if (!isAdmin) error(403, 'Admin permission required');
+	if (!isAdmin) {
+		error(403, 'Admin permission required');
+	}
 }
 
 export async function requireProjectAccess(
@@ -76,8 +84,12 @@ export async function requireProjectAccess(
 	projectId: string,
 	minLevel: PermissionLevel | 'owner' = 'read'
 ): Promise<void> {
-	if (accessibilityFixtureEnabled && userId === accessibilityFixtureUser.id) {
-		if (projectId === accessibilityFixtureProject.id) return;
+	if (
+		accessibilityFixtureEnabled &&
+		userId === accessibilityFixtureUser.id &&
+		projectId === accessibilityFixtureProject.id
+	) {
+		return;
 	}
 
 	const projectAccess = await loadProjectAccess(db, userId, projectId);
@@ -90,7 +102,7 @@ export async function requireProjectAccess(
 		error(403, 'This project has been disabled');
 	}
 
-	if (!projectAccess.role || !hasProjectRole(projectAccess.role, minLevel)) {
+	if (!(projectAccess.role && hasProjectRole(projectAccess.role, minLevel))) {
 		error(403, 'Insufficient project permissions');
 	}
 }
@@ -100,8 +112,12 @@ export async function getProjectMemberRole(
 	userId: string,
 	projectId: string
 ): Promise<string | null> {
-	if (accessibilityFixtureEnabled && userId === accessibilityFixtureUser.id) {
-		if (projectId === accessibilityFixtureProject.id) return 'owner';
+	if (
+		accessibilityFixtureEnabled &&
+		userId === accessibilityFixtureUser.id &&
+		projectId === accessibilityFixtureProject.id
+	) {
+		return 'owner';
 	}
 
 	const projectAccess = await loadProjectAccess(db, userId, projectId);

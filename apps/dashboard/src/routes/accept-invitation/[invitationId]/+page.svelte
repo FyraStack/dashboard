@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import { authClient } from '#lib/auth-client.js';
-	import AlertCircle from '~icons/nucleo/alert-circle';
 	import { isProjectRole, projectRoleLabels } from '#lib/auth/organization-permissions.js';
+	import { authClient } from '#lib/auth-client.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { goto } from '$app/navigation';
+	import AlertCircle from '~icons/nucleo/alert-circle';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -13,7 +13,9 @@
 	let switching = $state(false);
 
 	async function accept() {
-		if (accepting || declining) return;
+		if (accepting || declining) {
+			return;
+		}
 		error = '';
 		accepting = true;
 		const { data: res, error: err } = await authClient.organization.acceptInvitation({
@@ -28,7 +30,9 @@
 	}
 
 	async function decline() {
-		if (accepting || declining) return;
+		if (accepting || declining) {
+			return;
+		}
 		error = '';
 		declining = true;
 		const { error: err } = await authClient.organization.rejectInvitation({
@@ -89,9 +93,12 @@
 				</h1>
 
 				<p class="text-center text-xs text-muted-foreground">
-					{data.inviterEmail} invited you to join {data.organizationName}
+					{data.inviterEmail}
+					invited you to join {data.organizationName}
 					{#if data.role && isProjectRole(data.role)}
-						with {projectRoleLabels[data.role]} access{/if}.
+						with {projectRoleLabels[data.role]} access
+					{/if}
+					.
 				</p>
 
 				{#if error}

@@ -55,7 +55,9 @@ export class UserSettingsState {
 
 	syncFromUrl(url: ReadonlyURL) {
 		const tab = parseUserSettingsTab(url.searchParams.get(queryParam));
-		if (!tab) return;
+		if (!tab) {
+			return;
+		}
 
 		this.show(tab);
 	}

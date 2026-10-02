@@ -1,16 +1,16 @@
 import { error } from '@sveltejs/kit';
-import { and, eq, inArray } from 'drizzle-orm';
 import type { InferSelectModel } from 'drizzle-orm';
-import { getRequestEvent } from '$app/server';
-import { runInBackground } from '#lib/server/background.js';
+import { and, eq, inArray } from 'drizzle-orm';
 import { getBackend } from '#lib/server/backends/index.js';
+import { runInBackground } from '#lib/server/background.js';
 import {
 	deleteProjectServerEntity,
 	ensureProjectServerEntity,
 	isBillingConfigured
 } from '#lib/server/billing/autumn.js';
 import { createBillingMeter } from '#lib/server/billing/metering.js';
-import { closeRequestDb, initDrizzle, type Database } from '#lib/server/db/index.js';
+import { config } from '#lib/server/config.js';
+import { closeRequestDb, type Database, initDrizzle } from '#lib/server/db/index.js';
 import { baseImages, vms, vmTypes } from '#lib/server/db/schema.js';
 import {
 	allocateVmNetworking,
@@ -21,7 +21,7 @@ import {
 } from '#lib/server/ipam.js';
 import { applyDefaultPtrRecords } from '#lib/server/ptr-records.js';
 import { allocateProxmoxVmid } from '#lib/server/vm-identity.js';
-import { config } from '#lib/server/config.js';
+import { getRequestEvent } from '$app/server';
 
 export type ProvisionVmInput = {
 	projectId: string;
@@ -61,7 +61,9 @@ export function isProvisioningStalled(row: StalledProvisioningVm, now = Date.now
 export async function resumeStalledProvisioning(db: Database, row: StalledProvisioningVm) {
 	const now = Date.now();
 	const inFlightSince = resumeAttemptsStartedAt.get(row.id);
-	if (inFlightSince !== undefined && now - inFlightSince < RESUME_ATTEMPT_TTL_MS) return;
+	if (inFlightSince !== undefined && now - inFlightSince < RESUME_ATTEMPT_TTL_MS) {
+		return;
+	}
 	resumeAttemptsStartedAt.set(row.id, now);
 	try {
 		if (Date.now() - row.createdAt > PROVISION_TIMEOUT_MS) {
@@ -74,7 +76,9 @@ export async function resumeStalledProvisioning(db: Database, row: StalledProvis
 			{ diskGb: row.vmTypeStorageAmount ?? 0 },
 			{ proxmoxNode: row.proxmoxNode ?? undefined }
 		);
-		if (!provisioned) return;
+		if (!provisioned) {
+			return;
+		}
 		await ensureVmDelegatedRoute(db, row.id);
 		await markVmProvisionReady(row.id);
 	} catch (err) {
@@ -108,7 +112,9 @@ async function updateActiveVmStatus(
 	} catch (updateErr) {
 		console.error(`VM ${vmId} status update failed:`, updateErr);
 	} finally {
-		if (ownsPool) closeRequestDb(settledEvent);
+		if (ownsPool) {
+			closeRequestDb(settledEvent);
+		}
 	}
 }
 
@@ -131,12 +137,17 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 				})
 			: null
 	]);
-	if (!vmType) error(400, `VM type "${input.vmTypeId}" not found`);
-	if (isBillingConfigured() && !vmType.autumnFeatureId)
+	if (!vmType) {
+		error(400, `VM type "${input.vmTypeId}" not found`);
+	}
+	if (isBillingConfigured() && !vmType.autumnFeatureId) {
 		error(400, `VM type "${vmType.name}" is missing an Autumn feature ID`);
+	}
 	const featureId = vmType.autumnFeatureId;
 
-	if (input.imageId && !baseImage) error(400, `Image "${input.imageId}" not found`);
+	if (input.imageId && !baseImage) {
+		error(400, `Image "${input.imageId}" not found`);
+	}
 
 	const now = Date.now();
 	const [inserted] = await db
@@ -257,7 +268,9 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 			projectId: input.projectId
 		});
 
-		if (!result.macAddress) error(502, 'Proxmox did not return a MAC address');
+		if (!result.macAddress) {
+			error(502, 'Proxmox did not return a MAC address');
+		}
 	} catch (err) {
 		if (proxmoxId != null) {
 			await getBackend('proxmox')

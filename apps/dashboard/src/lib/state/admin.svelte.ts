@@ -1,3 +1,40 @@
+import { untrack } from 'svelte';
+import { toast } from 'svelte-sonner';
+import { config } from '#lib/config.js';
+import {
+	defaultFeatureFlags,
+	type FeatureFlagKey,
+	type FeatureFlags,
+	featureFlagKeys
+} from '#lib/feature-flags.js';
+import { type AdminProject, setProjectBillingExempt } from '#lib/remote/admin-projects.remote.js';
+import {
+	type AdminUser,
+	deleteUserWithVerification,
+	getOrganizationResources,
+	getUserResources,
+	listAdminUsers,
+	setUserAdmin,
+	setUserBillingExempt,
+	setUserDisabled,
+	setUserRole,
+	setUserTwoFactor,
+	type UserAccount,
+	type UserApiToken,
+	type UserOrganization,
+	type UserSession,
+	type UserSshKey
+} from '#lib/remote/admin-users.remote.js';
+import {
+	type AdminVm,
+	adminDeleteVm,
+	adminKillVm,
+	adminRebootVm,
+	adminStartVm,
+	adminStopVm,
+	listAllAdminVms
+} from '#lib/remote/admin-vms.remote.js';
+import { updateFeatureFlag } from '#lib/remote/feature-flags.remote.js';
 import {
 	createImage,
 	deleteImage,
@@ -8,51 +45,14 @@ import {
 	reorderImages,
 	updateImage
 } from '#lib/remote/images.remote.js';
-import { goto, invalidate } from '$app/navigation';
-import {
-	listAdminUsers,
-	setUserAdmin,
-	setUserBillingExempt,
-	setUserDisabled,
-	setUserTwoFactor,
-	setUserRole,
-	deleteUserWithVerification,
-	getUserResources,
-	getOrganizationResources,
-	type AdminUser,
-	type UserSession,
-	type UserAccount,
-	type UserOrganization,
-	type UserSshKey,
-	type UserApiToken
-} from '#lib/remote/admin-users.remote.js';
-import { config } from '#lib/config.js';
-import { updateFeatureFlag } from '#lib/remote/feature-flags.remote.js';
-import {
-	adminDeleteVm,
-	adminKillVm,
-	adminRebootVm,
-	adminStartVm,
-	adminStopVm,
-	listAllAdminVms,
-	type AdminVm
-} from '#lib/remote/admin-vms.remote.js';
-import { setProjectBillingExempt, type AdminProject } from '#lib/remote/admin-projects.remote.js';
 import {
 	createVmType,
 	deleteVmType,
 	reorderVmTypes,
 	updateVmType
 } from '#lib/remote/vm-types.remote.js';
-import { toast } from 'svelte-sonner';
 import { getErrorMessage, runQuery } from '#lib/utils.js';
-import { untrack } from 'svelte';
-import {
-	defaultFeatureFlags,
-	featureFlagKeys,
-	type FeatureFlagKey,
-	type FeatureFlags
-} from '#lib/feature-flags.js';
+import { goto, invalidate } from '$app/navigation';
 import { page } from '$app/state';
 
 export type VmIsa = 'x86';
@@ -419,7 +419,9 @@ export class AdminState {
 	async commit2FAConfirm() {
 		const userId = this.twoFAPendingUserId;
 		const twoFactorEnabled = this.twoFAPendingValue;
-		if (!userId) return;
+		if (!userId) {
+			return;
+		}
 		this.twoFADialogOpen = false;
 		const previousUsers = this.adminUsers.map((u) => ({ ...u }));
 		this.adminUserError = '';
@@ -565,7 +567,9 @@ export class AdminState {
 	}
 
 	async vtSave() {
-		if (!this.vtName.trim()) return;
+		if (!this.vtName.trim()) {
+			return;
+		}
 		this.vtSaving = true;
 		this.vtError = '';
 		try {
@@ -583,7 +587,9 @@ export class AdminState {
 			if (this.vtEditing) {
 				await updateVmType({ vmTypeId: this.vtEditing.id, ...data });
 				const index = this.vmTypes.findIndex((vmType) => vmType.id === this.vtEditing?.id);
-				if (index !== -1) this.vmTypes[index] = { ...this.vmTypes[index], ...data };
+				if (index !== -1) {
+					this.vmTypes[index] = { ...this.vmTypes[index], ...data };
+				}
 			} else {
 				const result = await createVmType(data);
 				this.vmTypes.push({ id: result.id, ...data });
@@ -598,8 +604,12 @@ export class AdminState {
 	}
 
 	async vtReorder(fromIndex: number, toIndex: number) {
-		if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
-		if (fromIndex >= this.vmTypes.length || toIndex >= this.vmTypes.length) return;
+		if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) {
+			return;
+		}
+		if (fromIndex >= this.vmTypes.length || toIndex >= this.vmTypes.length) {
+			return;
+		}
 		const previous = [...this.vmTypes];
 		const next = [...this.vmTypes];
 		const [moved] = next.splice(fromIndex, 1);
@@ -658,7 +668,9 @@ export class AdminState {
 	}
 
 	imgImportClose() {
-		if (this.importSaving) return;
+		if (this.importSaving) {
+			return;
+		}
 		this.importDialogOpen = false;
 	}
 
@@ -678,9 +690,15 @@ export class AdminState {
 	}
 
 	async importImageFromUrl() {
-		if (!this.importUrl.trim()) return;
-		if (!this.importFilename.trim()) this.importFilenameFromUrl();
-		if (!this.importFilename.trim()) return;
+		if (!this.importUrl.trim()) {
+			return;
+		}
+		if (!this.importFilename.trim()) {
+			this.importFilenameFromUrl();
+		}
+		if (!this.importFilename.trim()) {
+			return;
+		}
 
 		this.importSaving = true;
 		this.importError = '';
@@ -701,7 +719,9 @@ export class AdminState {
 				await this.waitForTaskPoll();
 				const statuses = await Promise.all(
 					this.importTasks.map(async (task) => {
-						if (task.status === 'stopped') return task;
+						if (task.status === 'stopped') {
+							return task;
+						}
 						const status = await runQuery(
 							getProxmoxTaskStatus({ node: task.node, upid: task.upid })
 						);
@@ -710,7 +730,9 @@ export class AdminState {
 				);
 				this.importTasks = statuses;
 				const failed = statuses.find((task) => task.exitstatus && task.exitstatus !== 'OK');
-				if (failed) throw new Error(`Import failed on ${failed.node}: ${failed.exitstatus}`);
+				if (failed) {
+					throw new Error(`Import failed on ${failed.node}: ${failed.exitstatus}`);
+				}
 				if (statuses.every((task) => task.status === 'stopped')) {
 					await this.loadPveImages();
 					this.importDialogOpen = false;
@@ -739,7 +761,9 @@ export class AdminState {
 		this.imgIsa = 'x86';
 		this.imgError = '';
 		this.imgDialogOpen = true;
-		if (this.pveImages.length === 0) this.loadPveImages();
+		if (this.pveImages.length === 0) {
+			this.loadPveImages();
+		}
 	}
 
 	imgOpenEdit(img: BaseImage) {
@@ -757,12 +781,16 @@ export class AdminState {
 		this.imgIsa = 'x86';
 		this.imgError = '';
 		this.imgDialogOpen = true;
-		if (this.pveImages.length === 0) this.loadPveImages();
+		if (this.pveImages.length === 0) {
+			this.loadPveImages();
+		}
 	}
 
 	async imgSave() {
 		const selectedImage = this.pveImages.find((image) => image.volid === this.imgFilePath);
-		if (!this.imgName.trim() || !selectedImage) return;
+		if (!(this.imgName.trim() && selectedImage)) {
+			return;
+		}
 		this.imgSaving = true;
 		this.imgError = '';
 		try {
@@ -791,7 +819,9 @@ export class AdminState {
 			if (this.imgEditing) {
 				await updateImage({ imageId: this.imgEditing.id, ...data });
 				const index = this.images.findIndex((image) => image.id === this.imgEditing?.id);
-				if (index !== -1) this.images[index] = { ...this.images[index], ...localData };
+				if (index !== -1) {
+					this.images[index] = { ...this.images[index], ...localData };
+				}
 			} else {
 				const result = await createImage(data);
 				this.images.push({ id: result.id, ...localData });
@@ -806,8 +836,12 @@ export class AdminState {
 	}
 
 	async imgReorder(fromIndex: number, toIndex: number) {
-		if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
-		if (fromIndex >= this.images.length || toIndex >= this.images.length) return;
+		if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) {
+			return;
+		}
+		if (fromIndex >= this.images.length || toIndex >= this.images.length) {
+			return;
+		}
 		const previous = [...this.images];
 		const next = [...this.images];
 		const [moved] = next.splice(fromIndex, 1);

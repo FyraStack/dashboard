@@ -1,5 +1,5 @@
-import { dev } from '$app/env';
 import { env as platformEnv } from 'cloudflare:workers';
+import { dev } from '$app/env';
 import { STACK_TIMING_SPAM } from '$app/env/private';
 
 type SpanAttributes = Record<string, string | number | boolean | undefined>;
@@ -28,7 +28,9 @@ function timingLogsEnabled(): boolean {
 }
 
 export function timingLog(name: string, attributes?: SpanAttributes) {
-	if (!timingLogsEnabled()) return;
+	if (!timingLogsEnabled()) {
+		return;
+	}
 
 	console.info({
 		message: `[timing] ${name}`,
@@ -51,7 +53,9 @@ function loadTracing(): Promise<TracingApi | null> {
 }
 
 function applyAttributes(span: TraceSpan, attributes?: SpanAttributes) {
-	if (!attributes) return;
+	if (!attributes) {
+		return;
+	}
 	for (const [key, value] of Object.entries(attributes)) {
 		span.setAttribute(key, value);
 	}
@@ -99,6 +103,8 @@ export async function instrument<T>(
 }
 
 export function summarizeStatement(statement: string | undefined): string | undefined {
-	if (!statement) return undefined;
+	if (!statement) {
+		return undefined;
+	}
 	return statement.replace(/\s+/g, ' ').trim().slice(0, 120);
 }

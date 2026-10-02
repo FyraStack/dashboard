@@ -1,6 +1,6 @@
+import ky, { type KyInstance } from 'ky';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import { createVpcFetch, insecureDirectFetch } from '#lib/server/vpc.js';
-import ky, { type KyInstance } from 'ky';
 
 type VyosApiResponse<T = unknown> = {
 	success: boolean;
@@ -51,7 +51,9 @@ export class VyosError extends Error {
 
 function getVyosConfig() {
 	const env = getRuntimeEnv();
-	if (!env.VYOS_API_URL || !env.VYOS_API_KEY) return null;
+	if (!(env.VYOS_API_URL && env.VYOS_API_KEY)) {
+		return null;
+	}
 
 	const routersInFailoverOrder =
 		env.VYOS_USE_VPC === 'false' ? [] : [env.VYOS_VPC_01, env.VYOS_VPC_02];
@@ -74,7 +76,9 @@ export class VyosClient {
 
 	constructor() {
 		const config = getVyosConfig();
-		if (!config) throw new VyosError("Couldn't get VyOS config", 500, '');
+		if (!config) {
+			throw new VyosError("Couldn't get VyOS config", 500, '');
+		}
 
 		this.apiKey = config.apiKey;
 
@@ -120,7 +124,7 @@ export class VyosClient {
 			);
 		}
 
-		if (!response.ok || !parsed.success) {
+		if (!(response.ok && parsed.success)) {
 			throw new VyosError(
 				`VyOS ${endpoint} request failed`,
 				response.status,
@@ -178,7 +182,9 @@ export class VyosClient {
 
 	async deleteDelegatedRoute(destination: string): Promise<VyosCommandResponse | null> {
 		const existingRoutes = await this.getStaticIpv6Routes();
-		if (!existingRoutes.route6?.[destination]) return null;
+		if (!existingRoutes.route6?.[destination]) {
+			return null;
+		}
 
 		const response = await this.deleteDelegatedRouteWithoutSavingConfig(destination);
 		await this.saveConfig();

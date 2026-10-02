@@ -1,24 +1,24 @@
-import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { and, eq } from 'drizzle-orm';
-import { projectRoles, type ProjectRole } from '#lib/auth/organization-permissions.js';
-import { initDrizzle } from '#lib/server/db/index.js';
-import { member, organization } from '#lib/server/db/schema.js';
-import { requireProjectAccess } from '#lib/server/auth-context.js';
-import { initAuth } from '#lib/server/auth.js';
-import {
-	ensureLocalProjectBillingCustomer,
-	ensureProjectCustomer,
-	updateProjectCustomer
-} from '#lib/server/billing/autumn.js';
+import { type ProjectRole, projectRoles } from '#lib/auth/organization-permissions.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureProjectDetails,
 	accessibilityFixtureProjects
 } from '#lib/server/accessibility-fixtures.js';
-import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
+import { initAuth } from '#lib/server/auth.js';
+import { requireProjectAccess } from '#lib/server/auth-context.js';
+import {
+	ensureLocalProjectBillingCustomer,
+	ensureProjectCustomer,
+	updateProjectCustomer
+} from '#lib/server/billing/autumn.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { member, organization } from '#lib/server/db/schema.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
+import { command, getRequestEvent, query } from '$app/server';
 
 type ListResult = {
 	id: string;
@@ -45,7 +45,7 @@ type GetResult = {
 	members: MemberInfo[];
 };
 
-const PROJECT_LIST_CACHE_TTL_MS = 5_000;
+const PROJECT_LIST_CACHE_TTL_MS = 5000;
 const projectListCache = new Map<string, ProjectListCacheEntry>();
 
 function toProjectName(name: string) {
@@ -138,8 +138,12 @@ async function getCachedProjectsForUser(userId: string): Promise<ListResult> {
 
 export const listProjects = query(async () => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
-	if (accessibilityFixtureEnabled) return accessibilityFixtureProjects;
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureProjects;
+	}
 
 	return getCachedProjectsForUser(event.locals.user.id);
 });
@@ -147,7 +151,9 @@ export const listProjects = query(async () => {
 const getParams = type({ projectId: 'string' });
 export const getProject = query(getParams, async (params): Promise<GetResult> => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 	if (accessibilityFixtureEnabled && params.projectId === accessibilityFixtureProjectDetails.id) {
 		return accessibilityFixtureProjectDetails;
 	}
@@ -160,7 +166,9 @@ export const getProject = query(getParams, async (params): Promise<GetResult> =>
 		with: { members: { with: { user: true } } }
 	});
 
-	if (!org) error(404, 'Project not found');
+	if (!org) {
+		error(404, 'Project not found');
+	}
 
 	const owner =
 		org.members.find((item: { role: string }) => item.role === 'owner') ?? org.members[0];
@@ -187,7 +195,9 @@ export const getProject = query(getParams, async (params): Promise<GetResult> =>
 const createParams = type({ name: 'string' });
 export const createProject = command(createParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const name = toProjectName(params.name);
 	const auth = initAuth();
@@ -212,7 +222,9 @@ export const createProject = command(createParams, async (params) => {
 const deleteParams = type({ projectId: 'string' });
 export const deleteProject = command(deleteParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'owner');
@@ -225,7 +237,9 @@ export const deleteProject = command(deleteParams, async (params) => {
 const updateParams = type({ projectId: 'string', name: 'string' });
 export const updateProject = command(updateParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'admin');
@@ -249,7 +263,9 @@ const addMemberParams = type({
 });
 export const addMember = command(addMemberParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'admin');
@@ -278,7 +294,9 @@ const updateMemberRoleParams = type({
 });
 export const updateMemberRole = command(updateMemberRoleParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'admin');
@@ -298,7 +316,9 @@ export const updateMemberRole = command(updateMemberRoleParams, async (params) =
 const removeMemberParams = type({ projectId: 'string', userId: 'string' });
 export const removeMember = command(removeMemberParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'admin');
@@ -306,8 +326,12 @@ export const removeMember = command(removeMemberParams, async (params) => {
 	const target = await db.query.member.findFirst({
 		where: and(eq(member.organizationId, params.projectId), eq(member.userId, params.userId))
 	});
-	if (!target) return;
-	if (target.role === 'owner') error(400, 'Project owner cannot be removed');
+	if (!target) {
+		return;
+	}
+	if (target.role === 'owner') {
+		error(400, 'Project owner cannot be removed');
+	}
 
 	await db.delete(member).where(eq(member.id, target.id));
 	clearProjectListCache();

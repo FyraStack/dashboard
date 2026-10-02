@@ -1,8 +1,8 @@
-@import 'tailwindcss';
-@import 'tw-animate-css';
-@import 'shadcn-svelte/tailwind.css';
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn-svelte/tailwind.css";
 
-@import '@fontsource-variable/inter';
+@import "@fontsource-variable/inter";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -107,9 +107,9 @@
 	--color-border: var(--border);
 	--color-input: var(--input);
 	--color-ring: var(--ring);
-	--font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+	--font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 	--font-mono:
-		ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+		ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
 		monospace;
 	--radius-xs: 0;
 	--radius-sm: 0;
@@ -125,18 +125,18 @@
 		@apply border-border outline-ring/40;
 	}
 	html {
-		@apply font-sans;
 		background-color: var(--background);
+		@apply font-sans;
 	}
 	body {
-		@apply text-foreground antialiased;
+		font-feature-settings: "ss01", "ss02";
 		background-color: var(--background);
-		font-feature-settings: 'ss01', 'ss02';
+		@apply text-foreground antialiased;
 	}
 }
 
 @utility icon-flat {
-	& [data-color='color-2'] {
+	& [data-color="color-2"] {
 		display: none;
 	}
 }

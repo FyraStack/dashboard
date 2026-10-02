@@ -21,8 +21,12 @@ export function capHoursFor(
 ) {
 	const rateValue = Number(rate);
 	const capValue = Number(cap);
-	if (!Number.isFinite(rateValue) || rateValue <= 0) return Infinity;
-	if (!Number.isFinite(capValue) || capValue <= 0) return Infinity;
+	if (!Number.isFinite(rateValue) || rateValue <= 0) {
+		return Number.POSITIVE_INFINITY;
+	}
+	if (!Number.isFinite(capValue) || capValue <= 0) {
+		return Number.POSITIVE_INFINITY;
+	}
 
 	return capValue / rateValue;
 }
@@ -65,8 +69,12 @@ function addUtcMonths(at: number, months: number) {
 
 export function billingCyclePeriod(anchor: CapPeriod, at: number): CapPeriod {
 	const length = anchor.end - anchor.start;
-	if (length <= 0) return calendarMonthPeriod(at);
-	if (at >= anchor.start && at < anchor.end) return { start: anchor.start, end: anchor.end };
+	if (length <= 0) {
+		return calendarMonthPeriod(at);
+	}
+	if (at >= anchor.start && at < anchor.end) {
+		return { start: anchor.start, end: anchor.end };
+	}
 
 	if (!isMonthlyLength(length)) {
 		const cycles = Math.floor((at - anchor.start) / length);
@@ -75,8 +83,12 @@ export function billingCyclePeriod(anchor: CapPeriod, at: number): CapPeriod {
 	}
 
 	let cycles = Math.round((at - anchor.start) / AVERAGE_MONTH_MS);
-	while (addUtcMonths(anchor.start, cycles) > at) cycles -= 1;
-	while (addUtcMonths(anchor.start, cycles + 1) <= at) cycles += 1;
+	while (addUtcMonths(anchor.start, cycles) > at) {
+		cycles -= 1;
+	}
+	while (addUtcMonths(anchor.start, cycles + 1) <= at) {
+		cycles += 1;
+	}
 
 	return {
 		start: addUtcMonths(anchor.start, cycles),
@@ -95,7 +107,9 @@ export function sliceCapUsage(input: {
 	let periodStart = input.state.capPeriodStart;
 	let periodEnd = input.state.capPeriodEnd;
 	let hours = Number(input.state.hoursThisPeriod);
-	if (!Number.isFinite(hours) || hours < 0) hours = 0;
+	if (!Number.isFinite(hours) || hours < 0) {
+		hours = 0;
+	}
 
 	let cursor = input.from;
 	while (cursor < input.to) {

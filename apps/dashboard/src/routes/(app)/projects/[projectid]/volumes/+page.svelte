@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import { Button } from '#lib/components/ui/button/index.js';
+	import { untrack } from 'svelte';
+	import AttachVolumeDialog from '#lib/components/dialogs/attach-volume-dialog.svelte';
+	import CreateVolumeDialog from '#lib/components/dialogs/create-volume-dialog.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import CreateVolumeDialog from '#lib/components/dialogs/create-volume-dialog.svelte';
-	import AttachVolumeDialog from '#lib/components/dialogs/attach-volume-dialog.svelte';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
 	import {
 		attachVolume as attachProjectVolume,
 		createVolume as createProjectVolume,
@@ -13,8 +14,7 @@
 		detachVolume as detachProjectVolume
 	} from '#lib/remote/volumes.remote.js';
 	import { getErrorMessage } from '#lib/utils.js';
-	import { confirmDestructive } from '#lib/confirm.svelte.js';
-	import { untrack } from 'svelte';
+	import { page } from '$app/state';
 	import Plus from '~icons/lucide/plus';
 	import HardDrive from '~icons/nucleo/hard-drive';
 	import Link from '~icons/nucleo/link';
@@ -55,7 +55,9 @@
 	let volumes = $state<Volume[]>([]);
 
 	function getPath(history: number[], max: number, width = 72, height = 20): string {
-		if (history.length === 0) return '';
+		if (history.length === 0) {
+			return '';
+		}
 		const points = history.map((val, i) => {
 			const x = (i / (history.length - 1)) * width;
 			const y = height - (val / max) * height;
@@ -66,15 +68,23 @@
 
 	function getUsageColor(used: number, size: number) {
 		const ratio = used / size;
-		if (ratio > 0.8) return 'text-rose-500';
-		if (ratio > 0.5) return 'text-amber-500';
+		if (ratio > 0.8) {
+			return 'text-rose-500';
+		}
+		if (ratio > 0.5) {
+			return 'text-amber-500';
+		}
 		return 'text-rose-400';
 	}
 
 	function getUsageColorHex(used: number, size: number) {
 		const ratio = used / size;
-		if (ratio > 0.8) return '#f43f5e';
-		if (ratio > 0.5) return '#f59e0b';
+		if (ratio > 0.8) {
+			return '#f43f5e';
+		}
+		if (ratio > 0.5) {
+			return '#f59e0b';
+		}
 		return '#fb7185';
 	}
 
@@ -128,7 +138,9 @@
 
 	async function createVolume() {
 		const projectId = page.params.projectid;
-		if (!projectId || !newName.trim() || creatingVolume) return;
+		if (!(projectId && newName.trim()) || creatingVolume) {
+			return;
+		}
 		actionError = '';
 		creatingVolume = true;
 		try {
@@ -161,16 +173,22 @@
 	}
 
 	async function deleteVolume(id: string) {
-		if (deletingVolumeIds.includes(id)) return;
+		if (deletingVolumeIds.includes(id)) {
+			return;
+		}
 		const idx = volumes.findIndex((v) => v.id === id);
-		if (idx === -1) return;
+		if (idx === -1) {
+			return;
+		}
 		const ok = await confirmDestructive({
 			title: 'Delete volume',
 			description: `This permanently destroys all data on ${volumes[idx].name} and cannot be undone.`,
 			confirmWord: volumes[idx].name,
 			confirmLabel: 'Delete volume'
 		});
-		if (!ok) return;
+		if (!ok) {
+			return;
+		}
 		actionError = '';
 		deletingVolumeIds = [...deletingVolumeIds, id];
 		volumes[idx].status = 'deleting';
@@ -186,9 +204,13 @@
 	}
 
 	async function detach(id: string) {
-		if (detachingVolumeIds.includes(id)) return;
+		if (detachingVolumeIds.includes(id)) {
+			return;
+		}
 		const idx = volumes.findIndex((v) => v.id === id);
-		if (idx === -1) return;
+		if (idx === -1) {
+			return;
+		}
 		actionError = '';
 		detachingVolumeIds = [...detachingVolumeIds, id];
 		try {
@@ -211,9 +233,13 @@
 	}
 
 	async function confirmAttach() {
-		if (!attachTarget || !attachServer || attachingVolume) return;
+		if (!(attachTarget && attachServer) || attachingVolume) {
+			return;
+		}
 		const idx = volumes.findIndex((v) => v.id === attachTarget!.id);
-		if (idx === -1) return;
+		if (idx === -1) {
+			return;
+		}
 		actionError = '';
 		attachingVolume = true;
 		try {
@@ -358,7 +384,8 @@
 						</svg>
 					</div>
 					<span class="w-14 text-right text-[10px] text-muted-foreground tabular-nums">
-						{vol.used}/{vol.size} GB
+						{vol.used}/{vol.size}
+						GB
 					</span>
 				</div>
 

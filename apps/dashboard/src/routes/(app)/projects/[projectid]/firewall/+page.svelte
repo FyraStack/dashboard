@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { Button } from '#lib/components/ui/button/index.js';
+	import CreateFirewallGroupDialog from '#lib/components/dialogs/create-firewall-group-dialog.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
-	import CreateFirewallGroupDialog from '#lib/components/dialogs/create-firewall-group-dialog.svelte';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import ChevronRight from '~icons/lucide/chevron-right';
 	import Plus from '~icons/lucide/plus';
 	import Shield from '~icons/nucleo/shield';
@@ -128,11 +128,15 @@
 	let creatingGroup = $state(false);
 
 	function addRule() {
-		if (!newPorts.trim() || addingRule) return;
+		if (!newPorts.trim() || addingRule) {
+			return;
+		}
 		addingRule = true;
 		ruleIdCounter++;
 		const groupIdx = groups.findIndex((g) => g.id === selectedGroup.id);
-		if (groupIdx === -1) return;
+		if (groupIdx === -1) {
+			return;
+		}
 		groups[groupIdx].rules.push({
 			id: ruleIdCounter,
 			direction: newDirection,
@@ -151,12 +155,16 @@
 
 	function deleteRule(ruleId: number) {
 		const groupIdx = groups.findIndex((g) => g.id === selectedGroup.id);
-		if (groupIdx === -1) return;
+		if (groupIdx === -1) {
+			return;
+		}
 		groups[groupIdx].rules = groups[groupIdx].rules.filter((r) => r.id !== ruleId);
 	}
 
 	function createGroup() {
-		if (!newGroupName.trim() || creatingGroup) return;
+		if (!newGroupName.trim() || creatingGroup) {
+			return;
+		}
 		creatingGroup = true;
 		groupCounter++;
 		const newG: FirewallGroup = {
@@ -216,7 +224,8 @@
 						<div class="min-w-0">
 							<p class="truncate text-sm font-semibold text-foreground">{group.name}</p>
 							<p class="mt-0.5 text-xs text-muted-foreground">
-								{group.rules.length} rules &bull; {group.servers.length} servers
+								{group.rules.length}
+								rules &bull; {group.servers.length} servers
 							</p>
 						</div>
 						<ChevronRight class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -281,15 +290,16 @@
 					<table class="w-full whitespace-nowrap">
 						<thead>
 							<tr class="border-y border-border/50">
-								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground"
-									>Protocol</th
-								>
+								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">
+									Protocol
+								</th>
 								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">Ports</th>
-								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">Source</th
-								>
-								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground"
-									>Enabled</th
-								>
+								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">
+									Source
+								</th>
+								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">
+									Enabled
+								</th>
 								<th class="px-5 py-2 text-right text-xs font-medium text-muted-foreground"></th>
 							</tr>
 						</thead>
@@ -319,9 +329,9 @@
 							{/each}
 							{#if selectedGroup.rules.filter((r) => r.direction === 'inbound').length === 0}
 								<tr>
-									<td colspan="5" class="px-5 py-6 text-center text-xs text-muted-foreground"
-										>No inbound rules</td
-									>
+									<td colspan="5" class="px-5 py-6 text-center text-xs text-muted-foreground">
+										No inbound rules
+									</td>
 								</tr>
 							{/if}
 						</tbody>
@@ -335,21 +345,23 @@
 					<table class="w-full whitespace-nowrap">
 						<thead>
 							<tr class="border-y border-border/50">
-								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground"
-									>Protocol</th
-								>
+								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">
+									Protocol
+								</th>
 								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">Ports</th>
-								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground"
-									>Destination</th
-								>
-								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground"
-									>Enabled</th
-								>
+								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">
+									Destination
+								</th>
+								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">
+									Enabled
+								</th>
 								<th class="px-5 py-2 text-right text-xs font-medium text-muted-foreground"></th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-border/30">
-							{#each selectedGroup.rules.filter((r) => r.direction === 'outbound') as rule (rule.id)}
+							{#each selectedGroup.rules.filter(
+								(r) => r.direction === 'outbound'
+							) as rule (rule.id)}
 								<tr class="transition-colors duration-100 hover:bg-muted/20">
 									<td class="px-5 py-2.5">
 										<Badge variant="outline" class="text-[10px]">{rule.protocol}</Badge>
@@ -374,9 +386,9 @@
 							{/each}
 							{#if selectedGroup.rules.filter((r) => r.direction === 'outbound').length === 0}
 								<tr>
-									<td colspan="5" class="px-5 py-6 text-center text-xs text-muted-foreground"
-										>No outbound rules</td
-									>
+									<td colspan="5" class="px-5 py-6 text-center text-xs text-muted-foreground">
+										No outbound rules
+									</td>
 								</tr>
 							{/if}
 						</tbody>
@@ -434,7 +446,8 @@
 				variant="outline"
 				size="sm"
 				onclick={() => (addRuleOpen = false)}
-				disabled={addingRule}>Cancel</Button
+				disabled={addingRule}
+				>Cancel</Button
 			>
 			<Button size="sm" onclick={addRule} disabled={!newPorts.trim() || addingRule}
 				>{addingRule ? 'Adding...' : 'Add Rule'}</Button

@@ -13,10 +13,10 @@
 	import EmailHeader from './email-header.svelte';
 
 	interface Props {
-		userName?: string | null;
-		targetEmail: string;
 		code: string;
 		expiresInMinutes: number;
+		targetEmail: string;
+		userName?: string | null;
 	}
 
 	let { userName = null, targetEmail, code, expiresInMinutes }: Props = $props();
@@ -33,7 +33,11 @@
 					Confirm user deletion
 				</Heading>
 				<Text class="mt-4 text-sm leading-5 text-gray-400">
-					{#if userName}Hi {userName},{:else}Hi there,{/if}
+					{#if userName}
+						Hi {userName},
+					{:else}
+						Hi there,
+					{/if}
 				</Text>
 				<Text class="mt-2 text-sm leading-5 text-gray-400">
 					Enter this code in Stack to confirm deleting {targetEmail}.
@@ -45,8 +49,8 @@
 				</Section>
 				<Hr class="my-8 border-gray-800" />
 				<Text class="text-sm leading-5 text-gray-500">
-					This code expires in {expiresInMinutes} minutes. If you did not request this deletion, contact
-					support@fyrastack.com and secure your account immediately.
+					This code expires in {expiresInMinutes} minutes. If you did not request this deletion,
+					contact support@fyrastack.com and secure your account immediately.
 				</Text>
 			</Section>
 		</Container>

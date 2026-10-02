@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import ComingSoon from '#lib/components/coming-soon.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 	import Camera from '~icons/nucleo/camera';
 	import Trash2 from '~icons/nucleo/trash';
 

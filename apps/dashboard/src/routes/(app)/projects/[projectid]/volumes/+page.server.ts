@@ -1,7 +1,7 @@
-import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
-import { listVolumes } from '#lib/remote/volumes.remote.js';
 import { listVms } from '#lib/remote/vms.remote.js';
+import { listVolumes } from '#lib/remote/volumes.remote.js';
+import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, parent, depends }) => {
 	depends('project:volumes');

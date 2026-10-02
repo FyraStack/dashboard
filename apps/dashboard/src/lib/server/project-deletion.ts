@@ -20,8 +20,8 @@ import {
 	organization,
 	paymentPeriods,
 	projectBillingCustomers,
-	volumes,
-	vms
+	vms,
+	volumes
 } from '#lib/server/db/schema.js';
 import { releaseVmNetworking } from '#lib/server/ipam.js';
 
@@ -115,7 +115,9 @@ export async function purgeExpiredDeletedOrganizations(now = Date.now(), limit =
 				)
 			)
 			.limit(1);
-		if (unsettled) continue;
+		if (unsettled) {
+			continue;
+		}
 
 		const projectVms = await db.select({ id: vms.id }).from(vms).where(eq(vms.ownerProjectId, id));
 		const vmIds = projectVms.map((vm) => vm.id);

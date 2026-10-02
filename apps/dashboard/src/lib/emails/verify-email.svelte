@@ -30,7 +30,11 @@
 			<Section class="p-8">
 				<Heading as="h1" class="m-0 text-xl font-semibold text-gray-50">Verify this email</Heading>
 				<Text class="mt-4 text-sm leading-5 text-gray-400">
-					{#if userName}Hi {userName},{:else}Hi there,{/if}
+					{#if userName}
+						Hi {userName},
+					{:else}
+						Hi there,
+					{/if}
 				</Text>
 				<Text class="mt-2 text-sm leading-5 text-gray-400">
 					Please verify this email address for your Stack account.

@@ -1,0 +1,127 @@
+{
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	"extends": ["ultracite/biome/core", "ultracite/biome/svelte"],
+	"files": {
+		"includes": [
+			"!!apps/dashboard/static",
+			"!!apps/dashboard/drizzle",
+			"!!**/.factory",
+			"!!**/*.svg"
+		]
+	},
+	"assist": {
+		"actions": {
+			"source": {
+				"useSortedKeys": "off",
+				"useSortedAttributes": "off"
+			}
+		}
+	},
+	"html": {
+		"formatter": {
+			"selfCloseVoidElements": "always"
+		}
+	},
+	"formatter": {
+		"indentStyle": "tab",
+		"lineWidth": 100
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "single",
+			"trailingCommas": "none"
+		}
+	},
+	"css": {
+		"formatter": {
+			"lineWidth": 100
+		}
+	},
+	"json": {
+		"formatter": {
+			"indentStyle": "tab",
+			"lineWidth": 100
+		}
+	},
+	"linter": {
+		"rules": {
+			"a11y": {
+				"noLabelWithoutControl": "warn",
+				"noNoninteractiveElementInteractions": "warn",
+				"noNoninteractiveTabindex": "warn",
+				"noSvgWithoutTitle": "warn",
+				"useAnchorContent": "warn",
+				"useAriaPropsSupportedByRole": "warn",
+				"useButtonType": "warn",
+				"useKeyWithClickEvents": "warn",
+				"useSemanticElements": "warn"
+			},
+			"complexity": {
+				"noExcessiveCognitiveComplexity": "warn",
+				"noVoid": "warn",
+				"useLiteralKeys": "warn",
+				"useOptionalChain": "warn",
+				"useSimplifiedLogicExpression": "warn"
+			},
+			"correctness": {
+				"noUnusedFunctionParameters": "warn",
+				"noUnusedPrivateClassMembers": "warn",
+				"noUnusedVariables": "warn",
+				"useParseIntRadix": "warn"
+			},
+			"performance": {
+				"noAwaitInLoops": "warn",
+				"noBarrelFile": "warn",
+				"noNamespaceImport": "warn",
+				"useTopLevelRegex": "warn"
+			},
+			"style": {
+				"noExportedImports": "warn",
+				"noIncrementDecrement": "warn",
+				"noNamespace": "warn",
+				"noNestedTernary": "warn",
+				"noNonNullAssertion": "warn",
+				"noParameterProperties": "warn",
+				"noRestrictedGlobals": "warn",
+				"useAtIndex": "warn",
+				"useConsistentBuiltinInstantiation": "warn",
+				"useConsistentMethodSignatures": "warn",
+				"useConsistentTypeDefinitions": "warn",
+				"useDefaultSwitchClause": "warn",
+				"useDestructuring": "warn",
+				"useErrorCause": "warn",
+				"useReadonlyClassProperties": "warn",
+				"useTemplate": "warn"
+			},
+			"suspicious": {
+				"noAssignInExpressions": "warn",
+				"noBitwiseOperators": "warn",
+				"noDoubleEquals": "warn",
+				"noEmptyBlockStatements": "warn",
+				"noEqualsToNull": "warn",
+				"noEvolvingTypes": "warn",
+				"noExplicitAny": "warn",
+				"noImplicitAnyLet": "warn",
+				"noNestedPromises": "warn",
+				"noReturnAssign": "warn",
+				"noShadow": "warn",
+				"noUnnecessaryConditions": "warn",
+				"noUnusedExpressions": "warn",
+				"useAwait": "warn",
+				"useIterableCallbackReturn": "warn"
+			}
+		}
+	},
+	"overrides": [
+		{
+			"includes": ["**/*.svelte"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noReturnAssign": "off"
+					}
+				}
+			}
+		}
+	]
+}

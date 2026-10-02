@@ -1,21 +1,19 @@
-import { redirect } from '@sveltejs/kit';
 import { waitUntil } from 'cloudflare:workers';
-import { sequence, type Handle, type HandleServerError } from '@sveltejs/kit/hooks';
-
 import { handleErrorWithSentry, initCloudflareSentryHandle, sentryHandle } from '@sentry/sveltekit';
-
-import { building, dev } from '$app/env';
-import { PUBLIC_SENTRY_DSN } from '$app/env/public';
-import { handlePostHogProxy } from '#lib/server/posthog-proxy.js';
-import { captureServerException } from '#lib/server/posthog.js';
-import { getCachedAuthSession, hasAuthSessionCookie } from '#lib/server/auth-lite.js';
-import { closeRequestDb } from '#lib/server/db/index.js';
-import { instrument, timingLog } from '#lib/server/observability.js';
+import { redirect } from '@sveltejs/kit';
+import { type Handle, type HandleServerError, sequence } from '@sveltejs/kit/hooks';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureSession,
 	accessibilityFixtureUser
 } from '#lib/server/accessibility-fixtures.js';
+import { getCachedAuthSession, hasAuthSessionCookie } from '#lib/server/auth-lite.js';
+import { closeRequestDb } from '#lib/server/db/index.js';
+import { instrument, timingLog } from '#lib/server/observability.js';
+import { captureServerException } from '#lib/server/posthog.js';
+import { handlePostHogProxy } from '#lib/server/posthog-proxy.js';
+import { building, dev } from '$app/env';
+import { PUBLIC_SENTRY_DSN } from '$app/env/public';
 
 const publicRoutes = [
 	'/health',
@@ -39,7 +37,9 @@ function scheduleAuthPrewarm(
 	event: Parameters<Handle>[0]['event'],
 	requestAttrs: Record<string, string | number | boolean | undefined>
 ) {
-	if (authPrewarmScheduled) return;
+	if (authPrewarmScheduled) {
+		return;
+	}
 	authPrewarmScheduled = true;
 
 	waitUntil(
@@ -85,7 +85,7 @@ async function runFullAuth(
 
 	const isPublic = publicRoutes.some((route) => event.url.pathname.startsWith(route));
 
-	if (!session && !isPublic) {
+	if (!(session || isPublic)) {
 		throw redirect(303, '/login');
 	}
 
@@ -172,7 +172,9 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 let sentryRequestHandle: Handle | undefined;
 
 const handleSentryInit: Handle = (input) => {
-	if (!PUBLIC_SENTRY_DSN) return input.resolve(input.event);
+	if (!PUBLIC_SENTRY_DSN) {
+		return input.resolve(input.event);
+	}
 
 	const requestHandle = (sentryRequestHandle ??= initCloudflareSentryHandle({
 		dsn: PUBLIC_SENTRY_DSN,
@@ -190,7 +192,9 @@ export const handle: Handle = sequence(
 
 const logServerError: HandleServerError = ({ kind, error, event }) => {
 	// Kit 3 also passes expected (app, framework and validation) errors here
-	if (kind !== 'unknown') return;
+	if (kind !== 'unknown') {
+		return;
+	}
 
 	console.error('Unhandled server error', { pathname: event.url.pathname, error });
 	captureServerException(error, event);

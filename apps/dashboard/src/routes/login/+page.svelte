@@ -1,16 +1,17 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import SiGithub from '@icons-pack/svelte-simple-icons/icons/SiGithub';
+	import { authClient } from '#lib/auth-client.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { authClient } from '#lib/auth-client.js';
+	import { goto } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertCircle from '~icons/nucleo/alert-circle';
 	import CheckCircle2 from '~icons/nucleo/check-circle';
 	import Eye from '~icons/nucleo/eye';
 	import EyeOff from '~icons/nucleo/eye-off';
 	import Fingerprint from '~icons/nucleo/fingerprint';
-	import SiGithub from '@icons-pack/svelte-simple-icons/icons/SiGithub';
 	import type { PageData } from './$types';
+
 	type SignInDataWithTwoFactor = {
 		twoFactorRedirect?: boolean;
 		twoFactorMethods?: string[] | null;
@@ -32,7 +33,9 @@
 	let socialLoading = $state<'github' | null>(null);
 
 	async function signInWithSocial(provider: 'github') {
-		if (socialLoading) return;
+		if (socialLoading) {
+			return;
+		}
 		error = '';
 		socialLoading = provider;
 		try {
@@ -53,7 +56,9 @@
 	}
 
 	async function handleLogin() {
-		if (!email || !password) return;
+		if (!(email && password)) {
+			return;
+		}
 		error = '';
 		loading = true;
 
@@ -157,7 +162,11 @@
 						class="absolute top-1/2 right-1 flex size-8 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
 						onclick={() => (showPassword = !showPassword)}
 					>
-						{#if showPassword}<EyeOff class="size-4" />{:else}<Eye class="size-4" />{/if}
+						{#if showPassword}
+							<EyeOff class="size-4" />
+						{:else}
+							<Eye class="size-4" />
+						{/if}
 					</button>
 				</div>
 

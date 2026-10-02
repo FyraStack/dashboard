@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Separator } from '#lib/components/ui/separator/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
@@ -7,6 +6,7 @@
 	import type { AdminVm } from '#lib/remote/admin-vms.remote.js';
 	import type { AdminState } from '#lib/state/admin.svelte.js';
 	import { getErrorMessage, runQuery } from '#lib/utils.js';
+	import { resolve } from '$app/paths';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Activity from '~icons/nucleo/activity';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
@@ -54,7 +54,9 @@
 			return;
 		}
 		const target = vm;
-		if (!target || loadedVmId === target.id) return;
+		if (!target || loadedVmId === target.id) {
+			return;
+		}
 		loadedVmId = target.id;
 		void loadUsage(target.id);
 	});
@@ -70,42 +72,60 @@
 			const result = await runQuery(
 				getVmBillingUsage({ vmId, periodStart, periodEnd: Date.now() })
 			);
-			if (current !== usageRequest) return;
+			if (current !== usageRequest) {
+				return;
+			}
 			usage = result;
 		} catch (err) {
-			if (current !== usageRequest) return;
+			if (current !== usageRequest) {
+				return;
+			}
 			usageError = getErrorMessage(err, 'Failed to load billed usage');
 		} finally {
-			if (current === usageRequest) usageLoading = false;
+			if (current === usageRequest) {
+				usageLoading = false;
+			}
 		}
 	}
 
 	function statusInfo(target: AdminVm) {
-		if (!target.active)
+		if (!target.active) {
 			return { label: 'deleted', class: 'border-ring/20 bg-muted/30 text-muted-foreground' };
-		if (target.status === 'deleting')
+		}
+		if (target.status === 'deleting') {
 			return { label: 'deleting', class: 'border-red-500/20 bg-red-500/10 text-red-400' };
-		if (target.status === 'error')
+		}
+		if (target.status === 'error') {
 			return { label: 'error', class: 'border-red-500/20 bg-red-500/10 text-red-400' };
-		if (target.status === 'provisioning')
+		}
+		if (target.status === 'provisioning') {
 			return { label: 'provisioning', class: 'border-sky-500/20 bg-sky-500/10 text-sky-400' };
-		if (target.liveStatus === 'running')
+		}
+		if (target.liveStatus === 'running') {
 			return {
 				label: 'running',
 				class: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
 			};
-		if (target.liveStatus === 'paused')
+		}
+		if (target.liveStatus === 'paused') {
 			return { label: 'paused', class: 'border-amber-500/20 bg-amber-500/10 text-amber-400' };
+		}
 		return { label: 'stopped', class: 'border-ring/20 bg-muted/30 text-muted-foreground' };
 	}
 
 	function formatUptime(seconds: number) {
-		if (seconds <= 0) return '-';
+		if (seconds <= 0) {
+			return '-';
+		}
 		const days = Math.floor(seconds / 86_400);
-		const hours = Math.floor((seconds % 86_400) / 3_600);
-		const minutes = Math.floor((seconds % 3_600) / 60);
-		if (days > 0) return `${days}d ${hours}h`;
-		if (hours > 0) return `${hours}h ${minutes}m`;
+		const hours = Math.floor((seconds % 86_400) / 3600);
+		const minutes = Math.floor((seconds % 3600) / 60);
+		if (days > 0) {
+			return `${days}d ${hours}h`;
+		}
+		if (hours > 0) {
+			return `${hours}h ${minutes}m`;
+		}
 		return `${minutes}m`;
 	}
 
@@ -153,9 +173,11 @@
 							disabled={Boolean(saving) || vm.liveStatus === 'running'}
 							onclick={() => admin.adminVmPower(vm.id, 'start')}
 						>
-							{#if saving === 'start'}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Play
-									class="h-3 w-3 text-emerald-400"
-								/>{/if}
+							{#if saving === 'start'}
+								<Loader2 class="h-3 w-3 animate-spin" />
+							{:else}
+								<Play class="h-3 w-3 text-emerald-400" />
+							{/if}
 							Start
 						</Button>
 						<Button
@@ -165,9 +187,11 @@
 							disabled={Boolean(saving) || vm.liveStatus !== 'running'}
 							onclick={() => admin.adminVmPower(vm.id, 'stop')}
 						>
-							{#if saving === 'stop'}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Power
-									class="h-3 w-3"
-								/>{/if}
+							{#if saving === 'stop'}
+								<Loader2 class="h-3 w-3 animate-spin" />
+							{:else}
+								<Power class="h-3 w-3" />
+							{/if}
 							Stop
 						</Button>
 						<Button
@@ -177,9 +201,11 @@
 							disabled={Boolean(saving) || vm.liveStatus !== 'running'}
 							onclick={() => admin.adminVmPower(vm.id, 'reboot')}
 						>
-							{#if saving === 'reboot'}<Loader2 class="h-3 w-3 animate-spin" />{:else}<RotateCw
-									class="h-3 w-3 text-sky-400"
-								/>{/if}
+							{#if saving === 'reboot'}
+								<Loader2 class="h-3 w-3 animate-spin" />
+							{:else}
+								<RotateCw class="h-3 w-3 text-sky-400" />
+							{/if}
 							Reboot
 						</Button>
 						<Button
@@ -189,9 +215,11 @@
 							disabled={Boolean(saving) || vm.liveStatus !== 'running'}
 							onclick={() => admin.adminVmPower(vm.id, 'kill')}
 						>
-							{#if saving === 'kill'}<Loader2 class="h-3 w-3 animate-spin" />{:else}<PowerOff
-									class="h-3 w-3 text-amber-400"
-								/>{/if}
+							{#if saving === 'kill'}
+								<Loader2 class="h-3 w-3 animate-spin" />
+							{:else}
+								<PowerOff class="h-3 w-3 text-amber-400" />
+							{/if}
 							Kill
 						</Button>
 					</div>
@@ -232,13 +260,16 @@
 							<span class="text-xs text-muted-foreground">{formatPercent(vm.cpuUsage)}</span>
 						</div>
 					{/if}
-					{#if vm.memoryUsageBytes != null && vm.memoryTotalBytes != null && vm.memoryTotalBytes > 0}
+					{#if vm.memoryUsageBytes != null &&
+						vm.memoryTotalBytes != null &&
+						vm.memoryTotalBytes > 0}
 						<div class="flex items-center justify-between">
 							<span class="flex items-center gap-2 text-xs text-muted-foreground">
 								<HardDrive class="h-3 w-3" />Memory
 							</span>
 							<span class="text-xs text-muted-foreground">
-								{formatGiB(vm.memoryUsageBytes)} / {formatGiB(vm.memoryTotalBytes)}
+								{formatGiB(vm.memoryUsageBytes)}
+								/ {formatGiB(vm.memoryTotalBytes)}
 							</span>
 						</div>
 					{/if}
@@ -323,7 +354,8 @@
 						{#if vm.projectId}
 							<a
 								class="text-xs text-foreground hover:underline"
-								href={resolve(`admin/projects/${vm.projectId}`)}>{vm.projectName ?? vm.projectId}</a
+								href={resolve(`admin/projects/${vm.projectId}`)}
+								>{vm.projectName ?? vm.projectId}</a
 							>
 						{:else}
 							<span class="text-xs text-foreground">-</span>

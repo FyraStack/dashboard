@@ -1,16 +1,16 @@
-import { dev } from '$app/env';
 import { waitUntil } from 'cloudflare:workers';
-import { error } from '@sveltejs/kit';
 import type { KVNamespace } from '@cloudflare/workers-types';
+import { error } from '@sveltejs/kit';
 import {
 	defaultFeatureFlags,
 	developmentFeatureFlags,
-	featureFlagKeys,
 	type FeatureFlagKey,
-	type FeatureFlags
+	type FeatureFlags,
+	featureFlagKeys
 } from '#lib/feature-flags.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import { instrument, timingLog } from '#lib/server/observability.js';
+import { dev } from '$app/env';
 
 const FEATURE_FLAGS_KEY = 'feature-flags';
 const FLAGS_FRESH_TTL_MS = 60_000;

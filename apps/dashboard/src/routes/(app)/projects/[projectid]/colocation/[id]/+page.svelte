@@ -36,14 +36,16 @@
 		const rackMatch = location.match(/Rack\s+([A-Za-z0-9]+)/);
 		const slotMatch = location.match(/Slot\s+(\d+)(?:-(\d+))?/);
 		const rack = rackMatch?.[1] ?? '??';
-		const start = slotMatch ? parseInt(slotMatch[1]) : 1;
-		const end = slotMatch?.[2] ? parseInt(slotMatch[2]) : start;
+		const start = slotMatch ? Number.parseInt(slotMatch[1]) : 1;
+		const end = slotMatch?.[2] ? Number.parseInt(slotMatch[2]) : start;
 		return { rack, start, end };
 	}
 
 	let rackInfo = $derived.by(() => {
 		const selectedUnit = colo.selectedUnit;
-		if (!selectedUnit) return { rack: '??', occupied: [] };
+		if (!selectedUnit) {
+			return { rack: '??', occupied: [] };
+		}
 		const selectedSlots = parseSlots(selectedUnit.location);
 		return {
 			rack: selectedSlots.rack,
@@ -60,9 +62,11 @@
 
 	let powerPct = $derived.by(() => {
 		const selectedUnit = colo.selectedUnit;
-		if (!selectedUnit) return 0;
-		const draw = parseInt(selectedUnit.powerDraw);
-		const budget = parseInt(selectedUnit.powerBudget);
+		if (!selectedUnit) {
+			return 0;
+		}
+		const draw = Number.parseInt(selectedUnit.powerDraw);
+		const budget = Number.parseInt(selectedUnit.powerBudget);
 		return budget > 0 ? (draw / budget) * 100 : 0;
 	});
 </script>
@@ -115,7 +119,13 @@
 					>
 				</div>
 				<div class="divide-y divide-border/50 border-t border-border/50">
-					{#each [['Created', colo.selectedUnit.created], ['Power Draw', colo.selectedUnit.powerDraw], ['Power Budget', colo.selectedUnit.powerBudget], ['Uplink', '1 Gbps fair-use'], ['Primary IP', colo.selectedUnit.ip]] as [label, value] (label)}
+					{#each [
+						['Created', colo.selectedUnit.created],
+						['Power Draw', colo.selectedUnit.powerDraw],
+						['Power Budget', colo.selectedUnit.powerBudget],
+						['Uplink', '1 Gbps fair-use'],
+						['Primary IP', colo.selectedUnit.ip]
+					] as [label, value] (label)}
 						<div class="flex items-center justify-between px-5 py-2">
 							<span class="text-xs text-muted-foreground">{label}</span>
 							<span class="text-xs font-medium text-foreground">{value}</span>
@@ -125,7 +135,8 @@
 						<div class="flex items-center justify-between">
 							<span class="text-xs text-muted-foreground">Power Usage</span>
 							<span class="text-xs text-muted-foreground"
-								>{colo.selectedUnit.powerDraw} / {colo.selectedUnit.powerBudget}</span
+								>{colo.selectedUnit.powerDraw}
+								/ {colo.selectedUnit.powerBudget}</span
 							>
 						</div>
 						<div class="mt-2 h-1.5 w-full bg-muted">
@@ -175,8 +186,10 @@
 								y={y + 5.5}
 								font-size="4"
 								fill="var(--muted-foreground)"
-								font-family="monospace">{slotNum}</text
+								font-family="monospace"
 							>
+								{slotNum}
+							</text>
 						{/if}
 					{/each}
 					{#each rackInfo.occupied as unit (`${unit.name}-${unit.start}`)}
@@ -225,8 +238,10 @@
 							font-size="4"
 							fill={unit.isCurrent ? 'var(--foreground)' : 'var(--muted-foreground)'}
 							font-family="monospace"
-							text-anchor="end">{unit.name}</text
+							text-anchor="end"
 						>
+							{unit.name}
+						</text>
 					{/each}
 				</svg>
 			</div>

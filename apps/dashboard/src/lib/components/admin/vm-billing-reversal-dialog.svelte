@@ -1,15 +1,15 @@
 <script lang="ts">
+	import { toast } from 'svelte-sonner';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import {
 		getVmBillingUsage,
 		reverseVmBillingUsage,
 		type VmBillingUsage
 	} from '#lib/remote/admin-billing.remote.js';
 	import { getErrorMessage, runQuery } from '#lib/utils.js';
-	import { toast } from 'svelte-sonner';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
 	import CreditCard from '~icons/nucleo/credit-card';
@@ -44,7 +44,7 @@
 		return Number.isNaN(end) ? Number.NaN : Math.min(end, Date.now());
 	});
 	const windowValid = $derived(
-		!Number.isNaN(periodStart) && !Number.isNaN(periodEnd) && periodStart < periodEnd
+		!(Number.isNaN(periodStart) || Number.isNaN(periodEnd)) && periodStart < periodEnd
 	);
 
 	$effect(() => {
@@ -58,7 +58,9 @@
 		wasOpen = open;
 
 		const target = vm;
-		if (!open || !target) return;
+		if (!(open && target)) {
+			return;
+		}
 		if (!windowValid) {
 			usage = null;
 			return;
@@ -74,23 +76,31 @@
 			const result = await runQuery(
 				getVmBillingUsage({ vmId, periodStart: start, periodEnd: end })
 			);
-			if (current !== request) return;
+			if (current !== request) {
+				return;
+			}
 			usage = result;
 		} catch (err) {
-			if (current !== request) return;
+			if (current !== request) {
+				return;
+			}
 			usage = null;
 			loadError = getErrorMessage(err, 'Failed to load billed usage');
 		} finally {
-			if (current === request) loading = false;
+			if (current === request) {
+				loading = false;
+			}
 		}
 	}
 
 	const canSubmit = $derived(
-		!submitting && !loading && usage !== null && usage.reversibleHours > 0
+		!(submitting || loading) && usage !== null && usage.reversibleHours > 0
 	);
 
 	async function submit() {
-		if (!vm || !usage || !canSubmit) return;
+		if (!(vm && usage && canSubmit)) {
+			return;
+		}
 		submitting = true;
 		try {
 			const result = await reverseVmBillingUsage({
@@ -100,7 +110,7 @@
 				...(note.trim() ? { note: note.trim() } : {})
 			});
 			const amount =
-				result.estimatedAmount != null ? ` (about $${result.estimatedAmount.toFixed(2)})` : '';
+				result.estimatedAmount == null ? '' : ` (about $${result.estimatedAmount.toFixed(2)})`;
 			if (result.syncStatus === 'synced') {
 				toast.success(`Reversed ${result.reversedHours} unit-hours${amount} for ${vm.name}`);
 			} else {
@@ -181,7 +191,8 @@
 					<div class="flex items-center justify-between text-xs">
 						<span class="text-muted-foreground">To reverse</span>
 						<span class="font-medium text-foreground"
-							>{formatHours(usage.reversibleHours)} unit-hours</span
+							>{formatHours(usage.reversibleHours)}
+							unit-hours</span
 						>
 					</div>
 					{#if usage.estimatedAmount != null}

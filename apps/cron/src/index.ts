@@ -1,7 +1,7 @@
 interface Env {
+	BILLING_DISABLED?: string;
 	DASHBOARD: Fetcher;
 	INTERNAL_CRON_SECRET: string;
-	BILLING_DISABLED?: string;
 }
 
 const METER_PATH = '/api/internal/billing/meter';

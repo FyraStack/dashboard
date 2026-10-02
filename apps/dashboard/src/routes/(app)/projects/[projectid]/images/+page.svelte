@@ -46,7 +46,9 @@
 
 	let filteredOfficialImages = $derived.by(() => {
 		const q = search.trim().toLowerCase();
-		if (!q) return officialImages;
+		if (!q) {
+			return officialImages;
+		}
 
 		return officialImages.filter(
 			(image) =>
@@ -58,7 +60,9 @@
 
 	let filteredCustomImages = $derived.by(() => {
 		const q = search.trim().toLowerCase();
-		if (!q) return customImages;
+		if (!q) {
+			return customImages;
+		}
 
 		return customImages.filter(
 			(image) =>
@@ -175,7 +179,8 @@
 								{image.description}
 							</p>
 							<p class="mt-auto pt-2 text-[10px] leading-none text-muted-foreground">
-								{displayArchitecture(image)} | {image.version}
+								{displayArchitecture(image)}
+								| {image.version}
 							</p>
 						</div>
 					</button>
@@ -194,7 +199,8 @@
 			</span>
 			{#if data.proxmoxIsos?.length}
 				<span class="text-[10px] text-muted-foreground"
-					>{data.proxmoxIsos.length} Proxmox ISOs found</span
+					>{data.proxmoxIsos.length}
+					Proxmox ISOs found</span
 				>
 			{/if}
 		</div>
@@ -232,7 +238,9 @@
 <Sheet.Root
 	bind:open={sheetOpen}
 	onOpenChange={(open) => {
-		if (!open) closeDetail();
+		if (!open) {
+			closeDetail();
+		}
 	}}
 >
 	<Sheet.Content side="right" class="border-border bg-background px-6 py-5 sm:max-w-md">

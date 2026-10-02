@@ -1,8 +1,7 @@
-import type { Fetcher, KVNamespace, SendEmail } from '@cloudflare/workers-types';
 import { env as platformEnv } from 'cloudflare:workers';
-import { dev } from '$app/env';
-
+import type { Fetcher, KVNamespace, SendEmail } from '@cloudflare/workers-types';
 import { accessibilityFixtureEnabled } from '#lib/server/accessibility-fixtures.js';
+import { dev } from '$app/env';
 
 export type RuntimeEnv = {
 	ORIGIN: string;
@@ -38,7 +37,9 @@ export type RuntimeEnv = {
 
 function required(name: keyof RuntimeEnv, value: string | undefined): string {
 	if (!value) {
-		if (accessibilityFixtureEnabled) return `fixture-${name}`;
+		if (accessibilityFixtureEnabled) {
+			return `fixture-${name}`;
+		}
 		throw new Error(`${name} is not set`);
 	}
 

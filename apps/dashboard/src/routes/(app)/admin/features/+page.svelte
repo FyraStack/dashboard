@@ -1,26 +1,28 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import type { IconComponent } from '#lib';
 	import {
-		featureFlagKeys,
-		featureFlagLabels,
-		featureFlagDescriptions,
+		type FeatureFlagCategory,
+		type FeatureFlagKey,
 		featureFlagCategories,
 		featureFlagCategoryLabels,
-		type FeatureFlagKey,
-		type FeatureFlagCategory
+		featureFlagDescriptions,
+		featureFlagKeys,
+		featureFlagLabels
 	} from '#lib/feature-flags.js';
+	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
 	import Check from '~icons/lucide/check';
-	import FileText from '~icons/nucleo/file-text';
-	import FolderOpen from '~icons/nucleo/folder-open';
 	import Loader2 from '~icons/lucide/loader-2';
 	import X from '~icons/lucide/x';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
 	import Ambulance from '~icons/nucleo/ambulance';
 	import Camera from '~icons/nucleo/camera';
+	import Maximize from '~icons/nucleo/expand-object';
+	import FileText from '~icons/nucleo/file-text';
+	import FolderOpen from '~icons/nucleo/folder-open';
+	import LayoutGrid from '~icons/nucleo/grid';
 	import HardDrive from '~icons/nucleo/hard-drive';
 	import Image from '~icons/nucleo/layers';
-	import LayoutGrid from '~icons/nucleo/grid';
-	import Maximize from '~icons/nucleo/expand-object';
 	import Network from '~icons/nucleo/network';
 	import RefreshCw from '~icons/nucleo/refresh-cw';
 	import Server from '~icons/nucleo/server';
@@ -28,8 +30,6 @@
 	import Shield from '~icons/nucleo/shield';
 	import Terminal from '~icons/nucleo/terminal';
 	import Upload from '~icons/nucleo/upload';
-	import { AdminState, type AdminPageData } from '#lib/state/admin.svelte.js';
-	import type { IconComponent } from '#lib';
 
 	const featureFlagIcons: Record<FeatureFlagKey, IconComponent> = {
 		colocation: Server,
@@ -63,7 +63,9 @@
 	const totalCount = featureFlagKeys.length;
 
 	function toggleFlag(flag: FeatureFlagKey) {
-		if (admin.featureFlagSaving[flag]) return;
+		if (admin.featureFlagSaving[flag]) {
+			return;
+		}
 		admin.toggleFeatureFlag(flag, !admin.featureFlags[flag]);
 	}
 </script>
@@ -111,7 +113,8 @@
 						{#if catEnabled === flags.length}
 							<Check class="mr-1 h-2.5 w-2.5" />All on
 						{:else if catEnabled > 0}
-							{catEnabled}/{flags.length} on
+							{catEnabled}/{flags.length}
+							on
 						{:else}
 							<X class="mr-1 h-2.5 w-2.5" />All off
 						{/if}
@@ -122,10 +125,10 @@
 						{@const enabled = admin.featureFlags[flag]}
 						{@const Icon = featureFlagIcons[flag]}
 						<div
-							class="group flex items-center justify-between gap-4 px-4 py-3.5 transition-colors hover:bg-muted/20 {i !==
+							class="group flex items-center justify-between gap-4 px-4 py-3.5 transition-colors hover:bg-muted/20 {i ===
 							flags.length - 1
-								? 'border-b border-border/30'
-								: ''}"
+								? ''
+								: 'border-b border-border/30'}"
 						>
 							<div class="flex min-w-0 items-center gap-3">
 								<div

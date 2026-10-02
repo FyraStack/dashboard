@@ -14,15 +14,15 @@
 	import EmailHeader from './email-header.svelte';
 
 	interface Props {
-		userName?: string | null;
+		affectedServices?: string | null;
+		body: string;
 		heading: string;
 		preview: string;
 		severity?: string;
 		status: string;
-		body: string;
-		affectedServices?: string | null;
-		timestamp?: string | null;
 		statusUrl?: string | null;
+		timestamp?: string | null;
+		userName?: string | null;
 	}
 
 	let {
@@ -68,7 +68,11 @@
 					{/if}
 				</Section>
 				<Text class="mt-4 text-sm leading-5 text-gray-400">
-					{#if userName}Hi {userName},{:else}Hi there,{/if}
+					{#if userName}
+						Hi {userName},
+					{:else}
+						Hi there,
+					{/if}
 				</Text>
 				<Text class="mt-2 text-sm leading-5 text-gray-400">{body}</Text>
 				{#if statusUrl}

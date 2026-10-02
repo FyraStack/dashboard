@@ -1,7 +1,11 @@
-import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
+import {
+	accessibilityFixtureBillingOverview,
+	accessibilityFixtureEnabled
+} from '#lib/server/accessibility-fixtures.js';
 import { requireProjectAccess } from '#lib/server/auth-context.js';
+import { runInBackground } from '#lib/server/background.js';
 import {
 	openProjectBillingPortal,
 	purchaseProjectCredits,
@@ -9,13 +13,9 @@ import {
 	validateProjectDiscountCode
 } from '#lib/server/billing/autumn.js';
 import { getProjectBillingOverview, refreshProjectBilling } from '#lib/server/billing/overview.js';
-import { runInBackground } from '#lib/server/background.js';
 import { initDrizzle } from '#lib/server/db/index.js';
-import {
-	accessibilityFixtureEnabled,
-	accessibilityFixtureBillingOverview
-} from '#lib/server/accessibility-fixtures.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { command, getRequestEvent, query } from '$app/server';
 
 const projectParams = type({ projectId: 'string' });
 const setupParams = type({ projectId: 'string', returnTo: 'string?', discountCode: 'string?' });
@@ -24,16 +24,22 @@ const purchaseCreditsParams = type({ projectId: 'string', credits: 'number.integ
 const MAX_CREDITS_PER_PURCHASE = 1_000_000;
 
 function safeReturnPath(value: string | undefined, fallback: string) {
-	if (!value || !value.startsWith('/') || value.startsWith('//')) return fallback;
+	if (!(value && value.startsWith('/')) || value.startsWith('//')) {
+		return fallback;
+	}
 
 	return value;
 }
 
 export const getProjectBilling = query(projectParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
-	if (accessibilityFixtureEnabled) return accessibilityFixtureBillingOverview;
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureBillingOverview;
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'admin');
@@ -44,7 +50,9 @@ export const getProjectBilling = query(projectParams, async (params) => {
 
 export const openBillingPortal = command(projectParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'owner');
@@ -60,7 +68,9 @@ export const openBillingPortal = command(projectParams, async (params) => {
 
 export const purchaseCredits = command(purchaseCreditsParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 	if (params.credits > MAX_CREDITS_PER_PURCHASE) {
 		error(
 			400,
@@ -83,13 +93,17 @@ export const purchaseCredits = command(purchaseCreditsParams, async (params) => 
 
 export const setupProjectBillingPayment = command(setupParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'owner');
 
 	const discountCode = params.discountCode?.trim();
-	if (discountCode) await validateProjectDiscountCode(params.projectId, discountCode);
+	if (discountCode) {
+		await validateProjectDiscountCode(params.projectId, discountCode);
+	}
 
 	const returnPath = safeReturnPath(params.returnTo, `/projects/${params.projectId}/billing`);
 	const separator = returnPath.includes('?') ? '&' : '?';

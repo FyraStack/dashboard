@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
 	import GripVertical from '~icons/lucide/grip-vertical';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
@@ -15,7 +16,6 @@
 	import RefreshCw from '~icons/nucleo/refresh-cw';
 	import Trash2 from '~icons/nucleo/trash';
 	import Upload from '~icons/nucleo/upload';
-	import { AdminState, type AdminPageData } from '#lib/state/admin.svelte.js';
 
 	let { data }: { data: AdminPageData } = $props();
 	const admin = new AdminState(untrack(() => data));
@@ -25,7 +25,9 @@
 
 	function formatSize(bytes: number) {
 		const mb = bytes / (1024 * 1024);
-		if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+		if (mb >= 1024) {
+			return `${(mb / 1024).toFixed(1)} GB`;
+		}
 		return `${mb.toFixed(0)} MB`;
 	}
 
@@ -42,20 +44,28 @@
 			event.dataTransfer.effectAllowed = 'move';
 			event.dataTransfer.setData('text/plain', String(index));
 			const row = (event.target as HTMLElement).closest('tr');
-			if (row) event.dataTransfer.setDragImage(row, 0, 0);
+			if (row) {
+				event.dataTransfer.setDragImage(row, 0, 0);
+			}
 		}
 	}
 
 	function imgDragOver(event: DragEvent, index: number) {
-		if (imgDragIndex === null) return;
+		if (imgDragIndex === null) {
+			return;
+		}
 		event.preventDefault();
-		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+		if (event.dataTransfer) {
+			event.dataTransfer.dropEffect = 'move';
+		}
 		imgDropIndex = index;
 	}
 
 	function imgDrop(event: DragEvent, index: number) {
 		event.preventDefault();
-		if (imgDragIndex !== null) admin.imgReorder(imgDragIndex, index);
+		if (imgDragIndex !== null) {
+			admin.imgReorder(imgDragIndex, index);
+		}
 		imgDragIndex = null;
 		imgDropIndex = null;
 	}
@@ -66,7 +76,9 @@
 	}
 
 	function imgHandleKeydown(event: KeyboardEvent, index: number) {
-		if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+		if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+			return;
+		}
 		event.preventDefault();
 		admin.imgReorder(index, event.key === 'ArrowUp' ? index - 1 : index + 1);
 	}
@@ -87,10 +99,12 @@
 			class="h-7 gap-1.5 text-xs"
 			onclick={() => admin.imgImportOpen()}
 		>
-			<Upload class="h-3 w-3" /> Upload/Import Image
+			<Upload class="h-3 w-3" />
+			Upload/Import Image
 		</Button>
 		<Button size="sm" class="h-7 gap-1.5 text-xs" onclick={() => admin.imgOpenCreate()}>
-			<Plus class="h-3 w-3" /> Add Image
+			<Plus class="h-3 w-3" />
+			Add Image
 		</Button>
 	</div>
 	{#if admin.images.length === 0}
@@ -101,23 +115,26 @@
 				variant="outline"
 				size="sm"
 				class="mt-3 gap-1.5 text-xs"
-				onclick={() => admin.imgOpenCreate()}><Plus class="h-3 w-3" /> Add Image</Button
+				onclick={() => admin.imgOpenCreate()}
+				><Plus class="h-3 w-3" />
+				Add Image</Button
 			>
 		</div>
 	{:else}
 		<table class="w-full whitespace-nowrap">
-			<thead
-				><tr class="border-b border-border">
+			<thead>
+				<tr class="border-b border-border">
 					<th class="w-8 px-3 py-3"><span class="sr-only">Drag handle</span></th>
 					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Image</th>
 					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Version</th>
 					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Type</th>
-					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Proxmox Path</th
-					>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">
+						Proxmox Path
+					</th>
 					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Description</th>
 					<th class="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th>
-				</tr></thead
-			>
+				</tr>
+			</thead>
 			<tbody class="divide-y divide-border/50">
 				{#each admin.images as img, index (img.id)}
 					<tr
@@ -165,16 +182,15 @@
 							</div>
 						</td>
 						<td class="px-5 py-3 text-sm text-muted-foreground">{img.version}</td>
-						<td class="px-5 py-3"
-							><Badge variant="secondary" class="text-[10px]">{img.imageType || 'import'}</Badge
-							></td
-						>
-						<td class="max-w-xs truncate px-5 py-3 font-mono text-xs text-muted-foreground"
-							>{img.filePath}</td
-						>
-						<td class="max-w-xs truncate px-5 py-3 text-xs text-muted-foreground"
-							>{img.description}</td
-						>
+						<td class="px-5 py-3">
+							<Badge variant="secondary" class="text-[10px]">{img.imageType || 'import'}</Badge>
+						</td>
+						<td class="max-w-xs truncate px-5 py-3 font-mono text-xs text-muted-foreground">
+							{img.filePath}
+						</td>
+						<td class="max-w-xs truncate px-5 py-3 text-xs text-muted-foreground">
+							{img.description}
+						</td>
 						<td class="px-5 py-3 text-right">
 							<div class="flex items-center justify-end gap-1">
 								<Button
@@ -182,14 +198,16 @@
 									size="sm"
 									aria-label={`Edit ${img.name}`}
 									class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-									onclick={() => admin.imgOpenEdit(img)}><Pencil class="h-3 w-3" /></Button
+									onclick={() => admin.imgOpenEdit(img)}
+									><Pencil class="h-3 w-3" /></Button
 								>
 								<Button
 									variant="ghost"
 									size="sm"
 									aria-label={`Delete ${img.name}`}
 									class="h-7 w-7 p-0 text-red-400 hover:text-red-300"
-									onclick={() => admin.imgRemove(img.id)}><Trash2 class="h-3 w-3" /></Button
+									onclick={() => admin.imgRemove(img.id)}
+									><Trash2 class="h-3 w-3" /></Button
 								>
 							</div>
 						</td>
@@ -220,7 +238,8 @@
 
 			<div class="flex items-center justify-between">
 				<p class="text-xs text-muted-foreground">
-					Target: <span class="font-mono text-muted-foreground">{admin.importStorage}</span> on {localImportTargets.length}
+					Target: <span class="font-mono text-muted-foreground">{admin.importStorage}</span> on
+					{localImportTargets.length}
 					node{localImportTargets.length === 1 ? '' : 's'}.
 				</p>
 				<Button
@@ -230,9 +249,11 @@
 					onclick={() => admin.loadPveImages()}
 					disabled={admin.isoLoading || admin.importSaving}
 				>
-					{#if admin.isoLoading}<Loader2 class="h-3 w-3 animate-spin" />{:else}<RefreshCw
-							class="h-3 w-3"
-						/>{/if}
+					{#if admin.isoLoading}
+						<Loader2 class="h-3 w-3 animate-spin" />
+					{:else}
+						<RefreshCw class="h-3 w-3" />
+					{/if}
 					Refresh
 				</Button>
 			</div>
@@ -320,14 +341,18 @@
 				variant="outline"
 				size="sm"
 				onclick={() => admin.imgImportClose()}
-				disabled={admin.importSaving}>Cancel</Button
+				disabled={admin.importSaving}
+				>Cancel</Button
 			>
 			<Button
 				size="sm"
 				onclick={() => admin.importImageFromUrl()}
 				disabled={admin.importSaving || !admin.importUrl.trim() || localImportTargets.length === 0}
 			>
-				{#if admin.importSaving}<Loader2 class="h-3 w-3 animate-spin" />{/if}Import
+				{#if admin.importSaving}
+					<Loader2 class="h-3 w-3 animate-spin" />
+				{/if}
+				Import
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
@@ -372,7 +397,8 @@
 					<label
 						class="flex h-9 items-center gap-2 border border-border bg-muted px-3 text-sm text-muted-foreground"
 					>
-						<input type="checkbox" bind:checked={admin.imgIsOfficial} class="h-4 w-4" /> Official image
+						<input type="checkbox" bind:checked={admin.imgIsOfficial} class="h-4 w-4" />
+						Official image
 					</label>
 				</div>
 			</div>
@@ -382,8 +408,8 @@
 				<label
 					class="flex h-9 items-center gap-2 border border-border bg-muted px-3 text-sm text-muted-foreground"
 				>
-					<input type="checkbox" bind:checked={admin.imgSecureBoot} class="h-4 w-4" /> Enable UEFI Secure
-					Boot for VMs using this image
+					<input type="checkbox" bind:checked={admin.imgSecureBoot} class="h-4 w-4" />
+					Enable UEFI Secure Boot for VMs using this image
 				</label>
 			</div>
 
@@ -401,8 +427,8 @@
 				<div class="grid grid-cols-[1fr_auto] gap-3">
 					<div class="flex flex-col gap-2">
 						<Label
-							>Logo SVG <span class="font-normal text-muted-foreground">(official only)</span
-							></Label
+							>Logo SVG
+							<span class="font-normal text-muted-foreground">(official only)</span></Label
 						>
 						<textarea
 							bind:value={admin.imgLogoSvg}
@@ -442,9 +468,11 @@
 						onclick={() => admin.loadPveImages()}
 						disabled={admin.isoLoading}
 					>
-						{#if admin.isoLoading}<Loader2 class="h-3 w-3 animate-spin" />{:else}<RefreshCw
-								class="h-3 w-3"
-							/>{/if}
+						{#if admin.isoLoading}
+							<Loader2 class="h-3 w-3 animate-spin" />
+						{:else}
+							<RefreshCw class="h-3 w-3" />
+						{/if}
 						Refresh
 					</Button>
 				</div>
@@ -473,9 +501,10 @@
 				onclick={() => admin.imgSave()}
 				disabled={admin.imgSaving || !admin.imgName.trim() || !selectedPveImage}
 			>
-				{#if admin.imgSaving}<Loader2 class="h-3 w-3 animate-spin" />{/if}{admin.imgEditing
-					? 'Save'
-					: 'Create'}
+				{#if admin.imgSaving}
+					<Loader2 class="h-3 w-3 animate-spin" />
+				{/if}
+				{admin.imgEditing ? 'Save' : 'Create'}
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

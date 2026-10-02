@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 
 	let { data } = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -13,7 +13,8 @@
 
 <div class="overflow-auto">
 	<div class="px-5 py-3">
-		<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Backups</span
+		<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+			>Backups</span
 		>
 	</div>
 	<div class="px-5 pb-3">

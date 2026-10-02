@@ -22,13 +22,17 @@
 	});
 
 	function decide(ok: boolean) {
-		if (ok && !canConfirm) return;
+		if (ok && !canConfirm) {
+			return;
+		}
 		confirmController.resolve(ok);
 		confirmController.open = false;
 	}
 
 	function onKeydown(e: KeyboardEvent) {
-		if (!confirmController.open) return;
+		if (!confirmController.open) {
+			return;
+		}
 		if (e.key === 'Escape') {
 			e.preventDefault();
 			decide(false);
@@ -68,7 +72,9 @@
 						autocapitalize="off"
 						spellcheck={false}
 						onkeydown={(e) => {
-							if (e.key === 'Enter') decide(true);
+							if (e.key === 'Enter') {
+								decide(true);
+							}
 						}}
 					/>
 				</div>

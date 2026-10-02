@@ -1,20 +1,20 @@
+import { timingLog } from '#lib/server/observability.js';
 import { dev } from '$app/env';
-import type { VmBackend } from './types';
+import { getBackendEnv } from './env';
 import { ProxmoxBackend } from './proxmox';
 import { ProxmoxClient } from './proxmox/client';
-import { getBackendEnv } from './env';
-import { timingLog } from '#lib/server/observability.js';
+import type { VmBackend } from './types';
 
 export type {
 	BackendImage,
-	BackendImageImportTarget,
 	BackendImageImportParams,
+	BackendImageImportTarget,
 	VmBackend,
+	VmCreateParams,
+	VmCreateResult,
 	VmInfo,
 	VmMetricsHistorySample,
 	VmMetricsTimeframe,
-	VmCreateParams,
-	VmCreateResult,
 	VmResizeParams,
 	VmStatus
 } from './types';
@@ -23,7 +23,9 @@ export { VmNotFoundError, VmResizeError } from './types';
 let cached: { key: string; backend: VmBackend } | null = null;
 
 function parseNodeList(value: string | undefined): string[] {
-	if (!value) return [];
+	if (!value) {
+		return [];
+	}
 	return value
 		.split(',')
 		.map((node) => node.trim())
@@ -34,16 +36,18 @@ function createProxmox(): ProxmoxBackend {
 	const started = performance.now();
 	const env = getBackendEnv();
 
-	if (!env.PROXMOX_API_URL || !env.PROXMOX_TOKEN_ID || !env.PROXMOX_TOKEN_SECRET) {
+	if (!(env.PROXMOX_API_URL && env.PROXMOX_TOKEN_ID && env.PROXMOX_TOKEN_SECRET)) {
 		throw new Error(
 			'Proxmox backend requires PROXMOX_API_URL, PROXMOX_TOKEN_ID, and PROXMOX_TOKEN_SECRET'
 		);
 	}
 
 	if (
-		!env.PROXMOX_SNIPPETS_ENDPOINT_URL ||
-		!env.PROXMOX_SNIPPETS_ENDPOINT_USERNAME ||
-		!env.PROXMOX_SNIPPETS_ENDPOINT_PASSWORD
+		!(
+			env.PROXMOX_SNIPPETS_ENDPOINT_URL &&
+			env.PROXMOX_SNIPPETS_ENDPOINT_USERNAME &&
+			env.PROXMOX_SNIPPETS_ENDPOINT_PASSWORD
+		)
 	) {
 		throw new Error(
 			'Proxmox backend requires PROXMOX_SNIPPETS_ENDPOINT_URL, PROXMOX_SNIPPETS_ENDPOINT_USERNAME, and PROXMOX_SNIPPETS_ENDPOINT_PASSWORD'

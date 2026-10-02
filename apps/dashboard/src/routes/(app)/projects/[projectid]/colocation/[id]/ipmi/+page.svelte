@@ -21,7 +21,9 @@
 	}
 
 	function generateIpmiPassword() {
-		if (generatingIpmiPassword) return;
+		if (generatingIpmiPassword) {
+			return;
+		}
 		generatingIpmiPassword = true;
 		ipmiPassword = Array.from(
 			{ length: 16 },
@@ -35,7 +37,9 @@
 	}
 
 	function ipmiCommand(action: string) {
-		if (ipmiAction) return;
+		if (ipmiAction) {
+			return;
+		}
 		ipmiAction = action;
 		if (action === 'power-on') {
 			colo.updateSelectedUnit({
@@ -89,9 +93,11 @@
 									aria-label="Copy IPMI address"
 									onclick={() => copyText(`ipmi-${colo.selectedUnit!.id}.stack.sh`, 'ipmi-host')}
 								>
-									{#if copied === 'ipmi-host'}<Check class="h-3 w-3 text-emerald-500" />{:else}<Copy
-											class="h-3 w-3"
-										/>{/if}
+									{#if copied === 'ipmi-host'}
+										<Check class="h-3 w-3 text-emerald-500" />
+									{:else}
+										<Copy class="h-3 w-3" />
+									{/if}
 								</button>
 							</div>
 						</div>
@@ -110,9 +116,11 @@
 									aria-label="Copy IPMI password"
 									onclick={() => copyText(ipmiPassword, 'ipmi-pw')}
 								>
-									{#if copied === 'ipmi-pw'}<Check class="h-3 w-3 text-emerald-500" />{:else}<Copy
-											class="h-3 w-3"
-										/>{/if}
+									{#if copied === 'ipmi-pw'}
+										<Check class="h-3 w-3 text-emerald-500" />
+									{:else}
+										<Copy class="h-3 w-3" />
+									{/if}
 								</button>
 							</div>
 						</div>

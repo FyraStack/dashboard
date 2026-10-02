@@ -28,7 +28,9 @@ function parseRecords(text: string): string[][] {
 			record.push(field);
 			field = '';
 		} else if (char === '\n' || char === '\r') {
-			if (char === '\r' && text[i + 1] === '\n') i++;
+			if (char === '\r' && text[i + 1] === '\n') {
+				i++;
+			}
 			record.push(field);
 			field = '';
 			records.push(record);
@@ -48,7 +50,9 @@ function parseRecords(text: string): string[][] {
 
 export function parseCsv(text: string): ParsedCsv {
 	const records = parseRecords(text);
-	if (records.length === 0) return { columns: [], rows: [] };
+	if (records.length === 0) {
+		return { columns: [], rows: [] };
+	}
 
 	const header = records[0].map((cell) => cell.trim());
 	const columns = header.filter((name) => name !== '');
@@ -58,7 +62,9 @@ export function parseCsv(text: string): ParsedCsv {
 		.map((record) => {
 			const row: Record<string, string> = {};
 			header.forEach((name, index) => {
-				if (name !== '') row[name] = (record[index] ?? '').trim();
+				if (name !== '') {
+					row[name] = (record[index] ?? '').trim();
+				}
 			});
 			return row;
 		});

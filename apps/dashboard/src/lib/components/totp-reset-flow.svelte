@@ -12,10 +12,10 @@
 	} from '#lib/remote/two-factor.remote.js';
 	import {
 		TOTP_RESET_FLOW_STEP_COUNT,
-		totpResetStepLabel,
-		totpResetStepNumber,
 		type TotpResetFlowStep,
-		type TotpResetUiChoice
+		type TotpResetUiChoice,
+		totpResetStepLabel,
+		totpResetStepNumber
 	} from '#lib/totp-reset-flow.js';
 	import { getErrorMessage } from '#lib/utils.js';
 	import Check from '~icons/lucide/check';
@@ -97,7 +97,9 @@
 	}
 
 	async function sendCode() {
-		if (codeSending) return;
+		if (codeSending) {
+			return;
+		}
 		codeSending = true;
 		codeRequested = true;
 		emailError = '';
@@ -113,7 +115,9 @@
 	}
 
 	async function verifyEmail() {
-		if (verifyingEmail || normalizedEmailCode.length !== 6) return;
+		if (verifyingEmail || normalizedEmailCode.length !== 6) {
+			return;
+		}
 		verifyingEmail = true;
 		emailError = '';
 		try {
@@ -159,7 +163,9 @@
 	}
 
 	async function confirmResetPassword() {
-		if (!password || confirming) return;
+		if (!password || confirming) {
+			return;
+		}
 		confirming = true;
 		confirmError = '';
 		try {
@@ -169,7 +175,9 @@
 				onPasskeyChallenge?.();
 				return;
 			}
-			if (outcome === 'session') await enableNewAuthenticator();
+			if (outcome === 'session') {
+				await enableNewAuthenticator();
+			}
 		} catch (err) {
 			confirmError = getErrorMessage(err, 'Failed to reset two-factor authentication.');
 		} finally {
@@ -178,7 +186,9 @@
 	}
 
 	async function verifySetup() {
-		if (!normalizedVerifyCode || verifyingSetup) return;
+		if (!normalizedVerifyCode || verifyingSetup) {
+			return;
+		}
 		verifyingSetup = true;
 		setupError = '';
 		const { error } = await authClient.twoFactor.verifyTotp({
@@ -193,7 +203,9 @@
 	}
 
 	async function confirmDisable() {
-		if (!password || confirming) return;
+		if (!password || confirming) {
+			return;
+		}
 		confirming = true;
 		confirmError = '';
 		try {
@@ -203,7 +215,9 @@
 				onPasskeyChallenge?.();
 				return;
 			}
-			if (outcome === 'session') onComplete?.('disable');
+			if (outcome === 'session') {
+				onComplete?.('disable');
+			}
 		} catch (err) {
 			confirmError = getErrorMessage(err, 'Failed to disable two-factor authentication.');
 		} finally {
@@ -247,7 +261,9 @@
 			},
 			errorCorrectionLevel: 'M'
 		}).then((src) => {
-			if (!cancelled) qrCodeSrc = src;
+			if (!cancelled) {
+				qrCodeSrc = src;
+			}
 		});
 
 		return () => {

@@ -1,22 +1,22 @@
-import type { Fetcher } from '@cloudflare/workers-types';
 import { env as platformEnv } from 'cloudflare:workers';
+import type { Fetcher } from '@cloudflare/workers-types';
 
 export interface BackendEnv {
-	PROXMOX_VPC?: Fetcher;
-	PROXMOX_USE_VPC?: string;
 	PROXMOX_API_URL?: string;
-	PROXMOX_TOKEN_ID?: string;
-	PROXMOX_TOKEN_SECRET?: string;
-	SNIPPETS?: Fetcher;
-	PROXMOX_SNIPPETS_USE_VPC?: string;
+	PROXMOX_EXCLUDED_NODES?: string;
+	PROXMOX_SNIPPETS_ENDPOINT_PASSWORD?: string;
 	PROXMOX_SNIPPETS_ENDPOINT_URL?: string;
 	PROXMOX_SNIPPETS_ENDPOINT_USERNAME?: string;
-	PROXMOX_SNIPPETS_ENDPOINT_PASSWORD?: string;
 	PROXMOX_SNIPPETS_ENDPOINT_VERIFY_SSL?: string;
 	PROXMOX_SNIPPETS_STORAGE?: string;
-	PROXMOX_VM_FIREWALL_SECURITY_GROUP?: string;
+	PROXMOX_SNIPPETS_USE_VPC?: string;
+	PROXMOX_TOKEN_ID?: string;
+	PROXMOX_TOKEN_SECRET?: string;
+	PROXMOX_USE_VPC?: string;
 	PROXMOX_VM_CPU_TYPE?: string;
-	PROXMOX_EXCLUDED_NODES?: string;
+	PROXMOX_VM_FIREWALL_SECURITY_GROUP?: string;
+	PROXMOX_VPC?: Fetcher;
+	SNIPPETS?: Fetcher;
 }
 
 export function getBackendEnv(): BackendEnv {

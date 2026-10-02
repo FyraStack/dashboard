@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { authClient } from '#lib/auth-client.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { authClient } from '#lib/auth-client.js';
+	import { goto } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertCircle from '~icons/nucleo/alert-circle';
 	import Eye from '~icons/nucleo/eye';
@@ -18,7 +18,9 @@
 	let loading = $state(false);
 
 	async function handleSubmit() {
-		if (!password || !confirmPassword || !data.token) return;
+		if (!(password && confirmPassword && data.token)) {
+			return;
+		}
 
 		if (password !== confirmPassword) {
 			error = 'Passwords do not match';
@@ -105,7 +107,11 @@
 							class="absolute top-1/2 right-1 flex size-8 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
 							onclick={() => (showPassword = !showPassword)}
 						>
-							{#if showPassword}<EyeOff class="size-4" />{:else}<Eye class="size-4" />{/if}
+							{#if showPassword}
+								<EyeOff class="size-4" />
+							{:else}
+								<Eye class="size-4" />
+							{/if}
 						</button>
 					</div>
 

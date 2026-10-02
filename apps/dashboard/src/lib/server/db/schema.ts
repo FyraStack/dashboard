@@ -1,21 +1,21 @@
+import { relations, sql } from 'drizzle-orm';
 import {
-	pgTable,
-	pgEnum,
-	pgSequence,
-	text,
-	boolean,
 	bigint,
-	integer,
-	numeric,
+	boolean,
+	cidr,
 	date,
 	index,
-	uniqueIndex,
 	inet,
-	cidr
+	integer,
+	numeric,
+	pgEnum,
+	pgSequence,
+	pgTable,
+	text,
+	uniqueIndex
 } from 'drizzle-orm/pg-core';
-import { relations, sql } from 'drizzle-orm';
-import { organization } from './auth.schema';
 import { ulid } from '#lib/server/id.js';
+import { organization } from './auth.schema';
 
 export * from './auth.schema';
 
@@ -90,9 +90,7 @@ export const vms = pgTable(
 		index('vms_owner_project_id_index').on(table.ownerProjectId),
 		index('vms_owner_project_active_index').on(table.ownerProjectId, table.active),
 		index('vms_proxmox_id_index').on(table.proxmoxId),
-		uniqueIndex('vms_active_proxmox_id_unique')
-			.on(table.proxmoxId)
-			.where(sql`${table.active}`)
+		uniqueIndex('vms_active_proxmox_id_unique').on(table.proxmoxId).where(sql`${table.active}`)
 	]
 );
 

@@ -1,12 +1,12 @@
 import { redirect } from '@sveltejs/kit';
 import { APIError } from 'better-auth/api';
-import type { PageServerLoad } from './$types';
 import { initAuth } from '#lib/server/auth.js';
+import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, params, request }) => {
 	const redirectTo = `/accept-invitation/${params.invitationId}`;
 
-	if (!locals.user || !locals.session) {
+	if (!(locals.user && locals.session)) {
 		throw redirect(303, `/login?redirectTo=${encodeURIComponent(redirectTo)}`);
 	}
 

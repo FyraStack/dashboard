@@ -36,7 +36,9 @@ export function totpResetStepLabel(step: TotpResetFlowStep): string {
 
 export function maskEmail(email: string): string {
 	const at = email.indexOf('@');
-	if (at <= 0) return email;
+	if (at <= 0) {
+		return email;
+	}
 	const local = email.slice(0, at);
 	const domain = email.slice(at);
 	const visible = local.length > 2 ? local.slice(0, 2) : local.slice(0, 1);

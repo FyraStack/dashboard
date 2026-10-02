@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { invalidate } from '$app/navigation';
+	import { toast } from 'svelte-sonner';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { featureFlagKeys } from '#lib/feature-flags.js';
+	import { reverseDnsZoneForCidr } from '#lib/ptr.js';
 	import {
 		createIpamPrefix,
 		deleteIpamPrefix,
@@ -15,10 +18,9 @@
 		updateIpamPrefix,
 		updateIpamPtrDefaultFormats
 	} from '#lib/remote/ipam.remote.js';
-	import { reverseDnsZoneForCidr } from '#lib/ptr.js';
-	import { AdminState, type AdminPageData, type IpamPrefix } from '#lib/state/admin.svelte.js';
+	import { type AdminPageData, AdminState, type IpamPrefix } from '#lib/state/admin.svelte.js';
 	import { getErrorMessage, runQuery } from '#lib/utils.js';
-	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { invalidate } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
@@ -26,8 +28,6 @@
 	import Pencil from '~icons/nucleo/pencil';
 	import Power from '~icons/nucleo/power';
 	import Trash2 from '~icons/nucleo/trash';
-	import { featureFlagKeys } from '#lib/feature-flags.js';
-	import { toast } from 'svelte-sonner';
 
 	let { data }: { data: AdminPageData } = $props();
 	const admin = new AdminState(untrack(() => data));
@@ -68,8 +68,12 @@
 
 	function formatCount(value: string) {
 		const parsed = BigInt(value);
-		if (parsed < 1_000_000n) return parsed.toString();
-		if (parsed < 1_000_000_000n) return `${parsed / 1_000_000n}M`;
+		if (parsed < 1_000_000n) {
+			return parsed.toString();
+		}
+		if (parsed < 1_000_000_000n) {
+			return `${parsed / 1_000_000n}M`;
+		}
 		return `${parsed / 1_000_000_000n}B+`;
 	}
 
@@ -107,7 +111,9 @@
 	}
 
 	async function savePrefix() {
-		if (!name.trim() || !cidr.trim() || (!isIpv6Prefix && !gatewayAddress.trim())) return;
+		if (!(name.trim() && cidr.trim() && (isIpv6Prefix || gatewayAddress.trim()))) {
+			return;
+		}
 
 		saving = true;
 		formError = '';
@@ -155,7 +161,9 @@
 
 	function autoFillBunnyZone() {
 		const generated = reverseDnsZoneForCidr(cidr.trim());
-		if (generated) bunnyDnsZone = generated;
+		if (generated) {
+			bunnyDnsZone = generated;
+		}
 	}
 
 	async function openPtrDefaults() {
@@ -197,7 +205,9 @@
 			confirmWord: prefix.name,
 			confirmLabel: 'Delete prefix'
 		});
-		if (!ok) return;
+		if (!ok) {
+			return;
+		}
 		try {
 			await deleteIpamPrefix({ prefixId: prefix.id });
 			admin.ipamPrefixes = admin.ipamPrefixes.filter((item) => item.id !== prefix.id);
@@ -223,7 +233,8 @@
 				Default PTR Format
 			</Button>
 			<Button size="sm" class="h-7 gap-1.5 text-xs" onclick={openCreate}>
-				<Plus class="h-3 w-3" /> Add Prefix
+				<Plus class="h-3 w-3" />
+				Add Prefix
 			</Button>
 		</div>
 	</div>
@@ -233,7 +244,8 @@
 			<Network class="mb-3 h-6 w-6" />
 			<p class="text-xs">No IPAM prefixes configured</p>
 			<Button variant="outline" size="sm" class="mt-3 gap-1.5 text-xs" onclick={openCreate}>
-				<Plus class="h-3 w-3" /> Add Prefix
+				<Plus class="h-3 w-3" />
+				Add Prefix
 			</Button>
 		</div>
 	{:else}
@@ -414,7 +426,7 @@
 				disabled={saving ||
 					!name.trim() ||
 					!cidr.trim() ||
-					(!isIpv6Prefix && !gatewayAddress.trim())}
+					!(isIpv6Prefix || gatewayAddress.trim())}
 			>
 				{#if saving}
 					<Loader2 class="mr-2 h-3 w-3 animate-spin" />
@@ -465,7 +477,8 @@
 				/>
 				<p class="text-xs text-muted-foreground">
 					Placeholders: <span class="font-mono">{'{group1}'}</span> through
-					<span class="font-mono">{'{group8}'}</span> (expanded hextets)
+					<span class="font-mono">{'{group8}'}</span>
+					(expanded hextets)
 				</p>
 			</div>
 		</div>

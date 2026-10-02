@@ -1,7 +1,7 @@
 <script lang="ts">
+	import { authClient } from '#lib/auth-client.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { authClient } from '#lib/auth-client.js';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertCircle from '~icons/nucleo/alert-circle';
 	import CheckCircle2 from '~icons/nucleo/check-circle';
@@ -12,7 +12,9 @@
 	let sent = $state(false);
 
 	async function handleSubmit() {
-		if (!email) return;
+		if (!email) {
+			return;
+		}
 		error = '';
 		loading = true;
 

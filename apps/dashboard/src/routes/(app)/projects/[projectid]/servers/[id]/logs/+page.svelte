@@ -1,13 +1,13 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
-	import { primaryAddress } from '../../lib/server-summary';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 	import X from '~icons/lucide/x';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
 	import Search from '~icons/nucleo/search';
 	import Trash2 from '~icons/nucleo/trash';
+	import { primaryAddress } from '../../lib/server-summary';
+	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -52,8 +52,12 @@
 	]);
 	let filteredLogs = $derived.by(() => {
 		let result = currentLogs;
-		if (logSevFilter) result = result.filter((log) => log.severity === logSevFilter);
-		if (logSourceFilter) result = result.filter((log) => log.source === logSourceFilter);
+		if (logSevFilter) {
+			result = result.filter((log) => log.severity === logSevFilter);
+		}
+		if (logSourceFilter) {
+			result = result.filter((log) => log.source === logSourceFilter);
+		}
 		if (logSearch.trim()) {
 			const query = logSearch.toLowerCase();
 			result = result.filter(
@@ -80,22 +84,20 @@
 			<span class="text-[9px] text-muted-foreground"
 				>{filteredLogs.length}/{currentLogs.length}</span
 			>
-			{#if logSevFilter}<button
-					aria-label="Clear severity filter"
-					onclick={() => (logSevFilter = null)}
-					><Badge
-						variant="outline"
-						class="cursor-pointer gap-1 text-[8px] {sevColors[logSevFilter]}"
+			{#if logSevFilter}
+				<button aria-label="Clear severity filter" onclick={() => (logSevFilter = null)}>
+					<Badge variant="outline" class="cursor-pointer gap-1 text-[8px] {sevColors[logSevFilter]}"
 						>{logSevFilter.toUpperCase()}<X class="h-2 w-2" /></Badge
-					></button
-				>{/if}
-			{#if logSourceFilter}<button
-					aria-label="Clear source filter"
-					onclick={() => (logSourceFilter = null)}
-					><Badge variant="secondary" class="cursor-pointer gap-1 text-[8px]"
+					>
+				</button>
+			{/if}
+			{#if logSourceFilter}
+				<button aria-label="Clear source filter" onclick={() => (logSourceFilter = null)}>
+					<Badge variant="secondary" class="cursor-pointer gap-1 text-[8px]"
 						>{logSourceFilter}<X class="h-2 w-2" /></Badge
-					></button
-				>{/if}
+					>
+				</button>
+			{/if}
 		{/if}
 	</div>
 	<div class="flex items-center gap-1.5">
@@ -109,16 +111,18 @@
 				class="h-6 w-36 border border-border bg-muted pr-2 pl-6 text-[11px] text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
 			/>
 		</div>
-		{#if hasLogFilters}<button
-				class="text-[9px] text-red-400 hover:text-red-300"
-				onclick={clearLogFilters}>Clear</button
-			>{/if}
+		{#if hasLogFilters}
+			<button class="text-[9px] text-red-400 hover:text-red-300" onclick={clearLogFilters}>
+				Clear
+			</button>
+		{/if}
 		<Button
 			aria-label="Clear logs"
 			variant="ghost"
 			size="sm"
 			class="h-6 w-6 p-0 text-red-400"
-			disabled><Trash2 class="h-2.5 w-2.5" /></Button
+			disabled
+			><Trash2 class="h-2.5 w-2.5" /></Button
 		>
 	</div>
 </div>
@@ -149,23 +153,26 @@
 			</div>
 		</div>
 	{:else}
-		{#each filteredLogs as entry (entry.id)}<div
-				class="flex items-baseline gap-0 px-4 py-px leading-[1.6] hover:bg-muted/20"
-			>
-				<span class="w-[148px] shrink-0 text-muted-foreground">{entry.timestamp}</span><button
+		{#each filteredLogs as entry (entry.id)}
+			<div class="flex items-baseline gap-0 px-4 py-px leading-[1.6] hover:bg-muted/20">
+				<span class="w-[148px] shrink-0 text-muted-foreground">{entry.timestamp}</span
+				><button
 					class="w-[42px] shrink-0 cursor-pointer text-left font-semibold uppercase {sevColors[
 						entry.severity
 					]} {logSevFilter === entry.severity ? 'underline' : ''}"
 					onclick={() => (logSevFilter = logSevFilter === entry.severity ? null : entry.severity)}
-					>{entry.severity.slice(0, 4)}</button
-				><button
+				>
+					{entry.severity.slice(0, 4)}
+				</button><button
 					class="w-[72px] shrink-0 cursor-pointer text-left text-muted-foreground hover:text-muted-foreground {logSourceFilter ===
 					entry.source
 						? 'text-foreground'
 						: ''}"
 					onclick={() => (logSourceFilter = logSourceFilter === entry.source ? null : entry.source)}
-					>{entry.source}</button
-				><span class="text-muted-foreground">{entry.message}</span>
-			</div>{/each}
+				>
+					{entry.source}
+				</button><span class="text-muted-foreground">{entry.message}</span>
+			</div>
+		{/each}
 	{/if}
 </div>

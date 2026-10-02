@@ -13,9 +13,9 @@
 	import EmailHeader from './email-header.svelte';
 
 	interface Props {
-		userName?: string | null;
 		code: string;
 		expiresInMinutes: number;
+		userName?: string | null;
 	}
 
 	let { userName = null, code, expiresInMinutes }: Props = $props();
@@ -32,7 +32,11 @@
 					Reset two-factor authentication
 				</Heading>
 				<Text class="mt-4 text-sm leading-5 text-gray-400">
-					{#if userName}Hi {userName},{:else}Hi there,{/if}
+					{#if userName}
+						Hi {userName},
+					{:else}
+						Hi there,
+					{/if}
 				</Text>
 				<Text class="mt-2 text-sm leading-5 text-gray-400">
 					Enter this code in Stack to reset the authenticator app on your account.
@@ -44,8 +48,8 @@
 				</Section>
 				<Hr class="my-8 border-gray-800" />
 				<Text class="text-sm leading-5 text-gray-500">
-					This code expires in {expiresInMinutes} minutes. If you did not request this change, contact
-					support@fyrastack.com and secure your account immediately.
+					This code expires in {expiresInMinutes} minutes. If you did not request this change,
+					contact support@fyrastack.com and secure your account immediately.
 				</Text>
 			</Section>
 		</Container>

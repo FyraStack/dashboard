@@ -120,7 +120,9 @@ function projectBillingUrl(projectId: string) {
 
 export async function sendProjectPastDueEmail(projectId: string, graceDays: number) {
 	const owner = await getProjectOwnerRecipient(projectId);
-	if (!owner) return null;
+	if (!owner) {
+		return null;
+	}
 
 	await sendRenderedEmail({
 		component: BillingNoticeEmail,
@@ -141,7 +143,9 @@ export async function sendProjectPastDueEmail(projectId: string, graceDays: numb
 
 export async function sendProjectSuspendedEmail(projectId: string) {
 	const owner = await getProjectOwnerRecipient(projectId);
-	if (!owner) return null;
+	if (!owner) {
+		return null;
+	}
 
 	await sendRenderedEmail({
 		component: BillingNoticeEmail,

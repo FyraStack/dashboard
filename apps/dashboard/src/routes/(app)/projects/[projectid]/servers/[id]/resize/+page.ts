@@ -1,5 +1,5 @@
-import type { PageLoad } from './$types';
 import { listVmTypes } from '#lib/remote/vm-types.remote.js';
+import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ params }) => {
 	const vmTypes = await listVmTypes().catch((error) => {

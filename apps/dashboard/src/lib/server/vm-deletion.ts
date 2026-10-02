@@ -1,12 +1,12 @@
-import { getRequestEvent } from '$app/server';
 import { and, eq, inArray, isNotNull, lt } from 'drizzle-orm';
-import { initDrizzle, closeRequestDb, type Database } from '#lib/server/db/index.js';
-import { ipAssignments, paymentPeriods, vms, volumes } from '#lib/server/db/schema.js';
 import { getBackend } from '#lib/server/backends/index.js';
+import { runInBackground } from '#lib/server/background.js';
 import { deleteProjectServerEntity } from '#lib/server/billing/autumn.js';
 import { hasUnsyncedUsageEvents, meterResourceThrough } from '#lib/server/billing/metering.js';
+import { closeRequestDb, type Database, initDrizzle } from '#lib/server/db/index.js';
+import { ipAssignments, paymentPeriods, vms, volumes } from '#lib/server/db/schema.js';
 import { releaseVmNetworking } from '#lib/server/ipam.js';
-import { runInBackground } from '#lib/server/background.js';
+import { getRequestEvent } from '$app/server';
 
 type DeletableVm = {
 	id: string;
@@ -35,7 +35,9 @@ export async function purgeExpiredDeletedVms(now = Date.now(), limit = 50) {
 		.where(and(eq(vms.active, false), isNotNull(vms.deletedAt), lt(vms.deletedAt, cutoff)))
 		.limit(limit);
 	const vmIds = expired.map((row) => row.id);
-	if (vmIds.length === 0) return { purged: 0 };
+	if (vmIds.length === 0) {
+		return { purged: 0 };
+	}
 
 	await db
 		.update(volumes)
@@ -55,7 +57,9 @@ function initOwnedDb() {
 	return {
 		db,
 		close: () => {
-			if (ownsDb) closeRequestDb(event);
+			if (ownsDb) {
+				closeRequestDb(event);
+			}
 		}
 	};
 }
@@ -89,7 +93,9 @@ async function deleteVmResources(row: DeletableVm): Promise<void> {
 			.set({ active: false, deletedAt: Date.now() })
 			.where(and(eq(vms.id, row.id), eq(vms.active, true)))
 			.returning({ id: vms.id });
-		if (claimed.length === 0) return;
+		if (claimed.length === 0) {
+			return;
+		}
 
 		await releaseVmNetworking(db, row.id).catch((err) => {
 			console.warn(`Failed to release networking for VM ${row.id}`, err);

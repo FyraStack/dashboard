@@ -2,8 +2,8 @@
 	import QRCode from 'qrcode';
 	import { authClient } from '#lib/auth-client.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import Check from '~icons/lucide/check';
 	import Copy from '~icons/nucleo/copy';
@@ -47,7 +47,9 @@
 			},
 			errorCorrectionLevel: 'M'
 		}).then((src) => {
-			if (!cancelled) qrCodeSrc = src;
+			if (!cancelled) {
+				qrCodeSrc = src;
+			}
 		});
 
 		return () => {
@@ -69,7 +71,9 @@
 	};
 
 	async function enableTotp() {
-		if (!setupPassword) return;
+		if (!setupPassword) {
+			return;
+		}
 		setupSubmitting = true;
 		verifyError = '';
 		const { data, error } = await authClient.twoFactor.enable({
@@ -91,7 +95,9 @@
 	}
 
 	async function verifyTotp() {
-		if (!normalizedVerifyCode) return;
+		if (!normalizedVerifyCode) {
+			return;
+		}
 		verifying = true;
 		verifyError = '';
 		const { error } = await authClient.twoFactor.verifyTotp({

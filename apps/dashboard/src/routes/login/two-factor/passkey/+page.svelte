@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import { authClient } from '#lib/auth-client.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { goto } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertCircle from '~icons/nucleo/alert-circle';
 	import Fingerprint from '~icons/nucleo/fingerprint';
-	import { onMount } from 'svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -92,9 +92,8 @@
 			{/if}
 
 			<p class="text-center text-xs text-muted-foreground">
-				Need another method? <a href={loginHref} class="text-red-400 hover:text-red-300"
-					>Back to sign in</a
-				>
+				Need another method?
+				<a href={loginHref} class="text-red-400 hover:text-red-300">Back to sign in</a>
 			</p>
 		</div>
 	</div>

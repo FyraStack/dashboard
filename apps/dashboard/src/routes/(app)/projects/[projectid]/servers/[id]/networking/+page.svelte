@@ -1,20 +1,20 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import type { PageProps } from './$types';
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
-	import { setVmPtrRecord } from '#lib/remote/networking.remote.js';
+	import { toast } from 'svelte-sonner';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import { setVmPtrRecord } from '#lib/remote/networking.remote.js';
+	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
-	import { toast } from 'svelte-sonner';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
 	import X from '~icons/lucide/x';
 	import Copy from '~icons/nucleo/copy';
 	import Pencil from '~icons/nucleo/pencil';
+	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
@@ -60,7 +60,9 @@
 	}
 
 	function ptrValueFor(allocation: Allocation, address: string | null) {
-		if (!address) return null;
+		if (!address) {
+			return null;
+		}
 		return allocation.ptrRecords.find((record) => record.address === address)?.value ?? null;
 	}
 
@@ -79,7 +81,9 @@
 		result: { address: string; value: string } | null
 	) {
 		allocations = allocations.map((allocation) => {
-			if (allocation.id !== allocationId) return allocation;
+			if (allocation.id !== allocationId) {
+				return allocation;
+			}
 			const others = allocation.ptrRecords.filter(
 				(record) => record.address !== address && record.address !== result?.address
 			);
@@ -140,7 +144,9 @@
 			originalAddress: record.address,
 			originalValue: record.value
 		}));
-		if (subnetEntries.length === 0) subnetEntries = [blankEntry()];
+		if (subnetEntries.length === 0) {
+			subnetEntries = [blankEntry()];
+		}
 		subnetDialogOpen = true;
 	}
 
@@ -154,7 +160,9 @@
 
 	async function saveSubnetEntries() {
 		const allocation = subnetDialogAllocation;
-		if (!allocation || !subnetEntriesValid) return;
+		if (!(allocation && subnetEntriesValid)) {
+			return;
+		}
 
 		const base = prefixBase(allocation.prefix);
 		const kept = subnetEntries.map((entry) => ({
@@ -182,7 +190,9 @@
 				const unchanged =
 					entry.originalAddress?.toLowerCase() === entry.address.toLowerCase() &&
 					entry.originalValue === entry.value.trim();
-				if (unchanged) continue;
+				if (unchanged) {
+					continue;
+				}
 				if (
 					entry.originalAddress &&
 					entry.originalAddress.toLowerCase() !== entry.address.toLowerCase()
@@ -212,7 +222,10 @@
 	}
 </script>
 
-{#snippet rdnsEditor(allocation: Allocation, address: string)}
+{#snippet rdnsEditor(
+	allocation: Allocation,
+	address: string
+)}
 	{@const key = entryKey(allocation.id, address)}
 	{@const current = ptrValueFor(allocation, address)}
 	<div class="mt-2 flex items-center justify-between">
@@ -281,10 +294,13 @@
 					aria-label="Copy IPv4 address"
 					class="text-muted-foreground hover:text-foreground"
 					onclick={() => copyToClipboard(allocation.address ?? '', `ipv4-${allocation.id}`)}
-					>{#if copied === `ipv4-${allocation.id}`}<Check
-							class="h-3.5 w-3.5 text-emerald-500"
-						/>{:else}<Copy class="size-4" />{/if}</button
 				>
+					{#if copied === `ipv4-${allocation.id}`}
+						<Check class="h-3.5 w-3.5 text-emerald-500" />
+					{:else}
+						<Copy class="size-4" />
+					{/if}
+				</button>
 			</div>
 			{#if allocation.address}
 				{@render rdnsEditor(allocation, allocation.address)}
@@ -302,10 +318,13 @@
 					aria-label="Copy IPv6 address"
 					class="text-muted-foreground hover:text-foreground"
 					onclick={() => copyToClipboard(allocation.address ?? '', `ipv6-${allocation.id}`)}
-					>{#if copied === `ipv6-${allocation.id}`}<Check
-							class="h-3.5 w-3.5 text-emerald-500"
-						/>{:else}<Copy class="size-4" />{/if}</button
 				>
+					{#if copied === `ipv6-${allocation.id}`}
+						<Check class="h-3.5 w-3.5 text-emerald-500" />
+					{:else}
+						<Copy class="size-4" />
+					{/if}
+				</button>
 			</div>
 			{#if allocation.address}
 				{@render rdnsEditor(allocation, allocation.address)}
@@ -338,10 +357,13 @@
 						aria-label="Copy IPv6 subnet"
 						class="text-muted-foreground hover:text-foreground"
 						onclick={() => copyToClipboard(allocation.prefix ?? '', `prefix-${allocation.id}`)}
-						>{#if copied === `prefix-${allocation.id}`}<Check
-								class="h-3.5 w-3.5 text-emerald-500"
-							/>{:else}<Copy class="size-4" />{/if}</button
 					>
+						{#if copied === `prefix-${allocation.id}`}
+							<Check class="h-3.5 w-3.5 text-emerald-500" />
+						{:else}
+							<Copy class="size-4" />
+						{/if}
+					</button>
 				</div>
 			</div>
 		</div>
@@ -365,10 +387,13 @@
 					aria-label="Copy IPv4 address"
 					class="text-muted-foreground hover:text-foreground"
 					onclick={() => copyToClipboard(selectedServer.ip, 'net-ipv4')}
-					>{#if copied === 'net-ipv4'}<Check class="h-3.5 w-3.5 text-emerald-500" />{:else}<Copy
-							class="size-4"
-						/>{/if}</button
 				>
+					{#if copied === 'net-ipv4'}
+						<Check class="h-3.5 w-3.5 text-emerald-500" />
+					{:else}
+						<Copy class="size-4" />
+					{/if}
+				</button>
 			</div>
 		</div>
 		<div class="px-5 py-3">
@@ -381,10 +406,13 @@
 					aria-label="Copy IPv6 address"
 					class="text-muted-foreground hover:text-foreground"
 					onclick={() => copyToClipboard(selectedServer.ipv6, 'net-ipv6')}
-					>{#if copied === 'net-ipv6'}<Check class="h-3.5 w-3.5 text-emerald-500" />{:else}<Copy
-							class="size-4"
-						/>{/if}</button
 				>
+					{#if copied === 'net-ipv6'}
+						<Check class="h-3.5 w-3.5 text-emerald-500" />
+					{:else}
+						<Copy class="size-4" />
+					{/if}
+				</button>
 			</div>
 		</div>
 	{/if}
@@ -395,8 +423,8 @@
 		<Dialog.Header>
 			<Dialog.Title>Edit Reverse DNS</Dialog.Title>
 			<Dialog.Description>
-				PTR records for addresses in <span class="font-mono">{subnetDialogAllocation?.prefix}</span
-				>.
+				PTR records for addresses in
+				<span class="font-mono">{subnetDialogAllocation?.prefix}</span>.
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="grid gap-3 py-4">

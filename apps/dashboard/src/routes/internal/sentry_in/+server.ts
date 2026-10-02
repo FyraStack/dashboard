@@ -3,14 +3,18 @@ import { PUBLIC_SENTRY_DSN } from '$app/env/public';
 
 function allowedProject(): { host: string; projectId: string } | null {
 	const dsn = PUBLIC_SENTRY_DSN;
-	if (!dsn) return null;
+	if (!dsn) {
+		return null;
+	}
 	const url = new URL(dsn);
 	return { host: url.hostname, projectId: url.pathname.replace(/^\//, '') };
 }
 
 export const POST: RequestHandler = async ({ request, fetch }) => {
 	const allowed = allowedProject();
-	if (!allowed) throw error(404, 'Sentry is not configured');
+	if (!allowed) {
+		throw error(404, 'Sentry is not configured');
+	}
 
 	const envelope = await request.arrayBuffer();
 	const headerLine = new TextDecoder().decode(envelope).split('\n')[0];

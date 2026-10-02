@@ -1,14 +1,18 @@
-import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { asc, count, desc, eq } from 'drizzle-orm';
 import AdminUserDeletionCodeEmail from '#lib/emails/admin-user-deletion-code.svelte';
+import {
+	accessibilityFixtureAdminUsers,
+	accessibilityFixtureEnabled
+} from '#lib/server/accessibility-fixtures.js';
 import {
 	ADMIN_VERIFICATION_CODE_TTL_MS,
 	beginAdminVerification,
 	consumeAdminVerification
 } from '#lib/server/admin-verification.js';
 import { hasAdminRole, requireAdmin } from '#lib/server/auth-context.js';
+import { updateProjectCustomer } from '#lib/server/billing/autumn.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	account,
@@ -19,17 +23,13 @@ import {
 	session,
 	sshKeys,
 	user,
-	volumes,
-	vms
+	vms,
+	volumes
 } from '#lib/server/db/schema.js';
-import { updateProjectCustomer } from '#lib/server/billing/autumn.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
-import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
-import {
-	accessibilityFixtureEnabled,
-	accessibilityFixtureAdminUsers
-} from '#lib/server/accessibility-fixtures.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
+import { command, getRequestEvent, query } from '$app/server';
 
 export type UserSession = {
 	id: string;
@@ -86,7 +86,9 @@ export type AdminUser = {
 
 async function requireCurrentAdmin() {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
@@ -99,17 +101,23 @@ async function assertCanDeleteUser(
 	adminUserId: string,
 	targetUserId: string
 ) {
-	if (adminUserId === targetUserId) error(400, 'You cannot delete your own account.');
+	if (adminUserId === targetUserId) {
+		error(400, 'You cannot delete your own account.');
+	}
 
 	const target = await db.query.user.findFirst({ where: eq(user.id, targetUserId) });
-	if (!target) error(404, 'User not found');
+	if (!target) {
+		error(404, 'User not found');
+	}
 
 	if (hasAdminRole(target.role) || target.isAdmin) {
 		const adminRows = await db.select({ role: user.role, isAdmin: user.isAdmin }).from(user);
 		const adminCount = adminRows.filter(
 			(account) => hasAdminRole(account.role) || account.isAdmin
 		).length;
-		if (adminCount <= 1) error(400, 'At least one admin is required.');
+		if (adminCount <= 1) {
+			error(400, 'At least one admin is required.');
+		}
 	}
 
 	return target;
@@ -154,14 +162,18 @@ async function settleUserOrganizations(db: ReturnType<typeof initDrizzle>, targe
 function makeCountMap(rows: { userId: string | null; count: number }[]) {
 	const map = new Map<string, number>();
 	for (const row of rows) {
-		if (!row.userId) continue;
+		if (!row.userId) {
+			continue;
+		}
 		map.set(row.userId, row.count);
 	}
 	return map;
 }
 
 export const listAdminUsers = query(async (): Promise<AdminUser[]> => {
-	if (accessibilityFixtureEnabled) return accessibilityFixtureAdminUsers;
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureAdminUsers;
+	}
 	const { db } = await requireCurrentAdmin();
 
 	const users = await db
@@ -223,12 +235,16 @@ const setAdminParams = type({ userId: 'string', isAdmin: 'boolean' });
 export const setUserAdmin = command(setAdminParams, async (params) => {
 	const { db } = await requireCurrentAdmin();
 	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) error(404, 'User not found');
+	if (!target) {
+		error(404, 'User not found');
+	}
 
 	if (!params.isAdmin && (hasAdminRole(target.role) || target.isAdmin)) {
 		const adminRows = await db.select({ role: user.role, isAdmin: user.isAdmin }).from(user);
 		const adminCount = adminRows.filter((row) => hasAdminRole(row.role) || row.isAdmin).length;
-		if (adminCount <= 1) error(400, 'At least one admin is required');
+		if (adminCount <= 1) {
+			error(400, 'At least one admin is required');
+		}
 	}
 
 	await db
@@ -243,7 +259,9 @@ const setDisabledParams = type({ userId: 'string', disabled: 'boolean' });
 export const setUserDisabled = command(setDisabledParams, async (params) => {
 	const { db } = await requireCurrentAdmin();
 	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) error(404, 'User not found');
+	if (!target) {
+		error(404, 'User not found');
+	}
 
 	await db
 		.update(user)
@@ -262,7 +280,9 @@ const setBillingExemptParams = type({ userId: 'string', billingExempt: 'boolean'
 export const setUserBillingExempt = command(setBillingExemptParams, async (params) => {
 	const { db } = await requireCurrentAdmin();
 	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) error(404, 'User not found');
+	if (!target) {
+		error(404, 'User not found');
+	}
 
 	await db
 		.update(user)
@@ -281,7 +301,9 @@ const setTwoFactorParams = type({ userId: 'string', twoFactorEnabled: 'boolean' 
 export const setUserTwoFactor = command(setTwoFactorParams, async (params) => {
 	const { db } = await requireCurrentAdmin();
 	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) error(404, 'User not found');
+	if (!target) {
+		error(404, 'User not found');
+	}
 
 	await db
 		.update(user)
@@ -295,7 +317,9 @@ const setRoleParams = type({ userId: 'string', role: 'string' });
 export const setUserRole = command(setRoleParams, async (params) => {
 	const { db } = await requireCurrentAdmin();
 	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) error(404, 'User not found');
+	if (!target) {
+		error(404, 'User not found');
+	}
 
 	await db
 		.update(user)
@@ -314,7 +338,9 @@ const beginDeleteUserParams = type({ userId: 'string' });
 export const beginDeleteUser = command(beginDeleteUserParams, async (params) => {
 	const { db, userId: adminUserId } = await requireCurrentAdmin();
 	const adminUser = getRequestEvent().locals.user;
-	if (!adminUser) error(401, 'Authentication required');
+	if (!adminUser) {
+		error(401, 'Authentication required');
+	}
 
 	const target = await assertCanDeleteUser(db, adminUserId, params.userId);
 	const { method, code } = await beginAdminVerification(db, adminUserId, params.userId);
@@ -356,7 +382,9 @@ export const getUserResources = query(getUserResourcesParams, async (params) => 
 	const { db } = await requireCurrentAdmin();
 
 	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) error(404, 'User not found');
+	if (!target) {
+		error(404, 'User not found');
+	}
 
 	const [sessions, accounts, members, sshKeysList, apiTokenList] = await Promise.all([
 		db
@@ -406,7 +434,9 @@ export const getOrganizationResources = query(getOrgResourcesParams, async (para
 	const target = await db.query.organization.findFirst({
 		where: eq(organization.id, params.orgId)
 	});
-	if (!target) error(404, 'Organization not found');
+	if (!target) {
+		error(404, 'Organization not found');
+	}
 
 	const [vmsData, volumesData] = await Promise.all([
 		db

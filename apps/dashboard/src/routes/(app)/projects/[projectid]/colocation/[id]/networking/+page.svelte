@@ -45,9 +45,13 @@
 	}
 
 	function addIp() {
-		if (!newIpAddr.trim() || addingIp) return;
+		if (!newIpAddr.trim() || addingIp) {
+			return;
+		}
 		addingIp = true;
-		if (!ips[colo.selectedUnitId]) ips[colo.selectedUnitId] = [];
+		if (!ips[colo.selectedUnitId]) {
+			ips[colo.selectedUnitId] = [];
+		}
 		ips[colo.selectedUnitId].push({
 			address: newIpAddr.trim(),
 			rdns: newIpRdns.trim(),
@@ -61,13 +65,17 @@
 
 	function saveRdns(idx: number) {
 		const unitIps = ips[colo.selectedUnitId];
-		if (unitIps?.[idx]) unitIps[idx].rdns = rdnsValue;
+		if (unitIps?.[idx]) {
+			unitIps[idx].rdns = rdnsValue;
+		}
 		editingRdns = null;
 	}
 
 	function deleteIp(idx: number) {
 		const unitIps = ips[colo.selectedUnitId];
-		if (unitIps) ips[colo.selectedUnitId] = unitIps.filter((_, i) => i !== idx);
+		if (unitIps) {
+			ips[colo.selectedUnitId] = unitIps.filter((_, i) => i !== idx);
+		}
 	}
 </script>
 
@@ -105,14 +113,16 @@
 									size="sm"
 									class="h-6 w-6 p-0 text-emerald-500"
 									aria-label="Save reverse DNS"
-									onclick={() => saveRdns(idx)}><Check class="h-2.5 w-2.5" /></Button
+									onclick={() => saveRdns(idx)}
+									><Check class="h-2.5 w-2.5" /></Button
 								>
 								<Button
 									variant="ghost"
 									size="sm"
 									class="h-6 w-6 p-0"
 									aria-label="Cancel reverse DNS edit"
-									onclick={() => (editingRdns = null)}><X class="h-2.5 w-2.5" /></Button
+									onclick={() => (editingRdns = null)}
+									><X class="h-2.5 w-2.5" /></Button
 								>
 							</div>
 						{:else}
@@ -128,9 +138,11 @@
 								aria-label="Copy IP address"
 								onclick={() => copyText(ip.address, `colo-ip-${idx}`)}
 							>
-								{#if copied === `colo-ip-${idx}`}<Check
-										class="h-3 w-3 text-emerald-500"
-									/>{:else}<Copy class="h-3 w-3" />{/if}
+								{#if copied === `colo-ip-${idx}`}
+									<Check class="h-3 w-3 text-emerald-500" />
+								{:else}
+									<Copy class="h-3 w-3" />
+								{/if}
 							</button>
 							<Button
 								variant="ghost"
@@ -140,7 +152,8 @@
 								onclick={() => {
 									editingRdns = idx;
 									rdnsValue = ip.rdns;
-								}}><Pencil class="h-3 w-3" /></Button
+								}}
+								><Pencil class="h-3 w-3" /></Button
 							>
 							{#if ip.type === 'Additional'}
 								<Button
@@ -148,7 +161,8 @@
 									size="sm"
 									class="h-7 w-7 p-0 text-red-400"
 									aria-label={`Delete IP ${ip.address}`}
-									onclick={() => deleteIp(idx)}><X class="h-3 w-3" /></Button
+									onclick={() => deleteIp(idx)}
+									><X class="h-3 w-3" /></Button
 								>
 							{/if}
 						</div>

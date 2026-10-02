@@ -46,7 +46,9 @@ export function syncServers(projectId: string | null, incoming: ServerInfo[]): v
 	serversState.servers = sortServers(
 		incoming.map((server) => {
 			const current = currentById.get(server.id);
-			if (!current?.liveLoaded) return server;
+			if (!current?.liveLoaded) {
+				return server;
+			}
 
 			// List data contains cached snapshots. Keep fresher live values during invalidation.
 			return {
@@ -82,8 +84,12 @@ export function getServer(id: string): ServerInfo | null {
 
 export function getServerWithFallback(id: string, fallback: ServerInfo): ServerInfo {
 	const server = getServer(id);
-	if (!server) return fallback;
-	if (!server.liveLoaded && fallback.liveLoaded) return fallback;
+	if (!server) {
+		return fallback;
+	}
+	if (!server.liveLoaded && fallback.liveLoaded) {
+		return fallback;
+	}
 	return server;
 }
 

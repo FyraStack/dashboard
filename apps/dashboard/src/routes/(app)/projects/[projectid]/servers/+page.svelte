@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
-	import Plus from '~icons/lucide/plus';
-	import Server from '~icons/nucleo/server';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { serversState } from '#lib/state/servers.svelte.js';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import Plus from '~icons/lucide/plus';
+	import Server from '~icons/nucleo/server';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();

@@ -1,6 +1,6 @@
+import { error } from '@sveltejs/kit';
 import { Autumn } from 'autumn-js';
 import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
-import { error } from '@sveltejs/kit';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { member, organization, projectBillingCustomers, user } from '#lib/server/db/schema.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
@@ -13,7 +13,9 @@ export function isBillingConfigured() {
 
 export function createAutumnClient() {
 	const secretKey = getRuntimeEnv().AUTUMN_SECRET;
-	if (!secretKey) throw new Error('AUTUMN_SECRET is not set');
+	if (!secretKey) {
+		throw new Error('AUTUMN_SECRET is not set');
+	}
 
 	return new Autumn({ secretKey, failOpen: false });
 }
@@ -30,7 +32,9 @@ export function autumnStatus(err: unknown) {
 
 function serverEntityFeatureId() {
 	const featureId = getRuntimeEnv().AUTUMN_SERVER_ENTITY_FEATURE_ID;
-	if (!featureId) throw new Error('AUTUMN_SERVER_ENTITY_FEATURE_ID is not set');
+	if (!featureId) {
+		throw new Error('AUTUMN_SERVER_ENTITY_FEATURE_ID is not set');
+	}
 
 	return featureId;
 }
@@ -65,7 +69,9 @@ async function getProjectCustomerData(projectId: string) {
 		with: { members: { with: { user: true } } }
 	});
 
-	if (!project || project.deletedAt != null) error(404, `Project "${projectId}" not found`);
+	if (!project || project.deletedAt != null) {
+		error(404, `Project "${projectId}" not found`);
+	}
 
 	const owner = project.members.find((item) => item.role === 'owner') ?? project.members[0];
 
@@ -82,7 +88,9 @@ export async function ensureLocalProjectBillingCustomer(projectId: string) {
 		where: eq(projectBillingCustomers.projectId, projectId)
 	});
 
-	if (existing) return existing;
+	if (existing) {
+		return existing;
+	}
 
 	const [inserted] = await db
 		.insert(projectBillingCustomers)
@@ -132,7 +140,9 @@ export async function ensureProjectCustomer(projectId: string) {
 }
 
 export async function updateProjectCustomer(projectId: string) {
-	if (!isBillingConfigured()) return;
+	if (!isBillingConfigured()) {
+		return;
+	}
 
 	const db = initDrizzle();
 	const now = Date.now();
@@ -165,10 +175,14 @@ export async function attachDefaultProjectPlan(
 	discountCode?: string
 ) {
 	const planId = defaultPlanId();
-	if (!planId) return null;
+	if (!planId) {
+		return null;
+	}
 
 	await ensureProjectCustomer(projectId);
-	if (!isBillingConfigured()) return null;
+	if (!isBillingConfigured()) {
+		return null;
+	}
 
 	const attachPlan = (withDiscount: boolean) =>
 		createAutumnClient().billing.attach({
@@ -181,7 +195,9 @@ export async function attachDefaultProjectPlan(
 
 	try {
 		const response = await attachPlan(true).catch((err) => {
-			if (!discountCode || autumnStatus(err) !== 400) throw err;
+			if (!discountCode || autumnStatus(err) !== 400) {
+				throw err;
+			}
 
 			return attachPlan(false);
 		});
@@ -189,7 +205,9 @@ export async function attachDefaultProjectPlan(
 		invalidateProjectBillingState(projectId);
 		return response.paymentUrl;
 	} catch (err) {
-		if (autumnStatus(err) === 409) return null;
+		if (autumnStatus(err) === 409) {
+			return null;
+		}
 
 		const db = initDrizzle();
 		await db
@@ -201,7 +219,9 @@ export async function attachDefaultProjectPlan(
 }
 
 export async function cancelProjectBilling(projectId: string) {
-	if (!isBillingConfigured()) return true;
+	if (!isBillingConfigured()) {
+		return true;
+	}
 
 	const planId = defaultPlanId();
 
@@ -213,7 +233,9 @@ export async function cancelProjectBilling(projectId: string) {
 		});
 		return true;
 	} catch (err) {
-		if (autumnStatus(err) === 404) return true;
+		if (autumnStatus(err) === 404) {
+			return true;
+		}
 
 		const db = initDrizzle();
 		await db
@@ -246,7 +268,9 @@ export async function retryOrphanedProjectBillingCancellations(limit = 100) {
 
 export async function validateProjectDiscountCode(projectId: string, discountCode: string) {
 	const planId = defaultPlanId();
-	if (!planId || !isBillingConfigured()) return;
+	if (!(planId && isBillingConfigured())) {
+		return;
+	}
 
 	await ensureProjectCustomer(projectId);
 
@@ -265,7 +289,9 @@ export async function validateProjectDiscountCode(projectId: string, discountCod
 }
 
 export async function setupProjectPayment(projectId: string, successUrl: string) {
-	if (!isBillingConfigured()) error(501, 'Billing is not configured in this environment.');
+	if (!isBillingConfigured()) {
+		error(501, 'Billing is not configured in this environment.');
+	}
 
 	await ensureProjectCustomer(projectId);
 
@@ -389,7 +415,9 @@ export async function getProjectBillingState(
 	const now = Date.now();
 	if (!options.live) {
 		const cached = billingStateCache.get(projectId);
-		if (cached && now < cached.expiresAt) return cached.state;
+		if (cached && now < cached.expiresAt) {
+			return cached.state;
+		}
 	}
 
 	const state = await computeProjectBillingState(projectId);
@@ -405,7 +433,9 @@ export async function isProjectBillingExempt(projectId: string) {
 		.from(organization)
 		.where(eq(organization.id, projectId))
 		.limit(1);
-	if (project?.billingExempt) return true;
+	if (project?.billingExempt) {
+		return true;
+	}
 
 	const [exemptOwner] = await db
 		.select({ userId: member.userId })
@@ -424,7 +454,9 @@ export async function isProjectBillingExempt(projectId: string) {
 }
 
 export async function requireProjectBillingActive(projectId: string) {
-	if (await isProjectBillingExempt(projectId)) return;
+	if (await isProjectBillingExempt(projectId)) {
+		return;
+	}
 
 	const state = await getProjectBillingState(projectId, { live: true });
 
@@ -435,12 +467,16 @@ export async function requireProjectBillingActive(projectId: string) {
 
 export async function getProjectCreditsBalance(projectId: string) {
 	const featureId = creditsFeatureId();
-	if (!featureId || !isBillingConfigured()) return null;
+	if (!(featureId && isBillingConfigured())) {
+		return null;
+	}
 
 	try {
 		const customer = await createAutumnClient().customers.get({ customerId: projectId });
 		const balance = customer.balances?.[featureId];
-		if (!balance) return null;
+		if (!balance) {
+			return null;
+		}
 
 		const breakdowns = balance.breakdown ?? [];
 		const overage = breakdowns.find((item) => item.price?.billingMethod === 'usage_based');
@@ -458,7 +494,7 @@ export async function getProjectCreditsBalance(projectId: string) {
 			overageUsage,
 			overageRate,
 			estimatedOverageCost:
-				overageRate != null ? Number((overageUsage * overageRate).toFixed(2)) : null,
+				overageRate == null ? null : Number((overageUsage * overageRate).toFixed(2)),
 			prepaidPrice: prepaid?.price
 				? { amount: prepaid.price.amount ?? null, billingUnits: prepaid.price.billingUnits }
 				: null,
@@ -480,7 +516,9 @@ function withProjectCreditPurchaseLock<T>(projectId: string, task: () => Promise
 	);
 	creditPurchaseLocks.set(projectId, settled);
 	settled.then(() => {
-		if (creditPurchaseLocks.get(projectId) === settled) creditPurchaseLocks.delete(projectId);
+		if (creditPurchaseLocks.get(projectId) === settled) {
+			creditPurchaseLocks.delete(projectId);
+		}
 	});
 	return result;
 }
@@ -489,7 +527,7 @@ export function purchaseProjectCredits(projectId: string, credits: number) {
 	return withProjectCreditPurchaseLock(projectId, async () => {
 		const featureId = creditsFeatureId();
 		const planId = defaultPlanId();
-		if (!isBillingConfigured() || !featureId || !planId) {
+		if (!(isBillingConfigured() && featureId && planId)) {
 			error(501, 'Credit purchases are not configured in this environment.');
 		}
 
@@ -514,7 +552,9 @@ function isIssuedInvoice(invoice: { status: string }) {
 }
 
 export async function getProjectInvoices(projectId: string) {
-	if (!isBillingConfigured()) return [];
+	if (!isBillingConfigured()) {
+		return [];
+	}
 
 	try {
 		const customer = await createAutumnClient().customers.get({
@@ -536,18 +576,23 @@ export async function getProjectInvoices(projectId: string) {
 }
 
 export type ProjectBillingPeriodLookup =
-	{ customer: 'found'; anchor: CapPeriod | null } | { customer: 'missing' };
+	| { customer: 'found'; anchor: CapPeriod | null }
+	| { customer: 'missing' };
 
 export async function lookupProjectBillingPeriod(
 	projectId: string
 ): Promise<ProjectBillingPeriodLookup> {
-	if (!isBillingConfigured()) return { customer: 'found', anchor: null };
+	if (!isBillingConfigured()) {
+		return { customer: 'found', anchor: null };
+	}
 
 	let customer;
 	try {
 		customer = await createAutumnClient().customers.get({ customerId: projectId });
 	} catch (err) {
-		if (autumnStatus(err) === 404) return { customer: 'missing' };
+		if (autumnStatus(err) === 404) {
+			return { customer: 'missing' };
+		}
 		throw err;
 	}
 
@@ -555,7 +600,7 @@ export async function lookupProjectBillingPeriod(
 	const subscription = planId
 		? customer.subscriptions.find((item) => item.planId === planId)
 		: undefined;
-	if (!subscription?.currentPeriodStart || !subscription.currentPeriodEnd) {
+	if (!(subscription?.currentPeriodStart && subscription.currentPeriodEnd)) {
 		return { customer: 'found', anchor: null };
 	}
 
@@ -566,7 +611,9 @@ export async function lookupProjectBillingPeriod(
 }
 
 export async function openProjectBillingPortal(projectId: string, returnUrl: string) {
-	if (!isBillingConfigured()) error(501, 'Billing is not configured in this environment.');
+	if (!isBillingConfigured()) {
+		error(501, 'Billing is not configured in this environment.');
+	}
 
 	await ensureProjectCustomer(projectId);
 
@@ -584,7 +631,9 @@ export async function ensureProjectServerEntity(input: {
 	name?: string | null;
 	customerEnsured?: boolean;
 }) {
-	if (!isBillingConfigured()) return;
+	if (!isBillingConfigured()) {
+		return;
+	}
 
 	if (!input.customerEnsured) {
 		await ensureProjectCustomer(input.projectId);
@@ -595,7 +644,9 @@ export async function ensureProjectServerEntity(input: {
 		await client.entities.get({ customerId: input.projectId, entityId: input.serverId });
 		return;
 	} catch (err) {
-		if (autumnStatus(err) !== 404) throw err;
+		if (autumnStatus(err) !== 404) {
+			throw err;
+		}
 	}
 
 	try {
@@ -606,17 +657,23 @@ export async function ensureProjectServerEntity(input: {
 			name: input.name ?? input.serverId
 		});
 	} catch (err) {
-		if (autumnStatus(err) !== 409) throw err;
+		if (autumnStatus(err) !== 409) {
+			throw err;
+		}
 	}
 }
 
 export async function deleteProjectServerEntity(projectId: string, serverId: string) {
-	if (!isBillingConfigured()) return;
+	if (!isBillingConfigured()) {
+		return;
+	}
 
 	try {
 		await createAutumnClient().entities.delete({ customerId: projectId, entityId: serverId });
 	} catch (err) {
-		if (autumnStatus(err) !== 404) throw err;
+		if (autumnStatus(err) !== 404) {
+			throw err;
+		}
 	}
 }
 

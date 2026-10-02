@@ -1,12 +1,12 @@
 <script lang="ts">
-	import Loader2 from '~icons/lucide/loader-2';
-	import DollarSign from '~icons/nucleo/dollar-sign';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { purchaseCredits } from '#lib/remote/billing.remote.js';
 	import { getErrorMessage } from '#lib/utils.js';
+	import Loader2 from '~icons/lucide/loader-2';
+	import DollarSign from '~icons/nucleo/dollar-sign';
 
 	let {
 		open = $bindable(false),
@@ -39,10 +39,10 @@
 		packPrice != null && amountValid ? Math.ceil(amount / packPrice - 1e-6) : 0
 	);
 	const credits = $derived(packs * billingUnits);
-	const billedNow = $derived(packPrice != null ? packs * packPrice : 0);
+	const billedNow = $derived(packPrice == null ? 0 : packs * packPrice);
 	const roundedUp = $derived(amountValid && packPrice != null && billedNow > amount);
 	const canSubmit = $derived(packPrice != null && amountValid && credits > 0);
-	const creditRate = $derived(packPrice != null ? packPrice / billingUnits : null);
+	const creditRate = $derived(packPrice == null ? null : packPrice / billingUnits);
 	const balanceValue = $derived(
 		remaining != null && creditRate != null ? remaining * creditRate : null
 	);
@@ -54,7 +54,9 @@
 	}
 
 	async function handlePurchase() {
-		if (!projectId || loading || !canSubmit) return;
+		if (!projectId || loading || !canSubmit) {
+			return;
+		}
 
 		loading = true;
 		actionError = '';
@@ -138,9 +140,9 @@
 					</div>
 				{/if}
 				<div
-					class="flex items-center justify-between px-3.5 py-2.5 text-sm {balanceValue != null
-						? 'border-t border-border/40'
-						: ''}"
+					class="flex items-center justify-between px-3.5 py-2.5 text-sm {balanceValue == null
+						? ''
+						: 'border-t border-border/40'}"
 				>
 					<span class="text-muted-foreground">Billed now</span>
 					<span class="font-semibold text-foreground tabular-nums">
@@ -151,9 +153,8 @@
 
 			{#if roundedUp}
 				<p class="text-xs text-muted-foreground">
-					Credits are sold in {formatCost(packPrice)} increments, so the amount is rounded up to {formatCost(
-						billedNow
-					)}.
+					Credits are sold in {formatCost(packPrice)} increments, so the amount is rounded up to
+					{formatCost(billedNow)}.
 				</p>
 			{/if}
 		{:else}

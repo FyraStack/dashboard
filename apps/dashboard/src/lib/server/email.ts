@@ -1,7 +1,7 @@
-import { dev } from '$app/env';
-import appStyles from '../../routes/layout.css?raw';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import { instrument } from '#lib/server/observability.js';
+import { dev } from '$app/env';
+import appStyles from '../../routes/layout.css?raw';
 
 type EmailRenderer = {
 	render(
@@ -51,7 +51,9 @@ type CloudflareAccountsResponse = CloudflareEmailResponse & {
 let cachedCloudflareAccountId: string | null = null;
 
 async function getCloudflareAccountId(apiToken: string) {
-	if (cachedCloudflareAccountId) return cachedCloudflareAccountId;
+	if (cachedCloudflareAccountId) {
+		return cachedCloudflareAccountId;
+	}
 
 	const response = await fetch('https://api.cloudflare.com/client/v4/accounts?per_page=2', {
 		headers: { Authorization: `Bearer ${apiToken}` }

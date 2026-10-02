@@ -1,4 +1,3 @@
-import { command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import TotpResetCodeEmail from '#lib/emails/totp-reset-code.svelte';
@@ -7,18 +6,19 @@ import { initDrizzle } from '#lib/server/db/index.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { sendSecurityAlertEmail } from '#lib/server/email-notifications.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 import {
-	TOTP_RESET_CODE_TTL_MS,
 	beginTotpReset,
 	clearTotpResetGrant,
 	normalizeTotpResetChoice,
 	removeTotpWithVerifiedPassword,
 	requireTotpResetGrant,
 	resolvePendingTwoFactorUser,
-	verifyTotpResetCode as verifyTotpResetEmailCode,
-	type TotpResetUser
+	TOTP_RESET_CODE_TTL_MS,
+	type TotpResetUser,
+	verifyTotpResetCode as verifyTotpResetEmailCode
 } from '#lib/server/totp-reset.js';
-import { captureServerEvent } from '#lib/server/posthog.js';
+import { command, getRequestEvent } from '$app/server';
 
 const CODE_LENGTH = 6;
 
@@ -27,15 +27,20 @@ const disableTwoFactorParams = type({ password: 'string', method: 'string', code
 export const disableTwoFactorWithVerification = command(disableTwoFactorParams, async (params) => {
 	const event = getRequestEvent();
 	const user = event.locals.user;
-	if (!user) error(401, 'Authentication required');
+	if (!user) {
+		error(401, 'Authentication required');
+	}
 
-	if (!params.password) error(400, 'Enter your current password.');
+	if (!params.password) {
+		error(400, 'Enter your current password.');
+	}
 
 	const auth = initAuth();
 	if (params.method === 'totp') {
 		const code = params.code.replace(/\D/g, '');
-		if (code.length !== CODE_LENGTH)
+		if (code.length !== CODE_LENGTH) {
 			error(400, 'Enter the verification code from your authenticator app.');
+		}
 
 		await auth.api.verifyTOTP({
 			headers: event.request.headers,
@@ -43,7 +48,9 @@ export const disableTwoFactorWithVerification = command(disableTwoFactorParams, 
 		});
 	} else if (params.method === 'backupCode') {
 		const code = params.code.trim();
-		if (!code) error(400, 'Enter a backup code.');
+		if (!code) {
+			error(400, 'Enter a backup code.');
+		}
 
 		await auth.api.verifyBackupCode({
 			headers: event.request.headers,
@@ -75,10 +82,14 @@ async function resolveTotpResetUser(
 	event: ReturnType<typeof getRequestEvent>,
 	db: ReturnType<typeof initDrizzle>
 ): Promise<TotpResetUser> {
-	if (event.locals.user) error(403, 'Two-factor authentication cannot be reset while signed in.');
+	if (event.locals.user) {
+		error(403, 'Two-factor authentication cannot be reset while signed in.');
+	}
 
 	const pending = await resolvePendingTwoFactorUser(event, db, getRuntimeEnv().BETTER_AUTH_SECRET);
-	if (!pending) error(401, 'Authentication required');
+	if (!pending) {
+		error(401, 'Authentication required');
+	}
 	return pending;
 }
 
@@ -117,8 +128,12 @@ export const confirmTotpResetChoice = command(confirmTotpResetParams, async (par
 	const user = await resolveTotpResetUser(event, db);
 
 	const choice = normalizeTotpResetChoice(params.choice);
-	if (!choice) error(400, 'Choose whether to reset or disable two-factor authentication.');
-	if (!params.password) error(400, 'Enter your current password.');
+	if (!choice) {
+		error(400, 'Choose whether to reset or disable two-factor authentication.');
+	}
+	if (!params.password) {
+		error(400, 'Enter your current password.');
+	}
 
 	await requireTotpResetGrant(db, user.id);
 

@@ -1,26 +1,26 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
+	import type { Snippet } from 'svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
 	import Activity from '~icons/nucleo/activity';
+	import Warehouse from '~icons/nucleo/box';
 	import Disc from '~icons/nucleo/disc';
 	import Globe from '~icons/nucleo/globe';
 	import Power from '~icons/nucleo/power';
 	import Settings from '~icons/nucleo/settings';
-	import Warehouse from '~icons/nucleo/box';
-	import type { Snippet } from 'svelte';
 	import {
-		setColocationContext,
 		type ColocationContext,
 		type ColocationTab,
-		type ColoUnit
+		type ColoUnit,
+		setColocationContext
 	} from '../colocation-context.svelte';
 
 	let { children }: { children: Snippet } = $props();
@@ -105,7 +105,9 @@
 	}
 
 	async function addUnit() {
-		if (!newName.trim() || addingUnit) return;
+		if (!newName.trim() || addingUnit) {
+			return;
+		}
 		addingUnit = true;
 		try {
 			unitCounter += 1;
@@ -125,7 +127,9 @@
 			await goto(resolve(tabHref(activeTab, unit.id) as any));
 			setTimeout(() => {
 				const idx = units.findIndex((u) => u.id === unit.id);
-				if (idx !== -1) units[idx].status = 'online';
+				if (idx !== -1) {
+					units[idx].status = 'online';
+				}
 			}, 3000);
 			newName = '';
 			newRackSize = '1U';
@@ -136,7 +140,9 @@
 	}
 
 	function updateSelectedUnit(changes: Partial<ColoUnit>) {
-		if (selectedUnitIdx === -1) return;
+		if (selectedUnitIdx === -1) {
+			return;
+		}
 		Object.assign(units[selectedUnitIdx], changes);
 	}
 
@@ -146,7 +152,9 @@
 	}
 
 	async function deleteSelectedUnit() {
-		if (!selectedUnit || deleteConfirm !== selectedUnit.id || deletingUnit) return;
+		if (!selectedUnit || deleteConfirm !== selectedUnit.id || deletingUnit) {
+			return;
+		}
 		deletingUnit = true;
 		try {
 			units = units.filter((unit) => unit.id !== selectedUnit!.id);
@@ -214,7 +222,8 @@
 					<div class="min-w-0">
 						<p class="truncate text-sm font-semibold text-foreground">{unit.name}</p>
 						<p class="mt-0.5 text-xs text-muted-foreground">
-							{unit.rackSize} &bull; {unit.location}
+							{unit.rackSize}
+							&bull; {unit.location}
 						</p>
 					</div>
 					<span
@@ -313,7 +322,9 @@
 				>Cancel</Button
 			>
 			<Button size="sm" onclick={addUnit} disabled={!newName.trim() || addingUnit}>
-				{#if addingUnit}<Loader2 class="h-3 w-3 animate-spin" />{/if}
+				{#if addingUnit}
+					<Loader2 class="h-3 w-3 animate-spin" />
+				{/if}
 				{addingUnit ? 'Requesting...' : 'Request Slot'}
 			</Button>
 		</Dialog.Footer>
@@ -344,7 +355,8 @@
 					variant="outline"
 					size="sm"
 					onclick={() => (deleteOpen = false)}
-					disabled={deletingUnit}>Cancel</Button
+					disabled={deletingUnit}
+					>Cancel</Button
 				>
 				<Button
 					variant="outline"
@@ -353,7 +365,9 @@
 					disabled={deleteConfirm !== selectedUnit.id || deletingUnit}
 					onclick={deleteSelectedUnit}
 				>
-					{#if deletingUnit}<Loader2 class="h-3 w-3 animate-spin" />{/if}
+					{#if deletingUnit}
+						<Loader2 class="h-3 w-3 animate-spin" />
+					{/if}
 					{deletingUnit ? 'Removing...' : 'Remove Unit'}
 				</Button>
 			</Dialog.Footer>

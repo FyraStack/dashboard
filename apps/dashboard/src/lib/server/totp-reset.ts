@@ -1,7 +1,7 @@
 import { error, type RequestEvent } from '@sveltejs/kit';
 import { and, eq, gt } from 'drizzle-orm';
-import { account, twoFactor, user, verification } from './db/auth.schema';
 import type { initDrizzle } from './db';
+import { account, twoFactor, user, verification } from './db/auth.schema';
 import { ulid } from './id';
 
 export const TOTP_RESET_CODE_LENGTH = 6;
@@ -24,8 +24,12 @@ type VerifyPassword = (hash: string, password: string) => Promise<boolean>;
 type Db = ReturnType<typeof initDrizzle>;
 
 export function normalizeTotpResetChoice(value: string): TotpResetChoice | null {
-	if (value === 'reset' || value === 'reset-totp') return 'reset';
-	if (value === 'disable' || value === 'disable-totp') return 'disable';
+	if (value === 'reset' || value === 'reset-totp') {
+		return 'reset';
+	}
+	if (value === 'disable' || value === 'disable-totp') {
+		return 'disable';
+	}
 	return null;
 }
 
@@ -86,7 +90,9 @@ export function parseTotpResetCodeRecord(value: string): TotpResetCodeRecord | n
 }
 
 export function canResendTotpResetCode(lastSentAt: Date | null, now = new Date()) {
-	if (!lastSentAt) return true;
+	if (!lastSentAt) {
+		return true;
+	}
 	return now.getTime() - lastSentAt.getTime() >= TOTP_RESET_RESEND_INTERVAL_MS;
 }
 
@@ -100,10 +106,14 @@ export function isLegacyTotpSecret(encryptedSecret: string) {
 
 async function verifySignedCookieValue(raw: string, secret: string) {
 	const separator = raw.lastIndexOf('.');
-	if (separator < 1) return null;
+	if (separator < 1) {
+		return null;
+	}
 	const value = raw.slice(0, separator);
 	const signature = raw.slice(separator + 1);
-	if (signature.length !== 44 || !signature.endsWith('=')) return null;
+	if (signature.length !== 44 || !signature.endsWith('=')) {
+		return null;
+	}
 
 	const encoder = new TextEncoder();
 	const key = await crypto.subtle.importKey(
@@ -125,24 +135,32 @@ export async function resolvePendingTwoFactorUser(
 ): Promise<TotpResetUser | null> {
 	for (const cookieName of pendingTwoFactorCookieNames) {
 		const raw = event.cookies.get(cookieName);
-		if (!raw) continue;
+		if (!raw) {
+			continue;
+		}
 
 		const identifier = await verifySignedCookieValue(raw, secret);
-		if (!identifier) continue;
+		if (!identifier) {
+			continue;
+		}
 
 		const [pending] = await db
 			.select({ userId: verification.value })
 			.from(verification)
 			.where(and(eq(verification.identifier, identifier), gt(verification.expiresAt, new Date())))
 			.limit(1);
-		if (!pending) continue;
+		if (!pending) {
+			continue;
+		}
 
 		const [pendingUser] = await db
 			.select({ id: user.id, email: user.email, name: user.name })
 			.from(user)
 			.where(eq(user.id, pending.userId))
 			.limit(1);
-		if (pendingUser) return pendingUser;
+		if (pendingUser) {
+			return pendingUser;
+		}
 	}
 
 	return null;
@@ -170,16 +188,18 @@ export async function removeTotpWithVerifiedPassword(
 		.where(and(eq(account.userId, userId), eq(account.providerId, 'credential')))
 		.limit(1);
 
-	if (!credential?.password || !(await verifyPassword(credential.password, password)))
+	if (!(credential?.password && (await verifyPassword(credential.password, password)))) {
 		error(400, 'Incorrect password.');
+	}
 
 	await db.delete(twoFactor).where(eq(twoFactor.userId, userId));
 	await db.update(user).set({ twoFactorEnabled: false }).where(eq(user.id, userId));
 }
 
 export async function requireLegacyTotp(db: Db, userId: string) {
-	if (!(await requiresTotpReset(db, userId)))
+	if (!(await requiresTotpReset(db, userId))) {
 		error(403, 'Two-factor authentication cannot be reset for this account.');
+	}
 }
 
 export async function beginTotpReset(db: Db, userId: string) {
@@ -192,8 +212,9 @@ export async function beginTotpReset(db: Db, userId: string) {
 		.where(and(eq(verification.identifier, identifier), gt(verification.expiresAt, new Date())))
 		.limit(1);
 
-	if (existing && !canResendTotpResetCode(existing.createdAt))
+	if (existing && !canResendTotpResetCode(existing.createdAt)) {
 		error(429, 'A code was sent recently. Check your email or wait a minute to request another.');
+	}
 
 	const code = generateTotpResetCode();
 	const value = encodeTotpResetCodeRecord({
@@ -216,8 +237,9 @@ export async function verifyTotpResetCode(db: Db, userId: string, code: string) 
 	await requireLegacyTotp(db, userId);
 
 	const normalizedCode = normalizeTotpResetCode(code);
-	if (normalizedCode.length !== TOTP_RESET_CODE_LENGTH)
+	if (normalizedCode.length !== TOTP_RESET_CODE_LENGTH) {
 		error(400, 'Enter the verification code from your email.');
+	}
 
 	const identifier = totpResetCodeIdentifier(userId);
 	const [row] = await db
@@ -227,7 +249,9 @@ export async function verifyTotpResetCode(db: Db, userId: string, code: string) 
 		.limit(1);
 
 	const record = row ? parseTotpResetCodeRecord(row.value) : null;
-	if (!row || !record) error(400, 'Invalid or expired verification code.');
+	if (!(row && record)) {
+		error(400, 'Invalid or expired verification code.');
+	}
 
 	if (totpResetAttemptsExhausted(record)) {
 		await db.delete(verification).where(eq(verification.id, row.id));
@@ -274,7 +298,9 @@ export async function requireTotpResetGrant(db: Db, userId: string) {
 		)
 		.limit(1);
 
-	if (!record) error(400, 'Verify your email before changing two-factor authentication.');
+	if (!record) {
+		error(400, 'Verify your email before changing two-factor authentication.');
+	}
 }
 
 export async function clearTotpResetGrant(db: Db, userId: string) {

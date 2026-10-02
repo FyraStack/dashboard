@@ -41,7 +41,9 @@ export class BunnyError extends Error {
 
 function getBunnyConfig() {
 	const env = getRuntimeEnv();
-	if (!env.BUNNY_API_KEY) return null;
+	if (!env.BUNNY_API_KEY) {
+		return null;
+	}
 
 	return { apiKey: env.BUNNY_API_KEY };
 }
@@ -55,7 +57,9 @@ export class BunnyClient {
 
 	constructor() {
 		const config = getBunnyConfig();
-		if (!config) throw new BunnyError('Bunny.net API key is not configured', 500, '');
+		if (!config) {
+			throw new BunnyError('Bunny.net API key is not configured', 500, '');
+		}
 
 		this.api = ky.create({
 			prefix: 'https://api.bunny.net',
@@ -83,7 +87,9 @@ export class BunnyClient {
 				raw.slice(0, 500)
 			);
 		}
-		if (!raw) return undefined as T;
+		if (!raw) {
+			return undefined as T;
+		}
 
 		try {
 			return JSON.parse(raw) as T;
@@ -107,7 +113,9 @@ export class BunnyClient {
 				}
 			});
 			zones.push(...(result.Items ?? []));
-			if (!result.HasMoreItems) break;
+			if (!result.HasMoreItems) {
+				break;
+			}
 		}
 		return zones;
 	}

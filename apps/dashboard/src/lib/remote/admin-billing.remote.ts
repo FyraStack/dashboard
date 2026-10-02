@@ -1,8 +1,9 @@
-import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { and, desc, eq, gt, lte, sql } from 'drizzle-orm';
 import { requireAdmin } from '#lib/server/auth-context.js';
+import { capHoursFor } from '#lib/server/billing/caps.js';
+import { syncUsageEvent } from '#lib/server/billing/metering.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	billingMeters,
@@ -11,8 +12,7 @@ import {
 	vms,
 	vmTypes
 } from '#lib/server/db/schema.js';
-import { capHoursFor } from '#lib/server/billing/caps.js';
-import { syncUsageEvent } from '#lib/server/billing/metering.js';
+import { command, getRequestEvent, query } from '$app/server';
 
 export type VmBillingUsage = {
 	vmId: string;
@@ -32,7 +32,9 @@ export type VmBillingUsage = {
 
 async function requireCurrentAdmin() {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
@@ -64,7 +66,9 @@ async function computeVmUsage(
 		.leftJoin(organization, eq(organization.id, vms.ownerProjectId))
 		.where(eq(vms.id, vmId))
 		.limit(1);
-	if (!vm) error(404, `VM "${vmId}" not found`);
+	if (!vm) {
+		error(404, `VM "${vmId}" not found`);
+	}
 
 	const events = await db
 		.select({
@@ -122,8 +126,12 @@ async function computeVmUsage(
 }
 
 function validateWindow(periodStart: number, periodEnd: number) {
-	if (periodStart >= periodEnd) error(400, 'The window start must be before its end');
-	if (periodEnd > Date.now() + 60_000) error(400, 'The window cannot end in the future');
+	if (periodStart >= periodEnd) {
+		error(400, 'The window start must be before its end');
+	}
+	if (periodEnd > Date.now() + 60_000) {
+		error(400, 'The window cannot end in the future');
+	}
 }
 
 const usageParams = type({ vmId: 'string', periodStart: 'number', periodEnd: 'number' });
@@ -147,9 +155,15 @@ export const reverseVmBillingUsage = command(reverseParams, async (params) => {
 	validateWindow(params.periodStart, params.periodEnd);
 
 	const usage = await computeVmUsage(db, params.vmId, params.periodStart, params.periodEnd);
-	if (usage.reversibleHours <= 0) error(400, 'No reversible usage in this window');
-	if (!usage.featureId) error(400, 'This VM has no billing feature to reverse against');
-	if (!usage.projectId) error(400, 'This VM has no project to credit');
+	if (usage.reversibleHours <= 0) {
+		error(400, 'No reversible usage in this window');
+	}
+	if (!usage.featureId) {
+		error(400, 'This VM has no billing feature to reverse against');
+	}
+	if (!usage.projectId) {
+		error(400, 'This VM has no project to credit');
+	}
 
 	const meter = await db.query.billingMeters.findFirst({
 		where: and(
@@ -158,8 +172,14 @@ export const reverseVmBillingUsage = command(reverseParams, async (params) => {
 			eq(billingMeters.active, true)
 		)
 	});
-	const currentPeriodStart = Math.max(params.periodStart, meter?.capPeriodStart ?? Infinity);
-	const currentPeriodEnd = Math.min(params.periodEnd, meter?.capPeriodEnd ?? -Infinity);
+	const currentPeriodStart = Math.max(
+		params.periodStart,
+		meter?.capPeriodStart ?? Number.POSITIVE_INFINITY
+	);
+	const currentPeriodEnd = Math.min(
+		params.periodEnd,
+		meter?.capPeriodEnd ?? Number.NEGATIVE_INFINITY
+	);
 	const currentPeriodUsage =
 		currentPeriodStart < currentPeriodEnd
 			? await computeVmUsage(db, params.vmId, currentPeriodStart, currentPeriodEnd)
@@ -196,7 +216,9 @@ export const reverseVmBillingUsage = command(reverseParams, async (params) => {
 		})
 		.onConflictDoNothing({ target: billingUsageEvents.idempotencyKey })
 		.returning();
-	if (!event) error(409, 'An identical reversal was already recorded');
+	if (!event) {
+		error(409, 'An identical reversal was already recorded');
+	}
 
 	if (
 		meter?.capPeriodStart != null &&

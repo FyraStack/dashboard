@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { untrack, type Snippet } from 'svelte';
-	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
+	import { type Snippet, untrack } from 'svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { featureFlagKeys } from '#lib/feature-flags.js';
-	import { AdminState, type AdminPageData } from '#lib/state/admin.svelte.js';
+	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import Cpu from '~icons/nucleo/cpu';
 	import Disc from '~icons/nucleo/disc';
 	import Flag from '~icons/nucleo/flag';

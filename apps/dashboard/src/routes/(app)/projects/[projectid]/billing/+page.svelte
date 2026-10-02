@@ -3,9 +3,9 @@
 	import BuyCreditsDialog from '#lib/components/buy-credits-dialog.svelte';
 	import { openBillingPortal } from '#lib/remote/billing.remote.js';
 	import { getErrorMessage } from '#lib/utils.js';
-	import DollarSign from '~icons/nucleo/dollar-sign';
 	import Cpu from '~icons/nucleo/cpu';
 	import CreditCard from '~icons/nucleo/credit-card';
+	import DollarSign from '~icons/nucleo/dollar-sign';
 	import HardDrive from '~icons/nucleo/hard-drive';
 	import Server from '~icons/nucleo/server';
 
@@ -107,7 +107,9 @@
 	}
 
 	function formatCost(value: number | null | undefined) {
-		if (typeof value !== 'number') return null;
+		if (typeof value !== 'number') {
+			return null;
+		}
 		return new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' }).format(value);
 	}
 
@@ -128,13 +130,19 @@
 
 	function invoiceStatusClasses(status: string) {
 		const s = status.toLowerCase();
-		if (s === 'paid') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400';
-		if (s === 'open' || s === 'draft') return 'bg-amber-500/10 text-amber-700 dark:text-amber-400';
+		if (s === 'paid') {
+			return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400';
+		}
+		if (s === 'open' || s === 'draft') {
+			return 'bg-amber-500/10 text-amber-700 dark:text-amber-400';
+		}
 		return 'bg-muted/60 text-muted-foreground';
 	}
 
 	function friendlyLabel(value: unknown, fallback: string) {
-		if (typeof value !== 'string' || !value.trim()) return fallback;
+		if (typeof value !== 'string' || !value.trim()) {
+			return fallback;
+		}
 		return value
 			.replace(/[_-]+/g, ' ')
 			.replace(/\s+/g, ' ')
@@ -149,7 +157,9 @@
 
 	function resourceTypeLabel(resource: ActiveResource) {
 		const type = (resource.resourceType ?? resource.type ?? '').toLowerCase();
-		if (type === 'vm') return 'VPS';
+		if (type === 'vm') {
+			return 'VPS';
+		}
 		return friendlyLabel(resource.resourceType ?? resource.type, 'Resource');
 	}
 
@@ -160,16 +170,24 @@
 	}
 
 	function resourceIcon(type: string | undefined) {
-		if (!type) return Server;
+		if (!type) {
+			return Server;
+		}
 		const t = type.toLowerCase();
-		if (t.includes('volume') || t.includes('storage')) return HardDrive;
+		if (t.includes('volume') || t.includes('storage')) {
+			return HardDrive;
+		}
 		return Server;
 	}
 
 	function resourceStripe(resource: ActiveResource) {
 		const t = (resource.resourceType ?? resource.type ?? '').toLowerCase();
-		if (t === 'vm') return 'border-l-2 border-l-blue-500/60';
-		if (t === 'volume') return 'border-l-2 border-l-violet-500/60';
+		if (t === 'vm') {
+			return 'border-l-2 border-l-blue-500/60';
+		}
+		if (t === 'volume') {
+			return 'border-l-2 border-l-violet-500/60';
+		}
 		return '';
 	}
 
@@ -178,7 +196,9 @@
 			billingSetupOpen = true;
 			return;
 		}
-		if (!projectId || portalLoading) return;
+		if (!projectId || portalLoading) {
+			return;
+		}
 
 		portalLoading = true;
 		actionError = '';
@@ -254,8 +274,10 @@
 							<div class="text-right">
 								<p class="text-sm text-foreground tabular-nums">{resource.count ?? 0} active</p>
 								<p class="text-xs text-muted-foreground tabular-nums">
-									{formatHours(resource.hours)}{#if costLabel}
-										· {costLabel} est.{/if}
+									{formatHours(resource.hours)}
+									{#if costLabel}
+										· {costLabel} est.
+									{/if}
 								</p>
 							</div>
 						</div>
@@ -264,9 +286,8 @@
 			{:else if activeResourceCount > 0}
 				<div class="mt-4 rounded-md border border-border/60 bg-background/30 p-5 text-center">
 					<p class="text-sm text-muted-foreground">
-						You have {activeResourceCount} active {activeResourceCount === 1
-							? 'resource'
-							: 'resources'}.
+						You have {activeResourceCount} active
+						{activeResourceCount === 1 ? 'resource' : 'resources'}.
 					</p>
 				</div>
 			{:else}
@@ -339,13 +360,15 @@
 							<p class="text-xs font-medium text-muted-foreground">Credits</p>
 						</div>
 						<p class="mt-2 text-2xl font-semibold text-foreground tabular-nums">
-							{creditRate != null
-								? formatCost((credits.remaining ?? 0) * creditRate)
-								: formatCredits(credits.remaining)}
+							{creditRate == null
+								? formatCredits(credits.remaining)
+								: formatCost((credits.remaining ?? 0) * creditRate)}
 						</p>
-						{#if typeof credits.estimatedOverageCost === 'number' && credits.estimatedOverageCost > 0}
+						{#if typeof credits.estimatedOverageCost === 'number' &&
+							credits.estimatedOverageCost > 0}
 							<p class="mt-0.5 text-xs text-muted-foreground tabular-nums">
-								{formatCost(credits.estimatedOverageCost)} pay-as-you-go this cycle
+								{formatCost(credits.estimatedOverageCost)}
+								pay-as-you-go this cycle
 							</p>
 						{/if}
 					</div>

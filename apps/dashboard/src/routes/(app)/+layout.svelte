@@ -1,36 +1,36 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import UserSettingsDialog from '#lib/components/dialogs/user-settings-dialog.svelte';
+	import { untrack } from 'svelte';
+	import { toast } from 'svelte-sonner';
+	import type { IconComponent } from '#lib';
+	import { authClient } from '#lib/auth-client.js';
 	import ConfirmDialog from '#lib/components/confirm-dialog.svelte';
+	import UserSettingsDialog from '#lib/components/dialogs/user-settings-dialog.svelte';
+	import * as Avatar from '#lib/components/ui/avatar/index.js';
+	import * as Command from '#lib/components/ui/command/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import * as Sheet from '#lib/components/ui/sheet/index.js';
+	import { Toaster } from '#lib/components/ui/sonner/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
+	import type { FeatureFlags } from '#lib/feature-flags.js';
+	import { listVms } from '#lib/remote/vms.remote.js';
 	import {
 		clearUserSettingsHref,
 		UserSettingsState,
 		type UserSettingsTab
 	} from '#lib/state/user-settings.svelte.js';
-	import { Toaster } from '#lib/components/ui/sonner/index.js';
-	import * as Avatar from '#lib/components/ui/avatar/index.js';
-	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-
-	import * as Command from '#lib/components/ui/command/index.js';
-	import * as Sheet from '#lib/components/ui/sheet/index.js';
-	import { toast } from 'svelte-sonner';
 	import { getErrorMessage, runQuery } from '#lib/utils.js';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { untrack } from 'svelte';
-	import { listVms } from '#lib/remote/vms.remote.js';
-	import { authClient } from '#lib/auth-client.js';
-	import type { FeatureFlags } from '#lib/feature-flags.js';
-	import type { IconComponent } from '#lib';
+	import { page } from '$app/state';
 	import ArrowRight from '~icons/lucide/arrow-right';
 	import Check from '~icons/lucide/check';
 	import ChevronDown from '~icons/lucide/chevron-down';
-	import FolderOpen from '~icons/nucleo/folder-open';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Menu from '~icons/lucide/menu';
+	import Warehouse from '~icons/nucleo/box';
 	import CreditCard from '~icons/nucleo/credit-card';
 	import Disc from '~icons/nucleo/disc';
+	import FolderOpen from '~icons/nucleo/folder-open';
 	import HardDrive from '~icons/nucleo/hard-drive';
 	import Key from '~icons/nucleo/key';
 	import Search from '~icons/nucleo/search';
@@ -38,7 +38,6 @@
 	import Settings from '~icons/nucleo/settings';
 	import Shield from '~icons/nucleo/shield';
 	import User from '~icons/nucleo/user';
-	import Warehouse from '~icons/nucleo/box';
 
 	let { children, data } = $props();
 	let mobileNavOpen = $state(false);
@@ -75,7 +74,9 @@
 	const isAdminPage = $derived(page.url.pathname.startsWith('/admin'));
 	const currentProjectSection = $derived.by(() => {
 		const segment = page.url.pathname.match(/^\/projects\/[^/]+\/([^/]+)/)?.[1];
-		if (!segment) return '';
+		if (!segment) {
+			return '';
+		}
 		return segment
 			.split('-')
 			.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -86,23 +87,32 @@
 
 	const navItems = $derived.by(() => {
 		const items: { icon: IconComponent; label: string; href: string }[] = [];
-		if (!currentProject) return items;
+		if (!currentProject) {
+			return items;
+		}
 		const prefix = `/projects/${currentProject.id}`;
 		items.push({ icon: Server, label: 'Servers', href: `${prefix}/servers` });
-		if (featureFlags.colocation)
+		if (featureFlags.colocation) {
 			items.push({ icon: Warehouse, label: 'Colocation', href: `${prefix}/colocation` });
-		if (featureFlags.volumes)
+		}
+		if (featureFlags.volumes) {
 			items.push({ icon: HardDrive, label: 'Volumes', href: `${prefix}/volumes` });
-		if (featureFlags.firewall)
+		}
+		if (featureFlags.firewall) {
 			items.push({ icon: Shield, label: 'Firewall', href: `${prefix}/firewall` });
-		if (featureFlags.images) items.push({ icon: Disc, label: 'Images', href: `${prefix}/images` });
+		}
+		if (featureFlags.images) {
+			items.push({ icon: Disc, label: 'Images', href: `${prefix}/images` });
+		}
 		items.push({ icon: CreditCard, label: 'Billing', href: `${prefix}/billing` });
 		items.push({ icon: Settings, label: 'Settings', href: `${prefix}/settings` });
 		return items;
 	});
 
 	function isActive(href: string) {
-		if (href === '/') return page.url.pathname === '/';
+		if (href === '/') {
+			return page.url.pathname === '/';
+		}
 		if (href.startsWith('/projects/')) {
 			return page.url.pathname.startsWith(href);
 		}
@@ -110,8 +120,12 @@
 	}
 
 	function withProjectContext(href: string, projectId = selectedProjectId) {
-		if (!projectId) return href;
-		if (href.startsWith('/projects/')) return href;
+		if (!projectId) {
+			return href;
+		}
+		if (href.startsWith('/projects/')) {
+			return href;
+		}
 		return `/projects/${projectId}${href}`;
 	}
 
@@ -125,7 +139,9 @@
 	});
 
 	async function selectProject(projectId: string) {
-		if (!projectId || projectId === selectedProjectId || switchingProjectId) return;
+		if (!projectId || projectId === selectedProjectId || switchingProjectId) {
+			return;
+		}
 		switchingProjectId = projectId;
 		try {
 			selectedProjectId = projectId;
@@ -157,7 +173,9 @@
 
 	$effect(() => {
 		const url = page.url;
-		if (!userSettings.urlHasSettingsTab(url)) return;
+		if (!userSettings.urlHasSettingsTab(url)) {
+			return;
+		}
 		userSettings.syncFromUrl(url);
 		untrack(() =>
 			goto(resolve(clearUserSettingsHref(url) as any), {
@@ -202,18 +220,27 @@
 			{ id: 'all', label: 'All', icon: Search },
 			{ id: 'navigate', label: 'Pages', icon: ArrowRight }
 		];
-		if (showServerFilter) filters.push({ id: 'servers', label: 'Servers', icon: Server });
+		if (showServerFilter) {
+			filters.push({ id: 'servers', label: 'Servers', icon: Server });
+		}
 		filters.push({ id: 'account', label: 'Account', icon: User });
 		return filters;
 	});
 
 	const navigateCommands = $derived.by(() => {
 		const commands: CommandEntry[] = [{ icon: Server, label: 'Servers', href: '/servers' }];
-		if (showColocation)
+		if (showColocation) {
 			commands.push({ icon: Warehouse, label: 'Colocation', href: '/colocation' });
-		if (showVolumes) commands.push({ icon: HardDrive, label: 'Volumes', href: '/volumes' });
-		if (showFirewall) commands.push({ icon: Shield, label: 'Firewall', href: '/firewall' });
-		if (showImages) commands.push({ icon: Disc, label: 'Images', href: '/images' });
+		}
+		if (showVolumes) {
+			commands.push({ icon: HardDrive, label: 'Volumes', href: '/volumes' });
+		}
+		if (showFirewall) {
+			commands.push({ icon: Shield, label: 'Firewall', href: '/firewall' });
+		}
+		if (showImages) {
+			commands.push({ icon: Disc, label: 'Images', href: '/images' });
+		}
 		return commands;
 	});
 	const accountCommands: CommandEntry[] = [
@@ -240,27 +267,43 @@
 	);
 
 	function matchesCommandSearch(values: (string | null | undefined)[]) {
-		if (!normalizedCommandSearch) return true;
+		if (!normalizedCommandSearch) {
+			return true;
+		}
 		return values.some((value) => value?.toLowerCase().includes(normalizedCommandSearch));
 	}
 
 	function formatVmStatus(status: string, liveStatus?: string | null) {
-		if (status === 'deleting') return 'Deleting';
-		if (liveStatus === 'running') return 'Running';
-		if (status === 'provisioning') return 'Provisioning';
-		if (status === 'error') return 'Error';
-		if (!liveStatus || liveStatus === 'unknown') return 'Ready';
+		if (status === 'deleting') {
+			return 'Deleting';
+		}
+		if (liveStatus === 'running') {
+			return 'Running';
+		}
+		if (status === 'provisioning') {
+			return 'Provisioning';
+		}
+		if (status === 'error') {
+			return 'Error';
+		}
+		if (!liveStatus || liveStatus === 'unknown') {
+			return 'Ready';
+		}
 		return liveStatus.charAt(0).toUpperCase() + liveStatus.slice(1);
 	}
 
 	async function loadCommandServers(projectId = selectedProjectId) {
-		if (!projectId || commandServersLoading || commandServersLoadedProjectId === projectId) return;
+		if (!projectId || commandServersLoading || commandServersLoadedProjectId === projectId) {
+			return;
+		}
 		const requestId = ++commandServersRequestId;
 		commandServersLoading = true;
 
 		try {
 			const vms = await runQuery(listVms({ projectId }));
-			if (requestId !== commandServersRequestId) return;
+			if (requestId !== commandServersRequestId) {
+				return;
+			}
 			commandServers = vms
 				.filter((vm) => vm.active)
 				.map((vm) => ({
@@ -279,12 +322,16 @@
 				}));
 			commandServersLoadedProjectId = projectId;
 		} catch (error) {
-			if (requestId !== commandServersRequestId) return;
+			if (requestId !== commandServersRequestId) {
+				return;
+			}
 			toast.error(getErrorMessage(error, 'Failed to load servers'));
 			commandServers = [];
 			commandServersLoadedProjectId = projectId;
 		} finally {
-			if (requestId === commandServersRequestId) commandServersLoading = false;
+			if (requestId === commandServersRequestId) {
+				commandServersLoading = false;
+			}
 		}
 	}
 
@@ -298,7 +345,9 @@
 	$effect(() => {
 		const projectId = selectedProjectId;
 		untrack(() => {
-			if (commandServersLoadedProjectId === projectId && !commandServersLoading) return;
+			if (commandServersLoadedProjectId === projectId && !commandServersLoading) {
+				return;
+			}
 			commandServers = [];
 			commandServersLoadedProjectId = null;
 			commandServersRequestId += 1;
@@ -307,7 +356,9 @@
 	});
 
 	$effect(() => {
-		if (cmdFilter === 'servers' && !showServerFilter) cmdFilter = 'all';
+		if (cmdFilter === 'servers' && !showServerFilter) {
+			cmdFilter = 'all';
+		}
 	});
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -352,8 +403,10 @@
 					<button
 						class="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground lg:hidden"
 						aria-label="Open navigation menu"
-						onclick={() => (mobileNavOpen = true)}><Menu class="h-4 w-4" /></button
+						onclick={() => (mobileNavOpen = true)}
 					>
+						<Menu class="h-4 w-4" />
+					</button>
 				{/if}
 				<a href={resolve('')} class="flex shrink-0 items-center gap-2">
 					<img src="/logo.svg" alt="" class="h-5 w-5" />
@@ -466,7 +519,9 @@
 					{#each navItems as item (item.label)}
 						<Tooltip.Root>
 							<Tooltip.Trigger>
-								{#snippet child({ props })}
+								{#snippet child({
+									props
+								})}
 									<a
 										{...props}
 										href={resolve(withProjectContext(item.href) as any)}
@@ -593,8 +648,10 @@
 					f.id
 						? 'bg-muted text-foreground'
 						: 'text-muted-foreground hover:text-foreground'}"
-					onclick={() => (cmdFilter = f.id)}><f.icon class="h-3 w-3" />{f.label}</button
+					onclick={() => (cmdFilter = f.id)}
 				>
+					<f.icon class="h-3 w-3" />{f.label}
+				</button>
 			{/each}
 		</div>
 		<Command.List class="max-h-[350px] bg-background">
@@ -621,7 +678,8 @@
 							<div class="min-w-0 flex-1">
 								<p class="truncate text-sm text-foreground">{server.name}</p>
 								<p class="truncate text-xs text-muted-foreground">
-									{server.plan} · {server.detail}
+									{server.plan}
+									· {server.detail}
 								</p>
 							</div>
 							<span class="ml-auto shrink-0 text-xs text-muted-foreground">{server.status}</span>

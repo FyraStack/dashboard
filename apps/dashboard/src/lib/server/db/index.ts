@@ -1,12 +1,12 @@
+import { waitUntil } from 'cloudflare:workers';
+import type { RequestEvent } from '@sveltejs/kit';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import type { RequestEvent } from '@sveltejs/kit';
-import { waitUntil } from 'cloudflare:workers';
-import { dev } from '$app/env';
-import * as schema from './schema';
-import { getRequestEvent } from '$app/server';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import { instrument, summarizeStatement, timingLog } from '#lib/server/observability.js';
+import { dev } from '$app/env';
+import { getRequestEvent } from '$app/server';
+import * as schema from './schema';
 
 export type Database = ReturnType<typeof drizzle<typeof schema>>;
 
@@ -44,7 +44,9 @@ function withQueryTracing(pool: Pool): Pool {
 	const runQuery = pool.query.bind(pool) as (...args: unknown[]) => unknown;
 
 	pool.query = function instrumentedQuery(...args: unknown[]) {
-		if (typeof args[args.length - 1] === 'function') return runQuery(...args);
+		if (typeof args[args.length - 1] === 'function') {
+			return runQuery(...args);
+		}
 
 		const first = args[0];
 

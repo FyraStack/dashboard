@@ -1,28 +1,28 @@
+import type { Fetcher } from '@cloudflare/workers-types';
+import { Address6 } from 'ip-address';
 import ky, { HTTPError } from 'ky';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { Address6 } from 'ip-address';
-import type { Fetcher } from '@cloudflare/workers-types';
 
 import { config } from '#lib/server/config.js';
-import { createVpcFetch, insecureDirectFetch } from '#lib/server/vpc.js';
 import { instrument } from '#lib/server/observability.js';
-import { ProxmoxClient } from './client';
-import type { PveClusterResource } from './types';
+import { createVpcFetch, insecureDirectFetch } from '#lib/server/vpc.js';
 import type {
 	BackendImage,
-	BackendImageImportTarget,
 	BackendImageImportParams,
+	BackendImageImportTarget,
 	VmBackend,
-	VmInfo,
 	VmCreateParams,
 	VmCreateResult,
-	VmStatus,
+	VmInfo,
+	VmLookupOptions,
 	VmMetricsHistorySample,
 	VmMetricsTimeframe,
-	VmLookupOptions,
-	VmResizeParams
+	VmResizeParams,
+	VmStatus
 } from '../types';
 import { VmNotFoundError, VmResizeError } from '../types';
+import type { ProxmoxClient } from './client';
+import type { PveClusterResource } from './types';
 
 interface ResolvedVm {
 	node: string;
@@ -36,7 +36,9 @@ function stableIdTag(id: string) {
 }
 
 function stableIdFromTags(tags: string | undefined): string | undefined {
-	if (!tags) return undefined;
+	if (!tags) {
+		return undefined;
+	}
 	const tag = tags
 		.split(/[;,]/)
 		.map((entry) => entry.trim().toLowerCase())
@@ -49,10 +51,10 @@ type CacheEntry<T> = {
 	promise: Promise<T>;
 };
 
-const CLUSTER_RESOURCES_TTL_MS = 2_000;
-const VM_STATUS_TTL_MS = 1_000;
+const CLUSTER_RESOURCES_TTL_MS = 2000;
+const VM_STATUS_TTL_MS = 1000;
 const RUNNING_CONFIRMATION_TIMEOUT_MS = 30_000;
-const RUNNING_CONFIRMATION_INTERVAL_MS = 1_000;
+const RUNNING_CONFIRMATION_INTERVAL_MS = 1000;
 const clusterResourcesCache = new Map<string, CacheEntry<PveClusterResource[]>>();
 const vmStatusCache = new Map<
 	string,
@@ -71,11 +73,15 @@ function getCached<T>(
 ): Promise<T> {
 	const now = Date.now();
 	const existing = cache.get(key);
-	if (existing && existing.expiresAt > now) return existing.promise;
+	if (existing && existing.expiresAt > now) {
+		return existing.promise;
+	}
 
 	let promise: Promise<T>;
 	promise = load().catch((error) => {
-		if (cache.get(key)?.promise === promise) cache.delete(key);
+		if (cache.get(key)?.promise === promise) {
+			cache.delete(key);
+		}
 		throw error;
 	});
 	cache.set(key, { expiresAt: now + ttlMs, promise });
@@ -114,7 +120,9 @@ function generateMacAddress() {
 }
 
 function firstIpv6AddressInPrefix(prefix: string) {
-	if (!Address6.isValid(prefix)) return null;
+	if (!Address6.isValid(prefix)) {
+		return null;
+	}
 
 	const address = new Address6(prefix);
 	return `${Address6.fromBigInt(address.startAddress().bigInt() + 1n).correctForm()}/${address.subnetMask}`;
@@ -251,7 +259,9 @@ export class ProxmoxBackend implements VmBackend {
 		proxmoxId?: number,
 		proxmoxNode?: string
 	): Promise<ResolvedVm | null> {
-		if (!proxmoxNode || proxmoxId == null) return null;
+		if (!proxmoxNode || proxmoxId == null) {
+			return null;
+		}
 		const candidate = { node: proxmoxNode, vmid: proxmoxId };
 		try {
 			return (await this.isOwnedBy(id, candidate)) ? candidate : null;
@@ -297,7 +307,7 @@ export class ProxmoxBackend implements VmBackend {
 			(r) => r.type === 'qemu' && stableIdFromTags(r.tags) === expectedStableId
 		);
 
-		if (!match || !match.node || match.vmid == null) {
+		if (!(match && match.node) || match.vmid == null) {
 			throw new VmNotFoundError(`VM "${id}" not found on any Proxmox node`);
 		}
 
@@ -317,7 +327,9 @@ export class ProxmoxBackend implements VmBackend {
 		while (Date.now() < deadline) {
 			const resources = await this.client.getClusterResources('vm');
 			const current = resources.find((resource) => resource.vmid === vmid);
-			if (current?.status === 'running') break;
+			if (current?.status === 'running') {
+				break;
+			}
 			await new Promise((resolve) => setTimeout(resolve, RUNNING_CONFIRMATION_INTERVAL_MS));
 		}
 		clearProxmoxReadCaches();
@@ -333,7 +345,9 @@ export class ProxmoxBackend implements VmBackend {
 		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
 		const config = await this.client.getQemuConfig(node, vmid);
 		const currentDiskGb = parseDiskSizeGb(config.virtio0);
-		if (config.lock || currentDiskGb == null) return false;
+		if (config.lock || currentDiskGb == null) {
+			return false;
+		}
 
 		if (params.diskGb > currentDiskGb) {
 			await this.client.resizeDisk(node, vmid, 'virtio0', `${params.diskGb}G`);
@@ -402,7 +416,9 @@ export class ProxmoxBackend implements VmBackend {
 	}
 
 	private async snippetStorage(node: string) {
-		if (this.options.snippetsStorage) return this.options.snippetsStorage;
+		if (this.options.snippetsStorage) {
+			return this.options.snippetsStorage;
+		}
 
 		const storages = await this.client.listStorage(node);
 		const storage = storages.find(
@@ -426,7 +442,7 @@ export class ProxmoxBackend implements VmBackend {
 		const username = this.options.snippetsEndpointUsername;
 		const password = this.options.snippetsEndpointPassword;
 
-		if (!endpointUrl || !username || !password) {
+		if (!(endpointUrl && username && password)) {
 			throw new Error(
 				'Custom cloud-init snippets require PROXMOX_SNIPPETS_ENDPOINT_URL, PROXMOX_SNIPPETS_ENDPOINT_USERNAME, and PROXMOX_SNIPPETS_ENDPOINT_PASSWORD'
 			);
@@ -467,7 +483,7 @@ export class ProxmoxBackend implements VmBackend {
 		const username = this.options.snippetsEndpointUsername;
 		const password = this.options.snippetsEndpointPassword;
 
-		if (!endpointUrl || !username || !password) {
+		if (!(endpointUrl && username && password)) {
 			throw new Error(
 				'Custom cloud-init snippets require PROXMOX_SNIPPETS_ENDPOINT_URL, PROXMOX_SNIPPETS_ENDPOINT_USERNAME, and PROXMOX_SNIPPETS_ENDPOINT_PASSWORD'
 			);
@@ -513,7 +529,7 @@ export class ProxmoxBackend implements VmBackend {
 	async listUsedProxmoxIds(): Promise<Set<number>> {
 		clearProxmoxReadCaches();
 		const resources = await this.client.getClusterResources('vm');
-		return new Set(resources.flatMap((r) => (r.vmid != null ? [r.vmid] : [])));
+		return new Set(resources.flatMap((r) => (r.vmid == null ? [] : [r.vmid])));
 	}
 
 	private async listSchedulableNodes() {
@@ -524,10 +540,14 @@ export class ProxmoxBackend implements VmBackend {
 		const haStateByNode = new Map(resources.map((r) => [r.node, r.hastate]));
 		const excluded = new Set(this.options.excludedNodes ?? []);
 		const schedulable = nodes.filter((node) => {
-			if (node.status !== 'online') return false;
-			if (excluded.has(node.node)) return false;
+			if (node.status !== 'online') {
+				return false;
+			}
+			if (excluded.has(node.node)) {
+				return false;
+			}
 			const haState = haStateByNode.get(node.node);
-			return !haState || !UNSCHEDULABLE_HA_STATES.has(haState);
+			return !(haState && UNSCHEDULABLE_HA_STATES.has(haState));
 		});
 		if (schedulable.length === 0) {
 			throw new Error(
@@ -861,7 +881,9 @@ export class ProxmoxBackend implements VmBackend {
 		try {
 			resolved = await this.resolveForMutation(id, proxmoxId);
 		} catch (err) {
-			if (err instanceof VmNotFoundError) return;
+			if (err instanceof VmNotFoundError) {
+				return;
+			}
 			throw err;
 		}
 
@@ -870,7 +892,9 @@ export class ProxmoxBackend implements VmBackend {
 		try {
 			await this.ensureVmStopped(node, vmid);
 		} catch (err) {
-			if (err instanceof HTTPError && err.response.status === 404) return;
+			if (err instanceof HTTPError && err.response.status === 404) {
+				return;
+			}
 			throw err;
 		}
 
@@ -878,12 +902,16 @@ export class ProxmoxBackend implements VmBackend {
 	}
 
 	private async destroyVmAndWait(node: string, vmid: number): Promise<void> {
-		await new Promise((r) => setTimeout(r, 3_000));
+		await new Promise((r) => setTimeout(r, 3000));
 		const upid = await this.destroyVm(node, vmid);
-		if (!upid) return;
+		if (!upid) {
+			return;
+		}
 		const status = await this.client.waitForTask(node, upid);
 		const leaked = await this.leakedDisksAfterDestroy(node, upid, status.exitstatus);
-		if (leaked.length > 0) await this.retryLeakedDiskRemoval(node, vmid, leaked);
+		if (leaked.length > 0) {
+			await this.retryLeakedDiskRemoval(node, vmid, leaked);
+		}
 	}
 
 	private async leakedDisksAfterDestroy(
@@ -891,7 +919,9 @@ export class ProxmoxBackend implements VmBackend {
 		upid: string,
 		exitstatus?: string
 	): Promise<string[]> {
-		if (!exitstatus?.startsWith('WARNINGS:')) return [];
+		if (!exitstatus?.startsWith('WARNINGS:')) {
+			return [];
+		}
 		const lines = await this.client.getTaskLog(node, upid);
 		return lines
 			.map((l) => l.t)
@@ -904,14 +934,16 @@ export class ProxmoxBackend implements VmBackend {
 		const storage = config.proxmox.vmDiskStorage;
 		let remaining = disks;
 		for (let attempt = 1; remaining.length > 0 && attempt <= 3; attempt++) {
-			await new Promise((r) => setTimeout(r, 5_000 * attempt));
+			await new Promise((r) => setTimeout(r, 5000 * attempt));
 			const stillLeaked: string[] = [];
 			for (const disk of remaining) {
 				try {
 					const upid = await this.client.deleteStorageVolume(node, storage, `${storage}:${disk}`);
 					await this.client.waitForTask(node, upid);
 				} catch (err) {
-					if (err instanceof HTTPError && err.response.status === 404) continue;
+					if (err instanceof HTTPError && err.response.status === 404) {
+						continue;
+					}
 					stillLeaked.push(disk);
 				}
 			}
@@ -924,21 +956,27 @@ export class ProxmoxBackend implements VmBackend {
 
 	private async ensureVmStopped(node: string, vmid: number): Promise<void> {
 		const status = await this.client.getQemuVm(node, vmid);
-		if (status.status === 'stopped') return;
+		if (status.status === 'stopped') {
+			return;
+		}
 
 		const stopUpid = await this.forceStopVm(node, vmid);
 		try {
 			await this.client.waitForTask(node, stopUpid);
 		} catch (err) {
 			const current = await this.client.getQemuVm(node, vmid);
-			if (current.status !== 'stopped') throw err;
+			if (current.status !== 'stopped') {
+				throw err;
+			}
 		}
 
 		const deadline = Date.now() + 60_000;
 		while (Date.now() < deadline) {
 			const current = await this.client.getQemuVm(node, vmid);
-			if (current.status === 'stopped') return;
-			await new Promise((r) => setTimeout(r, 1_000));
+			if (current.status === 'stopped') {
+				return;
+			}
+			await new Promise((r) => setTimeout(r, 1000));
 		}
 		throw new Error(`VM ${vmid} on node ${node} did not reach stopped state within 60s`);
 	}
@@ -947,7 +985,9 @@ export class ProxmoxBackend implements VmBackend {
 		try {
 			return await this.client.stopVm(node, vmid, { overruleShutdown: true });
 		} catch (err) {
-			if (!(err instanceof HTTPError) || err.response.status !== 400) throw err;
+			if (!(err instanceof HTTPError) || err.response.status !== 400) {
+				throw err;
+			}
 			return await this.client.stopVm(node, vmid);
 		}
 	}
@@ -960,9 +1000,13 @@ export class ProxmoxBackend implements VmBackend {
 					destroyUnreferencedDisks: true
 				});
 			} catch (err) {
-				if (err instanceof HTTPError && err.response.status === 404) return undefined;
-				if (!(err instanceof HTTPError) || attempt >= 3) throw err;
-				await new Promise((r) => setTimeout(r, 2_000));
+				if (err instanceof HTTPError && err.response.status === 404) {
+					return undefined;
+				}
+				if (!(err instanceof HTTPError) || attempt >= 3) {
+					throw err;
+				}
+				await new Promise((r) => setTimeout(r, 2000));
 				await this.ensureVmStopped(node, vmid);
 			}
 		}
@@ -1015,8 +1059,12 @@ export class ProxmoxBackend implements VmBackend {
 			}
 
 			const updates: Record<string, unknown> = {};
-			if (params.cores !== config.cores) updates.cores = params.cores;
-			if (params.memoryMb !== config.memory) updates.memory = params.memoryMb;
+			if (params.cores !== config.cores) {
+				updates.cores = params.cores;
+			}
+			if (params.memoryMb !== config.memory) {
+				updates.memory = params.memoryMb;
+			}
 			if (Object.keys(updates).length > 0) {
 				await this.client.updateQemuConfig(node, vmid, updates);
 			}
@@ -1036,7 +1084,9 @@ const diskSizeUnitsToGb: Record<string, number> = {
 
 function parseDiskSizeGb(driveSpec: string | undefined): number | null {
 	const match = driveSpec?.match(/(?:^|,)size=(\d+(?:\.\d+)?)([KMGT]?)(?:,|$)/i);
-	if (!match) return null;
+	if (!match) {
+		return null;
+	}
 	const amount = Number.parseFloat(match[1]);
 	const unit = match[2].toUpperCase();
 	return Number.isFinite(amount) ? amount * diskSizeUnitsToGb[unit] : null;

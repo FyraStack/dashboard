@@ -1,25 +1,25 @@
+import { waitUntil } from 'cloudflare:workers';
+import { passkey } from '@better-auth/passkey';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { createAuthMiddleware, APIError } from 'better-auth/api';
+import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { deleteSessionCookie, expireCookie } from 'better-auth/cookies';
-import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
-import { passkey } from '@better-auth/passkey';
+import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { and, count, eq, gt } from 'drizzle-orm';
-import { dev } from '$app/env';
-import { waitUntil } from 'cloudflare:workers';
-import { getRequestEvent } from '$app/server';
 import { ac, organizationRoles } from '#lib/auth/organization-permissions.js';
 import OrganizationInvitationEmail from '#lib/emails/organization-invitation.svelte';
 import ResetPasswordEmail from '#lib/emails/reset-password.svelte';
 import VerifyEmail from '#lib/emails/verify-email.svelte';
-import { initDrizzle, type Database } from '#lib/server/db/index.js';
+import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { member, user as userTable, verification } from '#lib/server/db/schema.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { sendSecurityAlertEmail } from '#lib/server/email-notifications.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import { ulid } from '#lib/server/id.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { dev } from '$app/env';
+import { getRequestEvent } from '$app/server';
 
 const PENDING_PASSKEY_COOKIE = 'pending_passkey_2fa';
 const PENDING_PASSKEY_HINT_COOKIE = 'pending_passkey_2fa_hint';
@@ -269,7 +269,9 @@ function buildAuth() {
 							matcher: (context) => context.path === '/sign-in/email',
 							handler: createAuthMiddleware(async (ctx) => {
 								const data = ctx.context.newSession;
-								if (!data) return;
+								if (!data) {
+									return;
+								}
 
 								const userPasskeys = await ctx.context.adapter.findMany({
 									model: 'passkey',
@@ -334,14 +336,18 @@ function buildAuth() {
 							where: [{ field: 'credentialID', value: clientData.id }]
 						})) as PasskeyRecord | null;
 
-						if (!verifiedPasskey) return;
+						if (!verifiedPasskey) {
+							return;
+						}
 
 						if (!pendingUserId) {
 							const sessionToken = await ctx.getSignedCookie(
 								ctx.context.authCookies.sessionToken.name,
 								ctx.context.secret
 							);
-							if (!sessionToken) return;
+							if (!sessionToken) {
+								return;
+							}
 
 							const currentSession = await ctx.context.internalAdapter.findSession(sessionToken);
 							if (currentSession?.user.id !== verifiedPasskey.userId) {

@@ -13,8 +13,8 @@ import {
 	projectBillingCustomers,
 	sshKeys,
 	user,
-	vmTypes,
 	vms,
+	vmTypes,
 	volumes
 } from './schema';
 

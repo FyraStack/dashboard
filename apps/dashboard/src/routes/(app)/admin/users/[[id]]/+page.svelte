@@ -3,19 +3,19 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { authClient } from '$lib/auth-client';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Switch } from '$lib/components/ui/switch';
-	import { Separator } from '$lib/components/ui/separator';
-	import * as Sheet from '$lib/components/ui/sheet';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import { beginDeleteUser, type AdminUser } from '$lib/remote/admin-users.remote';
-	import { getErrorMessage } from '$lib/utils';
-	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
+	import { authClient } from '#lib/auth-client.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import { Separator } from '#lib/components/ui/separator/index.js';
+	import * as Sheet from '#lib/components/ui/sheet/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { beginDeleteUser, type AdminUser } from '#lib/remote/admin-users.remote.js';
+	import { getErrorMessage } from '#lib/utils.js';
+	import { AdminState, type AdminPageData } from '#lib/state/admin.svelte.js';
 	import Calendar from '~icons/nucleo/calendar';
 	import Check from '~icons/lucide/check';
 	import ChevronDown from '~icons/lucide/chevron-down';
@@ -51,17 +51,14 @@
 		admin.sync(data);
 	});
 
-	const usersBase = resolve('/admin/users');
+	const usersBase = resolve('admin/users');
 
 	function openUser(userId: string) {
-		void goto(resolve(`/admin/users/${userId}`), {
-			noScroll: true,
-			keepFocus: true
-		});
+		void goto(resolve(`admin/users/${userId}`), { reset: false });
 	}
 
 	function closeUser() {
-		void goto(usersBase, { noScroll: true, keepFocus: true });
+		void goto(usersBase, { reset: false });
 	}
 
 	$effect(() => {
@@ -103,13 +100,13 @@
 
 		return `Enter the code sent to ${deleteVerificationEmail} to confirm permanently deleting ${deleteUserEmail}.`;
 	});
+
 	const deleteVerificationDisabled = $derived(
 		deleteVerifying ||
 			deletePreparing ||
 			!deleteUserId ||
 			(deleteVerificationMethod !== 'passkey' && normalizedDeleteVerificationCode.length !== 6)
 	);
-
 	const sortedUsers = $derived(
 		[...admin.adminUsers].sort((a, b) => {
 			if (a.isAdmin && !b.isAdmin) return -1;
@@ -790,9 +787,10 @@
 							<span class="text-xs text-muted-foreground">{u.email}</span>
 						</div>
 						<div class="flex items-center justify-between">
-							<span class="flex items-center gap-2 text-xs text-muted-foreground">
-								<Mail class="h-3 w-3" />Verified
-							</span>
+							<span class="flex items-center gap-2 text-xs text-muted-foreground"
+								><Mail class="h-3 w-3" />Verified</span
+							>
+
 							<span
 								class="flex items-center gap-1 text-xs {u.emailVerified
 									? 'text-emerald-400'
@@ -1209,10 +1207,9 @@
 				variant="outline"
 				size="sm"
 				class="border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-				onclick={() => admin.cancel2FAConfirm()}
+				onclick={() => admin.cancel2FAConfirm()}>Cancel</Button
 			>
-				Cancel
-			</Button>
+
 			<Button size="sm" class="text-xs" onclick={() => admin.commit2FAConfirm()}>
 				{#if admin.userSheetSaving[admin.twoFAPendingUserId]?.saving}
 					<Loader2 class="h-3 w-3 animate-spin" />

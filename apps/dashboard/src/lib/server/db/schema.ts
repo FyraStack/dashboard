@@ -15,7 +15,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { organization } from './auth.schema';
-import { ulid } from '$lib/server/id';
+import { ulid } from '#lib/server/id.js';
 
 export * from './auth.schema';
 

@@ -1,14 +1,14 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
 	import { invalidate } from '$app/navigation';
-	import { getServerWithFallback } from '$lib/state/servers.svelte';
-	import { Button } from '$lib/components/ui/button';
-	import { getVm, resizeVm } from '$lib/remote/vms.remote';
-	import { listVmTypes } from '$lib/remote/vm-types.remote';
-	import { findPlanDowngrades } from '$lib/vm-plans';
-	import { getErrorMessage } from '$lib/utils';
+	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { getVm, resizeVm } from '#lib/remote/vms.remote.js';
+	import { listVmTypes } from '#lib/remote/vm-types.remote.js';
+	import { findPlanDowngrades } from '#lib/vm-plans.js';
+	import { getErrorMessage } from '#lib/utils.js';
 	import { toast } from 'svelte-sonner';
-	import { confirmDestructive } from '$lib/confirm.svelte';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
 	import { formatBytes } from '../../lib/server-summary';
 	import Loader2 from '~icons/lucide/loader-2';
 

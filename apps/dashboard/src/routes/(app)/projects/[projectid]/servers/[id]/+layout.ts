@@ -1,6 +1,6 @@
 import type { LayoutLoad } from './$types';
 import { error } from '@sveltejs/kit';
-import { vpsServerTabFeatureFlags } from '$lib/feature-flags';
+import { vpsServerTabFeatureFlags } from '#lib/feature-flags.js';
 
 export const load: LayoutLoad = async ({ params, parent, url }) => {
 	const { featureFlags, projectId, servers } = await parent();

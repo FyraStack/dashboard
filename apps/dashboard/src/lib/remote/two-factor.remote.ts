@@ -1,12 +1,12 @@
 import { command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import TotpResetCodeEmail from '$lib/emails/totp-reset-code.svelte';
-import { initAuth, VERIFIED_2FA_DISABLE_HEADER } from '$lib/server/auth';
-import { initDrizzle } from '$lib/server/db';
-import { sendRenderedEmail } from '$lib/server/email';
-import { sendSecurityAlertEmail } from '$lib/server/email-notifications';
-import { getRuntimeEnv } from '$lib/server/env';
+import TotpResetCodeEmail from '#lib/emails/totp-reset-code.svelte';
+import { initAuth, VERIFIED_2FA_DISABLE_HEADER } from '#lib/server/auth.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { sendRenderedEmail } from '#lib/server/email.js';
+import { sendSecurityAlertEmail } from '#lib/server/email-notifications.js';
+import { getRuntimeEnv } from '#lib/server/env.js';
 import {
 	TOTP_RESET_CODE_TTL_MS,
 	beginTotpReset,
@@ -17,8 +17,8 @@ import {
 	resolvePendingTwoFactorUser,
 	verifyTotpResetCode as verifyTotpResetEmailCode,
 	type TotpResetUser
-} from '$lib/server/totp-reset';
-import { captureServerEvent } from '$lib/server/posthog';
+} from '#lib/server/totp-reset.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 
 const CODE_LENGTH = 6;
 

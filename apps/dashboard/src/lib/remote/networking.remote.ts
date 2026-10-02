@@ -2,13 +2,13 @@ import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { asc, eq } from 'drizzle-orm';
-import { initDrizzle } from '$lib/server/db';
-import { ipamAllocations, ipamPtrRecords, vms } from '$lib/server/db/schema';
-import { requireProjectAccess } from '$lib/server/auth-context';
-import { isBunnyConfigured } from '$lib/server/bunny';
-import { setPtrRecord } from '$lib/server/ptr-records';
-import type { PermissionLevel } from '$lib/auth/organization-permissions';
-import { captureServerEvent } from '$lib/server/posthog';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { ipamAllocations, ipamPtrRecords, vms } from '#lib/server/db/schema.js';
+import { requireProjectAccess } from '#lib/server/auth-context.js';
+import { isBunnyConfigured } from '#lib/server/bunny.js';
+import { setPtrRecord } from '#lib/server/ptr-records.js';
+import type { PermissionLevel } from '#lib/auth/organization-permissions.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 
 async function requireVmAccess(vmId: string, level?: PermissionLevel) {
 	const event = getRequestEvent();

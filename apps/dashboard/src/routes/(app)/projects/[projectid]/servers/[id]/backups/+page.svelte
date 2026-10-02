@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { getServerWithFallback } from '$lib/state/servers.svelte';
-	import { Badge } from '$lib/components/ui/badge';
+	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 
 	let { data } = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));

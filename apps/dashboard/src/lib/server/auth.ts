@@ -6,19 +6,20 @@ import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
 import { passkey } from '@better-auth/passkey';
 import { and, count, eq, gt } from 'drizzle-orm';
-import { dev } from '$app/environment';
+import { dev } from '$app/env';
+import { waitUntil } from 'cloudflare:workers';
 import { getRequestEvent } from '$app/server';
-import { ac, organizationRoles } from '$lib/auth/organization-permissions';
-import OrganizationInvitationEmail from '$lib/emails/organization-invitation.svelte';
-import ResetPasswordEmail from '$lib/emails/reset-password.svelte';
-import VerifyEmail from '$lib/emails/verify-email.svelte';
-import { initDrizzle, type Database } from '$lib/server/db';
-import { member, user as userTable, verification } from '$lib/server/db/schema';
-import { sendRenderedEmail } from '$lib/server/email';
-import { sendSecurityAlertEmail } from '$lib/server/email-notifications';
-import { getRuntimeEnv } from '$lib/server/env';
-import { ulid } from '$lib/server/id';
-import { captureServerEvent } from '$lib/server/posthog';
+import { ac, organizationRoles } from '#lib/auth/organization-permissions.js';
+import OrganizationInvitationEmail from '#lib/emails/organization-invitation.svelte';
+import ResetPasswordEmail from '#lib/emails/reset-password.svelte';
+import VerifyEmail from '#lib/emails/verify-email.svelte';
+import { initDrizzle, type Database } from '#lib/server/db/index.js';
+import { member, user as userTable, verification } from '#lib/server/db/schema.js';
+import { sendRenderedEmail } from '#lib/server/email.js';
+import { sendSecurityAlertEmail } from '#lib/server/email-notifications.js';
+import { getRuntimeEnv } from '#lib/server/env.js';
+import { ulid } from '#lib/server/id.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 
 const PENDING_PASSKEY_COOKIE = 'pending_passkey_2fa';
 const PENDING_PASSKEY_HINT_COOKIE = 'pending_passkey_2fa_hint';
@@ -48,15 +49,7 @@ type PasskeyRecord = {
 };
 
 async function sendAuthEmail(email: Promise<void>) {
-	const event = getRequestEvent();
-	const ctx = event.platform?.ctx;
-
-	if (ctx) {
-		ctx.waitUntil(email);
-		return;
-	}
-
-	await email;
+	waitUntil(email);
 }
 
 function securityAlertDetails() {
@@ -102,7 +95,7 @@ const lazyDb = new Proxy({} as Database, {
 });
 
 async function resyncOwnedProjectBilling(userId: string) {
-	const { updateProjectCustomer } = await import('$lib/server/billing/autumn');
+	const { updateProjectCustomer } = await import('#lib/server/billing/autumn.js');
 	const db = initDrizzle();
 	const owned = await db
 		.select({ organizationId: member.organizationId })
@@ -125,19 +118,15 @@ function buildAuth() {
 		appName: 'Stack',
 		baseURL,
 		secret: env.BETTER_AUTH_SECRET,
-		secrets: [{ version: TOTP_SECRET_KEY_VERSION, value: env.BETTER_AUTH_SECRET }],
+		secrets: [
+			{
+				version: TOTP_SECRET_KEY_VERSION,
+				value: env.BETTER_AUTH_SECRET
+			}
+		],
 		database: drizzleAdapter(db, { provider: 'pg' }),
-		advanced: {
-			database: {
-				generateId: () => ulid()
-			}
-		},
-		session: {
-			cookieCache: {
-				enabled: true,
-				maxAge: 300
-			}
-		},
+		advanced: { database: { generateId: () => ulid() } },
+		session: { cookieCache: { enabled: true, maxAge: 300 } },
 		user: {
 			changeEmail: {
 				enabled: true

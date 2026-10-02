@@ -2,13 +2,13 @@ import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { asc, desc, eq } from 'drizzle-orm';
-import { initDrizzle } from '$lib/server/db';
-import { vmTypes } from '$lib/server/db/schema';
-import { requireAdmin } from '$lib/server/auth-context';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { vmTypes } from '#lib/server/db/schema.js';
+import { requireAdmin } from '#lib/server/auth-context.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureVmTypes
-} from '$lib/server/accessibility-fixtures';
+} from '#lib/server/accessibility-fixtures.js';
 
 type VmTypeRow = {
 	id: string;

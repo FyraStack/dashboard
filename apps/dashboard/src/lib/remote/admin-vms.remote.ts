@@ -2,17 +2,17 @@ import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { desc, eq } from 'drizzle-orm';
-import { requireAdmin } from '$lib/server/auth-context';
-import { initDrizzle } from '$lib/server/db';
-import { member, organization, user, vms, vmTypes } from '$lib/server/db/schema';
-import { getBackend, type VmInfo } from '$lib/server/backends';
-import { queueVmDeletion } from '$lib/server/vm-deletion';
-import { findLiveVm } from '$lib/server/vm-identity';
+import { requireAdmin } from '#lib/server/auth-context.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { member, organization, user, vms, vmTypes } from '#lib/server/db/schema.js';
+import { getBackend, type VmInfo } from '#lib/server/backends/index.js';
+import { queueVmDeletion } from '#lib/server/vm-deletion.js';
+import { findLiveVm } from '#lib/server/vm-identity.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureAdminVms
-} from '$lib/server/accessibility-fixtures';
-import { captureServerEvent } from '$lib/server/posthog';
+} from '#lib/server/accessibility-fixtures.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 
 export type AdminVm = {
 	id: string;

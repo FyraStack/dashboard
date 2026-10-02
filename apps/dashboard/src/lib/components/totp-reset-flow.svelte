@@ -1,23 +1,23 @@
 <script lang="ts">
 	import QRCode from 'qrcode';
 	import { untrack } from 'svelte';
-	import { authClient } from '$lib/auth-client';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
+	import { authClient } from '#lib/auth-client.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 	import {
 		confirmTotpResetChoice,
 		sendTotpResetCode,
 		verifyTotpResetCode
-	} from '$lib/remote/two-factor.remote';
+	} from '#lib/remote/two-factor.remote.js';
 	import {
 		TOTP_RESET_FLOW_STEP_COUNT,
 		totpResetStepLabel,
 		totpResetStepNumber,
 		type TotpResetFlowStep,
 		type TotpResetUiChoice
-	} from '$lib/totp-reset-flow';
-	import { getErrorMessage } from '$lib/utils';
+	} from '#lib/totp-reset-flow.js';
+	import { getErrorMessage } from '#lib/utils.js';
 	import Check from '~icons/lucide/check';
 	import Minus from '~icons/lucide/minus';
 	import Copy from '~icons/nucleo/copy';

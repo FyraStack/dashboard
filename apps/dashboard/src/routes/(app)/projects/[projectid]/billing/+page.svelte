@@ -1,8 +1,8 @@
 <script lang="ts">
-	import BillingSetupDialog from '$lib/components/billing-setup-dialog.svelte';
-	import BuyCreditsDialog from '$lib/components/buy-credits-dialog.svelte';
-	import { openBillingPortal } from '$lib/remote/billing.remote';
-	import { getErrorMessage } from '$lib/utils';
+	import BillingSetupDialog from '#lib/components/billing-setup-dialog.svelte';
+	import BuyCreditsDialog from '#lib/components/buy-credits-dialog.svelte';
+	import { openBillingPortal } from '#lib/remote/billing.remote.js';
+	import { getErrorMessage } from '#lib/utils.js';
 	import DollarSign from '~icons/nucleo/dollar-sign';
 	import Cpu from '~icons/nucleo/cpu';
 	import CreditCard from '~icons/nucleo/credit-card';

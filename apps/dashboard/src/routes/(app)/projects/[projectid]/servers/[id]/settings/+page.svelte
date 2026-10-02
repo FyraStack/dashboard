@@ -7,16 +7,16 @@
 		getServer,
 		getServerWithFallback,
 		requestServerStatusRefresh
-	} from '$lib/state/servers.svelte';
-	import { Button } from '$lib/components/ui/button';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Switch } from '$lib/components/ui/switch';
-	import { confirmDestructive } from '$lib/confirm.svelte';
-	import { deleteVm, renameVm } from '$lib/remote/vms.remote';
-	import { isValidPtrHostname } from '$lib/ptr';
-	import { getErrorMessage } from '$lib/utils';
+	} from '#lib/state/servers.svelte.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { deleteVm, renameVm } from '#lib/remote/vms.remote.js';
+	import { isValidPtrHostname } from '#lib/ptr.js';
+	import { getErrorMessage } from '#lib/utils.js';
 	import { toast } from 'svelte-sonner';
 	import Check from '~icons/lucide/check';
 	import X from '~icons/lucide/x';
@@ -119,9 +119,8 @@
 			if (current) current.status = 'deleting';
 			requestServerStatusRefresh();
 			if (page.params.projectid !== projectId || page.params.id !== server.id) return;
-			await goto(resolve(`/projects/${projectId}/servers`), {
-				invalidate: ['project:vms']
-			});
+
+			await goto(resolve(`projects/${projectId}/servers`), { invalidate: ['project:vms'] });
 		} catch {
 			deleteError = 'Failed to delete server.';
 			deleting = false;
@@ -178,10 +177,8 @@
 					class="size-7 p-0"
 					disabled={selectedServer.status === 'provisioning' ||
 						selectedServer.status === 'deleting'}
-					onclick={() => (editingName = true)}
+					onclick={() => (editingName = true)}><Pencil class="size-3" /></Button
 				>
-					<Pencil class="size-3" />
-				</Button>
 			{/if}
 		</div>
 		<p class="text-base text-pretty text-muted-foreground sm:text-sm">
@@ -263,6 +260,7 @@
 			<Button variant="outline" size="sm" disabled={renaming} onclick={closeRenameDialog}
 				>Cancel</Button
 			>
+
 			<Button
 				size="sm"
 				loading={renaming}

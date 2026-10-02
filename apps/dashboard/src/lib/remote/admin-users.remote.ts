@@ -2,14 +2,14 @@ import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { asc, count, desc, eq } from 'drizzle-orm';
-import AdminUserDeletionCodeEmail from '$lib/emails/admin-user-deletion-code.svelte';
+import AdminUserDeletionCodeEmail from '#lib/emails/admin-user-deletion-code.svelte';
 import {
 	ADMIN_VERIFICATION_CODE_TTL_MS,
 	beginAdminVerification,
 	consumeAdminVerification
-} from '$lib/server/admin-verification';
-import { hasAdminRole, requireAdmin } from '$lib/server/auth-context';
-import { initDrizzle } from '$lib/server/db';
+} from '#lib/server/admin-verification.js';
+import { hasAdminRole, requireAdmin } from '#lib/server/auth-context.js';
+import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	account,
 	apiTokens,
@@ -21,15 +21,15 @@ import {
 	user,
 	volumes,
 	vms
-} from '$lib/server/db/schema';
-import { updateProjectCustomer } from '$lib/server/billing/autumn';
-import { sendRenderedEmail } from '$lib/server/email';
-import { softDeleteOrganizationResources } from '$lib/server/project-deletion';
+} from '#lib/server/db/schema.js';
+import { updateProjectCustomer } from '#lib/server/billing/autumn.js';
+import { sendRenderedEmail } from '#lib/server/email.js';
+import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureAdminUsers
-} from '$lib/server/accessibility-fixtures';
-import { captureServerEvent } from '$lib/server/posthog';
+} from '#lib/server/accessibility-fixtures.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 
 export type UserSession = {
 	id: string;

@@ -2,17 +2,17 @@ import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { and, desc, eq, gt, lte, sql } from 'drizzle-orm';
-import { requireAdmin } from '$lib/server/auth-context';
-import { initDrizzle } from '$lib/server/db';
+import { requireAdmin } from '#lib/server/auth-context.js';
+import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	billingMeters,
 	billingUsageEvents,
 	organization,
 	vms,
 	vmTypes
-} from '$lib/server/db/schema';
-import { capHoursFor } from '$lib/server/billing/caps';
-import { syncUsageEvent } from '$lib/server/billing/metering';
+} from '#lib/server/db/schema.js';
+import { capHoursFor } from '#lib/server/billing/caps.js';
+import { syncUsageEvent } from '#lib/server/billing/metering.js';
 
 export type VmBillingUsage = {
 	vmId: string;

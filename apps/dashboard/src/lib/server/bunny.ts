@@ -1,5 +1,5 @@
 import ky, { type KyInstance } from 'ky';
-import { getRuntimeEnv } from '$lib/server/env';
+import { getRuntimeEnv } from '#lib/server/env.js';
 
 export const bunnyDnsRecordTypePtr = 10;
 

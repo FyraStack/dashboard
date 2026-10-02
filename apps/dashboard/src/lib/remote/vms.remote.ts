@@ -2,37 +2,37 @@ import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { eq, inArray, sql } from 'drizzle-orm';
-import { initDrizzle, type Database } from '$lib/server/db';
-import { runInBackground } from '$lib/server/background';
-import { vms, vmTypes, sshKeys, ipamAllocations } from '$lib/server/db/schema';
+import { initDrizzle, type Database } from '#lib/server/db/index.js';
+import { runInBackground } from '#lib/server/background.js';
+import { vms, vmTypes, sshKeys, ipamAllocations } from '#lib/server/db/schema.js';
 import {
 	getBackend,
 	VmResizeError,
 	type VmBackend,
 	type VmInfo,
 	type VmMetricsTimeframe
-} from '$lib/server/backends';
-import { requireProjectAccess } from '$lib/server/auth-context';
+} from '#lib/server/backends/index.js';
+import { requireProjectAccess } from '#lib/server/auth-context.js';
 import {
 	isProjectBillingExempt,
 	requireProjectBillingActive,
 	isBillingConfigured
-} from '$lib/server/billing/autumn';
-import { queueVmDeletion } from '$lib/server/vm-deletion';
-import { findLiveVm } from '$lib/server/vm-identity';
+} from '#lib/server/billing/autumn.js';
+import { queueVmDeletion } from '#lib/server/vm-deletion.js';
+import { findLiveVm } from '#lib/server/vm-identity.js';
 import {
 	isProvisioningStalled,
 	provisionVm,
 	resumeStalledProvisioning
-} from '$lib/server/vm-provisioning';
-import { findPlanDowngrades } from '$lib/vm-plans';
-import { isValidPtrHostname } from '$lib/ptr';
-import { instrument, timingLog } from '$lib/server/observability';
+} from '#lib/server/vm-provisioning.js';
+import { findPlanDowngrades } from '#lib/vm-plans.js';
+import { isValidPtrHostname } from '#lib/ptr.js';
+import { instrument, timingLog } from '#lib/server/observability.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureServers
-} from '$lib/server/accessibility-fixtures';
-import { captureServerEvent } from '$lib/server/posthog';
+} from '#lib/server/accessibility-fixtures.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 
 type VmRow = {
 	id: string;

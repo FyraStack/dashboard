@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { getServerWithFallback } from '$lib/state/servers.svelte';
-	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
-	import Icon from '$lib/components/icon.svelte';
-	import ComingSoon from '$lib/components/coming-soon.svelte';
+	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import Icon from '#lib/components/icon.svelte';
+	import ComingSoon from '#lib/components/coming-soon.svelte';
 	import {
 		officialImages,
 		imageTypeColors,
 		type OfficialImage,
 		type ImageType
-	} from '$lib/data/images';
+	} from '#lib/data/images.js';
 	import ChevronLeft from '~icons/lucide/chevron-left';
 	import ChevronRight from '~icons/lucide/chevron-right';
 	import Disc from '~icons/nucleo/disc';

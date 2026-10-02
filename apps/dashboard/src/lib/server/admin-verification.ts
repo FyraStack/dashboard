@@ -1,10 +1,10 @@
 import { error } from '@sveltejs/kit';
 import { and, eq, gt } from 'drizzle-orm';
 import { getRequestEvent } from '$app/server';
-import { initAuth } from '$lib/server/auth';
-import type { initDrizzle } from '$lib/server/db';
-import { passkey, twoFactor, verification } from '$lib/server/db/schema';
-import { ulid } from '$lib/server/id';
+import { initAuth } from '#lib/server/auth.js';
+import type { initDrizzle } from '#lib/server/db/index.js';
+import { passkey, twoFactor, verification } from '#lib/server/db/schema.js';
+import { ulid } from '#lib/server/id.js';
 
 export const ADMIN_VERIFICATION_CODE_LENGTH = 6;
 export const ADMIN_VERIFICATION_CODE_TTL_MS = 10 * 60 * 1000;

@@ -1,23 +1,23 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { confirmDestructive } from '$lib/confirm.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
 	import {
 		CAMPAIGN_BATCH_SIZE,
 		campaignTemplates,
 		extractPlaceholders,
 		fieldToken
-	} from '$lib/emails/campaign-registry';
+	} from '#lib/emails/campaign-registry.js';
 	import {
 		previewCampaignEmail,
 		renderCampaignEditor,
 		sendCampaignEmails
-	} from '$lib/remote/email-campaign.remote';
-	import { getErrorMessage } from '$lib/utils';
-	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
+	} from '#lib/remote/email-campaign.remote.js';
+	import { getErrorMessage } from '#lib/utils.js';
+	import { AdminState, type AdminPageData } from '#lib/state/admin.svelte.js';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';

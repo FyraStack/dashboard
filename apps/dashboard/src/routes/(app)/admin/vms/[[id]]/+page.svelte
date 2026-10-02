@@ -2,15 +2,15 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Switch } from '$lib/components/ui/switch';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import VmBillingReversalDialog from '$lib/components/admin/vm-billing-reversal-dialog.svelte';
-	import VmDetailSheet from '$lib/components/admin/vm-detail-sheet.svelte';
-	import type { AdminVm } from '$lib/remote/admin-vms.remote';
-	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import VmBillingReversalDialog from '#lib/components/admin/vm-billing-reversal-dialog.svelte';
+	import VmDetailSheet from '#lib/components/admin/vm-detail-sheet.svelte';
+	import type { AdminVm } from '#lib/remote/admin-vms.remote.js';
+	import { AdminState, type AdminPageData } from '#lib/state/admin.svelte.js';
 	import Check from '~icons/lucide/check';
 	import ChevronDown from '~icons/lucide/chevron-down';
 	import Loader2 from '~icons/lucide/loader-2';
@@ -86,6 +86,7 @@
 			if (statusFilter !== 'all' && statusInfo(vm).label !== statusFilter) return false;
 			const term = search.trim().toLowerCase();
 			if (!term) return true;
+
 			return [vm.name, vm.projectName, vm.ownerName, vm.ownerEmail, vm.lastKnownIpv4, vm.id]
 				.filter(Boolean)
 				.some((value) => value!.toLowerCase().includes(term));
@@ -159,17 +160,18 @@
 		reversalOpen = true;
 	}
 
-	const vmsBase = resolve('/admin/vms');
+	const vmsBase = resolve('admin/vms');
+
 	const selectedVm = $derived(
 		page.params.id ? (admin.adminVms.find((vm) => vm.id === page.params.id) ?? null) : null
 	);
 
 	function openVmSheet(vm: AdminVm) {
-		void goto(resolve(`/admin/vms/${vm.id}`), { noScroll: true, keepFocus: true });
+		void goto(resolve(`admin/vms/${vm.id}`), { reset: false });
 	}
 
 	function closeVmSheet() {
-		void goto(vmsBase, { noScroll: true, keepFocus: true });
+		void goto(vmsBase, { reset: false });
 	}
 
 	function openDeleteDialog(vm: AdminVm) {

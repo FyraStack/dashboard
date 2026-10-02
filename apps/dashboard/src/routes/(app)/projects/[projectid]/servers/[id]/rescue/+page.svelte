@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { getServerWithFallback } from '$lib/state/servers.svelte';
-	import { Button } from '$lib/components/ui/button';
-	import { Switch } from '$lib/components/ui/switch';
+	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
 
 	let { data } = $props();
 	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));

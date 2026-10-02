@@ -1,19 +1,19 @@
 <script lang="ts">
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Badge } from '$lib/components/ui/badge';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import {
 		updateProject as updateProjectRpc,
 		deleteProject as deleteProjectRpc,
 		addMember as addMemberRpc,
 		updateMemberRole as updateMemberRoleRpc,
 		removeMember as removeMemberRpc
-	} from '$lib/remote/projects.remote';
+	} from '#lib/remote/projects.remote.js';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
@@ -21,8 +21,8 @@
 	import Trash2 from '~icons/nucleo/trash';
 	import User from '~icons/nucleo/user';
 	import { toast } from 'svelte-sonner';
-	import { getErrorMessage } from '$lib/utils';
-	import { projectRoleLabels } from '$lib/auth/organization-permissions';
+	import { getErrorMessage } from '#lib/utils.js';
+	import { projectRoleLabels } from '#lib/auth/organization-permissions.js';
 
 	let { data } = $props();
 
@@ -102,7 +102,7 @@
 		deleting = true;
 		try {
 			await deleteProjectRpc({ projectId });
-			await goto(resolve('/'));
+			await goto(resolve(''));
 		} catch (e) {
 			toast.error(getErrorMessage(e, 'Failed to delete project'));
 		} finally {

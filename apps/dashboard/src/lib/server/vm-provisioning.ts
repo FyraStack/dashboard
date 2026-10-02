@@ -2,26 +2,26 @@ import { error } from '@sveltejs/kit';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { InferSelectModel } from 'drizzle-orm';
 import { getRequestEvent } from '$app/server';
-import { runInBackground } from '$lib/server/background';
-import { getBackend } from '$lib/server/backends';
+import { runInBackground } from '#lib/server/background.js';
+import { getBackend } from '#lib/server/backends/index.js';
 import {
 	deleteProjectServerEntity,
 	ensureProjectServerEntity,
 	isBillingConfigured
-} from '$lib/server/billing/autumn';
-import { createBillingMeter } from '$lib/server/billing/metering';
-import { closeRequestDb, initDrizzle, type Database } from '$lib/server/db';
-import { baseImages, vms, vmTypes } from '$lib/server/db/schema';
+} from '#lib/server/billing/autumn.js';
+import { createBillingMeter } from '#lib/server/billing/metering.js';
+import { closeRequestDb, initDrizzle, type Database } from '#lib/server/db/index.js';
+import { baseImages, vms, vmTypes } from '#lib/server/db/schema.js';
 import {
 	allocateVmNetworking,
 	createVyosDelegatedRoute,
 	ensureVmDelegatedRoute,
 	generateMacAddress,
 	releaseVmNetworking
-} from '$lib/server/ipam';
-import { applyDefaultPtrRecords } from '$lib/server/ptr-records';
-import { allocateProxmoxVmid } from '$lib/server/vm-identity';
-import { config } from '$lib/server/config';
+} from '#lib/server/ipam.js';
+import { applyDefaultPtrRecords } from '#lib/server/ptr-records.js';
+import { allocateProxmoxVmid } from '#lib/server/vm-identity.js';
+import { config } from '#lib/server/config.js';
 
 export type ProvisionVmInput = {
 	projectId: string;

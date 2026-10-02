@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getServerWithFallback } from '$lib/state/servers.svelte';
+	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 	import Terminal from '~icons/nucleo/terminal';
 
 	let { data } = $props();

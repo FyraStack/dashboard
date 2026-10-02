@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import * as Dialog from '$lib/components/ui/dialog';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import GripVertical from '~icons/lucide/grip-vertical';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
@@ -15,7 +15,7 @@
 	import RefreshCw from '~icons/nucleo/refresh-cw';
 	import Trash2 from '~icons/nucleo/trash';
 	import Upload from '~icons/nucleo/upload';
-	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
+	import { AdminState, type AdminPageData } from '#lib/state/admin.svelte.js';
 
 	let { data }: { data: AdminPageData } = $props();
 	const admin = new AdminState(untrack(() => data));

@@ -1,8 +1,8 @@
-import { error, json, type RequestHandler } from '@sveltejs/kit';
-import { env } from '$env/dynamic/public';
+import { error, type RequestHandler } from '@sveltejs/kit';
+import { PUBLIC_SENTRY_DSN } from '$app/env/public';
 
 function allowedProject(): { host: string; projectId: string } | null {
-	const dsn = env.PUBLIC_SENTRY_DSN;
+	const dsn = PUBLIC_SENTRY_DSN;
 	if (!dsn) return null;
 	const url = new URL(dsn);
 	return { host: url.hostname, projectId: url.pathname.replace(/^\//, '') };
@@ -37,5 +37,5 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
 		throw error(502, `Sentry rejected the envelope (${upstream.status})`);
 	}
 
-	return json({});
+	return Response.json({});
 };

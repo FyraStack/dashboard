@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { PageProps } from './$types';
-	import { getServerWithFallback } from '$lib/state/servers.svelte';
-	import { setVmPtrRecord } from '$lib/remote/networking.remote';
-	import { Button } from '$lib/components/ui/button';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { Input } from '$lib/components/ui/input';
-	import * as InputGroup from '$lib/components/ui/input-group';
-	import { getErrorMessage } from '$lib/utils';
+	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
+	import { setVmPtrRecord } from '#lib/remote/networking.remote.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import { getErrorMessage } from '#lib/utils.js';
 	import { toast } from 'svelte-sonner';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';

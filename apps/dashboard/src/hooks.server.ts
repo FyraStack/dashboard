@@ -1,18 +1,21 @@
-import { redirect, type Handle, type HandleServerError } from '@sveltejs/kit';
-import { sequence } from '@sveltejs/kit/hooks';
+import { redirect } from '@sveltejs/kit';
+import { waitUntil } from 'cloudflare:workers';
+import { sequence, type Handle, type HandleServerError } from '@sveltejs/kit/hooks';
+
 import { handleErrorWithSentry, initCloudflareSentryHandle, sentryHandle } from '@sentry/sveltekit';
-import { building, dev } from '$app/environment';
-import { env as publicEnv } from '$env/dynamic/public';
-import { handlePostHogProxy } from '$lib/server/posthog-proxy';
-import { captureServerException } from '$lib/server/posthog';
-import { getCachedAuthSession, hasAuthSessionCookie } from '$lib/server/auth-lite';
-import { closeRequestDb } from '$lib/server/db';
-import { instrument, timingLog } from '$lib/server/observability';
+
+import { building, dev } from '$app/env';
+import { PUBLIC_SENTRY_DSN } from '$app/env/public';
+import { handlePostHogProxy } from '#lib/server/posthog-proxy.js';
+import { captureServerException } from '#lib/server/posthog.js';
+import { getCachedAuthSession, hasAuthSessionCookie } from '#lib/server/auth-lite.js';
+import { closeRequestDb } from '#lib/server/db/index.js';
+import { instrument, timingLog } from '#lib/server/observability.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureSession,
 	accessibilityFixtureUser
-} from '$lib/server/accessibility-fixtures';
+} from '#lib/server/accessibility-fixtures.js';
 
 const publicRoutes = [
 	'/health',
@@ -39,15 +42,12 @@ function scheduleAuthPrewarm(
 	if (authPrewarmScheduled) return;
 	authPrewarmScheduled = true;
 
-	const ctx = event.platform?.ctx;
-	if (!ctx) return;
-
-	ctx.waitUntil(
+	waitUntil(
 		instrument(
 			'auth.prewarm',
 			async () => {
 				const [{ initAuth }] = await Promise.all([
-					import('$lib/server/auth'),
+					import('#lib/server/auth.js'),
 					import('better-auth/svelte-kit')
 				]);
 				initAuth();
@@ -66,7 +66,7 @@ async function runFullAuth(
 ) {
 	const [{ initAuth }, { svelteKitHandler }] = await instrument(
 		'auth.full.import',
-		() => Promise.all([import('$lib/server/auth'), import('better-auth/svelte-kit')]),
+		() => Promise.all([import('#lib/server/auth.js'), import('better-auth/svelte-kit')]),
 		requestAttrs
 	);
 
@@ -172,14 +172,13 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 let sentryRequestHandle: Handle | undefined;
 
 const handleSentryInit: Handle = (input) => {
-	if (!publicEnv.PUBLIC_SENTRY_DSN) return input.resolve(input.event);
+	if (!PUBLIC_SENTRY_DSN) return input.resolve(input.event);
 
-	sentryRequestHandle ??= initCloudflareSentryHandle({
-		dsn: publicEnv.PUBLIC_SENTRY_DSN,
-		environment: dev ? 'development' : 'production',
-		sendDefaultPii: false
-	});
-	return sentryRequestHandle(input);
+	const requestHandle = (sentryRequestHandle ??= initCloudflareSentryHandle({
+		dsn: PUBLIC_SENTRY_DSN,
+		environment: dev ? 'development' : 'production'
+	}));
+	return requestHandle(input);
 };
 
 export const handle: Handle = sequence(
@@ -189,7 +188,10 @@ export const handle: Handle = sequence(
 	handleBetterAuth
 );
 
-const logServerError: HandleServerError = ({ error, event }) => {
+const logServerError: HandleServerError = ({ kind, error, event }) => {
+	// Kit 3 also passes expected (app, framework and validation) errors here
+	if (kind !== 'unknown') return;
+
 	console.error('Unhandled server error', { pathname: event.url.pathname, error });
 	captureServerException(error, event);
 };

@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
-import type { Database } from '$lib/server/db';
-import type { VmBackend, VmInfo } from '$lib/server/backends';
+import type { Database } from '#lib/server/db/index.js';
+import type { VmBackend, VmInfo } from '#lib/server/backends/index.js';
 
 export function findLiveVm<T extends VmInfo>(liveVms: T[], row: { id: string }): T | null {
 	const stableId = row.id.toLowerCase();

@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { authClient } from '$lib/auth-client';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import TotpResetFlow from '$lib/components/totp-reset-flow.svelte';
+	import { authClient } from '#lib/auth-client.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import TotpResetFlow from '#lib/components/totp-reset-flow.svelte';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertCircle from '~icons/nucleo/alert-circle';
 	import ShieldCheck from '~icons/nucleo/shield-check';
@@ -38,7 +38,7 @@
 			return;
 		}
 
-		goto(redirectTo);
+		goto(redirectTo).catch(() => goto('/'));
 	}
 </script>
 
@@ -71,7 +71,7 @@
 				<TotpResetFlow
 					centered
 					userEmail={data.resetEmail}
-					onComplete={() => goto(redirectTo)}
+					onComplete={() => goto(redirectTo).catch(() => goto('/'))}
 					onPasskeyChallenge={() => goto(passkeyHref)}
 				/>
 			</div>

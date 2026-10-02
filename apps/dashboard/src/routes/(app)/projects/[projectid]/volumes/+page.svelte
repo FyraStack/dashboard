@@ -1,19 +1,19 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import CreateVolumeDialog from '$lib/components/dialogs/create-volume-dialog.svelte';
-	import AttachVolumeDialog from '$lib/components/dialogs/attach-volume-dialog.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import CreateVolumeDialog from '#lib/components/dialogs/create-volume-dialog.svelte';
+	import AttachVolumeDialog from '#lib/components/dialogs/attach-volume-dialog.svelte';
 	import {
 		attachVolume as attachProjectVolume,
 		createVolume as createProjectVolume,
 		deleteVolume as deleteProjectVolume,
 		detachVolume as detachProjectVolume
-	} from '$lib/remote/volumes.remote';
-	import { getErrorMessage } from '$lib/utils';
-	import { confirmDestructive } from '$lib/confirm.svelte';
+	} from '#lib/remote/volumes.remote.js';
+	import { getErrorMessage } from '#lib/utils.js';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
 	import { untrack } from 'svelte';
 	import Plus from '~icons/lucide/plus';
 	import HardDrive from '~icons/nucleo/hard-drive';

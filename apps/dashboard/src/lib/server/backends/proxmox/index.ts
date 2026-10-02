@@ -3,9 +3,9 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { Address6 } from 'ip-address';
 import type { Fetcher } from '@cloudflare/workers-types';
 
-import { config } from '$lib/server/config';
-import { createVpcFetch, insecureDirectFetch } from '$lib/server/vpc';
-import { instrument } from '$lib/server/observability';
+import { config } from '#lib/server/config.js';
+import { createVpcFetch, insecureDirectFetch } from '#lib/server/vpc.js';
+import { instrument } from '#lib/server/observability.js';
 import { ProxmoxClient } from './client';
 import type { PveClusterResource } from './types';
 import type {

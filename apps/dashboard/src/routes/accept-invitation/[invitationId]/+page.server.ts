@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import { APIError } from 'better-auth/api';
 import type { PageServerLoad } from './$types';
-import { initAuth } from '$lib/server/auth';
+import { initAuth } from '#lib/server/auth.js';
 
 export const load: PageServerLoad = async ({ locals, params, request }) => {
 	const redirectTo = `/accept-invitation/${params.invitationId}`;

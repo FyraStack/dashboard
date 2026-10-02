@@ -1,26 +1,26 @@
 import { command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import AdminUserDeletionCodeEmail from '$lib/emails/admin-user-deletion-code.svelte';
-import BillingNoticeEmail from '$lib/emails/billing-notice.svelte';
-import BillingReminderEmail from '$lib/emails/billing-reminder.svelte';
-import EmptyEmail from '$lib/emails/empty.svelte';
-import OrganizationInvitationEmail from '$lib/emails/organization-invitation.svelte';
-import PasswordChangeCodeEmail from '$lib/emails/password-change-code.svelte';
-import ResetPasswordEmail from '$lib/emails/reset-password.svelte';
-import SecurityAlertEmail from '$lib/emails/security-alert.svelte';
-import ServiceDisruptionEmail from '$lib/emails/service-disruption.svelte';
-import VerifyEmailEmail from '$lib/emails/verify-email.svelte';
+import AdminUserDeletionCodeEmail from '#lib/emails/admin-user-deletion-code.svelte';
+import BillingNoticeEmail from '#lib/emails/billing-notice.svelte';
+import BillingReminderEmail from '#lib/emails/billing-reminder.svelte';
+import EmptyEmail from '#lib/emails/empty.svelte';
+import OrganizationInvitationEmail from '#lib/emails/organization-invitation.svelte';
+import PasswordChangeCodeEmail from '#lib/emails/password-change-code.svelte';
+import ResetPasswordEmail from '#lib/emails/reset-password.svelte';
+import SecurityAlertEmail from '#lib/emails/security-alert.svelte';
+import ServiceDisruptionEmail from '#lib/emails/service-disruption.svelte';
+import VerifyEmailEmail from '#lib/emails/verify-email.svelte';
 import {
 	applyPlaceholders,
 	CAMPAIGN_BATCH_SIZE,
 	campaignTemplates,
 	fieldToken,
 	type CampaignTemplate
-} from '$lib/emails/campaign-registry';
-import { requireAdmin } from '$lib/server/auth-context';
-import { initDrizzle } from '$lib/server/db';
-import { emailToPlainText, renderEmail, sendEmail } from '$lib/server/email';
+} from '#lib/emails/campaign-registry.js';
+import { requireAdmin } from '#lib/server/auth-context.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { emailToPlainText, renderEmail, sendEmail } from '#lib/server/email.js';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

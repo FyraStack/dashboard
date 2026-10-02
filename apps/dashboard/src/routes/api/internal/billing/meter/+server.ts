@@ -1,18 +1,18 @@
-import { error, json } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import {
 	meterActiveResources,
 	reconcileOrphanedMeters,
 	syncPendingUsage
-} from '$lib/server/billing/metering';
-import { purgeExpiredDeletedVms } from '$lib/server/vm-deletion';
-import { purgeExpiredDeletedOrganizations } from '$lib/server/project-deletion';
+} from '#lib/server/billing/metering.js';
+import { purgeExpiredDeletedVms } from '#lib/server/vm-deletion.js';
+import { purgeExpiredDeletedOrganizations } from '#lib/server/project-deletion.js';
 import {
 	isBillingConfigured,
 	retryOrphanedProjectBillingCancellations
-} from '$lib/server/billing/autumn';
-import { enforceProjectBillingGrace } from '$lib/server/billing/enforcement';
-import { getRuntimeEnv } from '$lib/server/env';
+} from '#lib/server/billing/autumn.js';
+import { enforceProjectBillingGrace } from '#lib/server/billing/enforcement.js';
+import { getRuntimeEnv } from '#lib/server/env.js';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const secret = getRuntimeEnv().INTERNAL_CRON_SECRET;
@@ -43,5 +43,13 @@ export const POST: RequestHandler = async ({ request }) => {
 		return { purged: 0, failed: true };
 	});
 
-	return json({ reconciled, metered, synced, cancellations, enforcement, purge, projectPurge });
+	return Response.json({
+		reconciled,
+		metered,
+		synced,
+		cancellations,
+		enforcement,
+		purge,
+		projectPurge
+	});
 };

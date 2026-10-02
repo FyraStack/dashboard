@@ -3,12 +3,12 @@
 	import CreditCard from '~icons/nucleo/credit-card';
 	import Info from '~icons/nucleo/info';
 	import ShieldAlert from '~icons/nucleo/shield-alert';
-	import { Button } from '$lib/components/ui/button';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { openBillingPortal, setupProjectBillingPayment } from '$lib/remote/billing.remote';
-	import { getErrorMessage } from '$lib/utils';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { openBillingPortal, setupProjectBillingPayment } from '#lib/remote/billing.remote.js';
+	import { getErrorMessage } from '#lib/utils.js';
 
 	type Mode = 'server-create' | 'billing-page';
 

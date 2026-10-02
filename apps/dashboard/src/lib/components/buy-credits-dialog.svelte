@@ -1,12 +1,12 @@
 <script lang="ts">
 	import Loader2 from '~icons/lucide/loader-2';
 	import DollarSign from '~icons/nucleo/dollar-sign';
-	import { Button } from '$lib/components/ui/button';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { purchaseCredits } from '$lib/remote/billing.remote';
-	import { getErrorMessage } from '$lib/utils';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { purchaseCredits } from '#lib/remote/billing.remote.js';
+	import { getErrorMessage } from '#lib/utils.js';
 
 	let {
 		open = $bindable(false),

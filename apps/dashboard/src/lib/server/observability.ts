@@ -1,6 +1,6 @@
-import { dev } from '$app/environment';
-import { getRequestEvent } from '$app/server';
-import { env as privateEnv } from '$env/dynamic/private';
+import { dev } from '$app/env';
+import { env as platformEnv } from 'cloudflare:workers';
+import { STACK_TIMING_SPAM } from '$app/env/private';
 
 type SpanAttributes = Record<string, string | number | boolean | undefined>;
 
@@ -21,9 +21,9 @@ function roundMs(value: number): number {
 function timingLogsEnabled(): boolean {
 	let value: string | undefined;
 	try {
-		value = getRequestEvent().platform?.env?.STACK_TIMING_SPAM;
+		value = platformEnv.STACK_TIMING_SPAM;
 	} catch {}
-	value ??= privateEnv.STACK_TIMING_SPAM;
+	value ??= STACK_TIMING_SPAM;
 	return value === undefined ? dev : value === 'true';
 }
 

@@ -1,10 +1,10 @@
 import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
-import { getProject } from '$lib/remote/projects.remote';
+import { getProject } from '#lib/remote/projects.remote.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureProjectDetails
-} from '$lib/server/accessibility-fixtures';
+} from '#lib/server/accessibility-fixtures.js';
 
 export const load: PageServerLoad = async ({ params, parent }) => {
 	const { projects } = await parent();

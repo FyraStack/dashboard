@@ -1,5 +1,5 @@
 import type { PageLoad } from './$types';
-import { getVmNetworking } from '$lib/remote/networking.remote';
+import { getVmNetworking } from '#lib/remote/networking.remote.js';
 
 export const load: PageLoad = async ({ params }) => {
 	const networking = await getVmNetworking({ vmId: params.id }).catch((error) => {

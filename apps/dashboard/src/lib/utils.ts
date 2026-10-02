@@ -1,6 +1,6 @@
+import type { RemoteQuery } from '$app/server';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import type { RemoteQuery } from '@sveltejs/kit';
 
 type ClientTimingAttributes = Record<string, string | number | boolean | undefined>;
 

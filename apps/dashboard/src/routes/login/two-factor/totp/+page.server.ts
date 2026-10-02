@@ -1,8 +1,8 @@
 import { redirect } from '@sveltejs/kit';
-import { initDrizzle } from '$lib/server/db';
-import { getRuntimeEnv } from '$lib/server/env';
-import { requiresTotpReset, resolvePendingTwoFactorUser } from '$lib/server/totp-reset';
-import { maskEmail } from '$lib/totp-reset-flow';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { getRuntimeEnv } from '#lib/server/env.js';
+import { requiresTotpReset, resolvePendingTwoFactorUser } from '#lib/server/totp-reset.js';
+import { maskEmail } from '#lib/totp-reset-flow.js';
 import type { PageServerLoad } from './$types';
 
 const pendingPasskeyHintCookie = 'pending_passkey_2fa_hint';

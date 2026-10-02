@@ -1,3 +1,5 @@
+import type { ReadonlyURL } from '$app/state';
+
 export type UserSettingsTab = 'profile' | 'security' | 'keys' | 'api' | 'appearance';
 
 const queryParam = 'user-settings';
@@ -26,14 +28,14 @@ export function parseUserSettingsTab(value: string | null): UserSettingsTab | nu
 	}
 }
 
-export function userSettingsHref(tab: UserSettingsTab, url: URL): string {
-	const next = new URL(url);
+export function userSettingsHref(tab: UserSettingsTab, url: ReadonlyURL): string {
+	const next = new URL(url.href);
 	next.searchParams.set(queryParam, tab);
 	return `${next.pathname}${next.search}${next.hash}`;
 }
 
-export function clearUserSettingsHref(url: URL): string {
-	const next = new URL(url);
+export function clearUserSettingsHref(url: ReadonlyURL): string {
+	const next = new URL(url.href);
 	next.searchParams.delete(queryParam);
 	return `${next.pathname}${next.search}${next.hash}`;
 }
@@ -51,14 +53,14 @@ export class UserSettingsState {
 		this.open = false;
 	}
 
-	syncFromUrl(url: URL) {
+	syncFromUrl(url: ReadonlyURL) {
 		const tab = parseUserSettingsTab(url.searchParams.get(queryParam));
 		if (!tab) return;
 
 		this.show(tab);
 	}
 
-	urlHasSettingsTab(url: URL) {
+	urlHasSettingsTab(url: ReadonlyURL) {
 		return parseUserSettingsTab(url.searchParams.get(queryParam)) !== null;
 	}
 }

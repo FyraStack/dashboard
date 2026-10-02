@@ -1,15 +1,15 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
-	import { browser } from '$app/environment';
-	import { Button } from '$lib/components/ui/button';
+	import { browser } from '$app/env';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import Check from '~icons/lucide/check';
 	import FileText from '~icons/nucleo/file-text';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
 	import Copy from '~icons/nucleo/copy';
 	import Terminal from '~icons/nucleo/terminal';
 	import Trash2 from '~icons/nucleo/trash';
-	import { getServerWithFallback, serversState } from '$lib/state/servers.svelte';
-	import { getVmMetricsHistory } from '$lib/remote/vms.remote';
+	import { getServerWithFallback, serversState } from '#lib/state/servers.svelte.js';
+	import { getVmMetricsHistory } from '#lib/remote/vms.remote.js';
 	import { primaryAddress } from '../lib/server-summary';
 
 	let { data }: PageProps = $props();
@@ -54,10 +54,12 @@
 		maxValue = Math.max(...values.map((v) => v ?? 0), 1)
 	) {
 		const points = values.filter((value): value is number => value != null);
+
 		return points
 			.map((value, index) => {
 				const x = (index / Math.max(points.length - 1, 1)) * 240;
 				const y = 80 - (value / maxValue) * 70;
+
 				return `${x.toFixed(1)},${Math.max(5, Math.min(75, y)).toFixed(1)}`;
 			})
 			.join(' ');
@@ -221,7 +223,9 @@
 			<div>
 				<svg viewBox="0 0 240 80" class="block h-28 w-full" preserveAspectRatio="none">
 					{#if chart.loaded}
-						<polygon points="{chart.points} 240,80 0,80" fill={chart.color} opacity="0.08" />
+						<polygon points="{chart.points} 240,80 0,80" fill={chart.color} opacity="0.08"
+						></polygon>
+
 						<polyline
 							points={chart.points}
 							fill="none"
@@ -230,7 +234,7 @@
 							stroke-linejoin="round"
 							stroke-linecap="round"
 							vector-effect="non-scaling-stroke"
-						/>
+						></polyline>
 					{:else}
 						<line
 							x1="0"
@@ -243,7 +247,7 @@
 							stroke-linecap="round"
 							vector-effect="non-scaling-stroke"
 							class="animate-pulse"
-						/>
+						></line>
 					{/if}
 				</svg>
 			</div>

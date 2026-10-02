@@ -1,11 +1,12 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import type { RequestEvent } from '@sveltejs/kit';
-import { dev } from '$app/environment';
+import { waitUntil } from 'cloudflare:workers';
+import { dev } from '$app/env';
 import * as schema from './schema';
 import { getRequestEvent } from '$app/server';
-import { getRuntimeEnv } from '$lib/server/env';
-import { instrument, summarizeStatement, timingLog } from '$lib/server/observability';
+import { getRuntimeEnv } from '#lib/server/env.js';
+import { instrument, summarizeStatement, timingLog } from '#lib/server/observability.js';
 
 export type Database = ReturnType<typeof drizzle<typeof schema>>;
 
@@ -46,6 +47,7 @@ function withQueryTracing(pool: Pool): Pool {
 		if (typeof args[args.length - 1] === 'function') return runQuery(...args);
 
 		const first = args[0];
+
 		const statement =
 			typeof first === 'string' ? first : (first as { text?: string } | undefined)?.text;
 
@@ -125,9 +127,6 @@ export function closeRequestDb(event: RequestEvent) {
 			console.error('Error closing PostgreSQL pool', error);
 		});
 
-	const ctx = event.platform?.ctx;
-	if (ctx) {
-		ctx.waitUntil(ending);
-		timingLog('db.closeRequestDb.waitUntil.scheduled');
-	}
+	waitUntil(ending);
+	timingLog('db.closeRequestDb.waitUntil.scheduled');
 }

@@ -1,9 +1,9 @@
-import { dev } from '$app/environment';
+import { dev } from '$app/env';
 import type { VmBackend } from './types';
 import { ProxmoxBackend } from './proxmox';
 import { ProxmoxClient } from './proxmox/client';
 import { getBackendEnv } from './env';
-import { timingLog } from '$lib/server/observability';
+import { timingLog } from '#lib/server/observability.js';
 
 export type {
 	BackendImage,

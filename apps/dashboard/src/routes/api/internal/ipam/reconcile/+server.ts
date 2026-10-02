@@ -1,8 +1,8 @@
-import { error, json } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getRuntimeEnv } from '$lib/server/env';
-import { initDrizzle } from '$lib/server/db';
-import { reconcileOrphanedIpamAllocations } from '$lib/server/ipam';
+import { getRuntimeEnv } from '#lib/server/env.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { reconcileOrphanedIpamAllocations } from '#lib/server/ipam.js';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const secret = getRuntimeEnv().INTERNAL_CRON_SECRET;
@@ -13,5 +13,5 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const ipam = await reconcileOrphanedIpamAllocations(initDrizzle());
 
-	return json({ ipam });
+	return Response.json({ ipam });
 };

@@ -1,15 +1,15 @@
 import { error } from '@sveltejs/kit';
 import { eq, inArray } from 'drizzle-orm';
-import type { initDrizzle } from '$lib/server/db';
-import { ipamPtrRecords, ipamSettings } from '$lib/server/db/schema';
-import { BunnyClient, BunnyError, isBunnyConfigured } from '$lib/server/bunny';
+import type { initDrizzle } from '#lib/server/db/index.js';
+import { ipamPtrRecords, ipamSettings } from '#lib/server/db/schema.js';
+import { BunnyClient, BunnyError, isBunnyConfigured } from '#lib/server/bunny.js';
 import {
 	addressInCidr,
 	applyPtrTemplate,
 	isValidPtrHostname,
 	reverseDnsNameForIp,
 	sameAddress
-} from '$lib/ptr';
+} from '#lib/ptr.js';
 
 type Db = ReturnType<typeof initDrizzle>;
 type Transaction = Parameters<Parameters<Db['transaction']>[0]>[0];

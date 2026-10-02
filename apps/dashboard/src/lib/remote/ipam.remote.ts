@@ -2,15 +2,15 @@ import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { eq } from 'drizzle-orm';
-import { initDrizzle } from '$lib/server/db';
-import { ipamAllocations, ipamPrefixes } from '$lib/server/db/schema';
-import { requireAdmin } from '$lib/server/auth-context';
-import { listIpamPrefixesWithStats, normalizeIpamPrefixInput } from '$lib/server/ipam';
-import { getIpamPtrDefaults, saveIpamPtrDefaults } from '$lib/server/ptr-records';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { ipamAllocations, ipamPrefixes } from '#lib/server/db/schema.js';
+import { requireAdmin } from '#lib/server/auth-context.js';
+import { listIpamPrefixesWithStats, normalizeIpamPrefixInput } from '#lib/server/ipam.js';
+import { getIpamPtrDefaults, saveIpamPtrDefaults } from '#lib/server/ptr-records.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureIpamPrefixes
-} from '$lib/server/accessibility-fixtures';
+} from '#lib/server/accessibility-fixtures.js';
 
 async function requireCurrentAdmin() {
 	const event = getRequestEvent();

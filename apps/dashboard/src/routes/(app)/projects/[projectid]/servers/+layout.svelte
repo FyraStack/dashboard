@@ -2,14 +2,14 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
-	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import ChevronDown from '~icons/lucide/chevron-down';
 	import Plus from '~icons/lucide/plus';
 	import HardDrive from '~icons/nucleo/hard-drive';
-	import { listVmStatuses } from '$lib/remote/vms.remote';
-	import { clientTimingLog, runQuery } from '$lib/utils';
-	import { serversState, syncServers } from '$lib/state/servers.svelte';
+	import { listVmStatuses } from '#lib/remote/vms.remote.js';
+	import { clientTimingLog, runQuery } from '#lib/utils.js';
+	import { serversState, syncServers } from '#lib/state/servers.svelte.js';
 	import { primaryAddress } from './lib/server-summary';
 
 	let { data, children } = $props();
@@ -157,7 +157,7 @@
 			currentPath !== serversPath
 		)
 			return;
-		goto(`${serversPath}/${currentServers[0].id}`, { replaceState: true });
+		goto(`${serversPath}/${currentServers[0].id}`, { replace: true });
 	});
 
 	const currentPath = $derived(page.url.pathname);

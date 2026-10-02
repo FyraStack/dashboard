@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { goto, invalidate } from '$app/navigation';
-	import { authClient } from '$lib/auth-client';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
+	import { authClient } from '#lib/auth-client.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 	import {
 		createProject as createProjectRpc,
 		deleteProject as deleteProjectRpc
-	} from '$lib/remote/projects.remote';
+	} from '#lib/remote/projects.remote.js';
 	import ArrowRight from '~icons/lucide/arrow-right';
 	import FolderOpen from '~icons/nucleo/folder-open';
 	import Loader2 from '~icons/lucide/loader-2';
@@ -18,8 +18,8 @@
 	import Settings from '~icons/nucleo/settings';
 	import Trash2 from '~icons/nucleo/trash';
 	import { toast } from 'svelte-sonner';
-	import { getErrorMessage } from '$lib/utils';
-	import { isProjectRole, projectRoleLabels } from '$lib/auth/organization-permissions';
+	import { getErrorMessage } from '#lib/utils.js';
+	import { isProjectRole, projectRoleLabels } from '#lib/auth/organization-permissions.js';
 
 	type Project = { id: string; projectName: string; role: string };
 

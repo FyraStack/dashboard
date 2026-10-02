@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Button } from '$lib/components/ui/button';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 
@@ -32,6 +32,6 @@
 		{#if !isNotFound}
 			<Button variant="outline" size="sm" onclick={() => location.reload()}>Try again</Button>
 		{/if}
-		<Button variant="outline" size="sm" onclick={() => goto(resolve('/'))}>Go Home</Button>
+		<Button variant="outline" size="sm" onclick={() => goto(resolve(''))}>Go Home</Button>
 	</div>
 </div>

@@ -1,5 +1,5 @@
-import { dev } from '$app/environment';
-import { getRequestEvent } from '$app/server';
+import { dev } from '$app/env';
+import { waitUntil } from 'cloudflare:workers';
 import { error } from '@sveltejs/kit';
 import type { KVNamespace } from '@cloudflare/workers-types';
 import {
@@ -8,9 +8,9 @@ import {
 	featureFlagKeys,
 	type FeatureFlagKey,
 	type FeatureFlags
-} from '$lib/feature-flags';
-import { getRuntimeEnv } from '$lib/server/env';
-import { instrument, timingLog } from '$lib/server/observability';
+} from '#lib/feature-flags.js';
+import { getRuntimeEnv } from '#lib/server/env.js';
+import { instrument, timingLog } from '#lib/server/observability.js';
 
 const FEATURE_FLAGS_KEY = 'feature-flags';
 const FLAGS_FRESH_TTL_MS = 60_000;
@@ -67,11 +67,7 @@ function scheduleFeatureFlagRefresh(kv: KVNamespace): Promise<FeatureFlags> {
 			});
 	}
 
-	try {
-		getRequestEvent().platform?.ctx?.waitUntil(flagsRefresh.then(() => undefined));
-	} catch {
-		// getFeatureFlags can be imported in non-request contexts during local tooling.
-	}
+	waitUntil(flagsRefresh.then(() => undefined));
 
 	return flagsRefresh;
 }

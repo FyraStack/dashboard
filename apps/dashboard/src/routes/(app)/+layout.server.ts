@@ -1,14 +1,14 @@
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
-import { listProjects } from '$lib/remote/projects.remote';
-import { getFeatureFlags } from '$lib/server/feature-flags';
-import { hasAdminRole } from '$lib/server/auth-context';
-import { instrument } from '$lib/server/observability';
+import { listProjects } from '#lib/remote/projects.remote.js';
+import { getFeatureFlags } from '#lib/server/feature-flags.js';
+import { hasAdminRole } from '#lib/server/auth-context.js';
+import { instrument } from '#lib/server/observability.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureFeatureFlags,
 	accessibilityFixtureProjects
-} from '$lib/server/accessibility-fixtures';
+} from '#lib/server/accessibility-fixtures.js';
 
 export const load: LayoutServerLoad = async ({ locals, depends }) => {
 	depends('app:projects');

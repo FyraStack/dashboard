@@ -3,9 +3,9 @@
 	import { goto } from '$app/navigation';
 	import Plus from '~icons/lucide/plus';
 	import Server from '~icons/nucleo/server';
-	import { Button } from '$lib/components/ui/button';
-	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { serversState } from '$lib/state/servers.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import { serversState } from '#lib/state/servers.svelte.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();

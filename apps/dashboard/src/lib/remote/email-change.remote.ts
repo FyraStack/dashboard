@@ -2,11 +2,11 @@ import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { and, eq, gt } from 'drizzle-orm';
-import { initAuth } from '$lib/server/auth';
-import { initDrizzle } from '$lib/server/db';
-import { user, verification } from '$lib/server/db/schema';
-import { ulid } from '$lib/server/id';
-import { captureServerEvent } from '$lib/server/posthog';
+import { initAuth } from '#lib/server/auth.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { user, verification } from '#lib/server/db/schema.js';
+import { ulid } from '#lib/server/id.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
 
 const EMAIL_CHANGE_TTL_MS = 60 * 60 * 1000;
 

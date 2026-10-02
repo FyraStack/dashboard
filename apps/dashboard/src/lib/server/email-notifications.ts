@@ -1,11 +1,11 @@
 import { and, eq } from 'drizzle-orm';
-import BillingNoticeEmail from '$lib/emails/billing-notice.svelte';
-import BillingReminderEmail from '$lib/emails/billing-reminder.svelte';
-import SecurityAlertEmail from '$lib/emails/security-alert.svelte';
-import { initDrizzle } from '$lib/server/db';
-import { member, user } from '$lib/server/db/schema';
-import { sendRenderedEmail } from '$lib/server/email';
-import { getRuntimeEnv } from '$lib/server/env';
+import BillingNoticeEmail from '#lib/emails/billing-notice.svelte';
+import BillingReminderEmail from '#lib/emails/billing-reminder.svelte';
+import SecurityAlertEmail from '#lib/emails/security-alert.svelte';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { member, user } from '#lib/server/db/schema.js';
+import { sendRenderedEmail } from '#lib/server/email.js';
+import { getRuntimeEnv } from '#lib/server/env.js';
 
 type SecurityAlertEmailParams = {
 	to: string;

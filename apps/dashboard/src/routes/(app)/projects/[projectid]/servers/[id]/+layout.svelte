@@ -1,33 +1,33 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Play from '~icons/nucleo/play';
 	import Power from '~icons/nucleo/power';
 	import PowerOff from '~icons/nucleo/power-off';
 	import RotateCw from '~icons/nucleo/rotate-cw';
-	import type { FeatureFlags } from '$lib/feature-flags';
-	import { killVm, rebootVm, startVm, stopVm } from '$lib/remote/vms.remote';
-	import { getServerWithFallback, requestServerStatusRefresh } from '$lib/state/servers.svelte';
+	import type { FeatureFlags } from '#lib/feature-flags.js';
+	import { killVm, rebootVm, startVm, stopVm } from '#lib/remote/vms.remote.js';
+	import { getServerWithFallback, requestServerStatusRefresh } from '#lib/state/servers.svelte.js';
 	import { serverTabs, type ServerTab } from './lib/server-detail';
 	import { toast } from 'svelte-sonner';
-	import { getErrorMessage } from '$lib/utils';
-	import { confirmDestructive } from '$lib/confirm.svelte';
+	import { getErrorMessage } from '#lib/utils.js';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
 
 	type ServerTabHref =
-		| `/projects/${string}/servers/${string}`
-		| `/projects/${string}/servers/${string}/backups`
-		| `/projects/${string}/servers/${string}/console`
-		| `/projects/${string}/servers/${string}/images`
-		| `/projects/${string}/servers/${string}/logs`
-		| `/projects/${string}/servers/${string}/networking`
-		| `/projects/${string}/servers/${string}/rebuild`
-		| `/projects/${string}/servers/${string}/rescue`
-		| `/projects/${string}/servers/${string}/resize`
-		| `/projects/${string}/servers/${string}/settings`
-		| `/projects/${string}/servers/${string}/snapshots`;
+		| `projects/${string}/servers/${string}`
+		| `projects/${string}/servers/${string}/backups`
+		| `projects/${string}/servers/${string}/console`
+		| `projects/${string}/servers/${string}/images`
+		| `projects/${string}/servers/${string}/logs`
+		| `projects/${string}/servers/${string}/networking`
+		| `projects/${string}/servers/${string}/rebuild`
+		| `projects/${string}/servers/${string}/rescue`
+		| `projects/${string}/servers/${string}/resize`
+		| `projects/${string}/servers/${string}/settings`
+		| `projects/${string}/servers/${string}/snapshots`;
 
 	type PowerAction = 'start' | 'shutdown' | 'kill' | 'restart';
 
@@ -46,7 +46,7 @@
 	});
 
 	function tabHref(tab: ServerTab): ServerTabHref {
-		const base = `/projects/${page.params.projectid}/servers/${serverId}`;
+		const base = `projects/${page.params.projectid}/servers/${serverId}`;
 		return (tab === 'overview' ? base : `${base}/${tab}`) as ServerTabHref;
 	}
 

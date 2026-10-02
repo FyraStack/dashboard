@@ -1066,7 +1066,17 @@
 								</td>
 								<td class="px-4 py-3 text-muted-foreground">{formatDate(project.createdAt)}</td>
 								<td class="px-4 py-3 text-right">
-									<ChevronRight class="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+									<button
+										type="button"
+										class="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+										aria-label="Open {project.name}"
+										onclick={(event) => {
+											event.stopPropagation();
+											openProjectSheet(project);
+										}}
+									>
+										<ChevronRight class="h-3.5 w-3.5" />
+									</button>
 								</td>
 							</tr>
 						{/each}

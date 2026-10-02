@@ -12,6 +12,13 @@
 	let declining = $state(false);
 	let switching = $state(false);
 
+	const roleAccess = $derived(
+		data.role && isProjectRole(data.role) ? ` with ${projectRoleLabels[data.role]} access` : ''
+	);
+	const invitationSummary = $derived(
+		`${data.inviterEmail} invited you to join ${data.organizationName}${roleAccess}.`
+	);
+
 	async function accept() {
 		if (accepting || declining) {
 			return;
@@ -92,14 +99,7 @@
 					Join {data.organizationName}
 				</h1>
 
-				<p class="text-center text-xs text-muted-foreground">
-					{data.inviterEmail}
-					invited you to join {data.organizationName}
-					{#if data.role && isProjectRole(data.role)}
-						with {projectRoleLabels[data.role]} access
-					{/if}
-					.
-				</p>
+				<p class="text-center text-xs text-muted-foreground">{invitationSummary}</p>
 
 				{#if errorMessage}
 					<div

@@ -8,6 +8,7 @@ import { PUBLIC_SENTRY_DSN } from '$app/env/public';
 if (PUBLIC_SENTRY_DSN) {
 	Sentry.init({
 		dsn: PUBLIC_SENTRY_DSN,
+		tracesSampleRate: dev ? 1.0 : 0.1,
 		tunnel: '/internal/sentry_in',
 		environment: dev ? 'development' : 'production'
 	});

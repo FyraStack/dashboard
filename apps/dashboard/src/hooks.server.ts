@@ -176,7 +176,7 @@ const handleSentryInit: Handle = (input) => {
 	const requestHandle =
 		sentryRequestHandle ??
 		initCloudflareSentryHandle({
-      dsn: PUBLIC_SENTRY_DSN,
+			dsn: PUBLIC_SENTRY_DSN,
 			tracesSampleRate: dev ? 1.0 : 0.1,
 			environment: dev ? 'development' : 'production'
 		});

@@ -54,7 +54,7 @@
 			newProjectName = '';
 			createOpen = false;
 			await authClient.organization.setActive({ organizationId: res.id });
-			await goto(`/projects/${res.id}/servers`);
+			await goto(`/projects/${res.id}/servers`, { invalidate: ['app:projects'] });
 		} catch (err) {
 			createProjectError = getErrorMessage(err, 'Project could not be created.');
 		} finally {

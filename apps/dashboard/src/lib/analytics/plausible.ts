@@ -19,14 +19,7 @@ export function initPlausible() {
 	return tracker;
 }
 
-export async function trackNotFound(path: string) {
+export async function trackNotFound(url: string) {
 	const plausible = await initPlausible();
-	if (!plausible) {
-		return;
-	}
-	const props: Record<string, string> = { path };
-	if (document.referrer) {
-		props.referrer = document.referrer;
-	}
-	plausible.track('404', { props });
+	plausible?.track('404', { url });
 }

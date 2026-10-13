@@ -97,9 +97,15 @@
 				return true;
 			}
 
-			return [vm.name, vm.projectName, vm.ownerName, vm.ownerEmail, vm.lastKnownIpv4, vm.id].some(
-				(value) => value?.toLowerCase().includes(term)
-			);
+			return [
+				vm.name,
+				vm.projectName,
+				vm.ownerName,
+				vm.ownerEmail,
+				vm.lastKnownIpv4,
+				vm.id,
+				vm.proxmoxId?.toString()
+			].some((value) => value?.toLowerCase().includes(term));
 		})
 	);
 
@@ -306,7 +312,7 @@
 				<Search class="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
 				<Input
 					bind:value={search}
-					placeholder="Search by name, project, owner, IP..."
+					placeholder="Search by name, project, owner, IP, VMID..."
 					class="h-8 pl-8 text-xs"
 				/>
 			</div>

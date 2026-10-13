@@ -6,6 +6,7 @@
 	import ConfirmDialog from '#lib/components/confirm-dialog.svelte';
 	import UserSettingsDialog from '#lib/components/dialogs/user-settings-dialog.svelte';
 	import * as Avatar from '#lib/components/ui/avatar/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import * as Command from '#lib/components/ui/command/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
@@ -415,6 +416,7 @@
 				<a href={resolve('')} class="flex shrink-0 items-center gap-2">
 					<img src="/logo.svg" alt="" class="h-5 w-5" />
 					<span class="text-sm font-semibold tracking-tight text-foreground">Stack</span>
+					<Badge class="h-4 px-1.5 text-[10px]" variant="secondary">Alpha</Badge>
 				</a>
 				{#if isOnProjectRoute}
 					<span class="text-sm text-muted-foreground">/</span>

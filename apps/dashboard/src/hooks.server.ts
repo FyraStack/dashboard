@@ -1,6 +1,6 @@
 import { waitUntil } from 'cloudflare:workers';
 import { handleErrorWithSentry, initCloudflareSentryHandle, sentryHandle } from '@sentry/sveltekit';
-import { redirect } from '@sveltejs/kit';
+import { type RequestEvent, redirect } from '@sveltejs/kit';
 import { type Handle, type HandleServerError, sequence } from '@sveltejs/kit/hooks';
 import {
 	accessibilityFixtureEnabled,
@@ -28,6 +28,12 @@ const publicRoutes = [
 	'/_app/remote/'
 ];
 const authPages = ['/login', '/register', '/signup', '/forgot-password'];
+
+function isPublicRequest(event: RequestEvent) {
+	return (
+		event.route.id === null || publicRoutes.some((route) => event.url.pathname.startsWith(route))
+	);
+}
 
 const moduleLoadedAt = performance.now();
 let isFirstRequestOnIsolate = true;
@@ -80,7 +86,7 @@ async function runFullAuth(
 		event.locals.activeProjectId = session.session.activeOrganizationId ?? null;
 	}
 
-	const isPublic = publicRoutes.some((route) => event.url.pathname.startsWith(route));
+	const isPublic = isPublicRequest(event);
 
 	if (!(session || isPublic)) {
 		throw redirect(303, '/login');
@@ -134,7 +140,7 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 					return await instrument('sveltekit.resolve', () => resolve(event), requestAttrs);
 				}
 
-				const isPublic = publicRoutes.some((route) => event.url.pathname.startsWith(route));
+				const isPublic = isPublicRequest(event);
 				if (!isAuthEndpoint && isPublic && !hasAuthSessionCookie(event.request)) {
 					timingLog('request.auth.publicNoSession', requestAttrs);
 					return await instrument('sveltekit.resolve', () => resolve(event), requestAttrs);

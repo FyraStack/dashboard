@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, lte, sql } from 'drizzle-orm';
 import { initAuth } from '#lib/server/auth.js';
 import { passkey, twoFactor, verification } from '#lib/server/db/auth.schema.js';
 import type { initDrizzle } from '#lib/server/db/index.js';
@@ -9,6 +9,8 @@ import { getRequestEvent } from '$app/server';
 export const ADMIN_VERIFICATION_CODE_LENGTH = 6;
 export const ADMIN_VERIFICATION_CODE_TTL_MS = 10 * 60 * 1000;
 const ADMIN_VERIFICATION_INTENT_TTL_MS = 60 * 1000;
+const ADMIN_VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000;
+const USED_TOTP_CODE_TTL_MS = 2 * 60 * 1000;
 
 export type AdminVerificationMethod = 'passkey' | 'totp' | 'email';
 
@@ -24,6 +26,10 @@ function passkeyIdentifier(adminUserId: string, targetId: string) {
 
 function emailIdentifier(adminUserId: string, targetId: string) {
 	return `admin-user-delete-email:${adminUserId}:${targetId}`;
+}
+
+function usedTotpIdentifier(adminUserId: string) {
+	return `admin-totp-used:${adminUserId}`;
 }
 
 export function normalizeVerificationCode(code: string) {
@@ -79,52 +85,101 @@ export async function beginAdminVerification(
 ): Promise<{ method: AdminVerificationMethod; code: string | null }> {
 	const method = await getAdminVerificationMethod(db, adminUserId);
 
-	await db.delete(verification).where(eq(verification.identifier, intentIdentifier(adminUserId)));
+	return db.transaction(async (tx) => {
+		await lockIdentifier(tx, intentIdentifier(adminUserId));
+		await tx.delete(verification).where(eq(verification.identifier, intentIdentifier(adminUserId)));
 
-	if (method === 'passkey') {
-		await db.insert(verification).values({
-			id: ulid(),
-			identifier: intentIdentifier(adminUserId),
-			value: targetId,
-			expiresAt: new Date(Date.now() + ADMIN_VERIFICATION_INTENT_TTL_MS)
-		});
+		if (method === 'passkey') {
+			await tx.insert(verification).values({
+				id: ulid(),
+				identifier: intentIdentifier(adminUserId),
+				value: targetId,
+				expiresAt: new Date(Date.now() + ADMIN_VERIFICATION_INTENT_TTL_MS)
+			});
+			return { method, code: null };
+		}
+
+		if (method === 'email') {
+			const identifier = emailIdentifier(adminUserId, targetId);
+			await lockIdentifier(tx, identifier);
+
+			const now = Date.now();
+			const [recent] = await tx
+				.select({ id: verification.id })
+				.from(verification)
+				.where(
+					and(
+						eq(verification.identifier, identifier),
+						gt(verification.expiresAt, new Date(now)),
+						gt(verification.createdAt, new Date(now - ADMIN_VERIFICATION_RESEND_COOLDOWN_MS))
+					)
+				)
+				.limit(1);
+			if (recent) {
+				return { method, code: null };
+			}
+
+			const code = generateVerificationCode();
+			const value = await hashVerificationCode(adminUserId, targetId, code);
+
+			await tx.delete(verification).where(eq(verification.identifier, identifier));
+			await tx.insert(verification).values({
+				id: ulid(),
+				identifier,
+				value,
+				expiresAt: new Date(now + ADMIN_VERIFICATION_CODE_TTL_MS)
+			});
+			return { method, code };
+		}
+
 		return { method, code: null };
-	}
+	});
+}
 
-	if (method === 'email') {
-		const code = generateVerificationCode();
-		const identifier = emailIdentifier(adminUserId, targetId);
-		const value = await hashVerificationCode(adminUserId, targetId, code);
+type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
-		await db.delete(verification).where(eq(verification.identifier, identifier));
-		await db.insert(verification).values({
-			id: ulid(),
-			identifier,
-			value,
-			expiresAt: new Date(Date.now() + ADMIN_VERIFICATION_CODE_TTL_MS)
-		});
-		return { method, code };
-	}
-
-	return { method, code: null };
+async function lockIdentifier(tx: Tx, identifier: string) {
+	await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${identifier}))`);
 }
 
 async function consumePasskeyVerification(db: Db, adminUserId: string, targetId: string) {
-	const [record] = await db
-		.select({ id: verification.id })
-		.from(verification)
+	const consumed = await db
+		.delete(verification)
 		.where(
 			and(
 				eq(verification.identifier, passkeyIdentifier(adminUserId, targetId)),
 				gt(verification.expiresAt, new Date())
 			)
 		)
-		.limit(1);
+		.returning({ id: verification.id });
 
-	if (!record) {
+	if (consumed.length === 0) {
 		error(400, 'Verify with your passkey before performing this action.');
 	}
-	await db.delete(verification).where(eq(verification.id, record.id));
+}
+
+async function claimTotpCode(db: Db, adminUserId: string, code: string) {
+	const identifier = usedTotpIdentifier(adminUserId);
+	const id = `${identifier}:${await hashVerificationCode(adminUserId, 'totp', code)}`;
+	const now = new Date();
+
+	await db
+		.delete(verification)
+		.where(and(eq(verification.identifier, identifier), lte(verification.expiresAt, now)));
+	const [claimed] = await db
+		.insert(verification)
+		.values({
+			id,
+			identifier,
+			value: 'used',
+			expiresAt: new Date(now.getTime() + USED_TOTP_CODE_TTL_MS)
+		})
+		.onConflictDoNothing()
+		.returning({ id: verification.id });
+
+	if (!claimed) {
+		error(400, 'This verification code was already used. Wait for a new code.');
+	}
 }
 
 async function consumeEmailVerification(
@@ -140,9 +195,8 @@ async function consumeEmailVerification(
 
 	const identifier = emailIdentifier(adminUserId, targetId);
 	const value = await hashVerificationCode(adminUserId, targetId, normalizedCode);
-	const [record] = await db
-		.select({ id: verification.id })
-		.from(verification)
+	const consumed = await db
+		.delete(verification)
 		.where(
 			and(
 				eq(verification.identifier, identifier),
@@ -150,12 +204,11 @@ async function consumeEmailVerification(
 				gt(verification.expiresAt, new Date())
 			)
 		)
-		.limit(1);
+		.returning({ id: verification.id });
 
-	if (!record) {
+	if (consumed.length !== 1) {
 		error(400, 'Invalid or expired verification code.');
 	}
-	await db.delete(verification).where(eq(verification.id, record.id));
 }
 
 export async function consumeAdminVerification(
@@ -186,6 +239,7 @@ export async function consumeAdminVerification(
 			headers: getRequestEvent().request.headers,
 			body: { code: normalizedCode, trustDevice: false }
 		});
+		await claimTotpCode(db, adminUserId, normalizedCode);
 		return;
 	}
 

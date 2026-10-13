@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { ulid } from 'ulid';
 	import BillingSetupDialog from '#lib/components/billing-setup-dialog.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -127,6 +128,8 @@
 	const ipv6Available = $derived(Boolean(data.ipamAvailability?.ipv6.available));
 	const bothNetworksAvailable = $derived(ipv4Available && ipv6Available);
 
+	let createRequestId = ulid();
+	let newVolumeId = ulid();
 	let serverName = $state(generateServerName());
 	function regenerateServerName() {
 		serverName = generateServerName();
@@ -356,7 +359,13 @@
 		}
 		creatingVolume = true;
 		try {
-			const created = await createProjectVolume({ projectId: routeProjectId, name, size });
+			const created = await createProjectVolume({
+				id: newVolumeId,
+				projectId: routeProjectId,
+				name,
+				size
+			});
+			newVolumeId = ulid();
 			createdVolumes = [...createdVolumes, { id: created.id, name, sizeGb: size }];
 			selectedVolumeIds = [...selectedVolumeIds, created.id];
 			newVolumeName = '';
@@ -417,6 +426,7 @@
 			const networkingMode: 'both' | 'ipv6' = networkingOption === 'ipv6' ? 'ipv6' : 'both';
 			const payload = {
 				projectId,
+				requestId: createRequestId,
 				vmTypeId: selectedPlanId,
 				name: serverName.trim(),
 				networkingMode,
@@ -425,6 +435,7 @@
 				...(usePasswordAuthentication ? { password: serverPassword.trim() } : {})
 			};
 			const created = await createVm(payload);
+			createRequestId = ulid();
 
 			await goto(resolve(`projects/${projectId}/servers/${created.id}`), {
 				invalidate: ['project:vms']

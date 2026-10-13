@@ -34,6 +34,7 @@
 	let newProjectName = $state('');
 	let creatingProject = $state(false);
 	let createProjectError = $state('');
+	let createRequestId = crypto.randomUUID();
 
 	let deleteOpen = $state(false);
 	let deleteTarget = $state<Project | null>(null);
@@ -49,9 +50,13 @@
 		createProjectError = '';
 		try {
 			const name = newProjectName.trim();
-			const res = await createProjectRpc({ name });
-			projects = [...projects, { id: res.id, projectName: name, role: 'owner' }];
+			const res = await createProjectRpc({ name, requestId: createRequestId });
+			projects = [
+				...projects.filter((project) => project.id !== res.id),
+				{ id: res.id, projectName: name, role: 'owner' }
+			];
 			newProjectName = '';
+			createRequestId = crypto.randomUUID();
 			createOpen = false;
 			await authClient.organization.setActive({ organizationId: res.id });
 			await goto(`/projects/${res.id}/servers`, { invalidate: ['app:projects'] });
@@ -69,6 +74,7 @@
 
 	function openCreateDialog() {
 		createProjectError = '';
+		createRequestId = crypto.randomUUID();
 		createOpen = true;
 	}
 

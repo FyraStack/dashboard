@@ -144,7 +144,8 @@ export const organization = pgTable(
 		metadata: text('metadata'),
 		billingExempt: boolean('billing_exempt').default(false).notNull(),
 		disabled: boolean('disabled').default(false).notNull(),
-		deletedAt: bigint('deleted_at', { mode: 'number' })
+		deletedAt: bigint('deleted_at', { mode: 'number' }),
+		deletingAt: bigint('deleting_at', { mode: 'number' })
 	},
 	(table) => [uniqueIndex('organization_slug_uidx').on(table.slug)]
 );
@@ -189,6 +190,13 @@ export const invitation = pgTable(
 		index('invitation_email_idx').on(table.email)
 	]
 );
+
+export const rateLimit = pgTable('rate_limit', {
+	id: text('id').primaryKey(),
+	key: text('key').notNull().unique(),
+	count: integer('count').notNull(),
+	lastRequest: bigint('last_request', { mode: 'number' }).notNull()
+});
 
 export const userRelations = relations(user, ({ many }) => ({
 	sessions: many(session),

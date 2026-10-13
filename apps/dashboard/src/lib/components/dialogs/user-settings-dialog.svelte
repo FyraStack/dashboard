@@ -416,6 +416,7 @@
 	let tokens = $state<ApiTokenState[]>([]);
 	let tokensLoading = $state(false);
 	let newTokenName = $state('');
+	let generatingToken = $state(false);
 	let generatedToken = $state('');
 	let copiedTokenId = $state<string | null>(null);
 
@@ -440,9 +441,10 @@
 	}
 
 	async function generateToken() {
-		if (!newTokenName.trim()) {
+		if (generatingToken || !newTokenName.trim()) {
 			return;
 		}
+		generatingToken = true;
 		const name = newTokenName.trim();
 		const tempId = `temp-${Date.now()}`;
 		const now = new Date().toISOString().slice(0, 10);
@@ -461,6 +463,7 @@
 			toast.error(getErrorMessage(err, 'Failed to create API token'));
 		} finally {
 			newTokenName = '';
+			generatingToken = false;
 		}
 	}
 
@@ -1021,7 +1024,8 @@
 									size="sm"
 									class="shrink-0 gap-1.5 text-xs"
 									onclick={generateToken}
-									disabled={!newTokenName.trim()}
+									loading={generatingToken}
+									disabled={generatingToken || !newTokenName.trim()}
 								>
 									<Plus class="h-3 w-3" />
 									Generate

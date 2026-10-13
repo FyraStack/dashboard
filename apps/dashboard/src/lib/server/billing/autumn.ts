@@ -1,9 +1,9 @@
 import { error } from '@sveltejs/kit';
 import { Autumn } from 'autumn-js';
-import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, lt, ne, or } from 'drizzle-orm';
 import { member, organization, user } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
-import { projectBillingCustomers } from '#lib/server/db/schema.js';
+import { projectBillingCustomers, projectCreditPurchases } from '#lib/server/db/schema.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import type { CapPeriod } from './caps';
 
@@ -85,15 +85,8 @@ async function getProjectCustomerData(projectId: string) {
 export async function ensureLocalProjectBillingCustomer(projectId: string) {
 	const db = initDrizzle();
 	const now = Date.now();
-	const existing = await db.query.projectBillingCustomers.findFirst({
-		where: eq(projectBillingCustomers.projectId, projectId)
-	});
 
-	if (existing) {
-		return existing;
-	}
-
-	const [inserted] = await db
+	await db
 		.insert(projectBillingCustomers)
 		.values({
 			projectId,
@@ -101,14 +94,73 @@ export async function ensureLocalProjectBillingCustomer(projectId: string) {
 			createdAt: now,
 			updatedAt: now
 		})
-		.returning();
+		.onConflictDoNothing({ target: projectBillingCustomers.projectId });
 
-	return inserted;
+	const customer = await db.query.projectBillingCustomers.findFirst({
+		where: eq(projectBillingCustomers.projectId, projectId)
+	});
+	if (!customer) {
+		throw new Error(`Billing customer for project ${projectId} could not be created`);
+	}
+
+	return customer;
+}
+
+async function markProjectCustomerSynced(projectId: string) {
+	const db = initDrizzle();
+	const now = Date.now();
+	await db
+		.update(projectBillingCustomers)
+		.set({ syncStatus: 'synced', syncError: null, lastSyncedAt: now, updatedAt: now })
+		.where(eq(projectBillingCustomers.projectId, projectId));
+}
+
+async function markProjectCustomerSyncFailed(
+	projectId: string,
+	err: unknown,
+	attemptStart: number
+) {
+	const db = initDrizzle();
+	await db
+		.update(projectBillingCustomers)
+		.set({ syncStatus: 'failed', syncError: errorMessage(err), updatedAt: Date.now() })
+		.where(
+			and(
+				eq(projectBillingCustomers.projectId, projectId),
+				or(
+					isNull(projectBillingCustomers.lastSyncedAt),
+					lt(projectBillingCustomers.lastSyncedAt, attemptStart)
+				)
+			)
+		);
+}
+
+async function getOrCreateAutumnCustomer(
+	projectId: string,
+	customer: { name: string; email: string | null }
+) {
+	const client = createAutumnClient();
+	try {
+		await client.customers.getOrCreate(
+			{
+				customerId: projectId,
+				name: customer.name,
+				email: customer.email,
+				metadata: { projectId }
+			},
+			{ headers: { 'Idempotency-Key': `customer:${projectId}` } }
+		);
+	} catch (err) {
+		if (autumnStatus(err) !== 409) {
+			throw err;
+		}
+
+		await client.customers.get({ customerId: projectId });
+	}
 }
 
 export async function ensureProjectCustomer(projectId: string) {
-	const db = initDrizzle();
-	const now = Date.now();
+	const attemptStart = Date.now();
 
 	if (!isBillingConfigured()) {
 		await ensureLocalProjectBillingCustomer(projectId);
@@ -119,23 +171,10 @@ export async function ensureProjectCustomer(projectId: string) {
 	await ensureLocalProjectBillingCustomer(projectId);
 
 	try {
-		await createAutumnClient().customers.getOrCreate({
-			customerId: projectId,
-			name: customer.name,
-			email: customer.email,
-			metadata: { projectId }
-		});
-
-		await db
-			.update(projectBillingCustomers)
-			.set({ syncStatus: 'synced', syncError: null, lastSyncedAt: now, updatedAt: now })
-			.where(eq(projectBillingCustomers.projectId, projectId));
+		await getOrCreateAutumnCustomer(projectId, customer);
+		await markProjectCustomerSynced(projectId);
 	} catch (err) {
-		await db
-			.update(projectBillingCustomers)
-			.set({ syncStatus: 'failed', syncError: errorMessage(err), updatedAt: now })
-			.where(eq(projectBillingCustomers.projectId, projectId));
-
+		await markProjectCustomerSyncFailed(projectId, err, attemptStart);
 		throw err;
 	}
 }
@@ -145,8 +184,7 @@ export async function updateProjectCustomer(projectId: string) {
 		return;
 	}
 
-	const db = initDrizzle();
-	const now = Date.now();
+	const attemptStart = Date.now();
 	const customer = await getProjectCustomerData(projectId);
 
 	try {
@@ -156,24 +194,25 @@ export async function updateProjectCustomer(projectId: string) {
 			email: customer.email,
 			metadata: { projectId }
 		});
-
-		await db
-			.update(projectBillingCustomers)
-			.set({ syncStatus: 'synced', syncError: null, lastSyncedAt: now, updatedAt: now })
-			.where(eq(projectBillingCustomers.projectId, projectId));
+		await markProjectCustomerSynced(projectId);
 	} catch (err) {
-		await db
-			.update(projectBillingCustomers)
-			.set({ syncStatus: 'failed', syncError: errorMessage(err), updatedAt: now })
-			.where(eq(projectBillingCustomers.projectId, projectId));
+		await markProjectCustomerSyncFailed(projectId, err, attemptStart);
 		throw err;
 	}
+}
+
+const SETUP_NONCE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function attachIdempotencyKey(projectId: string, planId: string, setupNonce?: string | null) {
+	const base = `attach:${projectId}:${planId}`;
+	return setupNonce && SETUP_NONCE_PATTERN.test(setupNonce) ? `${base}:${setupNonce}` : base;
 }
 
 export async function attachDefaultProjectPlan(
 	projectId: string,
 	successUrl?: string,
-	discountCode?: string
+	discountCode?: string,
+	setupNonce?: string | null
 ) {
 	const planId = defaultPlanId();
 	if (!planId) {
@@ -185,14 +224,23 @@ export async function attachDefaultProjectPlan(
 		return null;
 	}
 
+	const idempotencyKey = attachIdempotencyKey(projectId, planId, setupNonce);
 	const attachPlan = (withDiscount: boolean) =>
-		createAutumnClient().billing.attach({
-			customerId: projectId,
-			planId,
-			redirectMode: 'if_required',
-			...(successUrl ? { successUrl } : {}),
-			...(withDiscount && discountCode ? { discounts: [{ promotionCode: discountCode }] } : {})
-		});
+		createAutumnClient().billing.attach(
+			{
+				customerId: projectId,
+				planId,
+				redirectMode: 'if_required',
+				...(successUrl ? { successUrl } : {}),
+				...(withDiscount && discountCode ? { discounts: [{ promotionCode: discountCode }] } : {})
+			},
+			{
+				headers: {
+					'Idempotency-Key':
+						withDiscount && discountCode ? idempotencyKey : `${idempotencyKey}:nodiscount`
+				}
+			}
+		);
 
 	try {
 		const response = await attachPlan(true).catch((err) => {
@@ -227,14 +275,18 @@ export async function cancelProjectBilling(projectId: string) {
 	const planId = defaultPlanId();
 
 	try {
-		await createAutumnClient().billing.update({
-			customerId: projectId,
-			...(planId ? { planId } : {}),
-			cancelAction: 'cancel_end_of_cycle'
-		});
+		await createAutumnClient().billing.update(
+			{
+				customerId: projectId,
+				...(planId ? { planId } : {}),
+				cancelAction: 'cancel_end_of_cycle'
+			},
+			{ headers: { 'Idempotency-Key': `cancel:${projectId}:${planId ?? 'all'}` } }
+		);
 		return true;
 	} catch (err) {
-		if (autumnStatus(err) === 404) {
+		const status = autumnStatus(err);
+		if (status === 404 || status === 409) {
 			return true;
 		}
 
@@ -508,44 +560,118 @@ export async function getProjectCreditsBalance(projectId: string) {
 	}
 }
 
-const creditPurchaseLocks = new Map<string, Promise<void>>();
+const AUTUMN_IDEMPOTENCY_WINDOW_MS = 24 * 3_600_000;
 
-function withProjectCreditPurchaseLock<T>(projectId: string, task: () => Promise<T>): Promise<T> {
-	const previous = creditPurchaseLocks.get(projectId) ?? Promise.resolve();
-	const result = previous.then(task);
-	const settled = result.then(
-		() => undefined,
-		() => undefined
-	);
-	creditPurchaseLocks.set(projectId, settled);
-	settled.then(() => {
-		if (creditPurchaseLocks.get(projectId) === settled) {
-			creditPurchaseLocks.delete(projectId);
-		}
+async function claimCreditPurchase(projectId: string, purchaseId: string, credits: number) {
+	const db = initDrizzle();
+	const now = Date.now();
+
+	await db
+		.insert(projectCreditPurchases)
+		.values({ purchaseId, projectId, credits, createdAt: now, updatedAt: now })
+		.onConflictDoNothing({ target: projectCreditPurchases.purchaseId });
+
+	const purchase = await db.query.projectCreditPurchases.findFirst({
+		where: eq(projectCreditPurchases.purchaseId, purchaseId)
 	});
-	return result;
+	if (!purchase) {
+		throw new Error(`Credit purchase ${purchaseId} could not be recorded`);
+	}
+	if (purchase.projectId !== projectId || purchase.credits !== credits) {
+		error(409, 'This purchase does not match an earlier request. Reopen top-up and try again.');
+	}
+
+	return purchase;
 }
 
-export function purchaseProjectCredits(projectId: string, credits: number) {
-	return withProjectCreditPurchaseLock(projectId, async () => {
-		const featureId = creditsFeatureId();
-		const planId = defaultPlanId();
-		if (!(isBillingConfigured() && featureId && planId)) {
-			error(501, 'Credit purchases are not configured in this environment.');
+async function completeCreditPurchase(purchaseId: string, paymentUrl: string | null) {
+	const db = initDrizzle();
+	await db
+		.update(projectCreditPurchases)
+		.set({ status: 'completed', paymentUrl, error: null, updatedAt: Date.now() })
+		.where(eq(projectCreditPurchases.purchaseId, purchaseId));
+}
+
+async function settleAcceptedCreditPurchase(purchaseId: string) {
+	const db = initDrizzle();
+	await db
+		.update(projectCreditPurchases)
+		.set({ status: 'completed', error: null, updatedAt: Date.now() })
+		.where(
+			and(
+				eq(projectCreditPurchases.purchaseId, purchaseId),
+				ne(projectCreditPurchases.status, 'completed')
+			)
+		);
+
+	const purchase = await db.query.projectCreditPurchases.findFirst({
+		where: eq(projectCreditPurchases.purchaseId, purchaseId),
+		columns: { paymentUrl: true }
+	});
+	return purchase?.paymentUrl ?? null;
+}
+
+async function failCreditPurchase(purchaseId: string, err: unknown) {
+	const db = initDrizzle();
+	await db
+		.update(projectCreditPurchases)
+		.set({ status: 'failed', error: errorMessage(err), updatedAt: Date.now() })
+		.where(
+			and(
+				eq(projectCreditPurchases.purchaseId, purchaseId),
+				ne(projectCreditPurchases.status, 'completed')
+			)
+		);
+}
+
+export async function purchaseProjectCredits(
+	projectId: string,
+	credits: number,
+	purchaseId: string
+) {
+	const featureId = creditsFeatureId();
+	const planId = defaultPlanId();
+	if (!(isBillingConfigured() && featureId && planId)) {
+		error(501, 'Credit purchases are not configured in this environment.');
+	}
+
+	const purchase = await claimCreditPurchase(projectId, purchaseId, credits);
+	if (purchase.status === 'completed') {
+		return purchase.paymentUrl;
+	}
+	if (Date.now() - purchase.createdAt >= AUTUMN_IDEMPOTENCY_WINDOW_MS) {
+		error(
+			409,
+			'This top-up could not be confirmed in time. Check your billing page before starting a new one.'
+		);
+	}
+
+	await ensureProjectCustomer(projectId);
+
+	try {
+		const response = await createAutumnClient().billing.update(
+			{
+				customerId: projectId,
+				planId,
+				featureQuantities: [{ featureId, quantity: credits }],
+				redirectMode: 'if_required'
+			},
+			{ headers: { 'Idempotency-Key': `credits:${projectId}:${purchaseId}` } }
+		);
+
+		const paymentUrl = response.paymentUrl ?? null;
+		await completeCreditPurchase(purchaseId, paymentUrl);
+		invalidateProjectBillingState(projectId);
+		return paymentUrl;
+	} catch (err) {
+		if (autumnStatus(err) === 409) {
+			invalidateProjectBillingState(projectId);
+			return settleAcceptedCreditPurchase(purchaseId);
 		}
 
-		await ensureProjectCustomer(projectId);
-
-		const response = await createAutumnClient().billing.update({
-			customerId: projectId,
-			planId,
-			featureQuantities: [{ featureId, quantity: credits }],
-			redirectMode: 'if_required'
-		});
-
-		invalidateProjectBillingState(projectId);
-		return response.paymentUrl ?? null;
-	});
+		await failCreditPurchase(purchaseId, err);
+		throw err;
+	}
 }
 
 const ISSUED_INVOICE_STATUSES = new Set(['open', 'paid', 'uncollectible']);

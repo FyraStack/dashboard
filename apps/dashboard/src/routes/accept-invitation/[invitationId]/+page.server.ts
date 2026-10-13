@@ -19,6 +19,7 @@ export const load: PageServerLoad = async ({ locals, params, request }) => {
 		});
 		return {
 			invitationId: params.invitationId,
+			organizationId: invitation.organizationId,
 			organizationName: invitation.organizationName,
 			inviterEmail: invitation.inviterEmail,
 			role: invitation.role,

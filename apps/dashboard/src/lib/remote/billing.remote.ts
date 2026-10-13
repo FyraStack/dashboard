@@ -19,7 +19,11 @@ import { command, getRequestEvent, query } from '$app/server';
 
 const projectParams = type({ projectId: 'string' });
 const setupParams = type({ projectId: 'string', returnTo: 'string?', discountCode: 'string?' });
-const purchaseCreditsParams = type({ projectId: 'string', credits: 'number.integer > 0' });
+const purchaseCreditsParams = type({
+	projectId: 'string',
+	credits: 'number.integer > 0',
+	purchaseId: 'string.uuid'
+});
 
 const MAX_CREDITS_PER_PURCHASE = 1_000_000;
 
@@ -81,7 +85,7 @@ export const purchaseCredits = command(purchaseCreditsParams, async (params) => 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'owner');
 
-	const url = await purchaseProjectCredits(params.projectId, params.credits);
+	const url = await purchaseProjectCredits(params.projectId, params.credits, params.purchaseId);
 	captureServerEvent(
 		'credit_purchase_started',
 		{ credits: params.credits },
@@ -108,7 +112,8 @@ export const setupProjectBillingPayment = command(setupParams, async (params) =>
 	const returnPath = safeReturnPath(params.returnTo, `/projects/${params.projectId}/billing`);
 	const separator = returnPath.includes('?') ? '&' : '?';
 	const promoParam = discountCode ? `&billing_promo=${encodeURIComponent(discountCode)}` : '';
-	const successUrl = `${event.url.origin}${returnPath}${separator}billing_setup=complete${promoParam}`;
+	const nonceParam = `&billing_setup_nonce=${crypto.randomUUID()}`;
+	const successUrl = `${event.url.origin}${returnPath}${separator}billing_setup=complete${nonceParam}${promoParam}`;
 	const url = await setupProjectPayment(params.projectId, successUrl);
 	captureServerEvent(
 		'billing_setup_started',

@@ -1,5 +1,5 @@
 import { error, type RequestEvent } from '@sveltejs/kit';
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, sql } from 'drizzle-orm';
 import type { initDrizzle } from './db';
 import { account, twoFactor, user, verification } from './db/auth.schema';
 import { ulid } from './id';
@@ -184,7 +184,7 @@ export async function requiresTotpReset(db: Db, userId: string) {
 	return !!registeredTotp && isLegacyTotpSecret(registeredTotp.secret);
 }
 
-export async function removeTotpWithVerifiedPassword(
+export async function verifyTotpResetPassword(
 	db: Db,
 	userId: string,
 	password: string,
@@ -199,9 +199,27 @@ export async function removeTotpWithVerifiedPassword(
 	if (!(credential?.password && (await verifyPassword(credential.password, password)))) {
 		error(400, 'Incorrect password.');
 	}
+}
 
-	await db.delete(twoFactor).where(eq(twoFactor.userId, userId));
-	await db.update(user).set({ twoFactorEnabled: false }).where(eq(user.id, userId));
+export function consumeTotpResetGrantAndRemoveTotp(db: Db, userId: string) {
+	return db.transaction(async (tx) => {
+		const [grant] = await tx
+			.delete(verification)
+			.where(
+				and(
+					eq(verification.identifier, totpResetGrantIdentifier(userId)),
+					gt(verification.expiresAt, new Date())
+				)
+			)
+			.returning({ id: verification.id });
+		if (!grant) {
+			return false;
+		}
+
+		await tx.delete(twoFactor).where(eq(twoFactor.userId, userId));
+		await tx.update(user).set({ twoFactorEnabled: false }).where(eq(user.id, userId));
+		return true;
+	});
 }
 
 export async function requireLegacyTotp(db: Db, userId: string) {
@@ -214,31 +232,46 @@ export async function beginTotpReset(db: Db, userId: string) {
 	await requireLegacyTotp(db, userId);
 
 	const identifier = totpResetCodeIdentifier(userId);
-	const [existing] = await db
-		.select({ createdAt: verification.createdAt })
-		.from(verification)
-		.where(and(eq(verification.identifier, identifier), gt(verification.expiresAt, new Date())))
-		.limit(1);
-
-	if (existing && !canResendTotpResetCode(existing.createdAt)) {
-		error(429, 'A code was sent recently. Check your email or wait a minute to request another.');
-	}
-
 	const code = generateTotpResetCode();
+	const id = ulid();
 	const value = encodeTotpResetCodeRecord({
 		hash: await hashTotpResetCode(userId, code),
 		attempts: 0
 	});
 
-	await db.delete(verification).where(eq(verification.identifier, identifier));
-	await db.insert(verification).values({
-		id: ulid(),
-		identifier,
-		value,
-		expiresAt: new Date(Date.now() + TOTP_RESET_CODE_TTL_MS)
+	const issued = await db.transaction(async (tx) => {
+		await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${identifier}))`);
+		const now = new Date();
+		const [existing] = await tx
+			.select({ createdAt: verification.createdAt })
+			.from(verification)
+			.where(and(eq(verification.identifier, identifier), gt(verification.expiresAt, now)))
+			.limit(1);
+
+		if (existing && !canResendTotpResetCode(existing.createdAt, now)) {
+			return false;
+		}
+
+		await tx.delete(verification).where(eq(verification.identifier, identifier));
+		await tx.insert(verification).values({
+			id,
+			identifier,
+			value,
+			createdAt: now,
+			expiresAt: new Date(now.getTime() + TOTP_RESET_CODE_TTL_MS)
+		});
+		return true;
 	});
 
-	return code;
+	if (!issued) {
+		error(429, 'A code was sent recently. Check your email or wait a minute to request another.');
+	}
+
+	return { code, id };
+}
+
+export async function discardTotpResetCode(db: Db, id: string) {
+	await db.delete(verification).where(eq(verification.id, id));
 }
 
 export async function verifyTotpResetCode(db: Db, userId: string, code: string) {
@@ -309,10 +342,4 @@ export async function requireTotpResetGrant(db: Db, userId: string) {
 	if (!record) {
 		error(400, 'Verify your email before changing two-factor authentication.');
 	}
-}
-
-export async function clearTotpResetGrant(db: Db, userId: string) {
-	await db
-		.delete(verification)
-		.where(eq(verification.identifier, totpResetGrantIdentifier(userId)));
 }

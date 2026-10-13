@@ -13,6 +13,7 @@
 	} from '#lib/emails/campaign-registry.js';
 	import type { AdminUser } from '#lib/remote/admin-users.remote.js';
 	import {
+		createEmailCampaign,
 		previewCampaignEmail,
 		renderCampaignEditor,
 		sendCampaignEmails
@@ -352,11 +353,18 @@
 		}
 	}
 
+	type RecipientRow = Record<string, string>;
+
 	let sending = $state(false);
 	let sendComplete = $state(false);
 	let sentCount = $state(0);
+	let skippedCount = $state(0);
 	let sendFailures = $state<{ recipient: string; reason: string }[]>([]);
 	let sendError = $state('');
+	let campaignId = $state<string | null>(null);
+	let campaignRows = $state<RecipientRow[]>([]);
+	let queuedRows = $state<RecipientRow[]>([]);
+	let nextBatchOffset = $state(0);
 
 	const fieldsComplete = $derived(
 		template.fields.every(
@@ -367,7 +375,39 @@
 	const canSend = $derived(
 		!sending && recipientRows.length > 0 && subject.trim() !== '' && fieldsComplete
 	);
-	const processedCount = $derived(sentCount + sendFailures.length);
+	const processedCount = $derived(sentCount + skippedCount + sendFailures.length);
+	const campaignTotal = $derived(campaignRows.length);
+	const canResume = $derived(
+		!sending && campaignId !== null && sendError !== '' && nextBatchOffset < queuedRows.length
+	);
+	const canRetryFailed = $derived(
+		!sending && campaignId !== null && sendError === '' && sendFailures.length > 0
+	);
+
+	async function runQueuedBatches() {
+		if (!campaignId) {
+			return;
+		}
+		sending = true;
+		sendComplete = false;
+		sendError = '';
+		try {
+			while (nextBatchOffset < queuedRows.length) {
+				const batch = queuedRows.slice(nextBatchOffset, nextBatchOffset + CAMPAIGN_BATCH_SIZE);
+				// biome-ignore lint/performance/noAwaitInLoops: batches go out one at a time to stay under the email provider's rate limit and report progress
+				const result = await sendCampaignEmails({ campaignId, rows: batch, emailColumn: 'email' });
+				sentCount += result.sent;
+				skippedCount += result.skipped;
+				sendFailures = [...sendFailures, ...result.failures];
+				nextBatchOffset += batch.length;
+			}
+			sendComplete = true;
+		} catch (err) {
+			sendError = getErrorMessage(err, 'Failed to send emails');
+		} finally {
+			sending = false;
+		}
+	}
 
 	async function startSend() {
 		if (!canSend) {
@@ -383,32 +423,47 @@
 			return;
 		}
 
-		sending = true;
 		sendComplete = false;
-		sentCount = 0;
-		sendFailures = [];
 		sendError = '';
-		const rows = $state.snapshot(recipientRows);
-		const fields = $state.snapshot(fieldValues);
+		campaignId = null;
 		try {
-			for (let i = 0; i < rows.length; i += CAMPAIGN_BATCH_SIZE) {
-				// biome-ignore lint/performance/noAwaitInLoops: batches go out one at a time to stay under the email provider's rate limit and report progress
-				const result = await sendCampaignEmails({
-					template: selectedTemplateKey,
-					subject,
-					fields,
-					rows: rows.slice(i, i + CAMPAIGN_BATCH_SIZE),
-					emailColumn: 'email'
-				});
-				sentCount += result.sent;
-				sendFailures = [...sendFailures, ...result.failures];
-			}
-			sendComplete = true;
+			const created = await createEmailCampaign({
+				template: selectedTemplateKey,
+				subject,
+				fields: $state.snapshot(fieldValues)
+			});
+			({ campaignId } = created);
 		} catch (err) {
-			sendError = getErrorMessage(err, 'Failed to send emails');
-		} finally {
-			sending = false;
+			sendError = getErrorMessage(err, 'Failed to start the campaign');
+			return;
 		}
+		campaignRows = $state.snapshot(recipientRows);
+		queuedRows = campaignRows;
+		nextBatchOffset = 0;
+		sentCount = 0;
+		skippedCount = 0;
+		sendFailures = [];
+		await runQueuedBatches();
+	}
+
+	function resumeSend() {
+		if (!canResume) {
+			return;
+		}
+		runQueuedBatches();
+	}
+
+	function retryFailed() {
+		if (!canRetryFailed) {
+			return;
+		}
+		const failedEmails = new Set(sendFailures.map((failure) => failure.recipient.toLowerCase()));
+		queuedRows = campaignRows.filter((row) =>
+			failedEmails.has((row.email ?? '').trim().toLowerCase())
+		);
+		nextBatchOffset = 0;
+		sendFailures = [];
+		runQueuedBatches();
 	}
 </script>
 
@@ -659,9 +714,16 @@
 			{/if}
 			{#if sendError}
 				<div
-					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
+					class="flex items-center justify-between gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
-					<AlertTriangle class="size-4 shrink-0" />{sendError}
+					<span class="flex items-center gap-2">
+						<AlertTriangle class="size-4 shrink-0" />{sendError}
+					</span>
+					{#if canResume}
+						<Button variant="outline" size="sm" class="h-6 text-xs" onclick={() => resumeSend()}>
+							Resume campaign
+						</Button>
+					{/if}
 				</div>
 			{/if}
 			<div class="flex items-center gap-2">
@@ -688,28 +750,43 @@
 					Send to {recipientRows.length} recipient{recipientRows.length === 1 ? '' : 's'}
 				</Button>
 			</div>
-			{#if sending || sendComplete}
+			{#if campaignId && (sending || sendComplete || sendError)}
 				<div class="flex flex-col gap-1.5">
 					<div class="h-1.5 w-full bg-muted">
 						<div
 							class="h-full bg-red-500 transition-all"
-							style="width: {recipientRows.length > 0
-								? Math.round((processedCount / recipientRows.length) * 100)
+							style="width: {campaignTotal > 0
+								? Math.round((processedCount / campaignTotal) * 100)
 								: 0}%"
 						></div>
 					</div>
 					<p class="flex items-center gap-1.5 text-xs text-muted-foreground">
 						{#if sending}
 							<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
-							Sending {processedCount} of {recipientRows.length}...
-						{:else if sendFailures.length === 0}
+							Sending {processedCount} of {campaignTotal}...
+						{:else if sendFailures.length === 0 && sendComplete}
 							<Check class="h-3 w-3 text-emerald-400" />
 							Sent {sentCount} email{sentCount === 1 ? '' : 's'}.
 						{:else}
 							<AlertTriangle class="h-3 w-3 text-amber-400" />
-							Sent {sentCount} of {recipientRows.length}; {sendFailures.length} failed.
+							Sent {sentCount} of {campaignTotal}; {sendFailures.length} failed.
+						{/if}
+						{#if skippedCount > 0}
+							{skippedCount}
+							skipped as already sent.
 						{/if}
 					</p>
+					{#if canRetryFailed}
+						<Button
+							variant="outline"
+							size="sm"
+							class="w-fit gap-1.5 text-xs"
+							onclick={() => retryFailed()}
+						>
+							<Send class="h-3 w-3" />
+							Retry {sendFailures.length} failed
+						</Button>
+					{/if}
 				</div>
 			{/if}
 			{#if sendFailures.length > 0}

@@ -13,17 +13,13 @@ import {
 } from '#lib/server/admin-verification.js';
 import { initAuth } from '#lib/server/auth.js';
 import { requireAdmin } from '#lib/server/auth-context.js';
-import {
-	ensureLocalProjectBillingCustomer,
-	ensureProjectCustomer,
-	isProjectBillingExempt,
-	requireProjectBillingActive
-} from '#lib/server/billing/autumn.js';
+import { isProjectBillingExempt, requireProjectBillingActive } from '#lib/server/billing/autumn.js';
 import { member, organization, user } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { projectBillingCustomers, sshKeys, vms, volumes } from '#lib/server/db/schema.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { createProjectOnce } from '#lib/server/project-creation.js';
 import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
 import { provisionVm } from '#lib/server/vm-provisioning.js';
 import { command, getRequestEvent, query } from '$app/server';
@@ -196,9 +192,17 @@ function toSlug(name: string) {
 	return `${slug || 'project'}-${Date.now().toString(36)}`;
 }
 
-const createProjectParams = type({ name: 'string', ownerUserId: 'string' });
+const createProjectParams = type({
+	name: 'string',
+	ownerUserId: 'string',
+	requestId: '0 < string <= 128'
+});
 export const createAdminProject = command(createProjectParams, async (params) => {
 	const db = await requireCurrentAdmin();
+	const adminUser = getRequestEvent().locals.user;
+	if (!adminUser) {
+		error(401, 'Authentication required');
+	}
 
 	const owner = await db.query.user.findFirst({ where: eq(user.id, params.ownerUserId) });
 	if (!owner) {
@@ -207,27 +211,30 @@ export const createAdminProject = command(createProjectParams, async (params) =>
 
 	const name = params.name.trim() || 'Untitled Project';
 	const auth = initAuth();
-	const org = await auth.api.createOrganization({
-		body: {
-			name,
-			slug: toSlug(name),
-			userId: params.ownerUserId
+	const project = await createProjectOnce(
+		db,
+		{ userId: adminUser.id, requestId: params.requestId },
+		async () => {
+			const org = await auth.api.createOrganization({
+				body: {
+					name,
+					slug: toSlug(name),
+					userId: params.ownerUserId
+				}
+			});
+			if (!org) {
+				error(502, 'Failed to create project');
+			}
+			return org;
 		}
-	});
-	if (!org) {
-		error(502, 'Failed to create project');
-	}
+	);
 
-	await ensureLocalProjectBillingCustomer(org.id);
-	ensureProjectCustomer(org.id).catch((err) => {
-		console.warn(`Failed to sync Autumn customer for project ${org.id}`, err);
-	});
-
-	return { id: org.id };
+	return { id: project.id };
 });
 
 const createVmParams = type({
 	projectId: 'string',
+	requestId: 'string',
 	vmTypeId: 'string',
 	name: 'string',
 	networkingMode: "'both' | 'ipv6'?",
@@ -271,6 +278,7 @@ export const createAdminVm = command(createVmParams, async (params) => {
 	const publicKeys = keys.filter((key) => sshKeyIds.includes(key.id)).map((key) => key.publicKey);
 
 	return provisionVm(db, {
+		vmId: params.requestId,
 		projectId: params.projectId,
 		vmTypeId: params.vmTypeId,
 		name: params.name,
@@ -319,7 +327,7 @@ export const beginDeleteProject = command(beginDeleteProjectParams, async (param
 	const target = await db.query.organization.findFirst({
 		where: eq(organization.id, params.projectId)
 	});
-	if (!target) {
+	if (!target || target.deletedAt !== null) {
 		error(404, 'Project not found');
 	}
 
@@ -356,14 +364,19 @@ export const deleteProjectWithVerification = command(deleteProjectParams, async 
 	if (!target) {
 		error(404, 'Project not found');
 	}
+	if (target.deletedAt !== null) {
+		return { projectId: params.projectId, name: target.name };
+	}
 
 	await consumeAdminVerification(db, adminUser.id, params.projectId, params.method, params.code);
-	await softDeleteOrganizationResources(db, params.projectId);
-	captureServerEvent(
-		'admin_project_deleted',
-		{ verification_method: params.method },
-		{ projectId: params.projectId }
-	);
+	const deletion = await softDeleteOrganizationResources(db, params.projectId);
+	if (deletion === 'deleted') {
+		captureServerEvent(
+			'admin_project_deleted',
+			{ verification_method: params.method },
+			{ projectId: params.projectId }
+		);
+	}
 
 	return { projectId: params.projectId, name: target.name };
 });

@@ -392,7 +392,6 @@ async function rotateMeterFeature(
 	const capHours = capHoursFor(previousType?.rate, previousType?.cap);
 	const anchor = Number.isFinite(capHours) ? await anchorFor(meter.projectId) : null;
 	const periodAt = makePeriodAt(anchor);
-	const closeAt = Math.max(now, meter.lastMeteredAt);
 
 	console.error(
 		`Billing meter ${meter.id} for VM ${meter.resourceId} changed feature ${meter.featureId} -> ${nextFeatureId}; closing out the old rate and restarting the cap`
@@ -409,6 +408,7 @@ async function rotateMeterFeature(
 			return [];
 		}
 
+		const closeAt = Math.max(now, locked.lastMeteredAt);
 		const { segments } = sliceCapUsage({
 			from: meteringWindowStart(locked, closeAt),
 			to: closeAt,
@@ -630,20 +630,83 @@ async function runBounded<T>(items: T[], limit: number, worker: (item: T) => Pro
 	await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runner));
 }
 
+const SYNC_CLAIM_TTL_MS = 5 * 60_000;
+
+function claimableUsageEvents(now: number) {
+	return and(
+		inArray(billingUsageEvents.syncStatus, ['pending', 'failed']),
+		or(
+			isNull(billingUsageEvents.syncClaimedAt),
+			lt(billingUsageEvents.syncClaimedAt, now - SYNC_CLAIM_TTL_MS)
+		)
+	);
+}
+
+function compareSyncOrder(a: BillingUsageEvent, b: BillingUsageEvent) {
+	const aRank = a.syncStatus === 'pending' ? 0 : 1;
+	const bRank = b.syncStatus === 'pending' ? 0 : 1;
+	return aRank - bRank || a.createdAt - b.createdAt;
+}
+
+async function claimUsageEvents(limit: number, projectId?: string) {
+	const db = initDrizzle();
+	const now = Date.now();
+	const candidates = db
+		.select({ id: billingUsageEvents.id })
+		.from(billingUsageEvents)
+		.where(
+			and(
+				claimableUsageEvents(now),
+				projectId ? eq(billingUsageEvents.projectId, projectId) : undefined
+			)
+		)
+		.orderBy(
+			sql`case when ${billingUsageEvents.syncStatus} = 'pending' then 0 else 1 end`,
+			asc(billingUsageEvents.createdAt)
+		)
+		.limit(limit)
+		.for('update', { skipLocked: true });
+
+	const claimed = await db
+		.update(billingUsageEvents)
+		.set({ syncClaimedAt: now })
+		.where(and(inArray(billingUsageEvents.id, candidates), claimableUsageEvents(now)))
+		.returning();
+
+	return claimed.sort(compareSyncOrder);
+}
+
+async function claimUsageEvent(eventId: string) {
+	const db = initDrizzle();
+	const now = Date.now();
+	const [claimed] = await db
+		.update(billingUsageEvents)
+		.set({ syncClaimedAt: now })
+		.where(and(eq(billingUsageEvents.id, eventId), claimableUsageEvents(now)))
+		.returning();
+
+	return claimed;
+}
+
 async function markUsageEventFailed(eventId: string, error: string) {
 	const db = initDrizzle();
 	await db
 		.update(billingUsageEvents)
-		.set({ syncStatus: 'failed', syncError: error })
-		.where(eq(billingUsageEvents.id, eventId));
+		.set({ syncStatus: 'failed', syncError: error, syncClaimedAt: null })
+		.where(
+			and(
+				eq(billingUsageEvents.id, eventId),
+				inArray(billingUsageEvents.syncStatus, ['pending', 'failed'])
+			)
+		);
 }
 
 async function markUsageEventAbandoned(eventId: string, error: string) {
 	const db = initDrizzle();
 	await db
 		.update(billingUsageEvents)
-		.set({ syncStatus: 'abandoned', syncError: error })
-		.where(eq(billingUsageEvents.id, eventId));
+		.set({ syncStatus: 'abandoned', syncError: error, syncClaimedAt: null })
+		.where(and(eq(billingUsageEvents.id, eventId), ne(billingUsageEvents.syncStatus, 'synced')));
 }
 
 async function projectIsGone(projectId: string) {
@@ -661,7 +724,7 @@ async function markUsageEventSynced(eventId: string) {
 	const db = initDrizzle();
 	await db
 		.update(billingUsageEvents)
-		.set({ syncStatus: 'synced', syncError: null, syncedAt: Date.now() })
+		.set({ syncStatus: 'synced', syncError: null, syncedAt: Date.now(), syncClaimedAt: null })
 		.where(eq(billingUsageEvents.id, eventId));
 }
 
@@ -744,7 +807,6 @@ async function trackUsageEvent(event: BillingUsageEvent) {
 		return 'synced' as const;
 	}
 
-	const db = initDrizzle();
 	try {
 		const payload = {
 			customerId: event.projectId,
@@ -764,13 +826,15 @@ async function trackUsageEvent(event: BillingUsageEvent) {
 			headers: { 'Idempotency-Key': event.idempotencyKey }
 		});
 
-		await db
-			.update(billingUsageEvents)
-			.set({ syncStatus: 'synced', syncError: null, syncedAt: Date.now() })
-			.where(eq(billingUsageEvents.id, event.id));
+		await markUsageEventSynced(event.id);
 		return 'synced' as const;
 	} catch (err) {
-		if (autumnStatus(err) === 404) {
+		const status = autumnStatus(err);
+		if (status === 409) {
+			await markUsageEventSynced(event.id);
+			return 'synced' as const;
+		}
+		if (status === 404) {
 			await markUsageEventAbandoned(event.id, formatAutumnError(err));
 			return 'abandoned' as const;
 		}
@@ -820,17 +884,26 @@ async function syncUsageEvents(events: BillingUsageEvent[]) {
 	return { synced, failed, abandoned };
 }
 
-export async function syncUsageEvent(id: string) {
+async function currentUsageEventStatus(id: string) {
 	const db = initDrizzle();
-	const event = await db.query.billingUsageEvents.findFirst({
-		where: eq(billingUsageEvents.id, id)
+	const current = await db.query.billingUsageEvents.findFirst({
+		where: eq(billingUsageEvents.id, id),
+		columns: { syncStatus: true }
 	});
 
-	if (!event) {
+	if (!current) {
 		return null;
 	}
-	if (event.syncStatus === 'synced') {
-		return 'synced' as const;
+	if (current.syncStatus === 'synced' || current.syncStatus === 'abandoned') {
+		return current.syncStatus;
+	}
+	return 'pending' as const;
+}
+
+export async function syncUsageEvent(id: string) {
+	const event = await claimUsageEvent(id);
+	if (!event) {
+		return currentUsageEventStatus(id);
 	}
 	if (await isProjectBillingExempt(event.projectId)) {
 		await markUsageEventSynced(event.id);
@@ -856,7 +929,11 @@ async function abandonStaleFailedEvents(now: number) {
 		.where(
 			and(
 				eq(billingUsageEvents.syncStatus, 'failed'),
-				lt(billingUsageEvents.createdAt, now - FAILED_EVENT_MAX_AGE_MS)
+				lt(billingUsageEvents.createdAt, now - FAILED_EVENT_MAX_AGE_MS),
+				or(
+					isNull(billingUsageEvents.syncClaimedAt),
+					lt(billingUsageEvents.syncClaimedAt, now - SYNC_CLAIM_TTL_MS)
+				)
 			)
 		)
 		.returning({ id: billingUsageEvents.id });
@@ -871,17 +948,8 @@ async function abandonStaleFailedEvents(now: number) {
 }
 
 export async function syncPendingUsage(limit = 50) {
-	const db = initDrizzle();
 	const expired = await abandonStaleFailedEvents(Date.now());
-	const events = await db
-		.select()
-		.from(billingUsageEvents)
-		.where(inArray(billingUsageEvents.syncStatus, ['pending', 'failed']))
-		.orderBy(
-			sql`case when ${billingUsageEvents.syncStatus} = 'pending' then 0 else 1 end`,
-			asc(billingUsageEvents.createdAt)
-		)
-		.limit(limit);
+	const events = await claimUsageEvents(limit);
 
 	const { synced, failed, abandoned } = await syncUsageEvents(events);
 
@@ -889,21 +957,7 @@ export async function syncPendingUsage(limit = 50) {
 }
 
 export async function syncProjectUsage(projectId: string, limit = 50) {
-	const db = initDrizzle();
-	const events = await db
-		.select()
-		.from(billingUsageEvents)
-		.where(
-			and(
-				eq(billingUsageEvents.projectId, projectId),
-				inArray(billingUsageEvents.syncStatus, ['pending', 'failed'])
-			)
-		)
-		.orderBy(
-			sql`case when ${billingUsageEvents.syncStatus} = 'pending' then 0 else 1 end`,
-			asc(billingUsageEvents.createdAt)
-		)
-		.limit(limit);
+	const events = await claimUsageEvents(limit, projectId);
 
 	const { synced, failed, abandoned } = await syncUsageEvents(events);
 

@@ -33,6 +33,20 @@
 	let loading = $state(false);
 	let actionError = $state('');
 	let amountInput = $state('10');
+	let pendingPurchase = $state<{ id: string; credits: number } | null>(null);
+
+	$effect(() => {
+		if (!open) {
+			pendingPurchase = null;
+		}
+	});
+
+	function purchaseFor(requestedCredits: number) {
+		if (pendingPurchase?.credits !== requestedCredits) {
+			pendingPurchase = { id: crypto.randomUUID(), credits: requestedCredits };
+		}
+		return pendingPurchase;
+	}
 
 	const amount = $derived(Number.parseFloat(amountInput));
 	const amountValid = $derived(Number.isFinite(amount) && amount > 0);
@@ -62,7 +76,13 @@
 		loading = true;
 		actionError = '';
 		try {
-			const result = await purchaseCredits({ projectId, credits });
+			const purchase = purchaseFor(credits);
+			const result = await purchaseCredits({
+				projectId,
+				credits: purchase.credits,
+				purchaseId: purchase.id
+			});
+			pendingPurchase = null;
 			if (result.url) {
 				window.location.href = result.url;
 				return;

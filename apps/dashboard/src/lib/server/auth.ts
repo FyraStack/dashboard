@@ -6,12 +6,17 @@ import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { deleteSessionCookie, expireCookie } from 'better-auth/cookies';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
-import { and, count, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, sql } from 'drizzle-orm';
 import { ac, organizationRoles } from '#lib/auth/organization-permissions.js';
 import OrganizationInvitationEmail from '#lib/emails/organization-invitation.svelte';
 import ResetPasswordEmail from '#lib/emails/reset-password.svelte';
 import VerifyEmail from '#lib/emails/verify-email.svelte';
-import { member, user as userTable, verification } from '#lib/server/db/auth.schema.js';
+import {
+	invitation as invitationTable,
+	member,
+	user as userTable,
+	verification
+} from '#lib/server/db/auth.schema.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { sendSecurityAlertEmail } from '#lib/server/email-notifications.js';
@@ -27,6 +32,7 @@ const PENDING_PASSKEY_MAX_AGE = 600;
 const PASSKEY_PASSWORD_CHANGE_MAX_AGE_MS = 60 * 1000;
 export const VERIFIED_2FA_DISABLE_HEADER = 'x-fyra-verified-2fa-disable';
 export const TOTP_SECRET_KEY_VERSION = 1;
+export const ALREADY_PROJECT_MEMBER_CODE = 'ALREADY_PROJECT_MEMBER';
 
 function passwordChangePasskeyIdentifier(userId: string) {
 	return `password-change-passkey:${userId}`;
@@ -92,6 +98,30 @@ const lazyDb = new Proxy({} as Database, {
 	}
 });
 
+const FIRST_ADMIN_LOCK_KEY = 7_120_431_001;
+const AUTH_EMAIL_RATE_LIMIT = { window: 300, max: 3 };
+
+async function promoteFirstUser(userId: string) {
+	const db = initDrizzle();
+	await db.transaction(async (tx) => {
+		await tx.execute(sql`select pg_advisory_xact_lock(${FIRST_ADMIN_LOCK_KEY})`);
+		await tx.execute(sql`
+			update "user"
+			set role = 'admin', is_admin = true
+			where id = ${userId}
+				and not exists (
+					select 1 from "user" admins
+					where admins.is_admin or 'admin' = any(string_to_array(admins.role, ','))
+				)
+				and not exists (
+					select 1 from "user" earlier, "user" target
+					where target.id = ${userId}
+						and (earlier.created_at, earlier.id) < (target.created_at, target.id)
+				)
+		`);
+	});
+}
+
 async function resyncOwnedProjectBilling(userId: string) {
 	const { updateProjectCustomer } = await import('#lib/server/billing/autumn.js');
 	const db = initDrizzle();
@@ -124,8 +154,22 @@ function buildAuth() {
 			}
 		],
 		database: drizzleAdapter(db, { provider: 'pg' }),
-		advanced: { database: { generateId: () => ulid() } },
+		advanced: {
+			database: { generateId: () => ulid() },
+			ipAddress: { ipAddressHeaders: ['cf-connecting-ip', 'x-forwarded-for'] }
+		},
 		session: { cookieCache: { enabled: true, maxAge: 300 } },
+		rateLimit: {
+			enabled: !dev,
+			storage: 'database',
+			customRules: {
+				'/request-password-reset': AUTH_EMAIL_RATE_LIMIT,
+				'/send-verification-email': AUTH_EMAIL_RATE_LIMIT,
+				'/change-email': AUTH_EMAIL_RATE_LIMIT,
+				'/sign-up/email': { window: 600, max: 5 },
+				'/get-session': false
+			}
+		},
 		user: {
 			changeEmail: {
 				enabled: true
@@ -148,14 +192,10 @@ function buildAuth() {
 		databaseHooks: {
 			user: {
 				create: {
-					before: async (newUser) => {
-						const [row] = await db.select({ count: count() }).from(userTable);
-						const isFirstUser = row.count === 0;
-						return {
-							data: { ...newUser, role: isFirstUser ? 'admin' : 'user', isAdmin: isFirstUser }
-						};
-					},
-					after: (createdUser) => {
+					before: (newUser) =>
+						Promise.resolve({ data: { ...newUser, role: 'user', isAdmin: false } }),
+					after: async (createdUser) => {
+						await promoteFirstUser(createdUser.id);
 						captureServerEvent(
 							'user_signed_up',
 							{},
@@ -164,7 +204,6 @@ function buildAuth() {
 								set: { email: createdUser.email, name: createdUser.name }
 							}
 						);
-						return Promise.resolve();
 					}
 				}
 			},
@@ -427,6 +466,34 @@ function buildAuth() {
 			organization({
 				ac,
 				roles: organizationRoles,
+				organizationHooks: {
+					beforeAcceptInvitation: async ({ invitation: accepted, user: acceptingUser }) => {
+						const [existing] = await db
+							.select({ id: member.id })
+							.from(member)
+							.where(
+								and(
+									eq(member.organizationId, accepted.organizationId),
+									eq(member.userId, acceptingUser.id)
+								)
+							)
+							.limit(1);
+						if (!existing) {
+							return;
+						}
+
+						await db
+							.update(invitationTable)
+							.set({ status: 'accepted' })
+							.where(
+								and(eq(invitationTable.id, accepted.id), eq(invitationTable.status, 'pending'))
+							);
+						throw APIError.from('BAD_REQUEST', {
+							code: ALREADY_PROJECT_MEMBER_CODE,
+							message: 'You are already a member of this project.'
+						});
+					}
+				},
 				sendInvitationEmail: ({ email, id, organization: invitedOrganization }) => {
 					const invitationUrl = `${baseURL}/accept-invitation/${id}`;
 					return sendAuthEmail(

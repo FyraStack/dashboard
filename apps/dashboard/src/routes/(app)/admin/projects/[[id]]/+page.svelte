@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
+	import { ulid } from 'ulid';
 	import { authClient } from '#lib/auth-client.js';
 	import VmBillingReversalDialog from '#lib/components/admin/vm-billing-reversal-dialog.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -214,6 +215,8 @@
 	type DeletionVerificationMethod = 'passkey' | 'totp' | 'email';
 
 	let createProjectOpen = $state(false);
+	let createProjectRequestId = crypto.randomUUID();
+	let createVmRequestId = ulid();
 	let createProjectName = $state('');
 	let createProjectOwnerId = $state('');
 	let createProjectOwnerSearch = $state('');
@@ -232,6 +235,7 @@
 	);
 
 	function openCreateProject() {
+		createProjectRequestId = crypto.randomUUID();
 		createProjectName = '';
 		createProjectOwnerId = '';
 		createProjectOwnerSearch = '';
@@ -248,8 +252,10 @@
 		try {
 			const created = await createAdminProject({
 				name: createProjectName.trim(),
-				ownerUserId: createProjectOwnerId
+				ownerUserId: createProjectOwnerId,
+				requestId: createProjectRequestId
 			});
+			createProjectRequestId = crypto.randomUUID();
 			await invalidate('app:admin-projects');
 			createProjectOpen = false;
 			toast.success('Project created');
@@ -283,6 +289,7 @@
 
 	function openCreateVm(project: AdminProject) {
 		createVmProject = project;
+		createVmRequestId = ulid();
 		createVmName = generateServerName();
 		createVmTypeId = admin.vmTypes[0]?.id ?? '';
 		createVmImageId = admin.images[0]?.id ?? '';
@@ -324,6 +331,7 @@
 		try {
 			await createAdminVm({
 				projectId: createVmProject.id,
+				requestId: createVmRequestId,
 				vmTypeId: createVmTypeId,
 				name: createVmName.trim(),
 				networkingMode: createVmNetworking,

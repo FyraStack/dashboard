@@ -28,11 +28,14 @@ function cachedLookup<T>(key: string, compute: () => Promise<T>): Promise<T> {
 	return lookup;
 }
 
+export const PROJECT_DELETION_CLAIM_STALE_MS = 15 * 60_000;
+
 type ProjectAccess = {
 	projectId: string;
 	role: string | null;
 	disabled: boolean;
 	deletedAt: number | null;
+	deletingAt: number | null;
 } | null;
 
 function loadProjectAccess(
@@ -46,7 +49,8 @@ function loadProjectAccess(
 				projectId: organization.id,
 				role: member.role,
 				disabled: organization.disabled,
-				deletedAt: organization.deletedAt
+				deletedAt: organization.deletedAt,
+				deletingAt: organization.deletingAt
 			})
 			.from(organization)
 			.leftJoin(member, and(eq(member.organizationId, organization.id), eq(member.userId, userId)))
@@ -55,6 +59,10 @@ function loadProjectAccess(
 
 		return (projectAccess ?? null) as ProjectAccess;
 	});
+}
+
+function isDeletionInProgress(deletingAt: number | null) {
+	return deletingAt !== null && deletingAt > Date.now() - PROJECT_DELETION_CLAIM_STALE_MS;
 }
 
 export async function requireAdmin(db: Database, userId: string): Promise<void> {
@@ -106,6 +114,10 @@ export async function requireProjectAccess(
 
 	if (projectAccess.disabled) {
 		error(403, 'This project has been disabled');
+	}
+
+	if (minLevel !== 'read' && isDeletionInProgress(projectAccess.deletingAt)) {
+		error(409, 'This project is being deleted');
 	}
 
 	if (!(projectAccess.role && hasProjectRole(projectAccess.role, minLevel))) {

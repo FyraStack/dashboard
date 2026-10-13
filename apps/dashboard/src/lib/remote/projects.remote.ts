@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { type ProjectRole, projectRoles } from '#lib/auth/organization-permissions.js';
 import {
 	accessibilityFixtureEnabled,
@@ -9,14 +9,11 @@ import {
 } from '#lib/server/accessibility-fixtures.js';
 import { initAuth } from '#lib/server/auth.js';
 import { requireProjectAccess } from '#lib/server/auth-context.js';
-import {
-	ensureLocalProjectBillingCustomer,
-	ensureProjectCustomer,
-	updateProjectCustomer
-} from '#lib/server/billing/autumn.js';
-import { member, organization } from '#lib/server/db/auth.schema.js';
+import { updateProjectCustomer } from '#lib/server/billing/autumn.js';
+import { invitation, member, organization } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { createProjectOnce } from '#lib/server/project-creation.js';
 import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
 import { command, getRequestEvent, query } from '$app/server';
 
@@ -200,7 +197,7 @@ export const getProject = query(getParams, async (params): Promise<GetResult> =>
 	};
 });
 
-const createParams = type({ name: 'string' });
+const createParams = type({ name: 'string', requestId: '0 < string <= 128' });
 export const createProject = command(createParams, async (params) => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) {
@@ -209,22 +206,25 @@ export const createProject = command(createParams, async (params) => {
 
 	const name = toProjectName(params.name);
 	const auth = initAuth();
-	const org = await auth.api.createOrganization({
-		headers: event.request.headers,
-		body: {
-			name,
-			slug: toSlug(name)
-		}
-	});
+	const project = await createProjectOnce(
+		initDrizzle(),
+		{ userId: event.locals.user.id, requestId: params.requestId },
+		() =>
+			auth.api.createOrganization({
+				headers: event.request.headers,
+				body: {
+					name,
+					slug: toSlug(name)
+				}
+			})
+	);
 
-	await ensureLocalProjectBillingCustomer(org.id);
-	ensureProjectCustomer(org.id).catch((err) => {
-		console.warn(`Failed to sync Autumn customer for project ${org.id}`, err);
-	});
 	clearProjectListCache(event.locals.user.id);
-	captureServerEvent('project_created', {}, { projectId: org.id });
+	if (project.created) {
+		captureServerEvent('project_created', {}, { projectId: project.id });
+	}
 
-	return { id: org.id };
+	return { id: project.id };
 });
 
 const deleteParams = type({ projectId: 'string' });
@@ -237,9 +237,11 @@ export const deleteProject = command(deleteParams, async (params) => {
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'owner');
 
-	await softDeleteOrganizationResources(db, params.projectId);
+	const deletion = await softDeleteOrganizationResources(db, params.projectId);
 	clearProjectListCache();
-	captureServerEvent('project_deleted', {}, { projectId: params.projectId });
+	if (deletion === 'deleted') {
+		captureServerEvent('project_deleted', {}, { projectId: params.projectId });
+	}
 });
 
 const updateParams = type({ projectId: 'string', name: 'string' });
@@ -279,15 +281,37 @@ export const addMember = command(addMemberParams, async (params) => {
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'admin');
 
 	const auth = initAuth();
-	await auth.api.createInvitation({
-		headers: event.request.headers,
-		body: {
-			email: params.email.trim(),
-			role: params.permissions,
-			organizationId: params.projectId,
-			resend: true
+	const email = params.email.trim();
+	const invite = () =>
+		auth.api.createInvitation({
+			headers: event.request.headers,
+			body: {
+				email,
+				role: params.permissions,
+				organizationId: params.projectId,
+				resend: true
+			}
+		});
+
+	try {
+		await invite();
+	} catch (err) {
+		const [pending] = await db
+			.select({ id: invitation.id })
+			.from(invitation)
+			.where(
+				and(
+					eq(invitation.organizationId, params.projectId),
+					eq(invitation.email, email.toLowerCase()),
+					eq(invitation.status, 'pending')
+				)
+			)
+			.limit(1);
+		if (!pending) {
+			throw err;
 		}
-	});
+		await invite();
+	}
 	captureServerEvent(
 		'project_member_invited',
 		{ permissions: params.permissions },
@@ -341,7 +365,15 @@ export const removeMember = command(removeMemberParams, async (params) => {
 		error(400, 'Project owner cannot be removed');
 	}
 
-	await db.delete(member).where(eq(member.id, target.id));
+	await db
+		.delete(member)
+		.where(
+			and(
+				eq(member.organizationId, params.projectId),
+				eq(member.userId, params.userId),
+				ne(member.role, 'owner')
+			)
+		);
 	clearProjectListCache();
 	captureServerEvent(
 		'project_member_removed',

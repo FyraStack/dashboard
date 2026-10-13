@@ -1,26 +1,63 @@
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
+import { and, eq, gt, sql } from 'drizzle-orm';
 import TotpResetCodeEmail from '#lib/emails/totp-reset-code.svelte';
 import { initAuth, VERIFIED_2FA_DISABLE_HEADER } from '#lib/server/auth.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import { verification } from '#lib/server/db/auth.schema.js';
+import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { sendSecurityAlertEmail } from '#lib/server/email-notifications.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
+import { ulid } from '#lib/server/id.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import {
 	beginTotpReset,
-	clearTotpResetGrant,
+	consumeTotpResetGrantAndRemoveTotp,
+	discardTotpResetCode,
 	normalizeTotpResetChoice,
-	removeTotpWithVerifiedPassword,
 	requireTotpResetGrant,
 	resolvePendingTwoFactorUser,
 	TOTP_RESET_CODE_TTL_MS,
 	type TotpResetUser,
-	verifyTotpResetCode as verifyTotpResetEmailCode
+	verifyTotpResetCode as verifyTotpResetEmailCode,
+	verifyTotpResetPassword
 } from '#lib/server/totp-reset.js';
 import { command, getRequestEvent } from '$app/server';
 
 const CODE_LENGTH = 6;
+const SECURITY_ALERT_DEDUPE_MS = 5 * 60 * 1000;
+
+function claimSecurityAlert(db: Database, key: string) {
+	const identifier = `security-alert:${key}`;
+	return db.transaction(async (tx) => {
+		await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${identifier}))`);
+		const now = new Date();
+		const [existing] = await tx
+			.select({ id: verification.id })
+			.from(verification)
+			.where(and(eq(verification.identifier, identifier), gt(verification.expiresAt, now)))
+			.limit(1);
+		if (existing) {
+			return false;
+		}
+		await tx.delete(verification).where(eq(verification.identifier, identifier));
+		await tx.insert(verification).values({
+			id: ulid(),
+			identifier,
+			value: 'sent',
+			expiresAt: new Date(now.getTime() + SECURITY_ALERT_DEDUPE_MS)
+		});
+		return true;
+	});
+}
+
+async function sendSecurityAlertSafely(params: Parameters<typeof sendSecurityAlertEmail>[0]) {
+	try {
+		await sendSecurityAlertEmail(params);
+	} catch (err) {
+		console.error('Failed to send security alert email', err);
+	}
+}
 
 const disableTwoFactorParams = type({ password: 'string', method: 'string', code: 'string' });
 
@@ -68,13 +105,15 @@ export const disableTwoFactorWithVerification = command(disableTwoFactorParams, 
 		body: { password: params.password }
 	});
 
-	await sendSecurityAlertEmail({
-		to: user.email,
-		userName: user.name,
-		alertType: 'Two-factor authentication disabled',
-		message: 'Authenticator app two-factor authentication was disabled for your Stack account.',
-		actionUrl: event.url.origin
-	});
+	if (await claimSecurityAlert(initDrizzle(), `two-factor-disabled:${user.id}`)) {
+		await sendSecurityAlertSafely({
+			to: user.email,
+			userName: user.name,
+			alertType: 'Two-factor authentication disabled',
+			message: 'Authenticator app two-factor authentication was disabled for your Stack account.',
+			actionUrl: event.url.origin
+		});
+	}
 	captureServerEvent('two_factor_disabled', { verification_method: params.method });
 });
 
@@ -98,14 +137,19 @@ export const sendTotpResetCode = command(async () => {
 	const db = initDrizzle();
 	const user = await resolveTotpResetUser(event, db);
 
-	const code = await beginTotpReset(db, user.id);
+	const { code, id } = await beginTotpReset(db, user.id);
 
-	await sendRenderedEmail({
-		component: TotpResetCodeEmail,
-		props: { userName: user.name, code, expiresInMinutes: TOTP_RESET_CODE_TTL_MS / 60_000 },
-		subject: 'Reset your Stack two-factor authentication',
-		to: user.email
-	});
+	try {
+		await sendRenderedEmail({
+			component: TotpResetCodeEmail,
+			props: { userName: user.name, code, expiresInMinutes: TOTP_RESET_CODE_TTL_MS / 60_000 },
+			subject: 'Reset your Stack two-factor authentication',
+			to: user.email
+		});
+	} catch (err) {
+		await discardTotpResetCode(db, id);
+		throw err;
+	}
 });
 
 const verifyTotpResetParams = type({ code: 'string' });
@@ -139,11 +183,13 @@ export const confirmTotpResetChoice = command(confirmTotpResetParams, async (par
 
 	const auth = initAuth();
 	const authContext = await auth.$context;
-	await removeTotpWithVerifiedPassword(db, user.id, params.password, (hash, password) =>
+	await verifyTotpResetPassword(db, user.id, params.password, (hash, password) =>
 		authContext.password.verify({ hash, password })
 	);
-	await clearTotpResetGrant(db, user.id);
-	await sendSecurityAlertEmail({
+	if (!(await consumeTotpResetGrantAndRemoveTotp(db, user.id))) {
+		error(400, 'Verify your email before changing two-factor authentication.');
+	}
+	await sendSecurityAlertSafely({
 		to: user.email,
 		userName: user.name,
 		alertType:

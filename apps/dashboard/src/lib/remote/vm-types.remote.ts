@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { asc, desc, eq } from 'drizzle-orm';
+import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureVmTypes
@@ -56,24 +56,33 @@ export const createVmType = command(createParams, async (params) => {
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
 
-	const lastVmType = await db.query.vmTypes.findFirst({
-		orderBy: [desc(vmTypes.sortOrder)]
+	const inserted = await db.transaction(async (tx) => {
+		await tx.execute(sql`select pg_advisory_xact_lock(hashtext('vm_types_sort_order'))`);
+		const [{ nextSortOrder }] = await tx
+			.select({ nextSortOrder: sql<number>`coalesce(max(${vmTypes.sortOrder}), -1)::int + 1` })
+			.from(vmTypes);
+
+		const [row] = await tx
+			.insert(vmTypes)
+			.values({
+				sortOrder: nextSortOrder,
+				name: params.name,
+				isa: params.isa,
+				cores: params.cores,
+				ramCapacity: params.ramCapacity,
+				storageAmount: params.storageAmount,
+				rate: params.rate,
+				cap: params.cap,
+				autumnFeatureId: params.autumnFeatureId.trim() || null
+			})
+			.onConflictDoNothing({ target: vmTypes.name })
+			.returning({ id: vmTypes.id });
+		return row;
 	});
 
-	const [inserted] = await db
-		.insert(vmTypes)
-		.values({
-			sortOrder: (lastVmType?.sortOrder ?? -1) + 1,
-			name: params.name,
-			isa: params.isa,
-			cores: params.cores,
-			ramCapacity: params.ramCapacity,
-			storageAmount: params.storageAmount,
-			rate: params.rate,
-			cap: params.cap,
-			autumnFeatureId: params.autumnFeatureId.trim() || null
-		})
-		.returning();
+	if (!inserted) {
+		error(409, `A VM type named "${params.name}" already exists`);
+	}
 
 	return { id: inserted.id };
 });
@@ -103,6 +112,17 @@ export const updateVmType = command(updateParams, async (params) => {
 	});
 	if (!existing) {
 		error(404, 'VM type not found');
+	}
+
+	if (params.name !== undefined) {
+		const [duplicate] = await db
+			.select({ id: vmTypes.id })
+			.from(vmTypes)
+			.where(and(eq(vmTypes.name, params.name), ne(vmTypes.id, params.vmTypeId)))
+			.limit(1);
+		if (duplicate) {
+			error(409, `A VM type named "${params.name}" already exists`);
+		}
 	}
 
 	const { vmTypeId, ...fields } = params;

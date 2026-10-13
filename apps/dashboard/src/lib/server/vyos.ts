@@ -32,6 +32,7 @@ export interface VyosStaticRouteParams {
 }
 
 const TRAILING_SLASHES = /\/+$/;
+const MISSING_PATH_PATTERN = /does not exist|nothing to delete/i;
 
 function stringifyErrorDetails(details: unknown): string {
 	try {
@@ -197,9 +198,26 @@ export class VyosClient {
 	private async deleteDelegatedRouteWithoutSavingConfig(
 		destination: string
 	): Promise<VyosCommandResponse | null> {
-		return await this.post('configure', {
-			op: 'delete',
-			path: ['protocols', 'static', 'route6', destination]
-		});
+		try {
+			return await this.post('configure', {
+				op: 'delete',
+				path: ['protocols', 'static', 'route6', destination]
+			});
+		} catch (err) {
+			if (VyosClient.isMissingPathError(err)) {
+				return null;
+			}
+			const remainingRoutes = await this.getStaticIpv6Routes();
+			if (!remainingRoutes.route6?.[destination]) {
+				return null;
+			}
+			throw err;
+		}
+	}
+
+	private static isMissingPathError(err: unknown) {
+		return (
+			err instanceof VyosError && MISSING_PATH_PATTERN.test(stringifyErrorDetails(err.details))
+		);
 	}
 }

@@ -1,13 +1,13 @@
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { asc, desc, eq } from 'drizzle-orm';
+import { asc, desc, eq, sql } from 'drizzle-orm';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureImages
 } from '#lib/server/accessibility-fixtures.js';
 import { requireAdmin } from '#lib/server/auth-context.js';
 import { getBackend } from '#lib/server/backends/index.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { baseImages } from '#lib/server/db/schema.js';
 import { command, getRequestEvent, query } from '$app/server';
 
@@ -40,6 +40,10 @@ function validateLogoSvg(value: string | undefined, isOfficial: boolean) {
 		error(400, 'SVG logo contains unsafe attributes');
 	}
 	return svg;
+}
+
+async function lockImageOrder(tx: Parameters<Parameters<Database['transaction']>[0]>[0]) {
+	await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('base_images_order', 0))`);
 }
 
 async function getUploadedImage(volid: string) {
@@ -79,7 +83,10 @@ export const listImages = query(async () => {
 	}));
 });
 
+const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+
 const createParams = type({
+	id: 'string?',
 	name: 'string',
 	version: 'string',
 	description: 'string',
@@ -109,30 +116,48 @@ export const createImage = command(createParams, async (params) => {
 	validateAccentColor(accentColor);
 	const logoSvg = validateLogoSvg(params.logoSvg, isOfficial);
 
-	const lastImage = await db.query.baseImages.findFirst({
-		orderBy: [desc(baseImages.sortOrder)]
+	if (params.id !== undefined && !ULID_PATTERN.test(params.id)) {
+		error(400, 'Invalid image id');
+	}
+
+	return await db.transaction(async (tx) => {
+		await lockImageOrder(tx);
+		if (params.id) {
+			const existing = await tx.query.baseImages.findFirst({
+				where: eq(baseImages.id, params.id),
+				columns: { id: true }
+			});
+			if (existing) {
+				return { id: existing.id };
+			}
+		}
+
+		const lastImage = await tx.query.baseImages.findFirst({
+			orderBy: [desc(baseImages.sortOrder)]
+		});
+
+		const [inserted] = await tx
+			.insert(baseImages)
+			.values({
+				...(params.id ? { id: params.id } : {}),
+				sortOrder: (lastImage?.sortOrder ?? -1) + 1,
+				name: params.name,
+				version: params.version,
+				description: params.description,
+				icon: params.icon,
+				color: params.color ?? 'bg-gray-600',
+				isOfficial,
+				logoSvg,
+				accentColor,
+				imageType: selectedImage.format || 'qcow2',
+				secureBoot: params.secureBoot ?? true,
+				filePath: params.filePath,
+				isa: params.isa
+			})
+			.returning();
+
+		return { id: inserted.id };
 	});
-
-	const [inserted] = await db
-		.insert(baseImages)
-		.values({
-			sortOrder: (lastImage?.sortOrder ?? -1) + 1,
-			name: params.name,
-			version: params.version,
-			description: params.description,
-			icon: params.icon,
-			color: params.color ?? 'bg-gray-600',
-			isOfficial,
-			logoSvg,
-			accentColor,
-			imageType: selectedImage.format || 'qcow2',
-			secureBoot: params.secureBoot ?? true,
-			filePath: params.filePath,
-			isa: params.isa
-		})
-		.returning();
-
-	return { id: inserted.id };
 });
 
 const updateParams = type({
@@ -203,22 +228,30 @@ export const reorderImages = command(reorderParams, async (params) => {
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
 
-	const rows = await db.query.baseImages.findMany({ columns: { id: true } });
-	const existingIds = new Set(rows.map((row) => row.id));
-	const requestedIds = new Set(params.imageIds);
-	if (
-		params.imageIds.length !== existingIds.size ||
-		requestedIds.size !== existingIds.size ||
-		params.imageIds.some((id) => !existingIds.has(id))
-	) {
-		error(400, 'Image order is out of date, refresh and try again');
-	}
+	await db.transaction(async (tx) => {
+		await lockImageOrder(tx);
+		const rows = await tx.select({ id: baseImages.id }).from(baseImages);
+		const existingIds = new Set(rows.map((row) => row.id));
+		const requestedIds = new Set(params.imageIds);
+		if (
+			params.imageIds.length !== existingIds.size ||
+			requestedIds.size !== existingIds.size ||
+			params.imageIds.some((id) => !existingIds.has(id))
+		) {
+			error(400, 'Image order is out of date, refresh and try again');
+		}
+		if (params.imageIds.length === 0) {
+			return;
+		}
 
-	await Promise.all(
-		params.imageIds.map((id, index) =>
-			db.update(baseImages).set({ sortOrder: index }).where(eq(baseImages.id, id))
-		)
-	);
+		const orderValues = sql.join(
+			params.imageIds.map((id, index) => sql`(${id}, ${index}::integer)`),
+			sql`, `
+		);
+		await tx.execute(
+			sql`update base_images as image set sort_order = ordered.sort_order from (values ${orderValues}) as ordered(id, sort_order) where image.id = ordered.id`
+		);
+	});
 });
 
 const deleteParams = type({ imageId: 'string' });
@@ -292,11 +325,17 @@ export const importProxmoxImageFromUrl = command(importUrlParams, async (params)
 
 	const backend = getBackend('proxmox');
 	const storage = params.storage?.trim() || 'local';
-	const targets = (await backend.listImageImportTargets()).filter(
-		(target) => target.storage === storage
-	);
+	const filename = params.filename.trim();
+	const [importTargets, existingImages] = await Promise.all([
+		backend.listImageImportTargets(),
+		backend.listImages()
+	]);
+	const targets = importTargets.filter((target) => target.storage === storage);
 	if (targets.length === 0) {
 		error(400, `No online Proxmox nodes expose import storage "${storage}"`);
+	}
+	if (existingImages.some((image) => image.storage === storage && image.filename === filename)) {
+		error(409, `An image named "${filename}" already exists on storage "${storage}"`);
 	}
 
 	const tasks = await Promise.all(
@@ -307,7 +346,7 @@ export const importProxmoxImageFromUrl = command(importUrlParams, async (params)
 				node: target.node,
 				storage: target.storage,
 				url: params.url,
-				filename: params.filename,
+				filename,
 				checksum: params.checksum?.trim() || undefined,
 				checksumAlgorithm: params.checksumAlgorithm,
 				verifyCertificates: params.verifyCertificates ?? true

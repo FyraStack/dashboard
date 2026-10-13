@@ -1,5 +1,6 @@
 import { untrack } from 'svelte';
 import { toast } from 'svelte-sonner';
+import { ulid } from 'ulid';
 import { config } from '#lib/config.js';
 import {
 	defaultFeatureFlags,
@@ -222,6 +223,7 @@ export class AdminState {
 	importTasks = $state<ImportTask[]>([]);
 	imgDialogOpen = $state(false);
 	imgEditing = $state<BaseImage | null>(null);
+	imgCreateId = ulid();
 	imgSaving = $state(false);
 	imgError = $state('');
 	imgName = $state('');
@@ -563,7 +565,7 @@ export class AdminState {
 	}
 
 	async vtSave() {
-		if (!this.vtName.trim()) {
+		if (this.vtSaving || !this.vtName.trim()) {
 			return;
 		}
 		this.vtSaving = true;
@@ -686,7 +688,7 @@ export class AdminState {
 	}
 
 	async importImageFromUrl() {
-		if (!this.importUrl.trim()) {
+		if (this.importSaving || !this.importUrl.trim()) {
 			return;
 		}
 		if (!this.importFilename.trim()) {
@@ -746,6 +748,7 @@ export class AdminState {
 
 	imgOpenCreate() {
 		this.imgEditing = null;
+		this.imgCreateId = ulid();
 		this.imgName = '';
 		this.imgVersion = '';
 		this.imgDescription = '';
@@ -785,6 +788,9 @@ export class AdminState {
 	}
 
 	async imgSave() {
+		if (this.imgSaving) {
+			return;
+		}
 		const selectedImage = this.pveImages.find((image) => image.volid === this.imgFilePath);
 		if (!(this.imgName.trim() && selectedImage)) {
 			return;
@@ -821,8 +827,12 @@ export class AdminState {
 					this.images[index] = { ...this.images[index], ...localData };
 				}
 			} else {
-				const result = await createImage(data);
-				this.images.push({ id: result.id, ...localData });
+				const result = await createImage({ id: this.imgCreateId, ...data });
+				this.images = [
+					...this.images.filter((image) => image.id !== result.id),
+					{ id: result.id, ...localData }
+				];
+				this.imgCreateId = ulid();
 			}
 
 			this.imgDialogOpen = false;

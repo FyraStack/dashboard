@@ -13,6 +13,7 @@ import { instrument, timingLog } from '#lib/server/observability.js';
 import { dev } from '$app/env';
 
 const FEATURE_FLAGS_KEY = 'feature-flags';
+const FEATURE_FLAG_KEY_PREFIX = 'feature-flag:';
 const FLAGS_FRESH_TTL_MS = 60_000;
 const FLAGS_STALE_TTL_MS = 15 * 60_000;
 
@@ -46,12 +47,24 @@ function cacheFlags(flags: FeatureFlags): FeatureFlags {
 	return flags;
 }
 
+function featureFlagKey(flag: FeatureFlagKey) {
+	return `${FEATURE_FLAG_KEY_PREFIX}${flag}`;
+}
+
 async function loadFeatureFlagsFromKv(kv: KVNamespace): Promise<FeatureFlags> {
 	return await instrument('featureFlags.kv.get', async () => {
-		const storedFlags = await kv.get(FEATURE_FLAGS_KEY, 'json');
-		return cacheFlags(
-			normalizeFeatureFlags(storedFlags as Partial<Record<FeatureFlagKey, unknown>> | null)
-		);
+		const [legacyFlags, flagValues] = await Promise.all([
+			kv.get(FEATURE_FLAGS_KEY, 'json') as Promise<Partial<Record<FeatureFlagKey, unknown>> | null>,
+			Promise.all(featureFlagKeys.map((flag) => kv.get(featureFlagKey(flag))))
+		]);
+		const storedFlags: Partial<Record<FeatureFlagKey, unknown>> = { ...legacyFlags };
+		featureFlagKeys.forEach((flag, index) => {
+			const value = flagValues[index];
+			if (value === 'true' || value === 'false') {
+				storedFlags[flag] = value === 'true';
+			}
+		});
+		return cacheFlags(normalizeFeatureFlags(storedFlags));
 	});
 }
 
@@ -122,16 +135,12 @@ export async function setFeatureFlag(
 		throw new Error('Feature flag KV binding is unavailable');
 	}
 
-	const currentFlags = await getFeatureFlags({ fresh: true });
-	const nextFlags = {
+	await kv.put(featureFlagKey(flag), String(enabled));
+	const currentFlags = await loadFeatureFlagsFromKv(kv);
+	return cacheFlags({
 		...currentFlags,
 		[flag]: enabled
-	};
-
-	await kv.put(FEATURE_FLAGS_KEY, JSON.stringify(nextFlags));
-	cacheFlags(nextFlags);
-
-	return nextFlags;
+	});
 }
 
 export async function requireFeatureFlag(flag: FeatureFlagKey): Promise<void> {

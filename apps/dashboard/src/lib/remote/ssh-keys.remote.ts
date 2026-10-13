@@ -66,7 +66,21 @@ export const createSshKey = command(createParams, async (params) => {
 			fingerprint,
 			description: params.description ?? null
 		})
+		.onConflictDoNothing({ target: [sshKeys.userId, sshKeys.fingerprint] })
 		.returning();
+
+	if (!inserted) {
+		const existing = await db.query.sshKeys.findFirst({
+			where: and(eq(sshKeys.userId, event.locals.user.id), eq(sshKeys.fingerprint, fingerprint))
+		});
+		if (!existing) {
+			error(409, 'This SSH key could not be saved. Try again.');
+		}
+		if (existing.name !== params.name) {
+			error(409, `This SSH key is already saved as "${existing.name}"`);
+		}
+		return { id: existing.id, fingerprint: existing.fingerprint };
+	}
 
 	captureServerEvent('ssh_key_created', { key_type: parts[0] });
 

@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { and, eq, gt } from 'drizzle-orm';
+import { and, desc, eq, gt, sql } from 'drizzle-orm';
 import PasswordChangeCodeEmail from '#lib/emails/password-change-code.svelte';
 import { initAuth } from '#lib/server/auth.js';
 import { account, verification } from '#lib/server/db/auth.schema.js';
@@ -12,6 +12,7 @@ import { command, getRequestEvent } from '$app/server';
 
 const CODE_LENGTH = 6;
 const CODE_TTL_MS = 10 * 60 * 1000;
+const CODE_RESEND_INTERVAL_MS = 60 * 1000;
 
 function passwordChangeIdentifier(userId: string) {
 	return `password-change:${userId}`;
@@ -76,19 +77,57 @@ export const sendPasswordChangeCode = command(async () => {
 
 	const db = initDrizzle();
 	const code = generateCode();
+	const id = ulid();
 	const identifier = passwordChangeIdentifier(user.id);
 	const value = await hashCode(user.id, code);
-	const expiresAt = new Date(Date.now() + CODE_TTL_MS);
 
-	await db.delete(verification).where(eq(verification.identifier, identifier));
-	await db.insert(verification).values({ id: ulid(), identifier, value, expiresAt });
+	const issued = await db.transaction(async (tx) => {
+		await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${identifier}))`);
+		const now = Date.now();
+		const [existing] = await tx
+			.select({ createdAt: verification.createdAt })
+			.from(verification)
+			.where(
+				and(eq(verification.identifier, identifier), gt(verification.expiresAt, new Date(now)))
+			)
+			.orderBy(desc(verification.createdAt))
+			.limit(1);
+		const elapsed = existing ? now - existing.createdAt.getTime() : Number.POSITIVE_INFINITY;
+		if (elapsed < CODE_RESEND_INTERVAL_MS) {
+			return {
+				sent: false,
+				retryAfterSeconds: Math.ceil((CODE_RESEND_INTERVAL_MS - elapsed) / 1000)
+			};
+		}
 
-	await sendRenderedEmail({
-		component: PasswordChangeCodeEmail,
-		props: { userName: user.name, code, expiresInMinutes: CODE_TTL_MS / 60_000 },
-		subject: 'Confirm your Stack password change',
-		to: user.email
+		await tx.delete(verification).where(eq(verification.identifier, identifier));
+		await tx.insert(verification).values({
+			id,
+			identifier,
+			value,
+			expiresAt: new Date(now + CODE_TTL_MS),
+			createdAt: new Date(now)
+		});
+		return { sent: true, retryAfterSeconds: CODE_RESEND_INTERVAL_MS / 1000 };
 	});
+
+	if (!issued.sent) {
+		return issued;
+	}
+
+	try {
+		await sendRenderedEmail({
+			component: PasswordChangeCodeEmail,
+			props: { userName: user.name, code, expiresInMinutes: CODE_TTL_MS / 60_000 },
+			subject: 'Confirm your Stack password change',
+			to: user.email
+		});
+	} catch (err) {
+		await db.delete(verification).where(eq(verification.id, id));
+		throw err;
+	}
+
+	return issued;
 });
 
 const emailParams = type({ currentPassword: 'string', newPassword: 'string', code: 'string' });

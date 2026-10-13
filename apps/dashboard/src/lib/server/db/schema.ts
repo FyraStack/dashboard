@@ -7,6 +7,7 @@ import {
 	index,
 	inet,
 	integer,
+	jsonb,
 	numeric,
 	pgEnum,
 	pgSequence,
@@ -39,18 +40,22 @@ export const ipFamilyEnum = pgEnum('ip_family', ['ipv4', 'ipv6']);
 
 // VM Types
 
-export const vmTypes = pgTable('vm_types', {
-	id: ulidPk(),
-	name: text('name').notNull(),
-	isa: vmIsaEnum('isa').notNull(),
-	cores: integer('cores').notNull(),
-	ramCapacity: integer('ram_capacity').notNull(),
-	storageAmount: integer('storage_amount').notNull(),
-	rate: numeric('rate').notNull(),
-	cap: numeric('cap').notNull(),
-	autumnFeatureId: text('autumn_feature_id'),
-	sortOrder: integer('sort_order').notNull().default(0)
-});
+export const vmTypes = pgTable(
+	'vm_types',
+	{
+		id: ulidPk(),
+		name: text('name').notNull(),
+		isa: vmIsaEnum('isa').notNull(),
+		cores: integer('cores').notNull(),
+		ramCapacity: integer('ram_capacity').notNull(),
+		storageAmount: integer('storage_amount').notNull(),
+		rate: numeric('rate').notNull(),
+		cap: numeric('cap').notNull(),
+		autumnFeatureId: text('autumn_feature_id'),
+		sortOrder: integer('sort_order').notNull().default(0)
+	},
+	(table) => [uniqueIndex('vm_types_name_unique').on(table.name)]
+);
 
 export const vmTypesRelations = relations(vmTypes, ({ many }) => ({
 	vms: many(vms)
@@ -82,7 +87,9 @@ export const vms = pgTable(
 			.default(sql`(extract(epoch from now()) * 1000)::bigint`),
 		backend: vmBackendEnum('backend').notNull(),
 		status: vmStatusEnum('status').notNull().default('provisioning'),
-		statusError: text('status_error')
+		statusError: text('status_error'),
+		provisioningResumeClaimedAt: bigint('provisioning_resume_claimed_at', { mode: 'number' }),
+		resizeClaimedAt: bigint('resize_claimed_at', { mode: 'number' })
 	},
 	(table) => [
 		index('vms_owner_project_id_index').on(table.ownerProjectId),
@@ -184,6 +191,9 @@ export const projectBillingCustomers = pgTable(
 		lastSyncedAt: bigint('last_synced_at', { mode: 'number' }),
 		pastDueSince: bigint('past_due_since', { mode: 'number' }),
 		suspendedAt: bigint('suspended_at', { mode: 'number' }),
+		pastDueNotifiedAt: bigint('past_due_notified_at', { mode: 'number' }),
+		suspendedNotifiedAt: bigint('suspended_notified_at', { mode: 'number' }),
+		notifyClaimedAt: bigint('notify_claimed_at', { mode: 'number' }),
 		createdAt: bigint('created_at', { mode: 'number' }).notNull(),
 		updatedAt: bigint('updated_at', { mode: 'number' }).notNull()
 	},
@@ -191,6 +201,33 @@ export const projectBillingCustomers = pgTable(
 		uniqueIndex('project_billing_customers_autumn_customer_id_index').on(table.autumnCustomerId)
 	]
 );
+
+export const creditPurchaseStatusEnum = pgEnum('credit_purchase_status', [
+	'pending',
+	'completed',
+	'failed'
+]);
+
+export const projectCreditPurchases = pgTable(
+	'project_credit_purchases',
+	{
+		purchaseId: text('purchase_id').primaryKey(),
+		projectId: text('project_id').notNull(),
+		credits: integer('credits').notNull(),
+		paymentUrl: text('payment_url'),
+		status: creditPurchaseStatusEnum('status').notNull().default('pending'),
+		error: text('error'),
+		createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+		updatedAt: bigint('updated_at', { mode: 'number' }).notNull()
+	},
+	(table) => [index('project_credit_purchases_project_id_index').on(table.projectId)]
+);
+
+export const cronLeases = pgTable('cron_leases', {
+	name: text('name').primaryKey(),
+	holder: text('holder').notNull(),
+	expiresAt: bigint('expires_at', { mode: 'number' }).notNull()
+});
 
 export const billingMeters = pgTable(
 	'billing_meters',
@@ -232,6 +269,7 @@ export const billingUsageEvents = pgTable(
 		syncStatus: billingSyncStatusEnum('sync_status').notNull().default('pending'),
 		syncError: text('sync_error'),
 		syncedAt: bigint('synced_at', { mode: 'number' }),
+		syncClaimedAt: bigint('sync_claimed_at', { mode: 'number' }),
 		createdAt: bigint('created_at', { mode: 'number' }).notNull()
 	},
 	(table) => [
@@ -243,6 +281,20 @@ export const billingUsageEvents = pgTable(
 		),
 		index('billing_usage_events_resource_index').on(table.resourceType, table.resourceId)
 	]
+);
+
+export const billingUsageReversals = pgTable(
+	'billing_usage_reversals',
+	{
+		sourceEventId: text('source_event_id')
+			.primaryKey()
+			.references(() => billingUsageEvents.id),
+		reversalEventId: text('reversal_event_id')
+			.notNull()
+			.references(() => billingUsageEvents.id),
+		createdAt: bigint('created_at', { mode: 'number' }).notNull()
+	},
+	(table) => [index('billing_usage_reversals_reversal_event_id_index').on(table.reversalEventId)]
 );
 
 // IP Blocks
@@ -326,6 +378,7 @@ export const ipamAllocations = pgTable(
 		prefix: cidr('prefix'),
 		prefixLength: integer('prefix_length').notNull(),
 		macAddress: text('mac_address').notNull(),
+		releasingAt: bigint('releasing_at', { mode: 'number' }),
 		createdAt: bigint('created_at', { mode: 'number' })
 			.notNull()
 			.default(sql`(extract(epoch from now()) * 1000)::bigint`)
@@ -335,7 +388,17 @@ export const ipamAllocations = pgTable(
 		index('ipam_allocations_associated_vm_id_index').on(table.associatedVmId),
 		index('ipam_allocations_vm_family_index').on(table.associatedVmId, table.family),
 		uniqueIndex('ipam_allocations_address_index').on(table.address),
-		uniqueIndex('ipam_allocations_prefix_index').on(table.prefix)
+		uniqueIndex('ipam_allocations_prefix_index').on(table.prefix),
+		uniqueIndex('ipam_allocations_vm_ipv4_unique')
+			.on(table.associatedVmId)
+			.where(sql`${table.family} = 'ipv4'`),
+		uniqueIndex('ipam_allocations_vm_ipv6_transit_unique')
+			.on(table.associatedVmId)
+			.where(sql`${table.family} = 'ipv6' and ${table.address} is not null`),
+		uniqueIndex('ipam_allocations_vm_ipv6_prefix_unique')
+			.on(table.associatedVmId)
+			.where(sql`${table.family} = 'ipv6' and ${table.prefix} is not null`),
+		index('ipam_allocations_releasing_at_index').on(table.releasingAt)
 	]
 );
 
@@ -396,7 +459,10 @@ export const sshKeys = pgTable(
 		name: text('name').notNull(),
 		description: text('description')
 	},
-	(table) => [index('ssh_keys_user_id_index').on(table.userId)]
+	(table) => [
+		index('ssh_keys_user_id_index').on(table.userId),
+		uniqueIndex('ssh_keys_user_fingerprint_unique').on(table.userId, table.fingerprint)
+	]
 );
 
 // API Tokens
@@ -410,7 +476,57 @@ export const apiTokens = pgTable(
 		tokenHash: text('token_hash').notNull(),
 		createdAt: bigint('created_at', { mode: 'number' }).notNull()
 	},
-	(table) => [index('api_tokens_user_id_index').on(table.userId)]
+	(table) => [
+		index('api_tokens_user_id_index').on(table.userId),
+		uniqueIndex('api_tokens_token_hash_unique').on(table.tokenHash)
+	]
+);
+
+export const projectCreateRequests = pgTable(
+	'project_create_requests',
+	{
+		userId: text('user_id').notNull(),
+		requestId: text('request_id').notNull(),
+		projectId: text('project_id'),
+		createdAt: bigint('created_at', { mode: 'number' }).notNull()
+	},
+	(table) => [
+		uniqueIndex('project_create_requests_user_request_unique').on(table.userId, table.requestId)
+	]
+);
+
+// Email Campaigns
+
+export const emailCampaignRecipientStatusEnum = pgEnum('email_campaign_recipient_status', [
+	'pending',
+	'sent',
+	'failed'
+]);
+
+export const emailCampaigns = pgTable('email_campaigns', {
+	id: ulidPk(),
+	template: text('template').notNull(),
+	subject: text('subject').notNull(),
+	fields: jsonb('fields').$type<Record<string, string>>().notNull(),
+	createdBy: text('created_by').notNull(),
+	createdAt: bigint('created_at', { mode: 'number' }).notNull()
+});
+
+export const emailCampaignRecipients = pgTable(
+	'email_campaign_recipients',
+	{
+		campaignId: ulidFk('campaign_id')
+			.notNull()
+			.references(() => emailCampaigns.id, { onDelete: 'cascade' }),
+		email: text('email').notNull(),
+		status: emailCampaignRecipientStatusEnum('status').notNull().default('pending'),
+		claimedAt: bigint('claimed_at', { mode: 'number' }),
+		sentAt: bigint('sent_at', { mode: 'number' }),
+		error: text('error')
+	},
+	(table) => [
+		uniqueIndex('email_campaign_recipients_campaign_email_index').on(table.campaignId, table.email)
+	]
 );
 
 // Base Images

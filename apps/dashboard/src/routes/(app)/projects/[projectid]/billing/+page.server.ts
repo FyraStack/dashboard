@@ -37,7 +37,8 @@ export const load: PageServerLoad = async ({ locals, params, parent, url }) => {
 		const paymentUrl = await attachDefaultProjectPlan(
 			params.projectid,
 			`${url.origin}/projects/${params.projectid}/billing`,
-			url.searchParams.get('billing_promo') ?? undefined
+			url.searchParams.get('billing_promo') ?? undefined,
+			url.searchParams.get('billing_setup_nonce')
 		);
 		if (paymentUrl) {
 			redirect(303, paymentUrl);

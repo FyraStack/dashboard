@@ -78,7 +78,7 @@ export class BunnyClient {
 	private async request<T = unknown>(
 		method: 'get' | 'put' | 'post' | 'delete',
 		endpoint: string,
-		options: { json?: unknown; searchParams?: Record<string, string> } = {}
+		options: { json?: unknown; retry?: number; searchParams?: Record<string, string> } = {}
 	): Promise<T> {
 		const response = await this.api[method](endpoint, options);
 		const raw = await response.text();
@@ -128,9 +128,15 @@ export class BunnyClient {
 		return zones.find((zone) => zone.Domain.toLowerCase() === normalized) ?? null;
 	}
 
+	async listRecords(zoneId: number): Promise<BunnyDnsRecord[]> {
+		const zone = await this.request<{ Records?: BunnyDnsRecord[] }>('get', `dnszone/${zoneId}`);
+		return zone.Records ?? [];
+	}
+
 	createPtrRecord(zoneId: number, name: string, value: string): Promise<BunnyDnsRecord> {
 		return this.request<BunnyDnsRecord>('put', `dnszone/${zoneId}/records`, {
-			json: { Type: bunnyDnsRecordTypePtr, Name: name, Value: value, Ttl: 300 }
+			json: { Type: bunnyDnsRecordTypePtr, Name: name, Value: value, Ttl: 300 },
+			retry: 0
 		});
 	}
 

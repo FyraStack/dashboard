@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
+import { and, eq, lt, or } from 'drizzle-orm';
 import AdminUserDeletionCodeEmail from '#lib/emails/admin-user-deletion-code.svelte';
 import BillingNoticeEmail from '#lib/emails/billing-notice.svelte';
 import BillingReminderEmail from '#lib/emails/billing-reminder.svelte';
@@ -18,11 +19,13 @@ import SecurityAlertEmail from '#lib/emails/security-alert.svelte';
 import ServiceDisruptionEmail from '#lib/emails/service-disruption.svelte';
 import VerifyEmailEmail from '#lib/emails/verify-email.svelte';
 import { requireAdmin } from '#lib/server/auth-context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import { type Database, initDrizzle } from '#lib/server/db/index.js';
+import { emailCampaignRecipients, emailCampaigns } from '#lib/server/db/schema.js';
 import { emailToPlainText, renderEmail, sendEmail } from '#lib/server/email.js';
 import { command, getRequestEvent } from '$app/server';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const STALE_CLAIM_MS = 10 * 60 * 1000;
 
 const templateComponents: Record<string, unknown> = {
 	'admin-user-deletion-code': AdminUserDeletionCodeEmail,
@@ -139,17 +142,156 @@ export const previewCampaignEmail = command(previewParams, async (params) => {
 	}
 });
 
-const sendParams = type({
+const createCampaignParams = type({
 	template: 'string',
 	subject: 'string',
-	fields: csvRow,
+	fields: csvRow
+});
+
+export const createEmailCampaign = command(createCampaignParams, async (params) => {
+	const { db, userId } = await requireCurrentAdmin();
+	const { meta } = resolveTemplate(params.template);
+	if (params.subject.trim() === '') {
+		error(400, 'Enter a subject');
+	}
+
+	const fields: Record<string, string> = {};
+	for (const field of meta.fields) {
+		fields[field.name] = params.fields[field.name] ?? '';
+	}
+
+	const [campaign] = await db
+		.insert(emailCampaigns)
+		.values({
+			template: meta.key,
+			subject: params.subject,
+			fields,
+			createdBy: userId,
+			createdAt: Date.now()
+		})
+		.returning({ id: emailCampaigns.id });
+
+	return { campaignId: campaign.id };
+});
+
+const sendParams = type({
+	campaignId: 'string',
 	rows: csvRow.array(),
 	emailColumn: 'string'
 });
 
+type RecipientClaim = 'claimed' | 'sent' | 'in-progress';
+
+async function claimRecipient(
+	db: Database,
+	campaignId: string,
+	email: string
+): Promise<RecipientClaim> {
+	const now = Date.now();
+	const [claimed] = await db
+		.insert(emailCampaignRecipients)
+		.values({ campaignId, email, status: 'pending', claimedAt: now })
+		.onConflictDoUpdate({
+			target: [emailCampaignRecipients.campaignId, emailCampaignRecipients.email],
+			set: { status: 'pending', claimedAt: now, error: null },
+			setWhere: or(
+				eq(emailCampaignRecipients.status, 'failed'),
+				and(
+					eq(emailCampaignRecipients.status, 'pending'),
+					lt(emailCampaignRecipients.claimedAt, now - STALE_CLAIM_MS)
+				)
+			)
+		})
+		.returning({ email: emailCampaignRecipients.email });
+	if (claimed) {
+		return 'claimed';
+	}
+
+	const [existing] = await db
+		.select({ status: emailCampaignRecipients.status })
+		.from(emailCampaignRecipients)
+		.where(
+			and(
+				eq(emailCampaignRecipients.campaignId, campaignId),
+				eq(emailCampaignRecipients.email, email)
+			)
+		)
+		.limit(1);
+	return existing?.status === 'sent' ? 'sent' : 'in-progress';
+}
+
+function settleRecipient(
+	db: Database,
+	campaignId: string,
+	email: string,
+	outcome: { status: 'sent' } | { status: 'failed'; error: string }
+) {
+	return db
+		.update(emailCampaignRecipients)
+		.set(
+			outcome.status === 'sent'
+				? { status: 'sent', sentAt: Date.now(), error: null }
+				: { status: 'failed', error: outcome.error }
+		)
+		.where(
+			and(
+				eq(emailCampaignRecipients.campaignId, campaignId),
+				eq(emailCampaignRecipients.email, email),
+				eq(emailCampaignRecipients.status, 'pending')
+			)
+		);
+}
+
+type Campaign = typeof emailCampaigns.$inferSelect;
+
+type RecipientOutcome =
+	| { status: 'sent' }
+	| { status: 'skipped' }
+	| { status: 'failed'; reason: string };
+
+async function sendToRecipient(
+	db: Database,
+	campaign: Campaign,
+	template: ReturnType<typeof resolveTemplate>,
+	row: Record<string, string>,
+	to: string
+): Promise<RecipientOutcome> {
+	const email = to.toLowerCase();
+	let claimed = false;
+	try {
+		if (!EMAIL_PATTERN.test(to)) {
+			throw new Error('Invalid email address');
+		}
+		const subject = applyPlaceholders(campaign.subject, row).trim();
+		if (subject === '') {
+			throw new Error('Subject is empty for this recipient');
+		}
+		const html = await renderCampaignHtml(template.meta, template.component, campaign.fields, row);
+		const text = await emailToPlainText(html);
+
+		const claim = await claimRecipient(db, campaign.id, email);
+		if (claim === 'sent') {
+			return { status: 'skipped' };
+		}
+		if (claim === 'in-progress') {
+			throw new Error('Already being sent by another request');
+		}
+		claimed = true;
+
+		await sendEmail({ subject, to, html, text });
+		await settleRecipient(db, campaign.id, email, { status: 'sent' });
+		return { status: 'sent' };
+	} catch (err) {
+		const reason = err instanceof Error ? err.message : 'Send failed';
+		if (claimed) {
+			await settleRecipient(db, campaign.id, email, { status: 'failed', error: reason });
+		}
+		return { status: 'failed', reason };
+	}
+}
+
 export const sendCampaignEmails = command(sendParams, async (params) => {
-	await requireCurrentAdmin();
-	const { meta, component } = resolveTemplate(params.template);
+	const { db } = await requireCurrentAdmin();
 	if (params.rows.length === 0) {
 		error(400, 'No recipients provided');
 	}
@@ -157,31 +299,32 @@ export const sendCampaignEmails = command(sendParams, async (params) => {
 		error(400, `Send at most ${CAMPAIGN_BATCH_SIZE} recipients per batch`);
 	}
 
+	const [campaign] = await db
+		.select()
+		.from(emailCampaigns)
+		.where(eq(emailCampaigns.id, params.campaignId))
+		.limit(1);
+	if (!campaign) {
+		error(404, 'Campaign not found');
+	}
+	const template = resolveTemplate(campaign.template);
+
 	let sent = 0;
+	let skipped = 0;
 	const failures: { recipient: string; reason: string }[] = [];
 
 	for (const row of params.rows) {
 		const to = (row[params.emailColumn] ?? '').trim();
-		try {
-			if (!EMAIL_PATTERN.test(to)) {
-				throw new Error('Invalid email address');
-			}
-			const subject = applyPlaceholders(params.subject, row).trim();
-			if (subject === '') {
-				throw new Error('Subject is empty for this recipient');
-			}
-			// biome-ignore lint/performance/noAwaitInLoops: campaign sends go out one at a time to stay under the email provider's rate limit
-			const html = await renderCampaignHtml(meta, component, params.fields, row);
-			const text = await emailToPlainText(html);
-			await sendEmail({ subject, to, html, text });
+		// biome-ignore lint/performance/noAwaitInLoops: campaign sends go out one at a time to stay under the email provider's rate limit
+		const outcome = await sendToRecipient(db, campaign, template, row, to);
+		if (outcome.status === 'sent') {
 			sent += 1;
-		} catch (err) {
-			failures.push({
-				recipient: to === '' ? '(missing email)' : to,
-				reason: err instanceof Error ? err.message : 'Send failed'
-			});
+		} else if (outcome.status === 'skipped') {
+			skipped += 1;
+		} else {
+			failures.push({ recipient: to === '' ? '(missing email)' : to, reason: outcome.reason });
 		}
 	}
 
-	return { sent, failures };
+	return { sent, skipped, failures };
 });

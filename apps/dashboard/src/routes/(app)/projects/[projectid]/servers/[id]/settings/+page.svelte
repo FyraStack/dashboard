@@ -137,8 +137,8 @@
 			}
 
 			await goto(resolve(`projects/${projectId}/servers`), { invalidate: ['project:vms'] });
-		} catch {
-			deleteError = 'Failed to delete server.';
+		} catch (error) {
+			deleteError = getErrorMessage(error, 'Failed to delete server.');
 			deleting = false;
 		}
 	}
@@ -223,7 +223,9 @@
 		<Button
 			variant="outline"
 			size="sm"
-			disabled={deleting || selectedServer.status === 'deleting'}
+			disabled={deleting ||
+				selectedServer.status === 'deleting' ||
+				selectedServer.status === 'provisioning'}
 			onclick={handleDelete}
 			class="border-red-300 text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950"
 		>

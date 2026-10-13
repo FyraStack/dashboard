@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
-import { and, eq, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
+import { PROJECT_DELETION_CLAIM_STALE_MS } from '#lib/server/auth-context.js';
 import { getBackend } from '#lib/server/backends/index.js';
 import {
 	cancelProjectBilling,
@@ -15,6 +16,7 @@ import {
 import { invitation, organization } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import {
+	billingMeters,
 	billingUsageEvents,
 	ipAssignments,
 	paymentPeriods,
@@ -26,45 +28,148 @@ import { releaseVmNetworking } from '#lib/server/ipam.js';
 
 export const DELETED_PROJECT_RETENTION_DAYS = 90;
 
-export async function softDeleteOrganizationResources(
-	db: ReturnType<typeof initDrizzle>,
-	organizationId: string
-) {
-	const projectVms = await db.query.vms.findMany({
-		where: eq(vms.ownerProjectId, organizationId),
+export type OrganizationDeletionResult = 'deleted' | 'already_deleted' | 'in_progress';
+
+type Db = ReturnType<typeof initDrizzle>;
+
+async function claimOrganizationDeletion(db: Db, organizationId: string) {
+	const claimedAt = Date.now();
+	const [claimed] = await db
+		.update(organization)
+		.set({ deletingAt: claimedAt })
+		.where(
+			and(
+				eq(organization.id, organizationId),
+				isNull(organization.deletedAt),
+				or(
+					isNull(organization.deletingAt),
+					lt(organization.deletingAt, claimedAt - PROJECT_DELETION_CLAIM_STALE_MS)
+				)
+			)
+		)
+		.returning({ id: organization.id });
+
+	return claimed ? claimedAt : null;
+}
+
+async function renewOrganizationDeletionClaim(db: Db, organizationId: string, claimedAt: number) {
+	const renewedAt = Date.now();
+	const [renewed] = await db
+		.update(organization)
+		.set({ deletingAt: renewedAt })
+		.where(
+			and(
+				eq(organization.id, organizationId),
+				isNull(organization.deletedAt),
+				eq(organization.deletingAt, claimedAt)
+			)
+		)
+		.returning({ id: organization.id });
+
+	if (!renewed) {
+		error(409, 'Project deletion was taken over by another request');
+	}
+	return renewedAt;
+}
+
+async function releaseOrganizationDeletionClaim(db: Db, organizationId: string, claimedAt: number) {
+	await db
+		.update(organization)
+		.set({ deletingAt: null })
+		.where(
+			and(
+				eq(organization.id, organizationId),
+				isNull(organization.deletedAt),
+				eq(organization.deletingAt, claimedAt)
+			)
+		);
+}
+
+async function closeVmMeter(vmId: string, now: number) {
+	const metered = await meterResourceThrough('vm', vmId, now).catch((err) => {
+		console.warn(`Failed to meter VM ${vmId} during project delete`, err);
+		return null;
+	});
+
+	const db = initDrizzle();
+	await db
+		.update(billingMeters)
+		.set({ active: false, endedAt: now })
+		.where(
+			and(
+				eq(billingMeters.resourceType, 'vm'),
+				eq(billingMeters.resourceId, vmId),
+				eq(billingMeters.active, true)
+			)
+		);
+
+	return metered;
+}
+
+async function deprovisionProjectVms(db: Db, organizationId: string, claimedAt: number) {
+	const activeVms = await db.query.vms.findMany({
+		where: and(eq(vms.ownerProjectId, organizationId), eq(vms.active, true)),
 		columns: {
 			id: true,
 			name: true,
 			proxmoxId: true,
-			active: true,
 			backend: true
 		}
 	});
 
-	for (const vm of projectVms.filter((item) => item.active)) {
+	let claim = claimedAt;
+	for (const vm of activeVms) {
 		try {
 			// biome-ignore lint/performance/noAwaitInLoops: Proxmox deletes run one at a time and the first failure must abort the project delete
 			await getBackend(vm.backend).deleteVm(vm.id, vm.proxmoxId ?? undefined);
 		} catch (err) {
 			console.warn(`Failed to deprovision VM ${vm.id} during project delete`, err);
+			await releaseOrganizationDeletionClaim(db, organizationId, claim);
 			error(502, `Failed to deprovision VM "${vm.name}" in Proxmox`);
 		}
-	}
 
-	for (const vm of projectVms.filter((item) => item.active)) {
-		// biome-ignore lint/performance/noAwaitInLoops: each VM's final usage is metered and synced to Autumn one at a time
-		const metered = await meterResourceThrough('vm', vm.id).catch((err) => {
-			console.warn(`Failed to meter VM ${vm.id} during project delete`, err);
-			return null;
-		});
+		const now = Date.now();
+		const metered = await closeVmMeter(vm.id, now);
+		await db
+			.update(vms)
+			.set({ active: false, deletedAt: now })
+			.where(and(eq(vms.id, vm.id), isNull(vms.deletedAt)));
+
 		if (!metered || metered.events.length === 0 || metered.syncStatus === 'synced') {
 			await deleteProjectServerEntity(organizationId, vm.id).catch((err) => {
 				console.warn(`Failed to delete Autumn entity for VM ${vm.id}`, err);
 			});
 		}
+
+		claim = await renewOrganizationDeletionClaim(db, organizationId, claim);
 	}
+
+	return claim;
+}
+
+export async function softDeleteOrganizationResources(
+	db: Db,
+	organizationId: string
+): Promise<OrganizationDeletionResult> {
+	const claimedAt = await claimOrganizationDeletion(db, organizationId);
+	if (claimedAt === null) {
+		const current = await db.query.organization.findFirst({
+			where: eq(organization.id, organizationId),
+			columns: { deletedAt: true }
+		});
+		if (!current || current.deletedAt !== null) {
+			return 'already_deleted';
+		}
+		return 'in_progress';
+	}
+
+	const claim = await deprovisionProjectVms(db, organizationId, claimedAt);
 	await syncProjectUsage(organizationId);
 
+	const projectVms = await db
+		.select({ id: vms.id })
+		.from(vms)
+		.where(eq(vms.ownerProjectId, organizationId));
 	for (const vm of projectVms) {
 		// biome-ignore lint/performance/noAwaitInLoops: releasing networking writes VyOS and Bunny config, which must not race between VMs
 		await releaseVmNetworking(db, vm.id).catch((err) => {
@@ -92,8 +197,16 @@ export async function softDeleteOrganizationResources(
 	await db.delete(invitation).where(eq(invitation.organizationId, organizationId));
 	await db
 		.update(organization)
-		.set({ deletedAt: now, slug: `deleted-${organizationId}` })
-		.where(eq(organization.id, organizationId));
+		.set({ deletedAt: now, deletingAt: null, slug: `deleted-${organizationId}` })
+		.where(
+			and(
+				eq(organization.id, organizationId),
+				isNull(organization.deletedAt),
+				eq(organization.deletingAt, claim)
+			)
+		);
+
+	return 'deleted';
 }
 
 export async function purgeExpiredDeletedOrganizations(now = Date.now(), limit = 25) {
@@ -122,6 +235,15 @@ export async function purgeExpiredDeletedOrganizations(now = Date.now(), limit =
 			continue;
 		}
 
+		const [uncancelledBilling] = await db
+			.select({ projectId: projectBillingCustomers.projectId })
+			.from(projectBillingCustomers)
+			.where(eq(projectBillingCustomers.projectId, id))
+			.limit(1);
+		if (uncancelledBilling) {
+			continue;
+		}
+
 		const projectVms = await db.select({ id: vms.id }).from(vms).where(eq(vms.ownerProjectId, id));
 		const vmIds = projectVms.map((vm) => vm.id);
 		if (vmIds.length > 0) {
@@ -134,7 +256,6 @@ export async function purgeExpiredDeletedOrganizations(now = Date.now(), limit =
 			await db.delete(vms).where(inArray(vms.id, vmIds));
 		}
 		await db.delete(volumes).where(eq(volumes.ownerProjectId, id));
-		await db.delete(projectBillingCustomers).where(eq(projectBillingCustomers.projectId, id));
 		await db.delete(organization).where(eq(organization.id, id));
 		purged += 1;
 	}

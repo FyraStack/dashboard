@@ -37,6 +37,7 @@ export default betterAuth({
 		}
 	},
 	emailAndPassword: { enabled: true },
+	rateLimit: { storage: 'database' },
 	plugins: [
 		admin({ defaultRole: 'user' }),
 		twoFactor(),
@@ -60,6 +61,12 @@ export default betterAuth({
 							defaultValue: false
 						},
 						deletedAt: {
+							type: 'number',
+							bigint: true,
+							input: false,
+							required: false
+						},
+						deletingAt: {
 							type: 'number',
 							bigint: true,
 							input: false,

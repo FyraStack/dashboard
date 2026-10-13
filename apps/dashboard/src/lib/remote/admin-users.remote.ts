@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { asc, count, desc, eq } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull, ne, sql } from 'drizzle-orm';
 import AdminUserDeletionCodeEmail from '#lib/emails/admin-user-deletion-code.svelte';
 import {
 	accessibilityFixtureAdminUsers,
@@ -118,27 +118,53 @@ async function assertCanDeleteUser(
 	return target;
 }
 
+type Tx = Parameters<Parameters<ReturnType<typeof initDrizzle>['transaction']>[0]>[0];
+
+const isAdminUser = sql`(${user.isAdmin} or 'admin' = any(string_to_array(${user.role}, ',')))`;
+
+async function lockAdminIds(tx: Tx) {
+	const rows = await tx.select({ id: user.id }).from(user).where(isAdminUser).for('update');
+	return rows.map((row) => row.id);
+}
+
+async function assertAdminRemains(tx: Tx, removedUserId: string, message: string) {
+	const adminIds = await lockAdminIds(tx);
+	if (adminIds.includes(removedUserId) && adminIds.length <= 1) {
+		error(400, message);
+	}
+}
+
 async function deleteUserData(db: ReturnType<typeof initDrizzle>, targetUserId: string) {
 	await settleUserOrganizations(db, targetUserId);
 	await db.delete(apiTokens).where(eq(apiTokens.userId, targetUserId));
 	await db.delete(sshKeys).where(eq(sshKeys.userId, targetUserId));
-	await db.delete(user).where(eq(user.id, targetUserId));
+	await db.transaction(async (tx) => {
+		await assertAdminRemains(tx, targetUserId, 'At least one admin is required.');
+		await tx.delete(user).where(eq(user.id, targetUserId));
+	});
 }
 
 async function settleUserOrganizations(db: ReturnType<typeof initDrizzle>, targetUserId: string) {
 	const memberships = await db
-		.select({ organizationId: member.organizationId })
+		.select({ organizationId: member.organizationId, role: member.role })
 		.from(member)
-		.where(eq(member.userId, targetUserId));
+		.innerJoin(organization, eq(organization.id, member.organizationId))
+		.where(and(eq(member.userId, targetUserId), isNull(organization.deletedAt)));
 
 	for (const membership of memberships) {
 		// biome-ignore lint/performance/noAwaitInLoops: each organization settlement syncs Autumn and tears down backend resources, so run them one at a time
-		const otherMembers = await db
-			.select({ id: member.id, userId: member.userId, createdAt: member.createdAt })
+		const [oldestRemainingMember] = await db
+			.select({ id: member.id })
 			.from(member)
-			.where(eq(member.organizationId, membership.organizationId))
-			.orderBy(asc(member.createdAt));
-		const oldestRemainingMember = otherMembers.find((item) => item.userId !== targetUserId);
+			.where(
+				and(eq(member.organizationId, membership.organizationId), ne(member.userId, targetUserId))
+			)
+			.orderBy(asc(member.createdAt))
+			.limit(1);
+
+		if (oldestRemainingMember && membership.role !== 'owner') {
+			continue;
+		}
 
 		if (oldestRemainingMember) {
 			await db.update(member).set({ role: 'owner' }).where(eq(member.id, oldestRemainingMember.id));
@@ -235,18 +261,15 @@ export const setUserAdmin = command(setAdminParams, async (params) => {
 		error(404, 'User not found');
 	}
 
-	if (!params.isAdmin && (hasAdminRole(target.role) || target.isAdmin)) {
-		const adminRows = await db.select({ role: user.role, isAdmin: user.isAdmin }).from(user);
-		const adminCount = adminRows.filter((row) => hasAdminRole(row.role) || row.isAdmin).length;
-		if (adminCount <= 1) {
-			error(400, 'At least one admin is required');
+	await db.transaction(async (tx) => {
+		if (!params.isAdmin) {
+			await assertAdminRemains(tx, params.userId, 'At least one admin is required');
 		}
-	}
-
-	await db
-		.update(user)
-		.set({ role: params.isAdmin ? 'admin' : 'user', isAdmin: params.isAdmin })
-		.where(eq(user.id, params.userId));
+		await tx
+			.update(user)
+			.set({ role: params.isAdmin ? 'admin' : 'user', isAdmin: params.isAdmin })
+			.where(eq(user.id, params.userId));
+	});
 
 	return { userId: params.userId, isAdmin: params.isAdmin };
 });
@@ -317,10 +340,15 @@ export const setUserRole = command(setRoleParams, async (params) => {
 		error(404, 'User not found');
 	}
 
-	await db
-		.update(user)
-		.set({ role: params.role, isAdmin: hasAdminRole(params.role) })
-		.where(eq(user.id, params.userId));
+	await db.transaction(async (tx) => {
+		if (!hasAdminRole(params.role)) {
+			await assertAdminRemains(tx, params.userId, 'At least one admin is required');
+		}
+		await tx
+			.update(user)
+			.set({ role: params.role, isAdmin: hasAdminRole(params.role) })
+			.where(eq(user.id, params.userId));
+	});
 
 	captureServerEvent('admin_user_role_changed', {
 		target_user_id: params.userId,

@@ -1,8 +1,8 @@
 import { error } from '@sveltejs/kit';
-import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import { Address4, Address6 } from 'ip-address';
 import { isValidPtrHostname } from '#lib/ptr.js';
-import type { initDrizzle } from '#lib/server/db/index.js';
+import { initDrizzle } from '#lib/server/db/index.js';
 import { ipamAllocations, ipamPrefixes, vms } from '#lib/server/db/schema.js';
 import { deletePtrRecords } from '#lib/server/ptr-records.js';
 import { isVyosConfigured, VyosClient } from '#lib/server/vyos.js';
@@ -57,21 +57,13 @@ const v6Bits = 128;
 const vmIpv4PrefixLength = 32;
 const vmIpv6PrefixLength = 64;
 const randomAllocationAttempts = 25;
+const releaseLeaseMs = 5 * 60_000;
 const TRAILING_DOT = /\.$/;
 const allocationKindLabels: Record<AllocationKind, string> = {
 	ipv4: 'IPv4 addresses',
 	'ipv6-transit': 'IPv6 transit addresses',
 	'ipv6-prefix': 'IPv6 prefixes'
 };
-
-function uniqueViolation(err: unknown) {
-	return (
-		typeof err === 'object' &&
-		err !== null &&
-		'code' in err &&
-		(err as { code?: unknown }).code === '23505'
-	);
-}
 
 export function generateMacAddress() {
 	const bytes = crypto.getRandomValues(new Uint8Array(6));
@@ -256,6 +248,33 @@ export function normalizeIpamPrefixInput(input: IpamPrefixInput) {
 		bunnyDnsZone,
 		disabled: input.disabled ?? false
 	};
+}
+
+function sameOptionalAddress(family: IpFamily, left: string | null, right: string | null) {
+	if (left === null || right === null) {
+		return left === right;
+	}
+	return parseAddress(family, left) === parseAddress(family, right);
+}
+
+export function ipamPrefixAddressingChanged(
+	existing: IpamPrefix,
+	next: ReturnType<typeof normalizeIpamPrefixInput>
+) {
+	if (existing.family !== next.family) {
+		return true;
+	}
+	const existingRange = parseCidr(existing.cidr);
+	const nextRange = parseCidr(next.cidr);
+
+	return (
+		existingRange.start !== nextRange.start ||
+		existingRange.end !== nextRange.end ||
+		existing.ipv6UseTransitAddress !== next.ipv6UseTransitAddress ||
+		!sameOptionalAddress(next.family, existing.gatewayAddress, next.gatewayAddress) ||
+		!sameOptionalAddress(next.family, existing.whitelistStart, next.whitelistStart) ||
+		!sameOptionalAddress(next.family, existing.whitelistEnd, next.whitelistEnd)
+	);
 }
 
 function ipv4UsableRange(prefix: IpamPrefix) {
@@ -623,6 +642,7 @@ async function eligiblePrefixesWithAvailableCounts(db: QueryableDb, kind: Alloca
 			.from(ipamPrefixes)
 			.where(and(eq(ipamPrefixes.family, family), eq(ipamPrefixes.disabled, false)))
 			.orderBy(asc(ipamPrefixes.createdAt), asc(ipamPrefixes.cidr))
+			.for('share')
 	).filter((prefix) => prefixMatchesKind(prefix, kind));
 
 	if (prefixes.length === 0) {
@@ -647,6 +667,53 @@ async function eligiblePrefixesWithAvailableCounts(db: QueryableDb, kind: Alloca
 	});
 }
 
+function allocationKindWhere(kind: AllocationKind) {
+	if (kind === 'ipv4') {
+		return eq(ipamAllocations.family, 'ipv4');
+	}
+	return and(
+		eq(ipamAllocations.family, 'ipv6'),
+		kind === 'ipv6-prefix' ? isNotNull(ipamAllocations.prefix) : isNotNull(ipamAllocations.address)
+	);
+}
+
+async function lockAllocationKind(db: QueryableDb, kind: AllocationKind) {
+	await db.execute(
+		sql`select pg_advisory_xact_lock(hashtextextended(${`ipam_allocate:${kind}`}, 0))`
+	);
+}
+
+async function existingKindAllocation(
+	db: QueryableDb,
+	kind: AllocationKind,
+	vmId: string
+): Promise<PendingAllocation | null> {
+	const existing = await db.query.ipamAllocations.findFirst({
+		where: and(eq(ipamAllocations.associatedVmId, vmId), allocationKindWhere(kind)),
+		with: { ipamPrefix: true }
+	});
+	if (!existing) {
+		return null;
+	}
+	if (existing.releasingAt !== null) {
+		error(409, `VM ${vmId} networking is being released`);
+	}
+
+	const { ipamPrefix, ...allocation } = existing;
+	return { ...allocation, sourcePrefix: ipamPrefix };
+}
+
+async function usedAllocationIndexes(db: QueryableDb, kind: AllocationKind, prefix: IpamPrefix) {
+	const allocations = await db.query.ipamAllocations.findMany({
+		where: eq(ipamAllocations.ipamPrefixId, prefix.id),
+		columns: { address: true, prefix: true }
+	});
+
+	return kind === 'ipv4'
+		? usedIpv4AddressIndexes(allocations)
+		: usedIpv6AllocationIndexes(allocations);
+}
+
 async function insertAllocation(
 	db: QueryableDb,
 	kind: AllocationKind,
@@ -654,7 +721,7 @@ async function insertAllocation(
 	macAddress: string,
 	prefix: IpamPrefix,
 	next: { address: string | null; prefix: string | null }
-): Promise<PendingAllocation> {
+): Promise<PendingAllocation | null> {
 	const family: IpFamily = kind === 'ipv4' ? 'ipv4' : 'ipv6';
 	const [inserted] = await db
 		.insert(ipamAllocations)
@@ -667,18 +734,20 @@ async function insertAllocation(
 			prefixLength: family === 'ipv4' ? vmIpv4PrefixLength : ipv6AllocationPrefixLength(prefix),
 			macAddress
 		})
+		.onConflictDoNothing()
 		.returning();
 
-	return { ...inserted, sourcePrefix: prefix };
+	return inserted ? { ...inserted, sourcePrefix: prefix } : null;
 }
 
 async function createRandomKindAllocation(
 	db: QueryableDb,
 	kind: AllocationKind,
 	vmId: string,
-	macAddress: string
+	macAddress: string,
+	candidates: { prefix: IpamPrefix; available: bigint }[]
 ) {
-	const candidates = await eligiblePrefixesWithAvailableCounts(db, kind);
+	const usedByPrefixId = new Map<string, Set<string>>();
 
 	for (let attempt = 0; attempt < randomAllocationAttempts; attempt += 1) {
 		const selected = chooseWeightedPrefix(candidates);
@@ -686,15 +755,12 @@ async function createRandomKindAllocation(
 			return null;
 		}
 
-		// biome-ignore lint/performance/noAwaitInLoops: allocation retries run inside one transaction and each attempt must see the previous attempt's outcome
-		const allocations = await db.query.ipamAllocations.findMany({
-			where: eq(ipamAllocations.ipamPrefixId, selected.prefix.id),
-			columns: { address: true, prefix: true }
-		});
-		const used =
-			kind === 'ipv4'
-				? usedIpv4AddressIndexes(allocations)
-				: usedIpv6AllocationIndexes(allocations);
+		let used = usedByPrefixId.get(selected.prefix.id);
+		if (!used) {
+			// biome-ignore lint/performance/noAwaitInLoops: allocation retries run inside one transaction and each attempt must see the previous attempt's outcome
+			used = await usedAllocationIndexes(db, kind, selected.prefix);
+			usedByPrefixId.set(selected.prefix.id, used);
+		}
 		const next =
 			kind === 'ipv4'
 				? { address: randomIpv4Address(selected.prefix, used), prefix: null }
@@ -703,14 +769,11 @@ async function createRandomKindAllocation(
 			continue;
 		}
 
-		try {
-			return await insertAllocation(db, kind, vmId, macAddress, selected.prefix, next);
-		} catch (err) {
-			if (uniqueViolation(err)) {
-				continue;
-			}
-			throw err;
+		const inserted = await insertAllocation(db, kind, vmId, macAddress, selected.prefix, next);
+		if (inserted) {
+			return inserted;
 		}
+		usedByPrefixId.delete(selected.prefix.id);
 	}
 
 	return null;
@@ -720,21 +783,12 @@ async function createSequentialKindAllocation(
 	db: QueryableDb,
 	kind: AllocationKind,
 	vmId: string,
-	macAddress: string
-): Promise<PendingAllocation> {
-	const candidates = await eligiblePrefixesWithAvailableCounts(db, kind);
-
+	macAddress: string,
+	candidates: { prefix: IpamPrefix }[]
+) {
 	for (const { prefix } of candidates) {
 		// biome-ignore lint/performance/noAwaitInLoops: prefixes are tried in priority order inside one transaction and the first with room wins
-		const allocations = await db.query.ipamAllocations.findMany({
-			where: eq(ipamAllocations.ipamPrefixId, prefix.id),
-			columns: { address: true, prefix: true }
-		});
-
-		const used =
-			kind === 'ipv4'
-				? usedIpv4AddressIndexes(allocations)
-				: usedIpv6AllocationIndexes(allocations);
+		const used = await usedAllocationIndexes(db, kind, prefix);
 		const next =
 			kind === 'ipv4'
 				? { address: nextIpv4Address(prefix, used), prefix: null }
@@ -743,10 +797,13 @@ async function createSequentialKindAllocation(
 		if (!(next?.address || next?.prefix)) {
 			continue;
 		}
-		return insertAllocation(db, kind, vmId, macAddress, prefix, next);
+		const inserted = await insertAllocation(db, kind, vmId, macAddress, prefix, next);
+		if (inserted) {
+			return inserted;
+		}
 	}
 
-	error(409, `No available ${allocationKindLabels[kind]}`);
+	return null;
 }
 
 async function createLocalAllocation(
@@ -754,24 +811,26 @@ async function createLocalAllocation(
 	kind: AllocationKind,
 	vmId: string,
 	macAddress: string
-) {
-	const randomAllocation = await createRandomKindAllocation(db, kind, vmId, macAddress);
-	if (randomAllocation) {
-		return randomAllocation;
+): Promise<PendingAllocation> {
+	await lockAllocationKind(db, kind);
+
+	const existing = await existingKindAllocation(db, kind, vmId);
+	if (existing) {
+		return existing;
 	}
 
-	for (let attempt = 0; attempt < 5; attempt += 1) {
-		try {
-			// biome-ignore lint/performance/noAwaitInLoops: retries after a unique-constraint race must run one after another
-			return await createSequentialKindAllocation(db, kind, vmId, macAddress);
-		} catch (err) {
-			if (uniqueViolation(err)) {
-				continue;
-			}
-			throw err;
-		}
+	const candidates = await eligiblePrefixesWithAvailableCounts(db, kind);
+	const allocation =
+		(await createRandomKindAllocation(db, kind, vmId, macAddress, candidates)) ??
+		(await createSequentialKindAllocation(db, kind, vmId, macAddress, candidates));
+	if (allocation) {
+		return allocation;
 	}
 
+	const raced = await existingKindAllocation(db, kind, vmId);
+	if (raced) {
+		return raced;
+	}
 	error(409, `No available ${allocationKindLabels[kind]}`);
 }
 
@@ -779,28 +838,71 @@ function tenantDescription(vmId: string, label: string) {
 	return `tenant ${vmId.slice(-8)} ${label}`;
 }
 
-export async function createVyosDelegatedRoute(allocations: PendingAllocation[], vmId: string) {
+function delegatedRoutePair(allocations: PendingAllocation[]) {
+	const transit = allocations.find(
+		(allocation) => allocation.family === 'ipv6' && allocation.address
+	);
+	const delegated = allocations.find(
+		(allocation) => allocation.family === 'ipv6' && allocation.prefix
+	);
+	if (!(transit?.address && delegated?.prefix)) {
+		return null;
+	}
+
+	return {
+		allocationIds: [transit.id, delegated.id],
+		destination: delegated.prefix,
+		gateway: transit.address
+	};
+}
+
+async function delegatedRouteStillWanted(db: QueryableDb, vmId: string, allocationIds: string[]) {
+	const rows = await db
+		.select({ id: ipamAllocations.id })
+		.from(ipamAllocations)
+		.innerJoin(vms, eq(vms.id, ipamAllocations.associatedVmId))
+		.where(
+			and(
+				inArray(ipamAllocations.id, allocationIds),
+				eq(ipamAllocations.associatedVmId, vmId),
+				isNull(ipamAllocations.releasingAt),
+				eq(vms.active, true)
+			)
+		);
+
+	return rows.length === allocationIds.length;
+}
+
+export async function createVyosDelegatedRoute(
+	allocations: PendingAllocation[],
+	vmId: string,
+	db?: QueryableDb
+) {
 	if (!isVyosConfigured()) {
 		return;
 	}
 
-	const ipv6TransitAllocation = allocations.find(
-		(allocation) => allocation.family === 'ipv6' && allocation.address
-	);
-	const ipv6PrefixAllocation = allocations.find(
-		(allocation) => allocation.family === 'ipv6' && allocation.prefix
-	);
-
-	if (!(ipv6PrefixAllocation?.prefix && ipv6TransitAllocation?.address)) {
+	const pair = delegatedRoutePair(allocations);
+	if (!pair) {
 		return;
+	}
+
+	const routeDb = db ?? initDrizzle();
+	if (!(await delegatedRouteStillWanted(routeDb, vmId, pair.allocationIds))) {
+		throw new Error(`VM ${vmId} networking was released before its IPv6 route was created`);
 	}
 
 	const client = new VyosClient();
 	await client.createDelegatedRoute({
-		destination: ipv6PrefixAllocation.prefix,
-		gateway: ipv6TransitAllocation.address,
+		destination: pair.destination,
+		gateway: pair.gateway,
 		description: tenantDescription(vmId, 'IPv6 prefix')
 	});
+
+	if (!(await delegatedRouteStillWanted(routeDb, vmId, pair.allocationIds))) {
+		await client.deleteDelegatedRoute(pair.destination);
+		throw new Error(`VM ${vmId} networking was released while its IPv6 route was being created`);
+	}
 }
 
 async function deleteVyosDelegatedRoute(allocations: PendingAllocation[]) {
@@ -822,7 +924,25 @@ async function deleteVyosDelegatedRoute(allocations: PendingAllocation[]) {
 
 async function vmAllocations(db: QueryableDb, vmId: string): Promise<PendingAllocation[]> {
 	const allocations = await db.query.ipamAllocations.findMany({
-		where: eq(ipamAllocations.associatedVmId, vmId),
+		where: and(eq(ipamAllocations.associatedVmId, vmId), isNull(ipamAllocations.releasingAt)),
+		with: {
+			ipamPrefix: true
+		}
+	});
+
+	return allocations.map(({ ipamPrefix, ...allocation }) => ({
+		...allocation,
+		sourcePrefix: ipamPrefix
+	}));
+}
+
+async function claimedAllocations(
+	db: QueryableDb,
+	ids: string[],
+	claimedAt: number
+): Promise<PendingAllocation[]> {
+	const allocations = await db.query.ipamAllocations.findMany({
+		where: and(inArray(ipamAllocations.id, ids), eq(ipamAllocations.releasingAt, claimedAt)),
 		with: {
 			ipamPrefix: true
 		}
@@ -905,38 +1025,77 @@ export async function allocateVmNetworking(
 }
 
 export async function ensureVmDelegatedRoute(db: QueryableDb, vmId: string) {
-	await createVyosDelegatedRoute(await vmAllocations(db, vmId), vmId);
+	await createVyosDelegatedRoute(await vmAllocations(db, vmId), vmId, db);
 }
 
 export async function releaseVmNetworking(db: QueryableDb, vmId: string) {
-	const allocations = await vmAllocations(db, vmId);
+	const claimedAt = Date.now();
+	const claimed = await db
+		.update(ipamAllocations)
+		.set({ releasingAt: claimedAt })
+		.where(
+			and(
+				eq(ipamAllocations.associatedVmId, vmId),
+				or(
+					isNull(ipamAllocations.releasingAt),
+					lt(ipamAllocations.releasingAt, claimedAt - releaseLeaseMs)
+				)
+			)
+		)
+		.returning({ id: ipamAllocations.id });
+	if (claimed.length === 0) {
+		const remaining = await db.query.ipamAllocations.findFirst({
+			where: eq(ipamAllocations.associatedVmId, vmId),
+			columns: { id: true }
+		});
+		return !remaining;
+	}
+
+	const claimedIds = claimed.map((row) => row.id);
+	const allocations = await claimedAllocations(db, claimedIds, claimedAt);
 	await deleteVyosDelegatedRoute(allocations);
 	await deletePtrRecords(db, allocations).catch((err) => {
 		console.warn(`Failed to delete PTR records for VM ${vmId}`, err);
 	});
-	await db.delete(ipamAllocations).where(eq(ipamAllocations.associatedVmId, vmId));
+	await db
+		.delete(ipamAllocations)
+		.where(
+			and(inArray(ipamAllocations.id, claimedIds), eq(ipamAllocations.releasingAt, claimedAt))
+		);
+
+	return true;
 }
 
 export async function reconcileOrphanedIpamAllocations(db: QueryableDb, limit = 200) {
+	const staleClaimBefore = Date.now() - releaseLeaseMs;
 	const orphaned = await db
 		.selectDistinct({ vmId: ipamAllocations.associatedVmId })
 		.from(ipamAllocations)
 		.innerJoin(vms, eq(vms.id, ipamAllocations.associatedVmId))
-		.where(eq(vms.active, false))
+		.where(
+			and(
+				or(isNull(ipamAllocations.releasingAt), lt(ipamAllocations.releasingAt, staleClaimBefore)),
+				or(eq(vms.active, false), isNotNull(ipamAllocations.releasingAt))
+			)
+		)
 		.limit(limit);
 
 	let released = 0;
+	let skipped = 0;
 	let failed = 0;
 	for (const { vmId } of orphaned) {
 		try {
 			// biome-ignore lint/performance/noAwaitInLoops: releasing networking writes VyOS and Bunny config, which must not race between VMs
-			await releaseVmNetworking(db, vmId);
-			released += 1;
+			if (await releaseVmNetworking(db, vmId)) {
+				released += 1;
+			} else {
+				skipped += 1;
+			}
 		} catch (err) {
 			failed += 1;
 			console.warn(`Failed to reconcile orphaned IPAM allocations for VM ${vmId}`, err);
 		}
 	}
 
-	return { checked: orphaned.length, released, failed };
+	return { checked: orphaned.length, released, skipped, failed };
 }

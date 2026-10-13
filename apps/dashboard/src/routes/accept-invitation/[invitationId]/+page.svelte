@@ -29,6 +29,10 @@
 		const { data: res, error: err } = await authClient.organization.acceptInvitation({
 			invitationId: data.invitationId
 		});
+		if (err?.code === 'ALREADY_PROJECT_MEMBER' && data.organizationId) {
+			await goto(`/projects/${data.organizationId}/servers`, { refreshAll: true });
+			return;
+		}
 		if (err || !res) {
 			errorMessage = err?.message ?? 'Unable to accept invitation.';
 			accepting = false;

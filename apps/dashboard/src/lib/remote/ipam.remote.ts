@@ -1,14 +1,18 @@
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { eq } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureIpamPrefixes
 } from '#lib/server/accessibility-fixtures.js';
 import { requireAdmin } from '#lib/server/auth-context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { ipamAllocations, ipamPrefixes } from '#lib/server/db/schema.js';
-import { listIpamPrefixesWithStats, normalizeIpamPrefixInput } from '#lib/server/ipam.js';
+import {
+	ipamPrefixAddressingChanged,
+	listIpamPrefixesWithStats,
+	normalizeIpamPrefixInput
+} from '#lib/server/ipam.js';
 import { getIpamPtrDefaults, saveIpamPtrDefaults } from '#lib/server/ptr-records.js';
 import { command, getRequestEvent, query } from '$app/server';
 
@@ -32,6 +36,8 @@ export const listIpamPrefixes = query(async () => {
 	return listIpamPrefixesWithStats(db);
 });
 
+type PrefixTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+
 const prefixParams = type({
 	name: 'string',
 	cidr: 'string',
@@ -43,6 +49,49 @@ const prefixParams = type({
 	ipv6UseTransitAddress: 'boolean?'
 });
 
+function uniqueOrExclusionViolation(err: unknown) {
+	const code =
+		typeof err === 'object' && err !== null && 'code' in err
+			? (err as { code?: unknown }).code
+			: (err as { cause?: { code?: unknown } } | null)?.cause?.code;
+	return code === '23505' || code === '23P01';
+}
+
+async function lockPrefixAdmin(tx: PrefixTransaction) {
+	await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('ipam_prefixes_admin', 0))`);
+}
+
+async function assertNoOverlappingPrefix(
+	tx: PrefixTransaction,
+	cidr: string,
+	excludePrefixId?: string
+) {
+	const overlapping = await tx
+		.select({ cidr: ipamPrefixes.cidr })
+		.from(ipamPrefixes)
+		.where(
+			and(
+				sql`${ipamPrefixes.cidr} && ${cidr}::cidr`,
+				excludePrefixId ? ne(ipamPrefixes.id, excludePrefixId) : undefined
+			)
+		)
+		.limit(1);
+	if (overlapping.length > 0) {
+		error(409, `Prefix overlaps existing prefix ${overlapping[0].cidr}`);
+	}
+}
+
+async function writePrefix<T>(run: () => Promise<T>) {
+	try {
+		return await run();
+	} catch (err) {
+		if (uniqueOrExclusionViolation(err)) {
+			error(409, 'Prefix overlaps an existing prefix');
+		}
+		throw err;
+	}
+}
+
 export const createIpamPrefix = command(prefixParams, async (params) => {
 	const db = await requireCurrentAdmin();
 	const normalized = normalizeIpamPrefixInput(params);
@@ -51,8 +100,14 @@ export const createIpamPrefix = command(prefixParams, async (params) => {
 		error(400, 'Name is required');
 	}
 
-	const [inserted] = await db.insert(ipamPrefixes).values(normalized).returning();
-	return inserted;
+	return await writePrefix(() =>
+		db.transaction(async (tx) => {
+			await lockPrefixAdmin(tx);
+			await assertNoOverlappingPrefix(tx, normalized.cidr);
+			const [inserted] = await tx.insert(ipamPrefixes).values(normalized).returning();
+			return inserted;
+		})
+	);
 });
 
 const updatePrefixParams = type({
@@ -69,34 +124,46 @@ const updatePrefixParams = type({
 
 export const updateIpamPrefix = command(updatePrefixParams, async (params) => {
 	const db = await requireCurrentAdmin();
-	const existing = await db.query.ipamPrefixes.findFirst({
-		where: eq(ipamPrefixes.id, params.prefixId)
-	});
-	if (!existing) {
-		error(404, 'IPAM prefix not found');
-	}
-
 	const normalized = normalizeIpamPrefixInput(params);
 	if (!normalized.name) {
 		error(400, 'Name is required');
 	}
 
-	if (existing.ipv6UseTransitAddress !== normalized.ipv6UseTransitAddress) {
-		const allocation = await db.query.ipamAllocations.findFirst({
-			where: eq(ipamAllocations.ipamPrefixId, params.prefixId)
-		});
-		if (allocation) {
-			error(400, 'IPv6 allocation mode cannot be changed with active allocations');
-		}
-	}
+	return await writePrefix(() =>
+		db.transaction(async (tx) => {
+			await lockPrefixAdmin(tx);
+			const [existing] = await tx
+				.select()
+				.from(ipamPrefixes)
+				.where(eq(ipamPrefixes.id, params.prefixId))
+				.for('update');
+			if (!existing) {
+				error(404, 'IPAM prefix not found');
+			}
 
-	const [updated] = await db
-		.update(ipamPrefixes)
-		.set(normalized)
-		.where(eq(ipamPrefixes.id, params.prefixId))
-		.returning();
+			if (ipamPrefixAddressingChanged(existing, normalized)) {
+				const allocation = await tx.query.ipamAllocations.findFirst({
+					where: eq(ipamAllocations.ipamPrefixId, params.prefixId),
+					columns: { id: true }
+				});
+				if (allocation) {
+					error(
+						409,
+						'Prefix range, gateway, whitelist, and IPv6 allocation mode cannot be changed with active allocations'
+					);
+				}
+				await assertNoOverlappingPrefix(tx, normalized.cidr, params.prefixId);
+			}
 
-	return updated;
+			const [updated] = await tx
+				.update(ipamPrefixes)
+				.set(normalized)
+				.where(eq(ipamPrefixes.id, params.prefixId))
+				.returning();
+
+			return updated;
+		})
+	);
 });
 
 const disabledParams = type({ prefixId: 'string', disabled: 'boolean' });
@@ -119,21 +186,26 @@ const deleteParams = type({ prefixId: 'string' });
 
 export const deleteIpamPrefix = command(deleteParams, async (params) => {
 	const db = await requireCurrentAdmin();
-	const existing = await db.query.ipamPrefixes.findFirst({
-		where: eq(ipamPrefixes.id, params.prefixId)
-	});
-	if (!existing) {
-		error(404, 'IPAM prefix not found');
-	}
+	await db.transaction(async (tx) => {
+		const [existing] = await tx
+			.select({ id: ipamPrefixes.id })
+			.from(ipamPrefixes)
+			.where(eq(ipamPrefixes.id, params.prefixId))
+			.for('update');
+		if (!existing) {
+			error(404, 'IPAM prefix not found');
+		}
 
-	const allocation = await db.query.ipamAllocations.findFirst({
-		where: eq(ipamAllocations.ipamPrefixId, params.prefixId)
-	});
-	if (allocation) {
-		error(400, 'Prefixes with active allocations cannot be deleted');
-	}
+		const allocation = await tx.query.ipamAllocations.findFirst({
+			where: eq(ipamAllocations.ipamPrefixId, params.prefixId),
+			columns: { id: true }
+		});
+		if (allocation) {
+			error(409, 'Prefixes with active allocations cannot be deleted');
+		}
 
-	await db.delete(ipamPrefixes).where(eq(ipamPrefixes.id, params.prefixId));
+		await tx.delete(ipamPrefixes).where(eq(ipamPrefixes.id, params.prefixId));
+	});
 });
 
 export const getIpamPtrDefaultFormats = query(async () => {

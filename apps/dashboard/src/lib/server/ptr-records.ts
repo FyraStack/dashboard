@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import {
 	addressInCidr,
 	applyPtrTemplate,
@@ -7,7 +7,12 @@ import {
 	reverseDnsNameForIp,
 	sameAddress
 } from '#lib/ptr.js';
-import { BunnyClient, BunnyError, isBunnyConfigured } from '#lib/server/bunny.js';
+import {
+	BunnyClient,
+	BunnyError,
+	bunnyDnsRecordTypePtr,
+	isBunnyConfigured
+} from '#lib/server/bunny.js';
 import type { initDrizzle } from '#lib/server/db/index.js';
 import { ipamPtrRecords, ipamSettings } from '#lib/server/db/schema.js';
 
@@ -104,6 +109,45 @@ async function resolveZone(client: BunnyClient, allocation: PtrAllocation, addre
 	return { zone, recordName };
 }
 
+async function lockPtrAddress(db: QueryableDb, address: string) {
+	await db.execute(
+		sql`select pg_advisory_xact_lock(hashtextextended('ipam_ptr:' || host(${address}::inet), 0))`
+	);
+}
+
+async function reusableBunnyRecordId(client: BunnyClient, zoneId: number, recordName: string) {
+	const name = recordName.toLowerCase();
+	const [keep, ...duplicates] = (await client.listRecords(zoneId)).filter(
+		(record) => record.Type === bunnyDnsRecordTypePtr && record.Name.toLowerCase() === name
+	);
+	for (const duplicate of duplicates) {
+		// biome-ignore lint/performance/noAwaitInLoops: Bunny DNS deletes are sent one at a time to stay within its rate limits
+		await client.deleteRecord(zoneId, duplicate.Id).catch((err) => {
+			console.warn(`Failed to delete duplicate Bunny PTR record ${duplicate.Id}`, err);
+		});
+	}
+
+	return keep?.Id ?? null;
+}
+
+async function updateExistingBunnyRecord(
+	client: BunnyClient,
+	zoneId: number,
+	recordId: number,
+	recordName: string,
+	value: string
+) {
+	try {
+		await client.updatePtrRecord(zoneId, recordId, recordName, value);
+		return recordId;
+	} catch (err) {
+		if (err instanceof BunnyError && err.status === 404) {
+			return null;
+		}
+		throw err;
+	}
+}
+
 export async function setPtrRecord(
 	db: QueryableDb,
 	allocation: PtrAllocation,
@@ -130,74 +174,82 @@ export async function setPtrRecord(
 	const client = new BunnyClient();
 	const { zone, recordName } = await resolveZone(client, allocation, address);
 
-	const existing = await db.query.ipamPtrRecords.findFirst({
-		where: eq(ipamPtrRecords.address, address)
-	});
-	if (existing && existing.ipamAllocationId !== allocation.id) {
-		error(409, `${address} already has a reverse DNS record on another allocation`);
-	}
+	return await db.transaction(async (tx) => {
+		await lockPtrAddress(tx, address);
 
-	let bunnyRecordId = existing?.bunnyRecordId ?? null;
-	if (bunnyRecordId !== null) {
+		const existing = await tx.query.ipamPtrRecords.findFirst({
+			where: eq(ipamPtrRecords.address, address)
+		});
+		if (existing && existing.ipamAllocationId !== allocation.id) {
+			error(409, `${address} already has a reverse DNS record on another allocation`);
+		}
+
+		const existingRecordId = existing?.bunnyRecordId ?? null;
+		let bunnyRecordId =
+			existingRecordId === null
+				? null
+				: await updateExistingBunnyRecord(client, zone.Id, existingRecordId, recordName, value);
+		if (bunnyRecordId === null) {
+			const reusable = await reusableBunnyRecordId(client, zone.Id, recordName);
+			bunnyRecordId =
+				reusable === null
+					? null
+					: await updateExistingBunnyRecord(client, zone.Id, reusable, recordName, value);
+		}
+		let createdRecordId: number | null = null;
+		if (bunnyRecordId === null) {
+			const created = await client.createPtrRecord(zone.Id, recordName, value);
+			bunnyRecordId = created.Id;
+			createdRecordId = created.Id;
+		}
+
 		try {
-			await client.updatePtrRecord(zone.Id, bunnyRecordId, recordName, value);
+			const [row] = await tx
+				.insert(ipamPtrRecords)
+				.values({ ipamAllocationId: allocation.id, address, value, bunnyRecordId })
+				.onConflictDoUpdate({
+					target: ipamPtrRecords.address,
+					set: { value, bunnyRecordId }
+				})
+				.returning();
+
+			return { address: row.address, value: row.value };
 		} catch (err) {
-			if (err instanceof BunnyError && err.status === 404) {
-				bunnyRecordId = null;
-			} else {
-				throw err;
+			if (createdRecordId !== null) {
+				await client.deleteRecord(zone.Id, createdRecordId).catch((cleanupErr) => {
+					console.warn(`Failed to roll back Bunny PTR record for ${address}`, cleanupErr);
+				});
 			}
+			throw err;
 		}
-	}
-	let createdRecordId: number | null = null;
-	if (bunnyRecordId === null) {
-		const created = await client.createPtrRecord(zone.Id, recordName, value);
-		bunnyRecordId = created.Id;
-		createdRecordId = created.Id;
-	}
-
-	try {
-		const [row] = await db
-			.insert(ipamPtrRecords)
-			.values({ ipamAllocationId: allocation.id, address, value, bunnyRecordId })
-			.onConflictDoUpdate({
-				target: ipamPtrRecords.address,
-				set: { value, bunnyRecordId }
-			})
-			.returning();
-
-		return { address: row.address, value: row.value };
-	} catch (err) {
-		if (createdRecordId !== null) {
-			await client.deleteRecord(zone.Id, createdRecordId).catch((cleanupErr) => {
-				console.warn(`Failed to roll back Bunny PTR record for ${address}`, cleanupErr);
-			});
-		}
-		throw err;
-	}
+	});
 }
 
 export async function clearPtrRecord(db: QueryableDb, allocation: PtrAllocation, address: string) {
-	const existing = await db.query.ipamPtrRecords.findFirst({
-		where: eq(ipamPtrRecords.address, address)
-	});
-	if (!existing || existing.ipamAllocationId !== allocation.id) {
-		return null;
-	}
+	return await db.transaction(async (tx) => {
+		await lockPtrAddress(tx, address);
 
-	if (existing.bunnyRecordId !== null && isBunnyConfigured()) {
-		const zoneDomain = allocation.sourcePrefix.bunnyDnsZone;
-		if (zoneDomain) {
-			const client = new BunnyClient();
-			const zone = await client.findDnsZone(zoneDomain);
-			if (zone) {
-				await client.deleteRecord(zone.Id, existing.bunnyRecordId);
+		const existing = await tx.query.ipamPtrRecords.findFirst({
+			where: eq(ipamPtrRecords.address, address)
+		});
+		if (!existing || existing.ipamAllocationId !== allocation.id) {
+			return null;
+		}
+
+		if (existing.bunnyRecordId !== null && isBunnyConfigured()) {
+			const zoneDomain = allocation.sourcePrefix.bunnyDnsZone;
+			if (zoneDomain) {
+				const client = new BunnyClient();
+				const zone = await client.findDnsZone(zoneDomain);
+				if (zone) {
+					await client.deleteRecord(zone.Id, existing.bunnyRecordId);
+				}
 			}
 		}
-	}
 
-	await db.delete(ipamPtrRecords).where(eq(ipamPtrRecords.id, existing.id));
-	return null;
+		await tx.delete(ipamPtrRecords).where(eq(ipamPtrRecords.id, existing.id));
+		return null;
+	});
 }
 
 export async function applyDefaultPtrRecords(db: QueryableDb, allocations: PtrAllocation[]) {

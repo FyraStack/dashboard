@@ -35,7 +35,8 @@ export const load: LayoutServerLoad = async ({ locals, params, parent, depends, 
 		const paymentUrl = await attachDefaultProjectPlan(
 			params.projectid,
 			`${url.origin}${cleanPath}`,
-			url.searchParams.get('billing_promo') ?? undefined
+			url.searchParams.get('billing_promo') ?? undefined,
+			url.searchParams.get('billing_setup_nonce')
 		);
 		if (paymentUrl) {
 			redirect(303, paymentUrl);

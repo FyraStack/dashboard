@@ -42,6 +42,9 @@
 	let passwordCodeSent = $state(false);
 	let passwordVerifying = $state(false);
 	let passwordVerificationError = $state('');
+	let resendAvailableAt = $state(0);
+	let now = $state(Date.now());
+	let resendCooldownSeconds = $derived(Math.max(0, Math.ceil((resendAvailableAt - now) / 1000)));
 	let verificationMethod: VerificationMethod = $derived.by(() => {
 		if (hasPasskey) {
 			return 'passkey';
@@ -140,7 +143,9 @@
 		passwordVerificationError = '';
 
 		try {
-			await sendPasswordChangeCode();
+			const result = await sendPasswordChangeCode();
+			resendAvailableAt = Date.now() + result.retryAfterSeconds * 1000;
+			now = Date.now();
 			passwordCodeSent = true;
 		} catch (err) {
 			passwordCodeSent = false;
@@ -159,9 +164,28 @@
 	$effect(() => {
 		if (open && verificationMethod === 'email' && !passwordCodeRequested && !passwordCodeSending) {
 			untrack(() => {
+				if (Date.now() < resendAvailableAt) {
+					passwordCodeRequested = true;
+					passwordCodeSent = true;
+					return;
+				}
 				sendPasswordCode();
 			});
 		}
+	});
+
+	$effect(() => {
+		if (!(open && resendAvailableAt > Date.now())) {
+			return;
+		}
+		now = Date.now();
+		const timer = setInterval(() => {
+			now = Date.now();
+			if (now >= resendAvailableAt) {
+				clearInterval(timer);
+			}
+		}, 1000);
+		return () => clearInterval(timer);
 	});
 </script>
 
@@ -221,9 +245,15 @@
 						variant="outline"
 						type="button"
 						onclick={sendPasswordCode}
-						disabled={passwordCodeSending || passwordVerifying}
+						disabled={passwordCodeSending || passwordVerifying || resendCooldownSeconds > 0}
 					>
-						{passwordCodeSending ? 'Sending...' : 'Resend Code'}
+						{#if passwordCodeSending}
+							Sending...
+						{:else if resendCooldownSeconds > 0}
+							Resend in {resendCooldownSeconds}s
+						{:else}
+							Resend Code
+						{/if}
 					</Button>
 				{/if}
 				<Button

@@ -1,26 +1,81 @@
-import { and, eq, inArray, isNotNull, lt } from 'drizzle-orm';
+import { error } from '@sveltejs/kit';
+import { and, eq, inArray, isNotNull, lt, notInArray } from 'drizzle-orm';
 import { getBackend } from '#lib/server/backends/index.js';
 import { runInBackground } from '#lib/server/background.js';
 import { deleteProjectServerEntity } from '#lib/server/billing/autumn.js';
 import { hasUnsyncedUsageEvents, meterResourceThrough } from '#lib/server/billing/metering.js';
 import { closeRequestDb, type Database, initDrizzle } from '#lib/server/db/index.js';
-import { ipAssignments, paymentPeriods, vms, volumes } from '#lib/server/db/schema.js';
+import {
+	billingMeters,
+	ipAssignments,
+	paymentPeriods,
+	vms,
+	volumes
+} from '#lib/server/db/schema.js';
 import { releaseVmNetworking } from '#lib/server/ipam.js';
 import { getRequestEvent } from '$app/server';
 
 interface DeletableVm {
+	active: boolean;
 	backend: 'proxmox';
 	id: string;
+	name: string;
 	ownerProjectId: string | null;
 	proxmoxId: number | null;
+	status: 'provisioning' | 'ready' | 'error' | 'deleting';
 }
 
-export async function queueVmDeletion(db: Database, row: DeletableVm): Promise<void> {
+function rejectProvisioningDeletion(row: Pick<DeletableVm, 'name'>): never {
+	error(409, `VM "${row.name}" is still provisioning. Wait for it to finish before deleting it.`);
+}
+
+async function claimVmDeletion(db: Database, vmId: string) {
+	const claimed = await db
+		.update(vms)
+		.set({ status: 'deleting', statusError: null })
+		.where(
+			and(
+				eq(vms.id, vmId),
+				eq(vms.active, true),
+				notInArray(vms.status, ['deleting', 'provisioning'])
+			)
+		)
+		.returning({ id: vms.id, proxmoxId: vms.proxmoxId });
+	return claimed.at(0) ?? null;
+}
+
+export async function queueVmDeletion(db: Database, row: DeletableVm): Promise<boolean> {
+	if (!row.active || row.status === 'deleting') {
+		return false;
+	}
+	if (row.status === 'provisioning') {
+		rejectProvisioningDeletion(row);
+	}
 	await meterResourceThrough('vm', row.id).catch((err) => {
 		console.warn(`Failed to close billing meter for VM ${row.id} before deletion`, err);
 	});
-	await db.update(vms).set({ status: 'deleting', statusError: null }).where(eq(vms.id, row.id));
-	runInBackground(deleteVmResources(row), `vm-delete-${row.id}`);
+	const claimed = await claimVmDeletion(db, row.id);
+	if (!claimed) {
+		return false;
+	}
+	runInBackground(
+		deleteVmResources({ ...row, proxmoxId: claimed.proxmoxId }),
+		`vm-delete-${row.id}`
+	);
+	return true;
+}
+
+async function reopenBillingMeter(db: Database, vmId: string) {
+	await db
+		.update(billingMeters)
+		.set({ active: true, endedAt: null, lastMeteredAt: Date.now() })
+		.where(
+			and(
+				eq(billingMeters.resourceType, 'vm'),
+				eq(billingMeters.resourceId, vmId),
+				eq(billingMeters.active, false)
+			)
+		);
 }
 
 export const DELETED_VM_RETENTION_DAYS = 90;
@@ -71,13 +126,17 @@ async function deleteVmResources(row: DeletableVm): Promise<void> {
 		console.warn(`Failed to delete backend VM ${row.id}`, err);
 		const { db, close } = initOwnedDb();
 		try {
-			await db
+			const failed = await db
 				.update(vms)
 				.set({
 					status: 'error',
 					statusError: err instanceof Error ? err.message : 'Failed to deprovision VM'
 				})
-				.where(eq(vms.id, row.id));
+				.where(and(eq(vms.id, row.id), eq(vms.active, true), eq(vms.status, 'deleting')))
+				.returning({ id: vms.id });
+			if (failed.length > 0) {
+				await reopenBillingMeter(db, row.id);
+			}
 		} catch (updateErr) {
 			console.error(`VM ${row.id} deletion status update failed:`, updateErr);
 		} finally {

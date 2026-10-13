@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import { isValidPtrHostname } from '#lib/ptr.js';
 import {
 	accessibilityFixtureEnabled,
@@ -581,6 +581,7 @@ export const listVmStatuses = query(statusParams, async (params) => {
 
 const createParams = type({
 	projectId: 'string',
+	requestId: 'string',
 	vmTypeId: 'string',
 	name: 'string',
 	networkingMode: "'both' | 'ipv6'?",
@@ -611,6 +612,7 @@ export const createVm = command(createParams, async (params) => {
 	const publicKeys = keys.filter((key) => sshKeyIds.includes(key.id)).map((key) => key.publicKey);
 
 	const created = await provisionVm(db, {
+		vmId: params.requestId,
 		projectId: params.projectId,
 		vmTypeId: params.vmTypeId,
 		name: params.name,
@@ -702,7 +704,9 @@ export const deleteVm = command(deleteParams, async (params) => {
 		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'admin');
 	}
 
-	await queueVmDeletion(db, row);
+	if (!(await queueVmDeletion(db, row))) {
+		return;
+	}
 	captureServerEvent(
 		'vm_deleted',
 		{ vm_id: row.id, vm_type_id: row.vmTypeId },
@@ -745,6 +749,36 @@ export const startVm = command(powerParams, async (p) => powerAction(p.vmId, 'st
 export const stopVm = command(powerParams, async (p) => powerAction(p.vmId, 'stopVm'));
 export const killVm = command(powerParams, async (p) => powerAction(p.vmId, 'killVm'));
 export const rebootVm = command(powerParams, async (p) => powerAction(p.vmId, 'rebootVm'));
+
+const RESIZE_CLAIM_TTL_MS = 10 * 60_000;
+
+async function claimVmResize(db: Database, vmId: string, expectedVmTypeId: string) {
+	const claimedAt = Date.now();
+	const claimed = await db
+		.update(vms)
+		.set({ resizeClaimedAt: claimedAt })
+		.where(
+			and(
+				eq(vms.id, vmId),
+				eq(vms.active, true),
+				eq(vms.vmTypeId, expectedVmTypeId),
+				notInArray(vms.status, ['deleting', 'provisioning']),
+				or(isNull(vms.resizeClaimedAt), lt(vms.resizeClaimedAt, claimedAt - RESIZE_CLAIM_TTL_MS))
+			)
+		)
+		.returning({ id: vms.id });
+	if (claimed.length === 0) {
+		error(409, 'This server is already being resized or has changed. Refresh and try again.');
+	}
+	return claimedAt;
+}
+
+async function releaseVmResize(db: Database, vmId: string, claimedAt: number) {
+	await db
+		.update(vms)
+		.set({ resizeClaimedAt: null })
+		.where(and(eq(vms.id, vmId), eq(vms.resizeClaimedAt, claimedAt)));
+}
 
 const resizeParams = type({ vmId: 'string', vmTypeId: 'string' });
 export const resizeVm = command(resizeParams, async (params) => {
@@ -794,6 +828,7 @@ export const resizeVm = command(resizeParams, async (params) => {
 		error(400, `Cannot resize to a smaller plan (${downgrades.join(', ')})`);
 	}
 
+	const claimedAt = await claimVmResize(db, row.id, row.vmTypeId);
 	const backend = getBackend(row.backend);
 	try {
 		await backend.resizeVm(
@@ -802,13 +837,19 @@ export const resizeVm = command(resizeParams, async (params) => {
 			row.proxmoxId ?? undefined
 		);
 	} catch (err) {
+		await releaseVmResize(db, row.id, claimedAt).catch((releaseErr) => {
+			console.warn(`Failed to release resize claim for VM ${row.id}`, releaseErr);
+		});
 		if (err instanceof VmResizeError) {
 			error(400, err.message);
 		}
 		throw err;
 	}
 
-	await db.update(vms).set({ vmTypeId: target.id }).where(eq(vms.id, row.id));
+	await db
+		.update(vms)
+		.set({ vmTypeId: target.id, resizeClaimedAt: null })
+		.where(and(eq(vms.id, row.id), eq(vms.resizeClaimedAt, claimedAt)));
 	captureServerEvent(
 		'vm_resized',
 		{ vm_id: row.id, from_vm_type_id: row.vmTypeId, to_vm_type_id: target.id },

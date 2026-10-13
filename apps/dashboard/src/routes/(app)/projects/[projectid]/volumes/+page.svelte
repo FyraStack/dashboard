@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { ulid } from 'ulid';
 	import AttachVolumeDialog from '#lib/components/dialogs/attach-volume-dialog.svelte';
 	import CreateVolumeDialog from '#lib/components/dialogs/create-volume-dialog.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
@@ -101,6 +102,7 @@
 	const serverOptions = $derived((data.vms ?? []).filter((vm) => vm.active).map((vm) => vm.id));
 
 	let createOpen = $state(false);
+	let newVolumeId = $state(ulid());
 	let newName = $state('');
 	let newSize = $state(25);
 
@@ -155,12 +157,13 @@
 		creatingVolume = true;
 		try {
 			const created = await createProjectVolume({
+				id: newVolumeId,
 				projectId,
 				name: newName.trim(),
 				size: newSize
 			});
 			volumes = [
-				...volumes,
+				...volumes.filter((volume) => volume.id !== created.id),
 				{
 					id: created.id,
 					name: newName.trim(),
@@ -174,6 +177,7 @@
 			];
 			newName = '';
 			newSize = 25;
+			newVolumeId = ulid();
 			createOpen = false;
 		} catch (err) {
 			actionError = getErrorMessage(err, 'Failed to create volume.');

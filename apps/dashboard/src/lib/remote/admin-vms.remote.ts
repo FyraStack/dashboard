@@ -213,6 +213,8 @@ export const adminDeleteVm = command(powerParams, async (params) => {
 		return;
 	}
 
-	await queueVmDeletion(db, row);
+	if (!(await queueVmDeletion(db, row))) {
+		return;
+	}
 	captureServerEvent('admin_vm_deleted', { vm_id: row.id }, { projectId: row.ownerProjectId });
 });

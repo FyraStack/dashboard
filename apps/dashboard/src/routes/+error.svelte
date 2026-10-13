@@ -9,7 +9,7 @@
 
 	$effect(() => {
 		if (isNotFound) {
-			trackNotFound(page.url.pathname);
+			trackNotFound(page.url.href);
 		}
 	});
 	const isServerError = $derived(page.status >= 500);

@@ -2,19 +2,15 @@
 	import './layout.css';
 	import { ModeWatcher } from 'mode-watcher';
 	import { onMount } from 'svelte';
+	import { initPlausible } from '#lib/analytics/plausible.js';
 	import { initPostHog } from '#lib/analytics/posthog.js';
 	import NavigationProgress from '#lib/components/navigation-progress.svelte';
 
 	let { children } = $props();
 
-	onMount(async () => {
+	onMount(() => {
 		initPostHog();
-		const { init } = await import('@plausible-analytics/tracker');
-		init({
-			domain: 'dash.fyrastack.com',
-			endpoint: 'https://plausible.fyralabs.com/api/event',
-			outboundLinks: true
-		});
+		initPlausible();
 	});
 </script>
 

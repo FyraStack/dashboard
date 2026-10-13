@@ -1,10 +1,17 @@
 <script lang="ts">
+	import { trackNotFound } from '#lib/analytics/plausible.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 
 	const isNotFound = $derived(page.status === 404);
+
+	$effect(() => {
+		if (isNotFound) {
+			trackNotFound(page.url.pathname);
+		}
+	});
 	const isServerError = $derived(page.status >= 500);
 	const heading = $derived.by(() => {
 		if (isNotFound) {

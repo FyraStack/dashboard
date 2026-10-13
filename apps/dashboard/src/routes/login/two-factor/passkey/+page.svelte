@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { authClient } from '#lib/auth-client.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { goto } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
@@ -52,6 +53,7 @@
 		<div class="mb-10 flex items-center justify-center gap-2">
 			<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
 			<span class="text-base font-semibold tracking-tight text-foreground">Stack</span>
+			<Badge class="h-4 px-1.5 text-[10px]" variant="secondary">Alpha</Badge>
 		</div>
 
 		<div class="space-y-5">

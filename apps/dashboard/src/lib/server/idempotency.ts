@@ -6,7 +6,13 @@ import { idempotencyKeys } from '#lib/server/db/schema.js';
 
 const COMPLETED_TTL_MS = 24 * 60 * 60 * 1000;
 const ABANDONED_PENDING_MS = 60 * 60 * 1000;
-type JsonResult = string | number | boolean | null | { [key: string]: JsonResult | undefined };
+type JsonResult =
+	| string
+	| number
+	| boolean
+	| null
+	| JsonResult[]
+	| { [key: string]: JsonResult | undefined };
 
 export async function withIdempotency<T extends JsonResult>(
 	db: Pick<Database, 'insert' | 'select' | 'update' | 'delete'>,

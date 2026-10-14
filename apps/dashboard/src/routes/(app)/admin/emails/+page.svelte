@@ -11,6 +11,7 @@
 		extractPlaceholders,
 		fieldToken
 	} from '#lib/emails/campaign-registry.js';
+	import { prepareIdempotentRequest } from '#lib/idempotency.js';
 	import type { AdminUser } from '#lib/remote/admin-users.remote.js';
 	import {
 		previewCampaignEmail,
@@ -19,6 +20,7 @@
 	} from '#lib/remote/email-campaign.remote.js';
 	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
+	import { page } from '$app/state';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
@@ -390,18 +392,32 @@
 		sendError = '';
 		const rows = $state.snapshot(recipientRows);
 		const fields = $state.snapshot(fieldValues);
+		const sentBatches: (() => void)[] = [];
 		try {
 			for (let i = 0; i < rows.length; i += CAMPAIGN_BATCH_SIZE) {
-				// biome-ignore lint/performance/noAwaitInLoops: batches go out one at a time to stay under the email provider's rate limit and report progress
-				const result = await sendCampaignEmails({
+				const batch = {
 					template: selectedTemplateKey,
 					subject,
 					fields,
 					rows: rows.slice(i, i + CAMPAIGN_BATCH_SIZE),
 					emailColumn: 'email'
+				};
+				// biome-ignore lint/performance/noAwaitInLoops: batches go out one at a time to stay under the email provider's rate limit and report progress
+				const request = await prepareIdempotentRequest('admin.sendCampaignEmails', {
+					template: batch.template,
+					subject: batch.subject,
+					fields: JSON.stringify(batch.fields),
+					rows: JSON.stringify(batch.rows),
+					emailColumn: batch.emailColumn,
+					userId: page.data.user?.id
 				});
+				const result = await sendCampaignEmails({ ...batch, idempotencyKey: request.key });
+				sentBatches.push(request.complete);
 				sentCount += result.sent;
 				sendFailures = [...sendFailures, ...result.failures];
+			}
+			for (const complete of sentBatches) {
+				complete();
 			}
 			sendComplete = true;
 		} catch (err) {

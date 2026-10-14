@@ -458,7 +458,12 @@
 		tokens.push({ id: tempId, name, created: now, lastUsedAt: null });
 
 		try {
-			const result = await createApiToken({ name });
+			const request = await prepareIdempotentRequest('apiTokens.createApiToken', {
+				name,
+				userId: page.data.user?.id
+			});
+			const result = await createApiToken({ name, idempotencyKey: request.key });
+			request.complete();
 			generatedToken = result.token;
 			const idx = tokens.findIndex((t) => t.id === tempId);
 			if (idx !== -1) {

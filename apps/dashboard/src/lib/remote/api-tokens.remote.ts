@@ -3,6 +3,7 @@ import { type } from 'arktype';
 import { and, eq } from 'drizzle-orm';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { apiTokens } from '#lib/server/db/schema.js';
+import { withIdempotency } from '#lib/server/idempotency.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { command, getRequestEvent, query } from '$app/server';
 
@@ -39,7 +40,7 @@ async function hashToken(token: string): Promise<string> {
 	return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-const createParams = type({ name: 'string' });
+const createParams = type({ name: 'string', idempotencyKey: '0 < string <= 128' });
 
 export const createApiToken = command(createParams, async (params) => {
 	const event = getRequestEvent();
@@ -48,22 +49,41 @@ export const createApiToken = command(createParams, async (params) => {
 	}
 
 	const db = initDrizzle();
+	const userId = event.locals.user.id;
 	const plainToken = generateToken();
 	const tokenHash = await hashToken(plainToken);
+	let insertedNow = false;
 
-	const [inserted] = await db
-		.insert(apiTokens)
-		.values({
-			userId: event.locals.user.id,
-			name: params.name,
-			tokenHash,
-			createdAt: Date.now()
-		})
-		.returning();
+	const { id } = await withIdempotency(
+		db,
+		{
+			key: params.idempotencyKey,
+			operation: 'apiTokens.createApiToken',
+			args: { name: params.name, userId }
+		},
+		async () => {
+			const [inserted] = await db
+				.insert(apiTokens)
+				.values({ userId, name: params.name, tokenHash, createdAt: Date.now() })
+				.returning();
+			insertedNow = true;
+			captureServerEvent('api_token_created', { token_id: inserted.id });
+			return { id: inserted.id };
+		}
+	);
 
-	captureServerEvent('api_token_created', { token_id: inserted.id });
+	if (!insertedNow) {
+		const [rotated] = await db
+			.update(apiTokens)
+			.set({ tokenHash })
+			.where(and(eq(apiTokens.id, id), eq(apiTokens.userId, userId)))
+			.returning({ id: apiTokens.id });
+		if (!rotated) {
+			error(409, 'This token was revoked. Create a new one.');
+		}
+	}
 
-	return { id: inserted.id, token: plainToken };
+	return { id, token: plainToken };
 });
 
 const revokeParams = type({ tokenId: 'string' });

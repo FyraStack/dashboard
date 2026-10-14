@@ -7,12 +7,14 @@
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
+	import { prepareIdempotentRequest } from '#lib/idempotency.js';
 	import {
 		createProject as createProjectRpc,
 		deleteProject as deleteProjectRpc
 	} from '#lib/remote/projects.remote.js';
 	import { getErrorMessage } from '#lib/utils.js';
 	import { goto, invalidate } from '$app/navigation';
+	import { page } from '$app/state';
 	import ArrowRight from '~icons/lucide/arrow-right';
 	import Loader2 from '~icons/lucide/loader-2';
 	import MoreHorizontal from '~icons/lucide/more-horizontal';
@@ -49,7 +51,12 @@
 		createProjectError = '';
 		try {
 			const name = newProjectName.trim();
-			const res = await createProjectRpc({ name });
+			const request = await prepareIdempotentRequest('projects.createProject', {
+				name,
+				userId: page.data.user?.id
+			});
+			const res = await createProjectRpc({ name, idempotencyKey: request.key });
+			request.complete();
 			projects = [...projects, { id: res.id, projectName: name, role: 'owner' }];
 			newProjectName = '';
 			createOpen = false;

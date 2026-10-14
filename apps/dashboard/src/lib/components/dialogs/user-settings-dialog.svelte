@@ -12,6 +12,7 @@
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { prepareIdempotentRequest } from '#lib/idempotency.js';
 	import { createApiToken, listApiTokens, revokeApiToken } from '#lib/remote/api-tokens.remote.js';
 	import { getPendingEmailChange, requestEmailChange } from '#lib/remote/email-change.remote.js';
 	import { hasPassword } from '#lib/remote/password-change.remote.js';
@@ -25,6 +26,7 @@
 	import { getErrorMessage } from '#lib/utils.js';
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Minus from '~icons/lucide/minus';
@@ -358,9 +360,15 @@
 		}
 		sshKeyAdding = true;
 		try {
-			const res = await createSshKeyRpc({ name: newKeyName.trim(), publicKey: newKeyValue.trim() });
+			const payload = { name: newKeyName.trim(), publicKey: newKeyValue.trim() };
+			const request = await prepareIdempotentRequest('sshKeys.createSshKey', {
+				...payload,
+				userId: page.data.user?.id
+			});
+			const res = await createSshKeyRpc({ ...payload, idempotencyKey: request.key });
 
 			await invalidate('app:ssh-keys');
+			request.complete();
 
 			sshKeys.push({
 				id: res.id,

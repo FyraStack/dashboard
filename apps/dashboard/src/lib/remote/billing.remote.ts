@@ -14,12 +14,17 @@ import {
 } from '#lib/server/billing/autumn.js';
 import { getProjectBillingOverview, refreshProjectBilling } from '#lib/server/billing/overview.js';
 import { initDrizzle } from '#lib/server/db/index.js';
+import { withIdempotency } from '#lib/server/idempotency.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { command, getRequestEvent, query } from '$app/server';
 
 const projectParams = type({ projectId: 'string' });
 const setupParams = type({ projectId: 'string', returnTo: 'string?', discountCode: 'string?' });
-const purchaseCreditsParams = type({ projectId: 'string', credits: 'number.integer > 0' });
+const purchaseCreditsParams = type({
+	projectId: 'string',
+	credits: 'number.integer > 0',
+	idempotencyKey: '0 < string <= 128'
+});
 
 const MAX_CREDITS_PER_PURCHASE = 1_000_000;
 
@@ -81,11 +86,27 @@ export const purchaseCredits = command(purchaseCreditsParams, async (params) => 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'owner');
 
-	const url = await purchaseProjectCredits(params.projectId, params.credits);
-	captureServerEvent(
-		'credit_purchase_started',
-		{ credits: params.credits },
-		{ projectId: params.projectId }
+	const { idempotencyKey, ...operationArgs } = params;
+	const url = await withIdempotency(
+		db,
+		{
+			key: idempotencyKey,
+			operation: 'billing.purchaseCredits',
+			args: { ...operationArgs, userId: event.locals.user.id }
+		},
+		async () => {
+			const paymentUrl = await purchaseProjectCredits(
+				params.projectId,
+				params.credits,
+				idempotencyKey
+			);
+			captureServerEvent(
+				'credit_purchase_started',
+				{ credits: params.credits },
+				{ projectId: params.projectId }
+			);
+			return paymentUrl;
+		}
 	);
 
 	return { url };

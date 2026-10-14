@@ -526,7 +526,7 @@ function withProjectCreditPurchaseLock<T>(projectId: string, task: () => Promise
 	return result;
 }
 
-export function purchaseProjectCredits(projectId: string, credits: number) {
+export function purchaseProjectCredits(projectId: string, credits: number, idempotencyKey: string) {
 	return withProjectCreditPurchaseLock(projectId, async () => {
 		const featureId = creditsFeatureId();
 		const planId = defaultPlanId();
@@ -536,12 +536,15 @@ export function purchaseProjectCredits(projectId: string, credits: number) {
 
 		await ensureProjectCustomer(projectId);
 
-		const response = await createAutumnClient().billing.update({
-			customerId: projectId,
-			planId,
-			featureQuantities: [{ featureId, quantity: credits }],
-			redirectMode: 'if_required'
-		});
+		const response = await createAutumnClient().billing.update(
+			{
+				customerId: projectId,
+				planId,
+				featureQuantities: [{ featureId, quantity: credits }],
+				redirectMode: 'if_required'
+			},
+			{ headers: { 'Idempotency-Key': `credit-purchase:${projectId}:${idempotencyKey}` } }
+		);
 
 		invalidateProjectBillingState(projectId);
 		return response.paymentUrl ?? null;

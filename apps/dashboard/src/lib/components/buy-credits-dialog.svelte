@@ -3,8 +3,10 @@
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
+	import { prepareIdempotentRequest } from '#lib/idempotency.js';
 	import { purchaseCredits } from '#lib/remote/billing.remote.js';
 	import { getErrorMessage } from '#lib/utils.js';
+	import { page } from '$app/state';
 	import Loader2 from '~icons/lucide/loader-2';
 	import DollarSign from '~icons/nucleo/dollar-sign';
 
@@ -33,6 +35,7 @@
 	let loading = $state(false);
 	let actionError = $state('');
 	let amountInput = $state('10');
+	let purchaseResult = $state<{ url: string | null; complete: () => void } | null>(null);
 
 	const amount = $derived(Number.parseFloat(amountInput));
 	const amountValid = $derived(Number.isFinite(amount) && amount > 0);
@@ -55,21 +58,36 @@
 	}
 
 	async function handlePurchase() {
-		if (!projectId || loading || !canSubmit) {
+		if (!projectId || loading || !(purchaseResult || canSubmit)) {
 			return;
 		}
 
 		loading = true;
 		actionError = '';
 		try {
-			const result = await purchaseCredits({ projectId, credits });
-			if (result.url) {
-				window.location.href = result.url;
+			if (!purchaseResult) {
+				const request = await prepareIdempotentRequest('billing.purchaseCredits', {
+					projectId,
+					credits,
+					userId: page.data.user?.id
+				});
+				const result = await purchaseCredits({ projectId, credits, idempotencyKey: request.key });
+				purchaseResult = { ...result, complete: request.complete };
+			}
+			if (purchaseResult.url) {
+				window.location.href = purchaseResult.url;
+				purchaseResult.complete();
 				return;
 			}
 			window.location.reload();
+			purchaseResult.complete();
 		} catch (err) {
-			actionError = getErrorMessage(err, 'Credits could not be purchased. Try again.');
+			actionError = purchaseResult
+				? 'Your purchase was submitted. Select Continue to open the payment page or refresh your balance.'
+				: getErrorMessage(
+						err,
+						'The purchase could not be confirmed. Check your billing history before trying again.'
+					);
 			loading = false;
 		}
 	}
@@ -168,6 +186,7 @@
 
 		{#if actionError}
 			<div
+				role="alert"
 				class="rounded-md border border-red-300 bg-red-100 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
 			>
 				{actionError}
@@ -176,11 +195,19 @@
 
 		<Dialog.Footer>
 			<Button variant="outline" size="sm" onclick={() => (open = false)}>Not now</Button>
-			<Button size="sm" onclick={handlePurchase} disabled={loading || !canSubmit}>
+			<Button
+				size="sm"
+				onclick={handlePurchase}
+				disabled={loading || !(purchaseResult || canSubmit)}
+			>
 				{#if loading}
 					<Loader2 class="size-3.5 animate-spin" />
 				{/if}
-				{canSubmit ? `Top-up ${formatCost(billedNow)}` : 'Top-up credits'}
+				{#if purchaseResult}
+					Continue
+				{:else}
+					{canSubmit ? `Top-up ${formatCost(billedNow)}` : 'Top-up credits'}
+				{/if}
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

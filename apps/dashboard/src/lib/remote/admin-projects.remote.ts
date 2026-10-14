@@ -23,6 +23,7 @@ import { member, organization, user } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { projectBillingCustomers, sshKeys, vms, volumes } from '#lib/server/db/schema.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
+import { withIdempotency } from '#lib/server/idempotency.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
 import { provisionVm } from '#lib/server/vm-provisioning.js';
@@ -233,7 +234,8 @@ const createVmParams = type({
 	networkingMode: "'both' | 'ipv6'?",
 	imageId: 'string?',
 	sshKeyIds: 'string[]?',
-	password: 'string?'
+	password: 'string?',
+	idempotencyKey: '0 < string <= 128'
 });
 export const createAdminVm = command(createVmParams, async (params) => {
 	const db = await requireCurrentAdmin();
@@ -270,17 +272,27 @@ export const createAdminVm = command(createVmParams, async (params) => {
 			: [];
 	const publicKeys = keys.filter((key) => sshKeyIds.includes(key.id)).map((key) => key.publicKey);
 
-	return provisionVm(db, {
-		projectId: params.projectId,
-		vmTypeId: params.vmTypeId,
-		name: params.name,
-		userId: owner?.userId ?? adminUser.id,
-		billingExempt,
-		networkingMode: params.networkingMode,
-		imageId: params.imageId,
-		sshPublicKeys: publicKeys,
-		password: params.password
-	});
+	const { idempotencyKey, ...operationArgs } = params;
+	return withIdempotency(
+		db,
+		{
+			key: idempotencyKey,
+			operation: 'admin.createVm',
+			args: { ...operationArgs, userId: adminUser.id, sshKeyIds: [...sshKeyIds].sort() }
+		},
+		() =>
+			provisionVm(db, {
+				projectId: params.projectId,
+				vmTypeId: params.vmTypeId,
+				name: params.name,
+				userId: owner?.userId ?? adminUser.id,
+				billingExempt,
+				networkingMode: params.networkingMode,
+				imageId: params.imageId,
+				sshPublicKeys: publicKeys,
+				password: params.password
+			})
+	);
 });
 
 const setDisabledParams = type({ projectId: 'string', disabled: 'boolean' });

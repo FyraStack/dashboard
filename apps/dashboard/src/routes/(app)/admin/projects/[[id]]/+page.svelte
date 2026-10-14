@@ -12,6 +12,7 @@
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { prepareIdempotentRequest } from '#lib/idempotency.js';
 	import { generateServerName } from '#lib/name-generator.js';
 	import {
 		type AdminProject,
@@ -322,16 +323,22 @@
 		createVmSaving = true;
 		createVmError = '';
 		try {
-			await createAdminVm({
+			const payload = {
 				projectId: createVmProject.id,
 				vmTypeId: createVmTypeId,
 				name: createVmName.trim(),
 				networkingMode: createVmNetworking,
 				...(createVmImageId ? { imageId: createVmImageId } : {}),
-				...(createVmSshKeyIds.length > 0 ? { sshKeyIds: createVmSshKeyIds } : {}),
+				...(createVmSshKeyIds.length > 0 ? { sshKeyIds: [...createVmSshKeyIds].sort() } : {}),
 				...(createVmPassword.trim() ? { password: createVmPassword.trim() } : {})
+			};
+			const request = await prepareIdempotentRequest('admin.createVm', {
+				...payload,
+				userId: page.data.user?.id
 			});
+			await createAdminVm({ ...payload, idempotencyKey: request.key });
 			await Promise.all([invalidate('app:admin-vms'), invalidate('app:admin-projects')]);
+			request.complete();
 			createVmOpen = false;
 			toast.success('Server created');
 		} catch (err) {

@@ -247,11 +247,14 @@
 		createProjectSaving = true;
 		createProjectError = '';
 		try {
-			const created = await createAdminProject({
-				name: createProjectName.trim(),
-				ownerUserId: createProjectOwnerId
+			const payload = { name: createProjectName.trim(), ownerUserId: createProjectOwnerId };
+			const request = await prepareIdempotentRequest('admin.createProject', {
+				...payload,
+				userId: page.data.user?.id
 			});
+			const created = await createAdminProject({ ...payload, idempotencyKey: request.key });
 			await invalidate('app:admin-projects');
+			request.complete();
 			createProjectOpen = false;
 			toast.success('Project created');
 			goto(resolve(`admin/projects/${created.id}`), { reset: false });

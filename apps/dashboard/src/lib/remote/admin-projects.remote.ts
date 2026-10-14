@@ -197,9 +197,17 @@ function toSlug(name: string) {
 	return `${slug || 'project'}-${Date.now().toString(36)}`;
 }
 
-const createProjectParams = type({ name: 'string', ownerUserId: 'string' });
+const createProjectParams = type({
+	name: 'string',
+	ownerUserId: 'string',
+	idempotencyKey: '0 < string <= 128'
+});
 export const createAdminProject = command(createProjectParams, async (params) => {
 	const db = await requireCurrentAdmin();
+	const adminUser = getRequestEvent().locals.user;
+	if (!adminUser) {
+		error(401, 'Authentication required');
+	}
 
 	const owner = await db.query.user.findFirst({ where: eq(user.id, params.ownerUserId) });
 	if (!owner) {
@@ -207,24 +215,34 @@ export const createAdminProject = command(createProjectParams, async (params) =>
 	}
 
 	const name = params.name.trim() || 'Untitled Project';
-	const auth = initAuth();
-	const org = await auth.api.createOrganization({
-		body: {
-			name,
-			slug: toSlug(name),
-			userId: params.ownerUserId
+	return withIdempotency(
+		db,
+		{
+			key: params.idempotencyKey,
+			operation: 'admin.createProject',
+			args: { name, ownerUserId: params.ownerUserId, userId: adminUser.id }
+		},
+		async () => {
+			const auth = initAuth();
+			const org = await auth.api.createOrganization({
+				body: {
+					name,
+					slug: toSlug(name),
+					userId: params.ownerUserId
+				}
+			});
+			if (!org) {
+				error(502, 'Failed to create project');
+			}
+
+			await ensureLocalProjectBillingCustomer(org.id);
+			ensureProjectCustomer(org.id).catch((err) => {
+				console.warn(`Failed to sync Autumn customer for project ${org.id}`, err);
+			});
+
+			return { id: org.id };
 		}
-	});
-	if (!org) {
-		error(502, 'Failed to create project');
-	}
-
-	await ensureLocalProjectBillingCustomer(org.id);
-	ensureProjectCustomer(org.id).catch((err) => {
-		console.warn(`Failed to sync Autumn customer for project ${org.id}`, err);
-	});
-
-	return { id: org.id };
+	);
 });
 
 const createVmParams = type({

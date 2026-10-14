@@ -5,6 +5,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import type { FeatureFlags } from '#lib/feature-flags.js';
+	import { prepareIdempotentRequest } from '#lib/idempotency.js';
 	import { generateServerName } from '#lib/name-generator.js';
 	import { createVm } from '#lib/remote/vms.remote.js';
 	import { createVolume as createProjectVolume } from '#lib/remote/volumes.remote.js';
@@ -160,6 +161,7 @@
 	let creatingVolume = $state(false);
 	let createError = $state('');
 	let billingSetupOpen = $state(false);
+	let createdVm = $state<{ id: string; projectId: string; complete: () => void } | null>(null);
 
 	let selectedImage = $derived(dbImages.find((i) => i.id === selectedImageId) ?? null);
 	let selectedPlan = $derived(vmTypes.find((t) => t.id === selectedPlanId) ?? null);
@@ -387,13 +389,35 @@
 		}, 1500);
 	}
 
+	async function openCreatedVm() {
+		if (!createdVm) {
+			return;
+		}
+		try {
+			await goto(resolve(`projects/${createdVm.projectId}/servers/${createdVm.id}`), {
+				invalidate: ['project:vms']
+			});
+			createdVm.complete();
+			requestServerStatusRefresh();
+		} catch {
+			createError =
+				'Your server was created, but its page could not be opened. Select View server to try again.';
+		}
+	}
+
 	async function handleCreate() {
+		if (creating) {
+			return;
+		}
+		if (createdVm) {
+			creating = true;
+			createError = '';
+			await openCreatedVm();
+			creating = false;
+			return;
+		}
 		if (
-			creating ||
-			!serverName.trim() ||
-			!selectedImageId ||
-			!selectedPlanId ||
-			!networkingReady ||
+			!(serverName.trim() && selectedImageId && selectedPlanId && networkingReady) ||
 			(usePasswordAuthentication && !serverPassword.trim())
 		) {
 			return;
@@ -421,17 +445,21 @@
 				name: serverName.trim(),
 				networkingMode,
 				...(imageId ? { imageId } : {}),
-				...(selectedSshKeyIds.length > 0 ? { sshKeyIds: selectedSshKeyIds } : {}),
+				...(selectedSshKeyIds.length > 0 ? { sshKeyIds: [...selectedSshKeyIds].sort() } : {}),
 				...(usePasswordAuthentication ? { password: serverPassword.trim() } : {})
 			};
-			const created = await createVm(payload);
-
-			await goto(resolve(`projects/${projectId}/servers/${created.id}`), {
-				invalidate: ['project:vms']
+			const request = await prepareIdempotentRequest('vms.createVm', {
+				...payload,
+				userId: page.data.user?.id
 			});
-			requestServerStatusRefresh();
+			const created = await createVm({ ...payload, idempotencyKey: request.key });
+			createdVm = { id: created.id, projectId, complete: request.complete };
+			await openCreatedVm();
 		} catch (err) {
-			createError = getErrorMessage(err, 'Failed to create server. Please try again.');
+			createError = getErrorMessage(
+				err,
+				'Creation could not be confirmed. Check your server list before trying again.'
+			);
 		} finally {
 			creating = false;
 		}
@@ -1141,21 +1169,24 @@
 					{/if}
 					<Button
 						class="h-11 w-full text-sm sm:h-9"
-						disabled={!(serverName.trim() && selectedImageId && selectedPlanId) ||
-							(usePasswordAuthentication && !serverPassword.trim()) ||
-							!networkingReady ||
-							creating}
+						disabled={creating ||
+							(!createdVm &&
+								(!(serverName.trim() && selectedImageId && selectedPlanId) ||
+									(usePasswordAuthentication && !serverPassword.trim()) ||
+									!networkingReady))}
 						onclick={handleCreate}
 					>
 						{#if creating}
 							<Loader2 class="mr-2 h-3 w-3 animate-spin" />
-							Creating...
+							{createdVm ? 'Opening...' : 'Creating...'}
+						{:else if createdVm}
+							View server
 						{:else}
 							{billingReady ? 'Create Server' : 'Set up billing to create server'}
 						{/if}
 					</Button>
 					{#if createError}
-						<p class="mt-2 text-sm text-red-400 sm:text-xs">{createError}</p>
+						<p role="alert" class="mt-2 text-sm text-red-400 sm:text-xs">{createError}</p>
 					{/if}
 				</div>
 			</div>

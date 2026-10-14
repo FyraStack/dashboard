@@ -22,6 +22,7 @@ import {
 } from '#lib/server/billing/autumn.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { ipamAllocations, sshKeys, vms, vmTypes } from '#lib/server/db/schema.js';
+import { withIdempotency } from '#lib/server/idempotency.js';
 import { instrument, timingLog } from '#lib/server/observability.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { queueVmDeletion } from '#lib/server/vm-deletion.js';
@@ -586,7 +587,8 @@ const createParams = type({
 	networkingMode: "'both' | 'ipv6'?",
 	imageId: 'string?',
 	sshKeyIds: 'string[]?',
-	password: 'string?'
+	password: 'string?',
+	idempotencyKey: '0 < string <= 128'
 });
 export const createVm = command(createParams, async (params) => {
 	const event = getRequestEvent();
@@ -610,29 +612,41 @@ export const createVm = command(createParams, async (params) => {
 			: [];
 	const publicKeys = keys.filter((key) => sshKeyIds.includes(key.id)).map((key) => key.publicKey);
 
-	const created = await provisionVm(db, {
-		projectId: params.projectId,
-		vmTypeId: params.vmTypeId,
-		name: params.name,
-		userId: event.locals.user.id,
-		billingExempt,
-		networkingMode: params.networkingMode,
-		imageId: params.imageId,
-		sshPublicKeys: publicKeys,
-		password: params.password
-	});
-	captureServerEvent(
-		'vm_created',
+	const userId = event.locals.user.id;
+	const { idempotencyKey, ...operationArgs } = params;
+	return withIdempotency(
+		db,
 		{
-			vm_type_id: params.vmTypeId,
-			networking_mode: params.networkingMode ?? 'both',
-			image_id: params.imageId,
-			ssh_key_count: publicKeys.length,
-			billing_exempt: billingExempt
+			key: idempotencyKey,
+			operation: 'vms.createVm',
+			args: { ...operationArgs, userId, sshKeyIds: [...sshKeyIds].sort() }
 		},
-		{ projectId: params.projectId }
+		async () => {
+			const created = await provisionVm(db, {
+				projectId: params.projectId,
+				vmTypeId: params.vmTypeId,
+				name: params.name,
+				userId,
+				billingExempt,
+				networkingMode: params.networkingMode,
+				imageId: params.imageId,
+				sshPublicKeys: publicKeys,
+				password: params.password
+			});
+			captureServerEvent(
+				'vm_created',
+				{
+					vm_type_id: params.vmTypeId,
+					networking_mode: params.networkingMode ?? 'both',
+					image_id: params.imageId,
+					ssh_key_count: publicKeys.length,
+					billing_exempt: billingExempt
+				},
+				{ projectId: params.projectId }
+			);
+			return created;
+		}
 	);
-	return created;
 });
 
 const renameParams = type({ vmId: 'string', name: 'string', updateHostname: 'boolean' });

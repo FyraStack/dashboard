@@ -399,6 +399,28 @@ export const sshKeys = pgTable(
 	(table) => [index('ssh_keys_user_id_index').on(table.userId)]
 );
 
+// Idempotency Keys
+
+export const idempotencyStatusEnum = pgEnum('idempotency_status', ['pending', 'completed']);
+
+export const idempotencyKeys = pgTable(
+	'idempotency_keys',
+	{
+		key: text('key').primaryKey(),
+		fingerprint: text('fingerprint').notNull(),
+		status: idempotencyStatusEnum('status').notNull().default('pending'),
+		result: text('result'),
+		createdAt: bigint('created_at', { mode: 'number' })
+			.notNull()
+			.default(sql`(extract(epoch from now()) * 1000)::bigint`),
+		updatedAt: bigint('updated_at', { mode: 'number' })
+			.notNull()
+			.default(sql`(extract(epoch from now()) * 1000)::bigint`),
+		expiresAt: bigint('expires_at', { mode: 'number' }).notNull()
+	},
+	(table) => [index('idempotency_keys_expires_at_index').on(table.expiresAt)]
+);
+
 // API Tokens
 
 export const apiTokens = pgTable(

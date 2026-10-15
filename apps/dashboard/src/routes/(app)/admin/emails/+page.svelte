@@ -11,7 +11,7 @@
 		extractPlaceholders,
 		fieldToken
 	} from '#lib/emails/campaign-registry.js';
-	import { prepareIdempotentRequest } from '#lib/idempotency.js';
+	import { idempotencyScope } from '#lib/idempotency.js';
 	import type { AdminUser } from '#lib/remote/admin-users.remote.js';
 	import {
 		previewCampaignEmail,
@@ -392,7 +392,7 @@
 		sendError = '';
 		const rows = $state.snapshot(recipientRows);
 		const fields = $state.snapshot(fieldValues);
-		const sentBatches: (() => void)[] = [];
+		const campaign = idempotencyScope();
 		try {
 			for (let i = 0; i < rows.length; i += CAMPAIGN_BATCH_SIZE) {
 				const batch = {
@@ -403,22 +403,11 @@
 					emailColumn: 'email'
 				};
 				// biome-ignore lint/performance/noAwaitInLoops: batches go out one at a time to stay under the email provider's rate limit and report progress
-				const request = await prepareIdempotentRequest('admin.sendCampaignEmails', {
-					template: batch.template,
-					subject: batch.subject,
-					fields: JSON.stringify(batch.fields),
-					rows: JSON.stringify(batch.rows),
-					emailColumn: batch.emailColumn,
-					userId: page.data.user?.id
-				});
-				const result = await sendCampaignEmails({ ...batch, idempotencyKey: request.key });
-				sentBatches.push(request.complete);
+				const result = await campaign.run(sendCampaignEmails, 'admin.sendCampaignEmails', batch);
 				sentCount += result.sent;
 				sendFailures = [...sendFailures, ...result.failures];
 			}
-			for (const complete of sentBatches) {
-				complete();
-			}
+			campaign.complete();
 			sendComplete = true;
 		} catch (err) {
 			sendError = getErrorMessage(err, 'Failed to send emails');

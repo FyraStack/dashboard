@@ -12,7 +12,7 @@
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
-	import { prepareIdempotentRequest } from '#lib/idempotency.js';
+	import { idempotent } from '#lib/idempotency.js';
 	import { createApiToken, listApiTokens, revokeApiToken } from '#lib/remote/api-tokens.remote.js';
 	import { getPendingEmailChange, requestEmailChange } from '#lib/remote/email-change.remote.js';
 	import { hasPassword } from '#lib/remote/password-change.remote.js';
@@ -361,14 +361,9 @@
 		sshKeyAdding = true;
 		try {
 			const payload = { name: newKeyName.trim(), publicKey: newKeyValue.trim() };
-			const request = await prepareIdempotentRequest('sshKeys.createSshKey', {
-				...payload,
-				userId: page.data.user?.id
-			});
-			const res = await createSshKeyRpc({ ...payload, idempotencyKey: request.key });
+			const res = await idempotent(createSshKeyRpc, 'sshKeys.createSshKey', payload);
 
 			await invalidate('app:ssh-keys');
-			request.complete();
 
 			sshKeys.push({
 				id: res.id,
@@ -458,12 +453,7 @@
 		tokens.push({ id: tempId, name, created: now, lastUsedAt: null });
 
 		try {
-			const request = await prepareIdempotentRequest('apiTokens.createApiToken', {
-				name,
-				userId: page.data.user?.id
-			});
-			const result = await createApiToken({ name, idempotencyKey: request.key });
-			request.complete();
+			const result = await idempotent(createApiToken, 'apiTokens.createApiToken', { name });
 			generatedToken = result.token;
 			const idx = tokens.findIndex((t) => t.id === tempId);
 			if (idx !== -1) {

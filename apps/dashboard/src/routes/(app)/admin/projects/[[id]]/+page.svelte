@@ -12,7 +12,7 @@
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
-	import { prepareIdempotentRequest } from '#lib/idempotency.js';
+	import { idempotent } from '#lib/idempotency.js';
 	import { generateServerName } from '#lib/name-generator.js';
 	import {
 		type AdminProject,
@@ -248,13 +248,8 @@
 		createProjectError = '';
 		try {
 			const payload = { name: createProjectName.trim(), ownerUserId: createProjectOwnerId };
-			const request = await prepareIdempotentRequest('admin.createProject', {
-				...payload,
-				userId: page.data.user?.id
-			});
-			const created = await createAdminProject({ ...payload, idempotencyKey: request.key });
+			const created = await idempotent(createAdminProject, 'admin.createProject', payload);
 			await invalidate('app:admin-projects');
-			request.complete();
 			createProjectOpen = false;
 			toast.success('Project created');
 			goto(resolve(`admin/projects/${created.id}`), { reset: false });
@@ -335,13 +330,8 @@
 				...(createVmSshKeyIds.length > 0 ? { sshKeyIds: [...createVmSshKeyIds].sort() } : {}),
 				...(createVmPassword.trim() ? { password: createVmPassword.trim() } : {})
 			};
-			const request = await prepareIdempotentRequest('admin.createVm', {
-				...payload,
-				userId: page.data.user?.id
-			});
-			await createAdminVm({ ...payload, idempotencyKey: request.key });
+			await idempotent(createAdminVm, 'admin.createVm', payload);
 			await Promise.all([invalidate('app:admin-vms'), invalidate('app:admin-projects')]);
-			request.complete();
 			createVmOpen = false;
 			toast.success('Server created');
 		} catch (err) {

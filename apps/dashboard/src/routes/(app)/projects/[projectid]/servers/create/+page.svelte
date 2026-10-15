@@ -5,7 +5,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import type { FeatureFlags } from '#lib/feature-flags.js';
-	import { prepareIdempotentRequest } from '#lib/idempotency.js';
+	import { idempotent } from '#lib/idempotency.js';
 	import { generateServerName } from '#lib/name-generator.js';
 	import { createVm } from '#lib/remote/vms.remote.js';
 	import { createVolume as createProjectVolume } from '#lib/remote/volumes.remote.js';
@@ -161,7 +161,7 @@
 	let creatingVolume = $state(false);
 	let createError = $state('');
 	let billingSetupOpen = $state(false);
-	let createdVm = $state<{ id: string; projectId: string; complete: () => void } | null>(null);
+	let createdVm = $state<{ id: string; projectId: string } | null>(null);
 
 	let selectedImage = $derived(dbImages.find((i) => i.id === selectedImageId) ?? null);
 	let selectedPlan = $derived(vmTypes.find((t) => t.id === selectedPlanId) ?? null);
@@ -397,7 +397,6 @@
 			await goto(resolve(`projects/${createdVm.projectId}/servers/${createdVm.id}`), {
 				invalidate: ['project:vms']
 			});
-			createdVm.complete();
 			requestServerStatusRefresh();
 		} catch {
 			createError =
@@ -448,12 +447,8 @@
 				...(selectedSshKeyIds.length > 0 ? { sshKeyIds: [...selectedSshKeyIds].sort() } : {}),
 				...(usePasswordAuthentication ? { password: serverPassword.trim() } : {})
 			};
-			const request = await prepareIdempotentRequest('vms.createVm', {
-				...payload,
-				userId: page.data.user?.id
-			});
-			const created = await createVm({ ...payload, idempotencyKey: request.key });
-			createdVm = { id: created.id, projectId, complete: request.complete };
+			const created = await idempotent(createVm, 'vms.createVm', payload);
+			createdVm = { id: created.id, projectId };
 			await openCreatedVm();
 		} catch (err) {
 			createError = getErrorMessage(

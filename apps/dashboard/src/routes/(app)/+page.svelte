@@ -7,7 +7,7 @@
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { prepareIdempotentRequest } from '#lib/idempotency.js';
+	import { idempotent } from '#lib/idempotency.js';
 	import {
 		createProject as createProjectRpc,
 		deleteProject as deleteProjectRpc
@@ -51,12 +51,7 @@
 		createProjectError = '';
 		try {
 			const name = newProjectName.trim();
-			const request = await prepareIdempotentRequest('projects.createProject', {
-				name,
-				userId: page.data.user?.id
-			});
-			const res = await createProjectRpc({ name, idempotencyKey: request.key });
-			request.complete();
+			const res = await idempotent(createProjectRpc, 'projects.createProject', { name });
 			projects = [...projects, { id: res.id, projectName: name, role: 'owner' }];
 			newProjectName = '';
 			createOpen = false;

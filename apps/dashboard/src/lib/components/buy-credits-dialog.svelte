@@ -3,7 +3,7 @@
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { prepareIdempotentRequest } from '#lib/idempotency.js';
+	import { idempotent } from '#lib/idempotency.js';
 	import { purchaseCredits } from '#lib/remote/billing.remote.js';
 	import { getErrorMessage } from '#lib/utils.js';
 	import { page } from '$app/state';
@@ -35,7 +35,7 @@
 	let loading = $state(false);
 	let actionError = $state('');
 	let amountInput = $state('10');
-	let purchaseResult = $state<{ url: string | null; complete: () => void } | null>(null);
+	let purchaseResult = $state<{ url: string | null } | null>(null);
 
 	const amount = $derived(Number.parseFloat(amountInput));
 	const amountValid = $derived(Number.isFinite(amount) && amount > 0);
@@ -66,21 +66,16 @@
 		actionError = '';
 		try {
 			if (!purchaseResult) {
-				const request = await prepareIdempotentRequest('billing.purchaseCredits', {
+				purchaseResult = await idempotent(purchaseCredits, 'billing.purchaseCredits', {
 					projectId,
-					credits,
-					userId: page.data.user?.id
+					credits
 				});
-				const result = await purchaseCredits({ projectId, credits, idempotencyKey: request.key });
-				purchaseResult = { ...result, complete: request.complete };
 			}
 			if (purchaseResult.url) {
 				window.location.href = purchaseResult.url;
-				purchaseResult.complete();
 				return;
 			}
 			window.location.reload();
-			purchaseResult.complete();
 		} catch (err) {
 			actionError = purchaseResult
 				? 'Your purchase was submitted. Select Continue to open the payment page or refresh your balance.'

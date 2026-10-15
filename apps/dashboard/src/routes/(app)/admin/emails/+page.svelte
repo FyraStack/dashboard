@@ -11,6 +11,7 @@
 		extractPlaceholders,
 		fieldToken
 	} from '#lib/emails/campaign-registry.js';
+	import { idempotencyScope } from '#lib/idempotency.js';
 	import type { AdminUser } from '#lib/remote/admin-users.remote.js';
 	import {
 		previewCampaignEmail,
@@ -19,6 +20,7 @@
 	} from '#lib/remote/email-campaign.remote.js';
 	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
+	import { page } from '$app/state';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
@@ -390,19 +392,22 @@
 		sendError = '';
 		const rows = $state.snapshot(recipientRows);
 		const fields = $state.snapshot(fieldValues);
+		const campaign = idempotencyScope();
 		try {
 			for (let i = 0; i < rows.length; i += CAMPAIGN_BATCH_SIZE) {
-				// biome-ignore lint/performance/noAwaitInLoops: batches go out one at a time to stay under the email provider's rate limit and report progress
-				const result = await sendCampaignEmails({
+				const batch = {
 					template: selectedTemplateKey,
 					subject,
 					fields,
 					rows: rows.slice(i, i + CAMPAIGN_BATCH_SIZE),
 					emailColumn: 'email'
-				});
+				};
+				// biome-ignore lint/performance/noAwaitInLoops: batches go out one at a time to stay under the email provider's rate limit and report progress
+				const result = await campaign.run(sendCampaignEmails, 'admin.sendCampaignEmails', batch);
 				sentCount += result.sent;
 				sendFailures = [...sendFailures, ...result.failures];
 			}
+			campaign.complete();
 			sendComplete = true;
 		} catch (err) {
 			sendError = getErrorMessage(err, 'Failed to send emails');

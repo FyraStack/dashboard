@@ -20,6 +20,7 @@ import VerifyEmailEmail from '#lib/emails/verify-email.svelte';
 import { requireAdmin } from '#lib/server/auth-context.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { emailToPlainText, renderEmail, sendEmail } from '#lib/server/email.js';
+import { withIdempotency } from '#lib/server/idempotency.js';
 import { command, getRequestEvent } from '$app/server';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -144,11 +145,12 @@ const sendParams = type({
 	subject: 'string',
 	fields: csvRow,
 	rows: csvRow.array(),
-	emailColumn: 'string'
+	emailColumn: 'string',
+	idempotencyKey: '0 < string <= 128'
 });
 
 export const sendCampaignEmails = command(sendParams, async (params) => {
-	await requireCurrentAdmin();
+	const { db, userId } = await requireCurrentAdmin();
 	const { meta, component } = resolveTemplate(params.template);
 	if (params.rows.length === 0) {
 		error(400, 'No recipients provided');
@@ -157,31 +159,48 @@ export const sendCampaignEmails = command(sendParams, async (params) => {
 		error(400, `Send at most ${CAMPAIGN_BATCH_SIZE} recipients per batch`);
 	}
 
-	let sent = 0;
-	const failures: { recipient: string; reason: string }[] = [];
+	return withIdempotency(
+		db,
+		{
+			key: params.idempotencyKey,
+			operation: 'admin.sendCampaignEmails',
+			args: {
+				template: params.template,
+				subject: params.subject,
+				fields: JSON.stringify(params.fields),
+				rows: JSON.stringify(params.rows),
+				emailColumn: params.emailColumn,
+				userId
+			}
+		},
+		async () => {
+			let sent = 0;
+			const failures: { recipient: string; reason: string }[] = [];
 
-	for (const row of params.rows) {
-		const to = (row[params.emailColumn] ?? '').trim();
-		try {
-			if (!EMAIL_PATTERN.test(to)) {
-				throw new Error('Invalid email address');
+			for (const row of params.rows) {
+				const to = (row[params.emailColumn] ?? '').trim();
+				try {
+					if (!EMAIL_PATTERN.test(to)) {
+						throw new Error('Invalid email address');
+					}
+					const subject = applyPlaceholders(params.subject, row).trim();
+					if (subject === '') {
+						throw new Error('Subject is empty for this recipient');
+					}
+					// biome-ignore lint/performance/noAwaitInLoops: campaign sends go out one at a time to stay under the email provider's rate limit
+					const html = await renderCampaignHtml(meta, component, params.fields, row);
+					const text = await emailToPlainText(html);
+					await sendEmail({ subject, to, html, text });
+					sent += 1;
+				} catch (err) {
+					failures.push({
+						recipient: to === '' ? '(missing email)' : to,
+						reason: err instanceof Error ? err.message : 'Send failed'
+					});
+				}
 			}
-			const subject = applyPlaceholders(params.subject, row).trim();
-			if (subject === '') {
-				throw new Error('Subject is empty for this recipient');
-			}
-			// biome-ignore lint/performance/noAwaitInLoops: campaign sends go out one at a time to stay under the email provider's rate limit
-			const html = await renderCampaignHtml(meta, component, params.fields, row);
-			const text = await emailToPlainText(html);
-			await sendEmail({ subject, to, html, text });
-			sent += 1;
-		} catch (err) {
-			failures.push({
-				recipient: to === '' ? '(missing email)' : to,
-				reason: err instanceof Error ? err.message : 'Send failed'
-			});
+
+			return { sent, failures };
 		}
-	}
-
-	return { sent, failures };
+	);
 });

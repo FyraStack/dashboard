@@ -23,6 +23,7 @@ import { member, organization, user } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { projectBillingCustomers, sshKeys, vms, volumes } from '#lib/server/db/schema.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
+import { withIdempotency } from '#lib/server/idempotency.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
 import { provisionVm } from '#lib/server/vm-provisioning.js';
@@ -196,9 +197,17 @@ function toSlug(name: string) {
 	return `${slug || 'project'}-${Date.now().toString(36)}`;
 }
 
-const createProjectParams = type({ name: 'string', ownerUserId: 'string' });
+const createProjectParams = type({
+	name: 'string',
+	ownerUserId: 'string',
+	idempotencyKey: '0 < string <= 128'
+});
 export const createAdminProject = command(createProjectParams, async (params) => {
 	const db = await requireCurrentAdmin();
+	const adminUser = getRequestEvent().locals.user;
+	if (!adminUser) {
+		error(401, 'Authentication required');
+	}
 
 	const owner = await db.query.user.findFirst({ where: eq(user.id, params.ownerUserId) });
 	if (!owner) {
@@ -206,24 +215,34 @@ export const createAdminProject = command(createProjectParams, async (params) =>
 	}
 
 	const name = params.name.trim() || 'Untitled Project';
-	const auth = initAuth();
-	const org = await auth.api.createOrganization({
-		body: {
-			name,
-			slug: toSlug(name),
-			userId: params.ownerUserId
+	return withIdempotency(
+		db,
+		{
+			key: params.idempotencyKey,
+			operation: 'admin.createProject',
+			args: { name, ownerUserId: params.ownerUserId, userId: adminUser.id }
+		},
+		async () => {
+			const auth = initAuth();
+			const org = await auth.api.createOrganization({
+				body: {
+					name,
+					slug: toSlug(name),
+					userId: params.ownerUserId
+				}
+			});
+			if (!org) {
+				error(502, 'Failed to create project');
+			}
+
+			await ensureLocalProjectBillingCustomer(org.id);
+			ensureProjectCustomer(org.id).catch((err) => {
+				console.warn(`Failed to sync Autumn customer for project ${org.id}`, err);
+			});
+
+			return { id: org.id };
 		}
-	});
-	if (!org) {
-		error(502, 'Failed to create project');
-	}
-
-	await ensureLocalProjectBillingCustomer(org.id);
-	ensureProjectCustomer(org.id).catch((err) => {
-		console.warn(`Failed to sync Autumn customer for project ${org.id}`, err);
-	});
-
-	return { id: org.id };
+	);
 });
 
 const createVmParams = type({
@@ -233,7 +252,8 @@ const createVmParams = type({
 	networkingMode: "'both' | 'ipv6'?",
 	imageId: 'string?',
 	sshKeyIds: 'string[]?',
-	password: 'string?'
+	password: 'string?',
+	idempotencyKey: '0 < string <= 128'
 });
 export const createAdminVm = command(createVmParams, async (params) => {
 	const db = await requireCurrentAdmin();
@@ -270,17 +290,27 @@ export const createAdminVm = command(createVmParams, async (params) => {
 			: [];
 	const publicKeys = keys.filter((key) => sshKeyIds.includes(key.id)).map((key) => key.publicKey);
 
-	return provisionVm(db, {
-		projectId: params.projectId,
-		vmTypeId: params.vmTypeId,
-		name: params.name,
-		userId: owner?.userId ?? adminUser.id,
-		billingExempt,
-		networkingMode: params.networkingMode,
-		imageId: params.imageId,
-		sshPublicKeys: publicKeys,
-		password: params.password
-	});
+	const { idempotencyKey, ...operationArgs } = params;
+	return withIdempotency(
+		db,
+		{
+			key: idempotencyKey,
+			operation: 'admin.createVm',
+			args: { ...operationArgs, userId: adminUser.id, sshKeyIds: [...sshKeyIds].sort() }
+		},
+		() =>
+			provisionVm(db, {
+				projectId: params.projectId,
+				vmTypeId: params.vmTypeId,
+				name: params.name,
+				userId: owner?.userId ?? adminUser.id,
+				billingExempt,
+				networkingMode: params.networkingMode,
+				imageId: params.imageId,
+				sshPublicKeys: publicKeys,
+				password: params.password
+			})
+	);
 });
 
 const setDisabledParams = type({ projectId: 'string', disabled: 'boolean' });

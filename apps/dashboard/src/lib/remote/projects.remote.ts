@@ -16,6 +16,7 @@ import {
 } from '#lib/server/billing/autumn.js';
 import { member, organization } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
+import { withIdempotency } from '#lib/server/idempotency.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
 import { command, getRequestEvent, query } from '$app/server';
@@ -200,31 +201,38 @@ export const getProject = query(getParams, async (params): Promise<GetResult> =>
 	};
 });
 
-const createParams = type({ name: 'string' });
-export const createProject = command(createParams, async (params) => {
+const createParams = type({ name: 'string', idempotencyKey: '0 < string <= 128' });
+export const createProject = command(createParams, (params) => {
 	const event = getRequestEvent();
 	if (!event?.locals.user) {
 		error(401, 'Authentication required');
 	}
 
+	const userId = event.locals.user.id;
 	const name = toProjectName(params.name);
-	const auth = initAuth();
-	const org = await auth.api.createOrganization({
-		headers: event.request.headers,
-		body: {
-			name,
-			slug: toSlug(name)
+	return withIdempotency(
+		initDrizzle(),
+		{ key: params.idempotencyKey, operation: 'projects.createProject', args: { name, userId } },
+		async () => {
+			const auth = initAuth();
+			const org = await auth.api.createOrganization({
+				headers: event.request.headers,
+				body: {
+					name,
+					slug: toSlug(name)
+				}
+			});
+
+			await ensureLocalProjectBillingCustomer(org.id);
+			ensureProjectCustomer(org.id).catch((err) => {
+				console.warn(`Failed to sync Autumn customer for project ${org.id}`, err);
+			});
+			clearProjectListCache(userId);
+			captureServerEvent('project_created', {}, { projectId: org.id });
+
+			return { id: org.id };
 		}
-	});
-
-	await ensureLocalProjectBillingCustomer(org.id);
-	ensureProjectCustomer(org.id).catch((err) => {
-		console.warn(`Failed to sync Autumn customer for project ${org.id}`, err);
-	});
-	clearProjectListCache(event.locals.user.id);
-	captureServerEvent('project_created', {}, { projectId: org.id });
-
-	return { id: org.id };
+	);
 });
 
 const deleteParams = type({ projectId: 'string' });

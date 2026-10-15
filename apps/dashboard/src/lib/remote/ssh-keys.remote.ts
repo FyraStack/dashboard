@@ -3,6 +3,7 @@ import { type } from 'arktype';
 import { and, eq } from 'drizzle-orm';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { sshKeys } from '#lib/server/db/schema.js';
+import { withIdempotency } from '#lib/server/idempotency.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { command, getRequestEvent, query } from '$app/server';
 
@@ -25,7 +26,8 @@ export const listSshKeys = query(() => {
 const createParams = type({
 	name: 'string',
 	publicKey: 'string',
-	description: 'string?'
+	description: 'string?',
+	idempotencyKey: '0 < string <= 128'
 });
 
 export const createSshKey = command(createParams, async (params) => {
@@ -57,20 +59,28 @@ export const createSshKey = command(createParams, async (params) => {
 		error(400, 'Invalid SSH public key: could not compute fingerprint');
 	}
 
-	const [inserted] = await db
-		.insert(sshKeys)
-		.values({
-			userId: event.locals.user.id,
-			name: params.name,
-			publicKey: params.publicKey.trim(),
-			fingerprint,
-			description: params.description ?? null
-		})
-		.returning();
+	const userId = event.locals.user.id;
+	const { idempotencyKey, ...operationArgs } = params;
+	return withIdempotency(
+		db,
+		{ key: idempotencyKey, operation: 'sshKeys.createSshKey', args: { ...operationArgs, userId } },
+		async () => {
+			const [inserted] = await db
+				.insert(sshKeys)
+				.values({
+					userId,
+					name: params.name,
+					publicKey: params.publicKey.trim(),
+					fingerprint,
+					description: params.description ?? null
+				})
+				.returning();
 
-	captureServerEvent('ssh_key_created', { key_type: parts[0] });
+			captureServerEvent('ssh_key_created', { key_type: parts[0] });
 
-	return { id: inserted.id, fingerprint: inserted.fingerprint };
+			return { id: inserted.id, fingerprint: inserted.fingerprint };
+		}
+	);
 });
 
 const deleteParams = type({ keyId: 'string' });

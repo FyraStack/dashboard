@@ -12,6 +12,7 @@
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { idempotent } from '#lib/idempotency.js';
 	import { generateServerName } from '#lib/name-generator.js';
 	import {
 		type AdminProject,
@@ -246,10 +247,8 @@
 		createProjectSaving = true;
 		createProjectError = '';
 		try {
-			const created = await createAdminProject({
-				name: createProjectName.trim(),
-				ownerUserId: createProjectOwnerId
-			});
+			const payload = { name: createProjectName.trim(), ownerUserId: createProjectOwnerId };
+			const created = await idempotent(createAdminProject, 'admin.createProject', payload);
 			await invalidate('app:admin-projects');
 			createProjectOpen = false;
 			toast.success('Project created');
@@ -322,15 +321,16 @@
 		createVmSaving = true;
 		createVmError = '';
 		try {
-			await createAdminVm({
+			const payload = {
 				projectId: createVmProject.id,
 				vmTypeId: createVmTypeId,
 				name: createVmName.trim(),
 				networkingMode: createVmNetworking,
 				...(createVmImageId ? { imageId: createVmImageId } : {}),
-				...(createVmSshKeyIds.length > 0 ? { sshKeyIds: createVmSshKeyIds } : {}),
+				...(createVmSshKeyIds.length > 0 ? { sshKeyIds: [...createVmSshKeyIds].sort() } : {}),
 				...(createVmPassword.trim() ? { password: createVmPassword.trim() } : {})
-			});
+			};
+			await idempotent(createAdminVm, 'admin.createVm', payload);
 			await Promise.all([invalidate('app:admin-vms'), invalidate('app:admin-projects')]);
 			createVmOpen = false;
 			toast.success('Server created');

@@ -10,6 +10,7 @@ import {
 	syncPendingUsage
 } from '#lib/server/billing/metering.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
+import { purgeExpiredIdempotencyKeys } from '#lib/server/idempotency.js';
 import { purgeExpiredDeletedOrganizations } from '#lib/server/project-deletion.js';
 import { purgeExpiredDeletedVms } from '#lib/server/vm-deletion.js';
 import type { RequestHandler } from './$types';
@@ -24,6 +25,11 @@ export const POST: RequestHandler = async ({ request }) => {
 	if (authorization !== `Bearer ${secret}`) {
 		error(401, 'Unauthorized');
 	}
+
+	const idempotencyPurge = await purgeExpiredIdempotencyKeys().catch((err) => {
+		console.error('Idempotency key purge failed', err);
+		return { purged: 0, failed: true };
+	});
 
 	if (!isBillingConfigured()) {
 		error(503, 'Billing is not configured');
@@ -48,7 +54,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		console.error('Deleted project purge failed', err);
 		return { purged: 0, failed: true };
 	});
-
 	return Response.json({
 		reconciled,
 		metered,
@@ -56,6 +61,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		cancellations,
 		enforcement,
 		purge,
-		projectPurge
+		projectPurge,
+		idempotencyPurge
 	});
 };

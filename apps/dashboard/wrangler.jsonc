@@ -103,12 +103,12 @@
 			"enabled": true,
 			"head_sampling_rate": 1,
 			"persist": true,
-			"destinations": ["stack-otlp-traces"]
+			"destinations": ["sentry-traces"]
 		},
 		"logs": {
 			"enabled": true,
 			"persist": true,
-			"destinations": ["stack-otlp-logs"]
+			"destinations": ["sentry-logs"]
 		}
 	},
 	"env": {

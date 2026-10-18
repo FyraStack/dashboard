@@ -10,7 +10,11 @@ const IPAM_RECONCILE_PATH = '/api/internal/ipam/reconcile';
 async function runInternalCronRoute(env: Env, path: string, label: string): Promise<void> {
 	const response = await env.DASHBOARD.fetch(`https://dashboard.internal${path}`, {
 		method: 'POST',
-		headers: { authorization: `Bearer ${env.INTERNAL_CRON_SECRET}` }
+		headers: {
+			authorization: `Bearer ${env.INTERNAL_CRON_SECRET}`,
+			'content-type': 'application/json'
+		},
+		body: '{}'
 	});
 
 	const body = await response.text();

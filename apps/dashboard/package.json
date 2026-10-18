@@ -35,7 +35,7 @@
 		"@better-svelte-email/components": "^2.1.1",
 		"@better-svelte-email/server": "^2.1.1",
 		"@plausible-analytics/tracker": "^0.4.5",
-		"@sentry/sveltekit": "11.2.0",
+		"@sentry/sveltekit": "11.8.0",
 		"arktype": "^2.2.3",
 		"autumn-js": "1.2.33",
 		"ip-address": "^10.2.0",

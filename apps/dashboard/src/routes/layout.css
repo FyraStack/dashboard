@@ -208,48 +208,65 @@
 }
 
 /*
- * High contrast: neutral borders, dividers and rings are often drawn with an
- * opacity modifier (e.g. `border-border/50`, `divide-border/20`,
- * `ring-foreground/10`), which washes them out. Force them opaque.
- * `:where()` keeps specificity equal to the base utility, so these win over it
- * (they come later) but still lose to stateful variants like `hover:border-ring`.
+ * High contrast: many borders, dividers, rings and text use an opacity modifier
+ * (e.g. `border-border/50`, `text-foreground/60`), which washes them out.
+ * Force them opaque. Exact class tokens (`~=`) are used so variant classes such
+ * as `aria-invalid:border-destructive/50` are NOT matched. Specificity equals
+ * the base utility (it comes later, so it wins), while stateful variants like
+ * `hover:border-ring` still take precedence.
  */
 @layer utilities {
-	:where([data-theme="high-contrast"])
-		:is([class*="border-border/"], [class*="border-input/"], [class*="border-foreground/"]) {
+	:where([data-theme="high-contrast"]) [class~="border-border/20"],
+	:where([data-theme="high-contrast"]) [class~="border-border/30"],
+	:where([data-theme="high-contrast"]) [class~="border-border/40"],
+	:where([data-theme="high-contrast"]) [class~="border-border/50"],
+	:where([data-theme="high-contrast"]) [class~="border-border/60"],
+	:where([data-theme="high-contrast"]) [class~="border-border/80"],
+	:where([data-theme="high-contrast"]) [class~="border-input/30"] {
 		border-color: var(--border);
 	}
 
-	:where([data-theme="high-contrast"])
-		:is([class*="divide-border/"], [class*="divide-input/"])
-		> :where(:not(:last-child)) {
+	:where([data-theme="high-contrast"]) [class~="divide-border/20"] > :where(:not(:last-child)),
+	:where([data-theme="high-contrast"]) [class~="divide-border/30"] > :where(:not(:last-child)),
+	:where([data-theme="high-contrast"]) [class~="divide-border/40"] > :where(:not(:last-child)),
+	:where([data-theme="high-contrast"]) [class~="divide-border/50"] > :where(:not(:last-child)) {
 		border-color: var(--border);
 	}
 
-	:where([data-theme="high-contrast"]) :is([class*="ring-foreground/"], [class*="ring-border/"]) {
+	:where([data-theme="high-contrast"]) [class~="ring-foreground/10"] {
 		--tw-ring-color: var(--border);
 	}
 
-	/* Translucent red borders (e.g. `border-red-500/20` on warning panels and buttons). */
-	:where([data-theme="high-contrast"])
-	:is(
-		[class*="border-red-500/"],
-		[class*="border-red-800/"],
-		[class*="border-red-900/"],
-		[class*="border-destructive/"]
-	) {
+	:where([data-theme="high-contrast"]) [class~="border-red-400/60"],
+	:where([data-theme="high-contrast"]) [class~="border-red-500/10"],
+	:where([data-theme="high-contrast"]) [class~="border-red-500/20"],
+	:where([data-theme="high-contrast"]) [class~="border-red-500/50"],
+	:where([data-theme="high-contrast"]) [class~="border-red-900/50"],
+	:where(.dark[data-theme="high-contrast"])
+		[class~="dark:border-red-800/50"][class~="dark:border-red-800/50"],
+	:where(.dark[data-theme="high-contrast"])
+		[class~="dark:border-red-900/20"][class~="dark:border-red-900/20"],
+	:where(.dark[data-theme="high-contrast"])
+		[class~="dark:border-red-900/30"][class~="dark:border-red-900/30"],
+	:where(.dark[data-theme="high-contrast"])
+		[class~="dark:border-red-900/40"][class~="dark:border-red-900/40"],
+	:where(.dark[data-theme="high-contrast"])
+		[class~="dark:border-red-900/50"][class~="dark:border-red-900/50"] {
 		border-color: var(--red-500);
 	}
 
-	/* Translucent text (e.g. `text-foreground/60` on inactive tabs, `text-red-200/80`). */
-	:where([data-theme="high-contrast"]) :is([class*="text-foreground/"]) {
+	:where([data-theme="high-contrast"]) [class~="text-foreground/60"] {
 		color: var(--foreground);
 	}
-	:where([data-theme="high-contrast"]) :is([class*="text-muted-foreground/"]) {
+
+	:where([data-theme="high-contrast"]) [class~="text-muted-foreground/60"] {
 		color: var(--muted-foreground);
 	}
-	:where([data-theme="high-contrast"])
-		:is([class*="text-red-200/"], [class*="text-red-300/"], [class*="text-red-400/"]) {
+
+	:where([data-theme="high-contrast"]) [class~="text-red-200/80"],
+	:where([data-theme="high-contrast"]) [class~="text-red-300/70"],
+	:where([data-theme="high-contrast"]) [class~="text-red-400/60"],
+	:where([data-theme="high-contrast"]) [class~="text-red-400/80"] {
 		color: var(--red-400);
 	}
 }

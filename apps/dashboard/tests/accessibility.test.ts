@@ -17,21 +17,30 @@ function formatImpact(impact: string | null | undefined) {
 	return impactKey[impact] ?? impact;
 }
 
-const modes = ['dark', 'light'] as const;
+const modes = [
+	{ label: 'dark', mode: 'dark', theme: '' },
+	{ label: 'light', mode: 'light', theme: '' },
+	{ label: 'dark high contrast', mode: 'dark', theme: 'high-contrast' },
+	{ label: 'light high contrast', mode: 'light', theme: 'high-contrast' }
+] as const;
 
-for (const mode of modes) {
+for (const { label: modeLabel, mode, theme } of modes) {
 	for (const { label, path } of pages) {
-		test(`Testing for accessibility violations on ${label} in ${mode} mode.`, async ({
+		test(`Testing for accessibility violations on ${label} in ${modeLabel} mode.`, async ({
 			page,
 			makeAxeBuilder
 		}) => {
-			await page.addInitScript((selectedMode) => {
-				window.localStorage.setItem('mode-watcher-mode', selectedMode);
-			}, mode);
+			await page.addInitScript(
+				([selectedMode, selectedTheme]) => {
+					window.localStorage.setItem('mode-watcher-mode', selectedMode);
+					window.localStorage.setItem('mode-watcher-theme', selectedTheme);
+				},
+				[mode, theme] as const
+			);
 			await page.goto(`${localURL}${path}`, { waitUntil: 'networkidle' });
 
 			const { violations } = await makeAxeBuilder().analyze();
-			const reportMessage = `Found ${violations.length} accessibility violations on ${label} in ${mode} mode.`;
+			const reportMessage = `Found ${violations.length} accessibility violations on ${label} in ${modeLabel} mode.`;
 
 			if (violations.length === 0) {
 				expect(violations, reportMessage).toHaveLength(0);

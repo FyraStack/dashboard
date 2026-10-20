@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Dialog as DialogPrimitive } from 'bits-ui';
-	import { setMode, userPrefersMode } from 'mode-watcher';
+	import { setMode, setTheme, theme, userPrefersMode } from 'mode-watcher';
 	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { authClient } from '#lib/auth-client.js';
@@ -10,6 +10,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
 	import { idempotent } from '#lib/idempotency.js';
@@ -58,6 +59,9 @@
 		{ value: 'dark', label: 'Dark', icon: Moon },
 		{ value: 'system', label: 'Auto', icon: Monitor }
 	];
+
+	const highContrastTheme = 'high-contrast';
+	const highContrast = $derived(theme.current === highContrastTheme);
 
 	interface Props {
 		activeTab?: UserSettingsTab;
@@ -1062,6 +1066,22 @@
 								<p class="mt-1.5 text-xs text-muted-foreground">
 									Auto follows your system's light/dark setting.
 								</p>
+							</div>
+							<div
+								class="mt-4 flex items-center justify-between gap-4 border-t border-border/50 pt-4"
+							>
+								<div class="flex flex-col gap-1">
+									<Label id="high-contrast-label">High contrast</Label>
+									<p id="high-contrast-description" class="text-xs text-muted-foreground">
+										Stronger colors, borders and focus outlines. Works with light and dark.
+									</p>
+								</div>
+								<Switch
+									checked={highContrast}
+									onCheckedChange={(checked) => setTheme(checked ? highContrastTheme : '')}
+									aria-labelledby="high-contrast-label"
+									aria-describedby="high-contrast-description"
+								/>
 							</div>
 						</div>
 					</Tabs.Content>

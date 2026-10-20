@@ -5,6 +5,7 @@
 @import "@fontsource-variable/inter";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant high-contrast (&:is([data-theme="high-contrast"] *));
 
 :root {
 	--gray-50: #fafafa;
@@ -67,6 +68,73 @@
 	--border: var(--gray-800);
 	--input: var(--gray-800);
 	--ring: var(--gray-500);
+}
+
+/*
+ * High contrast mode. Applied via mode-watcher's `data-theme` attribute, so it
+ * stacks on top of light/dark. The red scale is remapped too, because many
+ * components use raw `red-*` utilities rather than semantic tokens.
+ */
+:root[data-theme="high-contrast"] {
+	--red-200: #7a0d0d;
+	--red-300: #7a0d0d;
+	--red-400: #8f1010;
+	--red-500: #9b1111;
+	--red-600: #8a0f0f;
+	--red-700: #6e0b0b;
+	--red-950: #fff0f0;
+	--color-red-800: #6e0b0b;
+	--color-red-900: #5c0909;
+	--background: #ffffff;
+	--foreground: #000000;
+	--card: #ffffff;
+	--card-foreground: #000000;
+	--popover: #ffffff;
+	--popover-foreground: #000000;
+	--primary: #9b1111;
+	--primary-foreground: #ffffff;
+	--secondary: #f0f0f0;
+	--secondary-foreground: #000000;
+	--muted: #f0f0f0;
+	--muted-foreground: #262626;
+	--accent: #9b1111;
+	--accent-foreground: #ffffff;
+	--destructive: #9b1111;
+	--destructive-foreground: #ffffff;
+	--border: #000000;
+	--input: #000000;
+	--ring: #000000;
+}
+
+.dark[data-theme="high-contrast"] {
+	--red-200: #ffe5e5;
+	--red-300: #ffcccc;
+	--red-400: #ffa3a3;
+	--red-500: #ff7a7a;
+	--red-600: #ff7a7a;
+	--red-700: #ff8f8f;
+	--red-950: #1a0000;
+	--color-red-800: #ff8f8f;
+	--color-red-900: #ff8f8f;
+	--background: #000000;
+	--foreground: #ffffff;
+	--card: #000000;
+	--card-foreground: #ffffff;
+	--popover: #000000;
+	--popover-foreground: #ffffff;
+	--primary: #ff7a7a;
+	--primary-foreground: #000000;
+	--secondary: #1a1a1a;
+	--secondary-foreground: #ffffff;
+	--muted: #1a1a1a;
+	--muted-foreground: #e5e5e5;
+	--accent: #ff7a7a;
+	--accent-foreground: #000000;
+	--destructive: #ff7a7a;
+	--destructive-foreground: #000000;
+	--border: #ffffff;
+	--input: #ffffff;
+	--ring: #ffffff;
 }
 
 @theme inline {
@@ -132,6 +200,57 @@
 		font-feature-settings: "ss01", "ss02";
 		background-color: var(--background);
 		@apply text-foreground antialiased;
+	}
+	[data-theme="high-contrast"] :focus-visible {
+		outline: 2px solid var(--ring) !important;
+		outline-offset: 2px;
+	}
+}
+
+/*
+ * High contrast: neutral borders, dividers and rings are often drawn with an
+ * opacity modifier (e.g. `border-border/50`, `divide-border/20`,
+ * `ring-foreground/10`), which washes them out. Force them opaque.
+ * `:where()` keeps specificity equal to the base utility, so these win over it
+ * (they come later) but still lose to stateful variants like `hover:border-ring`.
+ */
+@layer utilities {
+	:where([data-theme="high-contrast"])
+		:is([class*="border-border/"], [class*="border-input/"], [class*="border-foreground/"]) {
+		border-color: var(--border);
+	}
+
+	:where([data-theme="high-contrast"])
+		:is([class*="divide-border/"], [class*="divide-input/"])
+		> :where(:not(:last-child)) {
+		border-color: var(--border);
+	}
+
+	:where([data-theme="high-contrast"]) :is([class*="ring-foreground/"], [class*="ring-border/"]) {
+		--tw-ring-color: var(--border);
+	}
+
+	/* Translucent red borders (e.g. `border-red-500/20` on warning panels and buttons). */
+	:where([data-theme="high-contrast"])
+	:is(
+		[class*="border-red-500/"],
+		[class*="border-red-800/"],
+		[class*="border-red-900/"],
+		[class*="border-destructive/"]
+	) {
+		border-color: var(--red-500);
+	}
+
+	/* Translucent text (e.g. `text-foreground/60` on inactive tabs, `text-red-200/80`). */
+	:where([data-theme="high-contrast"]) :is([class*="text-foreground/"]) {
+		color: var(--foreground);
+	}
+	:where([data-theme="high-contrast"]) :is([class*="text-muted-foreground/"]) {
+		color: var(--muted-foreground);
+	}
+	:where([data-theme="high-contrast"])
+		:is([class*="text-red-200/"], [class*="text-red-300/"], [class*="text-red-400/"]) {
+		color: var(--red-400);
 	}
 }
 

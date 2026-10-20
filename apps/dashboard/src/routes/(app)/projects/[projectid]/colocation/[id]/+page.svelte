@@ -105,7 +105,9 @@
 {#if colo.selectedUnit}
 	<div class="flex min-h-0 flex-1 flex-col overflow-auto">
 		<div class="shrink-0">
-			<div class="grid shrink-0 grid-cols-2 gap-px border-b border-border bg-muted lg:grid-cols-4">
+			<div
+				class="grid shrink-0 grid-cols-2 gap-px border-b border-border bg-muted lg:grid-cols-4 high-contrast:bg-border"
+			>
 				{#each charts as chart (chart.label)}
 					<div class="relative flex flex-col bg-background">
 						<div class="flex items-baseline justify-between px-4 pt-3 pb-1">

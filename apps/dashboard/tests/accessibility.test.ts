@@ -18,24 +18,24 @@ function formatImpact(impact: string | null | undefined) {
 }
 
 const modes = [
-	{ label: 'dark', mode: 'dark', theme: '' },
-	{ label: 'light', mode: 'light', theme: '' },
-	{ label: 'dark high contrast', mode: 'dark', theme: 'high-contrast' },
-	{ label: 'light high contrast', mode: 'light', theme: 'high-contrast' }
+	{ label: 'dark', mode: 'dark', contrast: 'off' },
+	{ label: 'light', mode: 'light', contrast: 'off' },
+	{ label: 'dark high contrast', mode: 'dark', contrast: 'on' },
+	{ label: 'light high contrast', mode: 'light', contrast: 'on' }
 ] as const;
 
-for (const { label: modeLabel, mode, theme } of modes) {
+for (const { label: modeLabel, mode, contrast } of modes) {
 	for (const { label, path } of pages) {
 		test(`Testing for accessibility violations on ${label} in ${modeLabel} mode.`, async ({
 			page,
 			makeAxeBuilder
 		}) => {
 			await page.addInitScript(
-				([selectedMode, selectedTheme]) => {
+				([selectedMode, selectedContrast]) => {
 					window.localStorage.setItem('mode-watcher-mode', selectedMode);
-					window.localStorage.setItem('mode-watcher-theme', selectedTheme);
+					window.localStorage.setItem('contrast-preference', selectedContrast);
 				},
-				[mode, theme] as const
+				[mode, contrast] as const
 			);
 			await page.goto(`${localURL}${path}`, { waitUntil: 'networkidle' });
 

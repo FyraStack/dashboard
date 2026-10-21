@@ -5,7 +5,7 @@
 @import "@fontsource-variable/inter";
 
 @custom-variant dark (&:is(.dark *));
-@custom-variant high-contrast (&:is([data-theme="high-contrast"] *));
+@custom-variant high-contrast (&:is([data-contrast="more"] *));
 
 :root {
 	--gray-50: #fafafa;
@@ -71,11 +71,11 @@
 }
 
 /*
- * High contrast mode. Applied via mode-watcher's `data-theme` attribute, so it
- * stacks on top of light/dark. The red scale is remapped too, because many
+ * High contrast mode. Applied via `data-contrast="more"` on <html> (see
+ * #lib/state/contrast.svelte.ts), so it stacks on top of light/dark. The red scale is remapped too, because many
  * components use raw `red-*` utilities rather than semantic tokens.
  */
-:root[data-theme="high-contrast"] {
+:root[data-contrast="more"] {
 	--red-200: #7a0d0d;
 	--red-300: #7a0d0d;
 	--red-400: #8f1010;
@@ -106,7 +106,7 @@
 	--ring: #000000;
 }
 
-.dark[data-theme="high-contrast"] {
+.dark[data-contrast="more"] {
 	--red-200: #ffe5e5;
 	--red-300: #ffcccc;
 	--red-400: #ffa3a3;
@@ -201,7 +201,7 @@
 		background-color: var(--background);
 		@apply text-foreground antialiased;
 	}
-	[data-theme="high-contrast"] :focus-visible {
+	[data-contrast="more"] :focus-visible {
 		outline: 2px solid var(--ring) !important;
 		outline-offset: 2px;
 	}
@@ -216,57 +216,57 @@
  * `hover:border-ring` still take precedence.
  */
 @layer utilities {
-	:where([data-theme="high-contrast"]) [class~="border-border/20"],
-	:where([data-theme="high-contrast"]) [class~="border-border/30"],
-	:where([data-theme="high-contrast"]) [class~="border-border/40"],
-	:where([data-theme="high-contrast"]) [class~="border-border/50"],
-	:where([data-theme="high-contrast"]) [class~="border-border/60"],
-	:where([data-theme="high-contrast"]) [class~="border-border/80"],
-	:where([data-theme="high-contrast"]) [class~="border-input/30"] {
+	:where([data-contrast="more"]) [class~="border-border/20"],
+	:where([data-contrast="more"]) [class~="border-border/30"],
+	:where([data-contrast="more"]) [class~="border-border/40"],
+	:where([data-contrast="more"]) [class~="border-border/50"],
+	:where([data-contrast="more"]) [class~="border-border/60"],
+	:where([data-contrast="more"]) [class~="border-border/80"],
+	:where([data-contrast="more"]) [class~="border-input/30"] {
 		border-color: var(--border);
 	}
 
-	:where([data-theme="high-contrast"]) [class~="divide-border/20"] > :where(:not(:last-child)),
-	:where([data-theme="high-contrast"]) [class~="divide-border/30"] > :where(:not(:last-child)),
-	:where([data-theme="high-contrast"]) [class~="divide-border/40"] > :where(:not(:last-child)),
-	:where([data-theme="high-contrast"]) [class~="divide-border/50"] > :where(:not(:last-child)) {
+	:where([data-contrast="more"]) [class~="divide-border/20"] > :where(:not(:last-child)),
+	:where([data-contrast="more"]) [class~="divide-border/30"] > :where(:not(:last-child)),
+	:where([data-contrast="more"]) [class~="divide-border/40"] > :where(:not(:last-child)),
+	:where([data-contrast="more"]) [class~="divide-border/50"] > :where(:not(:last-child)) {
 		border-color: var(--border);
 	}
 
-	:where([data-theme="high-contrast"]) [class~="ring-foreground/10"] {
+	:where([data-contrast="more"]) [class~="ring-foreground/10"] {
 		--tw-ring-color: var(--border);
 	}
 
-	:where([data-theme="high-contrast"]) [class~="border-red-400/60"],
-	:where([data-theme="high-contrast"]) [class~="border-red-500/10"],
-	:where([data-theme="high-contrast"]) [class~="border-red-500/20"],
-	:where([data-theme="high-contrast"]) [class~="border-red-500/50"],
-	:where([data-theme="high-contrast"]) [class~="border-red-900/50"],
-	:where(.dark[data-theme="high-contrast"])
+	:where([data-contrast="more"]) [class~="border-red-400/60"],
+	:where([data-contrast="more"]) [class~="border-red-500/10"],
+	:where([data-contrast="more"]) [class~="border-red-500/20"],
+	:where([data-contrast="more"]) [class~="border-red-500/50"],
+	:where([data-contrast="more"]) [class~="border-red-900/50"],
+	:where(.dark[data-contrast="more"])
 		[class~="dark:border-red-800/50"][class~="dark:border-red-800/50"],
-	:where(.dark[data-theme="high-contrast"])
+	:where(.dark[data-contrast="more"])
 		[class~="dark:border-red-900/20"][class~="dark:border-red-900/20"],
-	:where(.dark[data-theme="high-contrast"])
+	:where(.dark[data-contrast="more"])
 		[class~="dark:border-red-900/30"][class~="dark:border-red-900/30"],
-	:where(.dark[data-theme="high-contrast"])
+	:where(.dark[data-contrast="more"])
 		[class~="dark:border-red-900/40"][class~="dark:border-red-900/40"],
-	:where(.dark[data-theme="high-contrast"])
+	:where(.dark[data-contrast="more"])
 		[class~="dark:border-red-900/50"][class~="dark:border-red-900/50"] {
 		border-color: var(--red-500);
 	}
 
-	:where([data-theme="high-contrast"]) [class~="text-foreground/60"] {
+	:where([data-contrast="more"]) [class~="text-foreground/60"] {
 		color: var(--foreground);
 	}
 
-	:where([data-theme="high-contrast"]) [class~="text-muted-foreground/60"] {
+	:where([data-contrast="more"]) [class~="text-muted-foreground/60"] {
 		color: var(--muted-foreground);
 	}
 
-	:where([data-theme="high-contrast"]) [class~="text-red-200/80"],
-	:where([data-theme="high-contrast"]) [class~="text-red-300/70"],
-	:where([data-theme="high-contrast"]) [class~="text-red-400/60"],
-	:where([data-theme="high-contrast"]) [class~="text-red-400/80"] {
+	:where([data-contrast="more"]) [class~="text-red-200/80"],
+	:where([data-contrast="more"]) [class~="text-red-300/70"],
+	:where([data-contrast="more"]) [class~="text-red-400/60"],
+	:where([data-contrast="more"]) [class~="text-red-400/80"] {
 		color: var(--red-400);
 	}
 }

@@ -22,12 +22,15 @@
 		listSshKeys
 	} from '#lib/remote/ssh-keys.remote.js';
 	import { disableTwoFactorWithVerification } from '#lib/remote/two-factor.remote.js';
+	import { type ContrastPreference, contrast } from '#lib/state/contrast.svelte.js';
 	import type { UserSettingsTab } from '#lib/state/user-settings.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import Check from '~icons/lucide/check';
+	import Circle from '~icons/lucide/circle';
+	import Contrast from '~icons/lucide/contrast';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Minus from '~icons/lucide/minus';
 	import Plus from '~icons/lucide/plus';
@@ -57,6 +60,12 @@
 		{ value: 'light', label: 'Light', icon: Sun },
 		{ value: 'dark', label: 'Dark', icon: Moon },
 		{ value: 'system', label: 'Auto', icon: Monitor }
+	];
+
+	const contrastOptions: { value: ContrastPreference; label: string; icon: typeof Sun }[] = [
+		{ value: 'off', label: 'Off', icon: Circle },
+		{ value: 'on', label: 'On', icon: Contrast },
+		{ value: 'auto', label: 'Auto', icon: Monitor }
 	];
 
 	interface Props {
@@ -1063,6 +1072,34 @@
 									Auto follows your system's light/dark setting.
 								</p>
 							</div>
+							<fieldset class="mt-4 border-t border-border/50 pt-4">
+								<legend class="float-left mb-1.5 w-full text-sm leading-none font-medium">
+									High contrast
+								</legend>
+								<div class="clear-both grid grid-cols-3 gap-2">
+									{#each contrastOptions as option (option.value)}
+										{@const Icon = option.icon}
+										<button
+											type="button"
+											aria-pressed={contrast.preference === option.value}
+											onclick={() => contrast.setPreference(option.value)}
+											class="flex flex-col items-center gap-1.5 border px-3 py-2.5 text-xs transition-colors {contrast.preference ===
+											option.value
+												? 'border-primary bg-primary/10 text-foreground'
+												: 'border-border text-muted-foreground hover:border-ring hover:text-foreground'}"
+										>
+											<Icon class="h-4 w-4" />
+											{option.label}
+										</button>
+									{/each}
+								</div>
+								<p class="mt-1.5 text-xs text-muted-foreground">
+									Stronger colors, borders and focus outlines. Auto follows your system's contrast
+									setting{contrast.preference === 'auto'
+										? ` (currently ${contrast.systemPrefersMore ? 'on' : 'off'})`
+										: ''}.
+								</p>
+							</fieldset>
 						</div>
 					</Tabs.Content>
 				</div>

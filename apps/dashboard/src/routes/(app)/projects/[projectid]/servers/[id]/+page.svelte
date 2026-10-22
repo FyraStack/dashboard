@@ -221,7 +221,9 @@
 
 <h1 class="sr-only">Server Overview</h1>
 
-<div class="grid shrink-0 grid-cols-2 gap-px border-b border-border bg-muted lg:grid-cols-4">
+<div
+	class="grid shrink-0 grid-cols-2 gap-px border-b border-border bg-muted lg:grid-cols-4 high-contrast:bg-border"
+>
 	{#each charts as chart (chart.label)}
 		<div class="relative flex flex-col bg-background">
 			<div class="flex items-baseline justify-between px-4 pt-3 pb-1">
@@ -275,7 +277,9 @@
 	{/each}
 </div>
 
-<div class="grid shrink-0 grid-cols-1 gap-px border-b border-border bg-muted lg:grid-cols-5">
+<div
+	class="grid shrink-0 grid-cols-1 gap-px border-b border-border bg-muted lg:grid-cols-5 high-contrast:bg-border"
+>
 	<div class="col-span-2 divide-y divide-border/50 bg-background">
 		<div class="px-5 py-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
 			Server Details

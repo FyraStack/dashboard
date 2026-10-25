@@ -7,6 +7,7 @@
 	import * as Avatar from '#lib/components/ui/avatar/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { autofillAttributes } from '#lib/components/ui/input/autofill.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
@@ -627,11 +628,16 @@
 							<div class="flex flex-col gap-3">
 								<div class="flex flex-col gap-1.5">
 									<Label>Full Name</Label>
-									<Input bind:value={profileName} />
+									<Input bind:value={profileName} autocomplete="name" allowAutofill />
 								</div>
 								<div class="flex flex-col gap-1.5">
 									<Label>Email Address</Label>
-									<Input bind:value={profileEmail} type="email" />
+									<Input
+										bind:value={profileEmail}
+										type="email"
+										autocomplete="email"
+										allowAutofill
+									/>
 									{#if profileEmailChangePending}
 										<p class="text-xs text-muted-foreground">
 											Check {pendingProfileEmail} to verify this email change.
@@ -677,6 +683,7 @@
 												bind:value={currentPassword}
 												type={showPassword ? 'text' : 'password'}
 												placeholder="********"
+												autocomplete="current-password"
 											/>
 											<button
 												type="button"
@@ -694,11 +701,21 @@
 								{/if}
 								<div class="flex flex-col gap-1.5">
 									<Label>New Password</Label>
-									<Input bind:value={newPassword} type="password" placeholder="********" />
+									<Input
+										bind:value={newPassword}
+										type="password"
+										placeholder="********"
+										autocomplete="new-password"
+									/>
 								</div>
 								<div class="flex flex-col gap-1.5">
 									<Label>Confirm New Password</Label>
-									<Input bind:value={confirmPassword} type="password" placeholder="********" />
+									<Input
+										bind:value={confirmPassword}
+										type="password"
+										placeholder="********"
+										autocomplete="new-password"
+									/>
 									{#if confirmPassword && newPassword !== confirmPassword}
 										<p class="text-xs text-red-400">Passwords do not match.</p>
 									{/if}
@@ -914,25 +931,42 @@
 								<p class="py-2 text-center text-xs text-muted-foreground">No SSH keys added.</p>
 							{/if}
 
-							<div class="mt-3 flex flex-col gap-2 border-t border-border/50 pt-3">
+							<form
+								class="mt-3 flex flex-col gap-2 border-t border-border/50 pt-3"
+								aria-label="Add SSH key"
+								onsubmit={(e) => {
+									e.preventDefault();
+									addSshKey();
+								}}
+							>
+								<Label for="ssh-key-title" class="sr-only">Key name</Label>
 								<Input
+									id="ssh-key-title"
+									name="ssh_key[title]"
 									bind:value={newKeyName}
 									placeholder="Key name"
 									class="h-8 text-xs"
+									allowAutofill
 									onfocus={() => (newKeyNameFocused = true)}
 									onblur={() => (newKeyNameFocused = false)}
 								/>
+								<Label for="ssh-key-public-key" class="sr-only">Public key</Label>
 								<textarea
+									id="ssh-key-public-key"
+									name="ssh_key[public_key]"
 									bind:value={newKeyValue}
+									{...autofillAttributes(undefined, { allow: true })}
 									placeholder="ssh-ed25519 AAAA..."
 									rows="3"
+									spellcheck="false"
+									autocapitalize="off"
 									class="w-full resize-none border border-border bg-muted px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
 								></textarea>
 								<Button
+									type="submit"
 									variant="outline"
 									size="sm"
 									class="w-fit gap-1.5 text-xs"
-									onclick={addSshKey}
 									disabled={!(newKeyName.trim() && newKeyValue.trim()) || sshKeyAdding}
 								>
 									{#if sshKeyAdding}
@@ -943,7 +977,7 @@
 										Add Key
 									{/if}
 								</Button>
-							</div>
+							</form>
 						</div>
 					</Tabs.Content>
 

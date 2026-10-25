@@ -100,6 +100,7 @@
 							bind:value={password}
 							placeholder="New password"
 							aria-label="New password"
+							autocomplete="new-password"
 							class="pr-10"
 							required
 						/>
@@ -122,6 +123,7 @@
 						bind:value={confirmPassword}
 						placeholder="Confirm new password"
 						aria-label="Confirm new password"
+						autocomplete="new-password"
 						required
 					/>
 

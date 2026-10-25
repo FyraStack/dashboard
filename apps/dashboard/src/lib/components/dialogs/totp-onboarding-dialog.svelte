@@ -147,6 +147,7 @@
 						bind:value={setupPassword}
 						type="password"
 						placeholder="********"
+						autocomplete="current-password"
 						onkeydown={(e) => e.key === 'Enter' && enableTotp()}
 					/>
 					{#if verifyError}

@@ -442,6 +442,7 @@ export const baseImages = pgTable('base_images', {
 	filePath: text('file_path').notNull(), // Proxmox storage path: "local:import/debian-12.qcow2"
 	name: text('name').notNull(),
 	version: text('version').notNull(),
+	variant: text('variant').notNull().default(''), // e.g. "systemd" / "openrc"; '' = default
 	description: text('description').notNull(),
 	shortName: text('short_name').notNull().default(''),
 	icon: text('icon'),

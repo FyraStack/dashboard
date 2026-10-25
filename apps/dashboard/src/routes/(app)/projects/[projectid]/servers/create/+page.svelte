@@ -75,6 +75,7 @@
 		isOfficial: boolean;
 		logoSvg: string | null;
 		name: string;
+		variant: string;
 		version: string;
 	}
 
@@ -95,6 +96,8 @@
 		imageType: string;
 		logoSvg: string | null;
 		name: string;
+		/** Distinct variants in admin sort order; the first one is the default. */
+		variants: string[];
 		versions: DbImage[];
 	}
 	const officialImageGroups = $derived.by(() => {
@@ -108,6 +111,8 @@
 			}
 		}
 		return Array.from(groups.values(), (versions) => {
+			// Variant order follows the admin sort order, so the first row decides the default variant.
+			const variants = [...new Set(versions.map((v) => v.variant ?? ''))];
 			const sorted = [...versions].sort((a, b) => compareVersionsDesc(a.version, b.version));
 			const [representative] = sorted;
 			return {
@@ -116,6 +121,7 @@
 				accentColor: representative.accentColor,
 				logoSvg: representative.logoSvg,
 				imageType: representative.imageType,
+				variants,
 				versions: sorted
 			} satisfies ImageGroup;
 		});
@@ -134,6 +140,7 @@
 	}
 	let selectedImageId = $state<string | null>(null);
 	let selectedImageVersion = $state<string | null>(null);
+	let selectedImageVariant = $state<string>('');
 	let selectedPlanId = $state<string | null>(null);
 	type NetworkingOption = 'both' | 'ipv6';
 	let networkingOption = $state<NetworkingOption>('both');
@@ -298,7 +305,9 @@
 		return officialImageGroups.filter(
 			(g) =>
 				g.name.toLowerCase().includes(q) ||
-				g.versions.some((v) => v.version.toLowerCase().includes(q))
+				g.versions.some(
+					(v) => v.version.toLowerCase().includes(q) || v.variant?.toLowerCase().includes(q)
+				)
 		);
 	}
 
@@ -307,9 +316,22 @@
 			selectedImageId = null;
 			selectedImageVersion = null;
 		} else {
-			selectedImageId = group.versions[0].id;
-			selectedImageVersion = group.versions[0].version;
+			selectImageVariant(group, group.variants[0] ?? '');
 		}
+	}
+
+	function versionsForVariant(group: ImageGroup, variant: string) {
+		return group.versions.filter((v) => (v.variant ?? '') === variant);
+	}
+
+	function selectImageVariant(group: ImageGroup, variant: string) {
+		const [latest] = versionsForVariant(group, variant);
+		if (!latest) {
+			return;
+		}
+		selectedImageVariant = variant;
+		selectedImageId = latest.id;
+		selectedImageVersion = latest.version;
 	}
 
 	function selectImageVersion(imageId: string) {
@@ -319,6 +341,7 @@
 		}
 		selectedImageId = img.id;
 		selectedImageVersion = img.version;
+		selectedImageVariant = img.variant ?? '';
 	}
 
 	function scrollTosSection(sectionId: string) {
@@ -585,6 +608,10 @@
 														class="mt-auto pt-2 text-xs leading-none text-muted-foreground sm:text-[10px]"
 													>
 														x86 |
+														{#if group.variants.length > 1}
+															{group.variants.map((v) => v || 'default').join(' / ')}
+															|
+														{/if}
 														{group.versions.length > 1
 															? `${group.versions.length} versions`
 															: group.versions[0].version}
@@ -594,13 +621,34 @@
 											</button>
 											{#if isSelected}
 												<div class="border-t border-border bg-background/50 px-5 py-3">
+													{#if group.variants.length > 1}
+														<span class="text-sm text-muted-foreground sm:text-xs">Variant</span>
+														<fieldset
+															class="mt-1.5 mb-3 flex flex-wrap gap-px border-0 p-0"
+															aria-label={`${group.name} variant`}
+														>
+															{#each group.variants as variant (variant)}
+																<button
+																	type="button"
+																	aria-pressed={selectedImageVariant === variant}
+																	class="h-11 flex-1 border px-3 text-base transition-colors sm:h-8 sm:text-xs {selectedImageVariant ===
+																	variant
+																		? 'border-red-500 bg-red-950/20 text-foreground'
+																		: 'border-border bg-muted text-muted-foreground hover:border-ring hover:text-foreground'}"
+																	onclick={() => selectImageVariant(group, variant)}
+																>
+																	{variant || 'Default'}
+																</button>
+															{/each}
+														</fieldset>
+													{/if}
 													<span class="text-sm text-muted-foreground sm:text-xs">Version</span>
 													<select
 														value={selectedImageId}
 														onchange={(e) => selectImageVersion(e.currentTarget.value)}
 														class="mt-1.5 h-11 w-full border border-border bg-muted px-2 text-base text-foreground focus:border-red-500 focus:outline-none sm:h-8 sm:text-xs"
 													>
-														{#each group.versions as v (v.id)}
+														{#each versionsForVariant(group, selectedImageVariant) as v (v.id)}
 															<option value={v.id}>{v.version} (x86)</option>
 														{/each}
 													</select>
@@ -639,6 +687,7 @@
 														} else {
 															selectedImageId = img.id;
 															selectedImageVersion = img.version || null;
+															selectedImageVariant = img.variant ?? '';
 														}
 													}}
 												>
@@ -1095,6 +1144,9 @@
 								<span class="text-muted-foreground">Image</span>
 								<span class="min-w-0 truncate text-right text-foreground">
 									{selectedImage?.name ?? '-'}
+									{#if selectedImage?.variant}
+										/ {selectedImage.variant}
+									{/if}
 									{#if selectedImageVersion}
 										/ {selectedImageVersion}
 									{/if}

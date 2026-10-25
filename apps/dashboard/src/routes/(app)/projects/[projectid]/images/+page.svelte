@@ -22,6 +22,7 @@
 		isOfficial: boolean;
 		logoSvg: string | null | undefined;
 		name: string;
+		variant?: string;
 		version: string;
 	}
 
@@ -183,7 +184,7 @@
 							</p>
 							<p class="mt-auto pt-2 text-[10px] leading-none text-muted-foreground">
 								{displayArchitecture(image)}
-								| {image.version}
+								| {image.version}{image.variant ? ` (${image.variant})` : ''}
 							</p>
 						</div>
 					</button>

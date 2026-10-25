@@ -252,6 +252,7 @@ export const accessibilityFixtureImages = [
 		id: 'ubuntu-2404',
 		name: 'Ubuntu',
 		version: '24.04 LTS',
+		variant: '',
 		description: 'Ubuntu 24.04 LTS',
 		icon: 'ubuntu',
 		color: 'bg-orange-500',

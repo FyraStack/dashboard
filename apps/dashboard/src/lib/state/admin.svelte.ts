@@ -82,6 +82,7 @@ export interface BaseImage {
 	logoSvg: string | null | undefined;
 	name: string;
 	secureBoot: boolean;
+	variant: string;
 	version: string;
 }
 
@@ -226,6 +227,7 @@ export class AdminState {
 	imgError = $state('');
 	imgName = $state('');
 	imgVersion = $state('');
+	imgVariant = $state('');
 	imgDescription = $state('');
 	imgIcon = $state('');
 	imgColor = $state('bg-gray-600');
@@ -748,6 +750,7 @@ export class AdminState {
 		this.imgEditing = null;
 		this.imgName = '';
 		this.imgVersion = '';
+		this.imgVariant = '';
 		this.imgDescription = '';
 		this.imgIcon = '';
 		this.imgColor = 'bg-gray-600';
@@ -768,6 +771,7 @@ export class AdminState {
 		this.imgEditing = img;
 		this.imgName = img.name;
 		this.imgVersion = img.version;
+		this.imgVariant = img.variant;
 		this.imgDescription = img.description;
 		this.imgIcon = img.icon ?? '';
 		this.imgColor = img.color;
@@ -797,6 +801,7 @@ export class AdminState {
 			const data = {
 				name: this.imgName.trim(),
 				version: this.imgVersion.trim(),
+				variant: this.imgVariant.trim(),
 				description: this.imgDescription.trim(),
 				color: this.imgColor,
 				isOfficial: this.imgIsOfficial,

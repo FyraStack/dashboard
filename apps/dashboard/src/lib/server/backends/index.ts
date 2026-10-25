@@ -1,3 +1,4 @@
+import { config } from '#lib/server/config.js';
 import { timingLog } from '#lib/server/observability.js';
 import { dev } from '$app/env';
 import { getBackendEnv } from './env';
@@ -9,6 +10,9 @@ export type {
 	BackendImage,
 	BackendImageImportParams,
 	BackendImageImportTarget,
+	CustomImageImport,
+	CustomImageVolume,
+	CustomImageVolumeInfo,
 	VmBackend,
 	VmCreateParams,
 	VmCreateResult,
@@ -76,7 +80,9 @@ function createProxmox(): ProxmoxBackend {
 		snippetsStorage: env.PROXMOX_SNIPPETS_STORAGE,
 		firewallSecurityGroup: env.PROXMOX_VM_FIREWALL_SECURITY_GROUP,
 		vmCpuType: env.PROXMOX_VM_CPU_TYPE,
-		excludedNodes: parseNodeList(env.PROXMOX_EXCLUDED_NODES)
+		excludedNodes: parseNodeList(env.PROXMOX_EXCLUDED_NODES),
+		customImageStorage:
+			env.PROXMOX_CUSTOM_IMAGE_STORAGE || config.customImages.defaultProxmoxStorage
 	});
 
 	timingLog('backend.proxmox.create.end', {

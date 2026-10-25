@@ -37,6 +37,8 @@ export const billingResourceTypeEnum = pgEnum('billing_resource_type', ['vm', 'v
 
 export const ipFamilyEnum = pgEnum('ip_family', ['ipv4', 'ipv6']);
 
+export const imageStatusEnum = pgEnum('image_status', ['importing', 'ready', 'failed']);
+
 // VM Types
 
 export const vmTypes = pgTable('vm_types', {
@@ -82,12 +84,16 @@ export const vms = pgTable(
 			.default(sql`(extract(epoch from now()) * 1000)::bigint`),
 		backend: vmBackendEnum('backend').notNull(),
 		status: vmStatusEnum('status').notNull().default('provisioning'),
-		statusError: text('status_error')
+		statusError: text('status_error'),
+		// Image the VM was provisioned from. Not a foreign key: VM disks are full
+		// copies, so images can be deleted once provisioning has finished.
+		sourceImageId: text('source_image_id')
 	},
 	(table) => [
 		index('vms_owner_project_id_index').on(table.ownerProjectId),
 		index('vms_owner_project_active_index').on(table.ownerProjectId, table.active),
 		index('vms_proxmox_id_index').on(table.proxmoxId),
+		index('vms_source_image_status_index').on(table.sourceImageId, table.status),
 		uniqueIndex('vms_active_proxmox_id_unique').on(table.proxmoxId).where(sql`${table.active}`)
 	]
 );
@@ -437,20 +443,44 @@ export const apiTokens = pgTable(
 
 // Base Images
 
-export const baseImages = pgTable('base_images', {
-	id: ulidPk(),
-	filePath: text('file_path').notNull(), // Proxmox storage path: "local:import/debian-12.qcow2"
-	name: text('name').notNull(),
-	version: text('version').notNull(),
-	description: text('description').notNull(),
-	shortName: text('short_name').notNull().default(''),
-	icon: text('icon'),
-	color: text('color').notNull().default('bg-gray-600'), // legacy Tailwind bg class
-	isOfficial: boolean('is_official').notNull().default(false),
-	logoSvg: text('logo_svg'),
-	accentColor: text('accent_color').notNull().default('#6b7280'),
-	imageType: text('image_type').notNull().default('qcow2'),
-	secureBoot: boolean('secure_boot').notNull().default(true),
-	isa: vmIsaEnum('isa').notNull(),
-	sortOrder: integer('sort_order').notNull().default(0)
-});
+export const baseImages = pgTable(
+	'base_images',
+	{
+		id: ulidPk(),
+		// Null for platform images managed by admins; set for images a project imported.
+		ownerProjectId: ulidFk('owner_project_id').references(() => organization.id),
+		filePath: text('file_path').notNull(), // Proxmox storage path: "local:import/debian-12.qcow2"
+		name: text('name').notNull(),
+		version: text('version').notNull(),
+		description: text('description').notNull(),
+		shortName: text('short_name').notNull().default(''),
+		icon: text('icon'),
+		color: text('color').notNull().default('bg-gray-600'), // legacy Tailwind bg class
+		isOfficial: boolean('is_official').notNull().default(false),
+		logoSvg: text('logo_svg'),
+		accentColor: text('accent_color').notNull().default('#6b7280'),
+		imageType: text('image_type').notNull().default('qcow2'),
+		secureBoot: boolean('secure_boot').notNull().default(true),
+		isa: vmIsaEnum('isa').notNull(),
+		sortOrder: integer('sort_order').notNull().default(0),
+		status: imageStatusEnum('status').notNull().default('ready'),
+		statusError: text('status_error'),
+		sizeBytes: bigint('size_bytes', { mode: 'number' }),
+		virtualSizeBytes: bigint('virtual_size_bytes', { mode: 'number' }),
+		// URL a project image was imported from.
+		sourceUrl: text('source_url'),
+		importNode: text('import_node'),
+		importUpid: text('import_upid'),
+		createdByUserId: text('created_by_user_id'),
+		createdAt: bigint('created_at', { mode: 'number' })
+			.notNull()
+			.default(sql`(extract(epoch from now()) * 1000)::bigint`),
+		updatedAt: bigint('updated_at', { mode: 'number' })
+			.notNull()
+			.default(sql`(extract(epoch from now()) * 1000)::bigint`)
+	},
+	(table) => [
+		index('base_images_owner_project_id_index').on(table.ownerProjectId),
+		index('base_images_status_updated_at_index').on(table.status, table.updatedAt)
+	]
+);

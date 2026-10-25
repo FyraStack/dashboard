@@ -12,9 +12,11 @@ import {
 	meterResourceThrough,
 	syncProjectUsage
 } from '#lib/server/billing/metering.js';
+import { deleteProjectCustomImages } from '#lib/server/custom-images.js';
 import { invitation, organization } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import {
+	baseImages,
 	billingUsageEvents,
 	ipAssignments,
 	paymentPeriods,
@@ -71,6 +73,12 @@ export async function softDeleteOrganizationResources(
 			console.warn(`Failed to release networking for VM ${vm.id} during project delete`, err);
 		});
 	}
+
+	// Rows go immediately; any storage that fails to delete is swept by the
+	// custom image reconciler.
+	await deleteProjectCustomImages(db, organizationId).catch((err) => {
+		console.warn('Failed to delete custom images during project delete', err);
+	});
 
 	const now = Date.now();
 	await db
@@ -134,6 +142,7 @@ export async function purgeExpiredDeletedOrganizations(now = Date.now(), limit =
 			await db.delete(vms).where(inArray(vms.id, vmIds));
 		}
 		await db.delete(volumes).where(eq(volumes.ownerProjectId, id));
+		await db.delete(baseImages).where(eq(baseImages.ownerProjectId, id));
 		await db.delete(projectBillingCustomers).where(eq(projectBillingCustomers.projectId, id));
 		await db.delete(organization).where(eq(organization.id, id));
 		purged += 1;

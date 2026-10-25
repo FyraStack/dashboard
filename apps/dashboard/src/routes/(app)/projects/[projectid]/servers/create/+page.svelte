@@ -68,12 +68,13 @@
 		accentColor: string;
 		color: string;
 		description: string;
-		filePath: string;
 		icon: string | null;
 		id: string;
 		imageType: string;
+		isCustom?: boolean;
 		isOfficial: boolean;
 		logoSvg: string | null;
+		minDiskGb?: number;
 		name: string;
 		version: string;
 	}
@@ -165,6 +166,15 @@
 
 	let selectedImage = $derived(dbImages.find((i) => i.id === selectedImageId) ?? null);
 	let selectedPlan = $derived(vmTypes.find((t) => t.id === selectedPlanId) ?? null);
+	const selectedImageMinDiskGb = $derived(selectedImage?.minDiskGb ?? 0);
+	function planFitsImage(plan: { storageAmount: number }) {
+		return plan.storageAmount >= selectedImageMinDiskGb;
+	}
+	$effect(() => {
+		if (selectedPlan && !planFitsImage(selectedPlan)) {
+			selectedPlanId = null;
+		}
+	});
 	let usePasswordAuthentication = $derived(selectedSshKeyIds.length === 0);
 	let availableVolumes = $derived(
 		volumesEnabled
@@ -622,6 +632,11 @@
 												class="text-xs font-semibold tracking-wider text-muted-foreground uppercase sm:text-[10px]"
 												>Other Images</span
 											>
+											<a
+												href={resolve(`projects/${projectId}/images`)}
+												class="ml-auto text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline sm:text-[10px]"
+												>Manage</a
+											>
 										</div>
 										<div class="mt-2 divide-y divide-border/30">
 											{#each customDbImages as img (img.id)}
@@ -649,6 +664,12 @@
 													{#if img.version}
 														<span class="shrink-0 text-xs text-muted-foreground sm:text-[10px]"
 															>{img.version}</span
+														>
+													{/if}
+													{#if img.isCustom}
+														<span
+															class="ml-auto shrink-0 border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground sm:text-[9px]"
+															>Project{img.minDiskGb ? ` · ≥${img.minDiskGb}GB` : ''}</span
 														>
 													{/if}
 												</button>
@@ -704,7 +725,11 @@
 											type="button"
 											aria-pressed={selectedPlanId === plan.id}
 											aria-label={`${plan.name} plan`}
-											class="flex flex-col gap-1 border p-4 text-left transition-colors sm:p-3 {selectedPlanId ===
+											disabled={!planFitsImage(plan)}
+											title={planFitsImage(plan)
+												? undefined
+												: `The selected image needs at least ${selectedImageMinDiskGb}GB of disk`}
+											class="flex flex-col gap-1 border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:p-3 {selectedPlanId ===
 											plan.id
 												? 'border-red-500 bg-red-950/20'
 												: 'border-border hover:border-ring'}"

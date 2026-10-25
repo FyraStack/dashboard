@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureImages
@@ -59,7 +59,9 @@ export const listImages = query(async () => {
 	}
 
 	const db = initDrizzle();
+	// Platform images only. Project uploads are listed through custom-images.remote.
 	const rows = await db.query.baseImages.findMany({
+		where: isNull(baseImages.ownerProjectId),
 		orderBy: [asc(baseImages.sortOrder), asc(baseImages.id)]
 	});
 	return rows.map((row) => ({
@@ -110,6 +112,7 @@ export const createImage = command(createParams, async (params) => {
 	const logoSvg = validateLogoSvg(params.logoSvg, isOfficial);
 
 	const lastImage = await db.query.baseImages.findFirst({
+		where: isNull(baseImages.ownerProjectId),
 		orderBy: [desc(baseImages.sortOrder)]
 	});
 
@@ -159,7 +162,7 @@ export const updateImage = command(updateParams, async (params) => {
 	await requireAdmin(db, event.locals.user.id);
 
 	const existing = await db.query.baseImages.findFirst({
-		where: eq(baseImages.id, params.imageId)
+		where: and(eq(baseImages.id, params.imageId), isNull(baseImages.ownerProjectId))
 	});
 	if (!existing) {
 		error(404, 'Image not found');
@@ -203,7 +206,10 @@ export const reorderImages = command(reorderParams, async (params) => {
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
 
-	const rows = await db.query.baseImages.findMany({ columns: { id: true } });
+	const rows = await db.query.baseImages.findMany({
+		where: isNull(baseImages.ownerProjectId),
+		columns: { id: true }
+	});
 	const existingIds = new Set(rows.map((row) => row.id));
 	const requestedIds = new Set(params.imageIds);
 	if (
@@ -216,7 +222,10 @@ export const reorderImages = command(reorderParams, async (params) => {
 
 	await Promise.all(
 		params.imageIds.map((id, index) =>
-			db.update(baseImages).set({ sortOrder: index }).where(eq(baseImages.id, id))
+			db
+				.update(baseImages)
+				.set({ sortOrder: index })
+				.where(and(eq(baseImages.id, id), isNull(baseImages.ownerProjectId)))
 		)
 	);
 });
@@ -232,13 +241,15 @@ export const deleteImage = command(deleteParams, async (params) => {
 	await requireAdmin(db, event.locals.user.id);
 
 	const existing = await db.query.baseImages.findFirst({
-		where: eq(baseImages.id, params.imageId)
+		where: and(eq(baseImages.id, params.imageId), isNull(baseImages.ownerProjectId))
 	});
 	if (!existing) {
 		error(404, 'Image not found');
 	}
 
-	await db.delete(baseImages).where(eq(baseImages.id, params.imageId));
+	await db
+		.delete(baseImages)
+		.where(and(eq(baseImages.id, params.imageId), isNull(baseImages.ownerProjectId)));
 });
 
 export const listProxmoxImages = query(async () => {

@@ -1,5 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
-import { listImages } from '#lib/remote/images.remote.js';
+import { listProjectImages } from '#lib/remote/custom-images.remote.js';
 import { listSshKeys } from '#lib/remote/ssh-keys.remote.js';
 import { listVmTypes } from '#lib/remote/vm-types.remote.js';
 import { listVolumes } from '#lib/remote/volumes.remote.js';
@@ -46,15 +46,37 @@ export const load: LayoutServerLoad = async ({ locals, params, parent, depends, 
 	}
 
 	runInBackground(refreshProjectBilling(params.projectid), 'refreshProjectBilling');
-	const [vmTypes, dbImages, volumes, sshKeys, billing, ipamAvailability, role] = await Promise.all([
+	const [vmTypes, images, volumes, sshKeys, billing, ipamAvailability, role] = await Promise.all([
 		listVmTypes(),
-		listImages(),
+		listProjectImages({ projectId: params.projectid }),
 		featureFlags?.volumes ? listVolumes({ projectId: params.projectid }) : [],
 		listSshKeys(),
 		getProjectBillingReadiness(params.projectid),
 		getIpamAvailability(db),
 		getProjectMemberRole(db, locals.user.id, params.projectid)
 	]);
+
+	const dbImages = [
+		...images.platformImages,
+		...images.customImages
+			.filter((image) => image.status === 'ready')
+			.map((image) => ({
+				id: image.id,
+				name: image.name,
+				version: image.version,
+				description: image.description,
+				imageType: image.imageType,
+				isa: image.isa,
+				secureBoot: image.secureBoot,
+				isOfficial: false,
+				isCustom: true,
+				icon: null,
+				color: 'bg-gray-600',
+				logoSvg: null,
+				accentColor: '#6b7280',
+				minDiskGb: image.virtualSizeBytes ? Math.ceil(image.virtualSizeBytes / 1024 ** 3) : 0
+			}))
+	];
 
 	return {
 		vmTypes,

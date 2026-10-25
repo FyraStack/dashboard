@@ -14,6 +14,7 @@ import {
 } from '#lib/server/billing/autumn.js';
 import { createBillingMeter } from '#lib/server/billing/metering.js';
 import { config } from '#lib/server/config.js';
+import { canProjectUseImage } from '#lib/server/custom-images.js';
 import { closeRequestDb, type Database, initDrizzle } from '#lib/server/db/index.js';
 import { baseImages, vms, vmTypes } from '#lib/server/db/schema.js';
 import {
@@ -210,6 +211,29 @@ async function cleanUpFailedProvision(
 		.catch(() => undefined);
 }
 
+function assertImageUsable(
+	input: ProvisionVmInput,
+	baseImage: InferSelectModel<typeof baseImages> | null | undefined,
+	vmType: InferSelectModel<typeof vmTypes>
+) {
+	if (!input.imageId) {
+		return;
+	}
+	if (!(baseImage && canProjectUseImage(baseImage, input.projectId))) {
+		// Same error for "missing" and "belongs to another project" so ids don't leak.
+		error(400, `Image "${input.imageId}" not found`);
+	}
+	if (baseImage.status !== 'ready') {
+		error(409, `Image "${baseImage.name}" is not ready yet`);
+	}
+	if (baseImage.virtualSizeBytes && baseImage.virtualSizeBytes > vmType.storageAmount * 1024 ** 3) {
+		error(
+			400,
+			`Image "${baseImage.name}" needs a ${Math.ceil(baseImage.virtualSizeBytes / 1024 ** 3)} GB disk, but the ${vmType.name} plan only has ${vmType.storageAmount} GB`
+		);
+	}
+}
+
 export async function provisionVm(db: Database, input: ProvisionVmInput) {
 	const [vmType, baseImage] = await Promise.all([
 		db.query.vmTypes.findFirst({
@@ -229,9 +253,7 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 	}
 	const featureId = vmType.autumnFeatureId;
 
-	if (input.imageId && !baseImage) {
-		error(400, `Image "${input.imageId}" not found`);
-	}
+	assertImageUsable(input, baseImage, vmType);
 
 	const now = Date.now();
 	const [inserted] = await db
@@ -245,7 +267,8 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 			creationDate: new Date().toISOString().split('T')[0],
 			createdAt: now,
 			backend: 'proxmox',
-			status: 'provisioning'
+			status: 'provisioning',
+			sourceImageId: baseImage?.id ?? null
 		})
 		.returning();
 

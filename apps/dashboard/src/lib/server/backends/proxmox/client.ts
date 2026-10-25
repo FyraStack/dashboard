@@ -363,6 +363,19 @@ export class ProxmoxClient {
 		return res.data;
 	}
 
+	async getStorageVolumeInfo(
+		node: string,
+		storage: string,
+		volume: string
+	): Promise<{ format: string; size: number; used?: number }> {
+		const res = await this.api
+			.get(
+				`nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content/${encodeURIComponent(volume)}`
+			)
+			.json<PveResponse<{ format: string; size: number; used?: number }>>();
+		return res.data;
+	}
+
 	async deleteStorageVolume(node: string, storage: string, volume: string): Promise<string> {
 		const res = await this.api
 			.delete(

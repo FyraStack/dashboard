@@ -86,6 +86,8 @@ export interface VmCreateParams {
 	registerBackground?: (work: Promise<unknown>, label?: string) => void;
 	secureBoot?: boolean;
 	sshKeys?: string[];
+	/** VM type name, exposed to the guest as the SMBIOS product. */
+	tierName: string;
 	userId: string;
 }
 
@@ -106,6 +108,8 @@ export interface VmResizeParams {
 	cores: number;
 	diskGb: number;
 	memoryMb: number;
+	/** VM type name, exposed to the guest as the SMBIOS product. */
+	tierName: string;
 }
 
 export class VmNotFoundError extends Error {

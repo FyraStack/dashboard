@@ -285,6 +285,7 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 			cores: vmType.cores,
 			memoryMb: vmType.ramCapacity,
 			diskGb: vmType.storageAmount,
+			tierName: vmType.name,
 			imageId: input.imageId,
 			imageSource: baseImage?.filePath,
 			secureBoot: baseImage?.secureBoot ?? true,

@@ -1163,7 +1163,6 @@ export class ProxmoxBackend implements VmBackend {
 			if (params.memoryMb !== qemuConfig.memory) {
 				updates.memory = params.memoryMb;
 			}
-			// SMBIOS changes are applied on the next cold boot (stop/start), not a guest reboot.
 			const smbios1 = rebrandSmbios1(qemuConfig.smbios1, id, params.tierName);
 			if (smbios1) {
 				updates.smbios1 = smbios1;

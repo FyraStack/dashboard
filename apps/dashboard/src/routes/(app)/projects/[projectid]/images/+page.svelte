@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { autofillAttributes } from '#lib/components/ui/input/autofill.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import { imageTypeColors } from '#lib/data/images.js';
 	import ChevronLeft from '~icons/lucide/chevron-left';
@@ -114,6 +115,7 @@
 			/>
 			<input
 				bind:value={search}
+				{...autofillAttributes()}
 				placeholder="Search images..."
 				class="h-7 w-44 border border-border bg-muted pr-2 pl-7 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
 			/>

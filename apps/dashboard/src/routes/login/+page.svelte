@@ -147,7 +147,14 @@
 				}}
 				class="space-y-3"
 			>
-				<Input type="email" bind:value={email} placeholder="Email" aria-label="Email" required />
+				<Input
+					type="email"
+					bind:value={email}
+					placeholder="Email"
+					aria-label="Email"
+					autocomplete="username"
+					required
+				/>
 
 				<div class="relative">
 					<Input
@@ -155,6 +162,7 @@
 						bind:value={password}
 						placeholder="Password"
 						aria-label="Password"
+						autocomplete="current-password"
 						class="pr-10"
 						required
 					/>

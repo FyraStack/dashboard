@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import BillingSetupDialog from '#lib/components/billing-setup-dialog.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { autofillAttributes } from '#lib/components/ui/input/autofill.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import type { FeatureFlags } from '#lib/feature-flags.js';
@@ -541,6 +542,7 @@
 								<div class="relative">
 									<input
 										bind:value={imagesSearch}
+										{...autofillAttributes()}
 										placeholder="Search images..."
 										class="h-11 w-full border border-border bg-muted px-3 text-base text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none sm:h-8 sm:text-xs"
 									/>
@@ -796,6 +798,7 @@
 													id="new-vol-name"
 													name="newVolumeName"
 													bind:value={newVolumeName}
+													{...autofillAttributes()}
 													placeholder="volume-name"
 													class="h-10 w-full border border-border bg-background px-2 text-base text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none sm:h-7 sm:text-xs"
 												/>
@@ -812,6 +815,7 @@
 													type="number"
 													min="1"
 													bind:value={newVolumeSize}
+													{...autofillAttributes()}
 													class="h-10 w-full border border-border bg-background px-2 text-base text-foreground tabular-nums focus:border-ring focus:outline-none sm:h-7 sm:text-xs"
 												/>
 											</div>
@@ -1015,6 +1019,7 @@
 											name="serverPassword"
 											type={showServerPassword ? 'text' : 'password'}
 											bind:value={serverPassword}
+											{...autofillAttributes()}
 											class="h-11 min-w-0 flex-1 border border-border bg-muted px-3 font-mono text-base text-foreground placeholder:text-muted-foreground focus:border-red-500 focus:outline-none sm:h-9 sm:text-xs"
 											placeholder="Generated password"
 										/>

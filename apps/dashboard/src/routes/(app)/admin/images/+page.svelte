@@ -3,6 +3,7 @@
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { autofillAttributes } from '#lib/components/ui/input/autofill.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
@@ -416,6 +417,7 @@
 				<Label>Description</Label>
 				<textarea
 					bind:value={admin.imgDescription}
+					{...autofillAttributes()}
 					placeholder="Short description of this image..."
 					rows="2"
 					class="w-full resize-none border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
@@ -431,6 +433,7 @@
 						>
 						<textarea
 							bind:value={admin.imgLogoSvg}
+							{...autofillAttributes()}
 							placeholder="<svg ...></svg>"
 							rows="3"
 							class="w-full resize-none border border-border bg-muted px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"

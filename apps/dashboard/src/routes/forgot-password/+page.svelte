@@ -78,7 +78,14 @@
 					}}
 					class="space-y-3"
 				>
-					<Input type="email" bind:value={email} placeholder="Email" aria-label="Email" required />
+					<Input
+						type="email"
+						bind:value={email}
+						placeholder="Email"
+						aria-label="Email"
+						autocomplete="username"
+						required
+					/>
 
 					<Button type="submit" class="w-full" disabled={loading}>
 						{#if loading}

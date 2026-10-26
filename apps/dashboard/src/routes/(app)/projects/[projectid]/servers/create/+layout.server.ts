@@ -1,4 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
+import { hasProjectRole } from '#lib/auth/organization-permissions.js';
 import { listProjectImages } from '#lib/remote/custom-images.remote.js';
 import { listSshKeys } from '#lib/remote/ssh-keys.remote.js';
 import { listVmTypes } from '#lib/remote/vm-types.remote.js';
@@ -81,6 +82,22 @@ export const load: LayoutServerLoad = async ({ locals, params, parent, depends, 
 	return {
 		vmTypes,
 		dbImages,
+		// Project images that aren't bootable yet, so the picker can show progress.
+		pendingProjectImages: images.customImages
+			.filter((image) => image.status !== 'ready')
+			.map((image) => ({
+				id: image.id,
+				name: image.name,
+				status: image.status,
+				statusError: image.statusError
+			})),
+		customImages: {
+			enabled: images.importsEnabled,
+			canImport: Boolean(role && hasProjectRole(role, 'read_write')),
+			atLimit: images.usage.count >= images.limits.maxImagesPerProject,
+			maxImagesPerProject: images.limits.maxImagesPerProject,
+			maxImageBytes: images.limits.maxImageBytes
+		},
 		volumes,
 		sshKeys,
 		billing,

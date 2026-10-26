@@ -290,7 +290,12 @@ export const analyticsBaseImages = analyticsSchema.view('base_images').as((qb) =
 			imageType: baseImages.imageType,
 			secureBoot: baseImages.secureBoot,
 			isa: baseImages.isa,
-			sortOrder: baseImages.sortOrder
+			sortOrder: baseImages.sortOrder,
+			ownerProjectId: baseImages.ownerProjectId,
+			status: baseImages.status,
+			sizeBytes: baseImages.sizeBytes,
+			virtualSizeBytes: baseImages.virtualSizeBytes,
+			createdAt: baseImages.createdAt
 		})
 		.from(baseImages)
 );

@@ -100,6 +100,7 @@ function clearProxmoxReadCaches() {
 }
 
 interface ProxmoxBackendOptions {
+	customImageStorage?: string;
 	excludedNodes?: string[];
 	firewallSecurityGroup?: string;
 	snippetsEndpointPassword?: string;
@@ -413,8 +414,16 @@ export class ProxmoxBackend implements VmBackend {
 			.includes(target);
 	}
 
-	private isActiveImportStorage(storage: { content?: string; active?: 0 | 1; enabled?: 0 | 1 }) {
+	private isActiveImportStorage(storage: {
+		storage?: string;
+		content?: string;
+		active?: 0 | 1;
+		enabled?: 0 | 1;
+	}) {
 		return (
+			// Project uploads live in their own storage and must never show up as
+			// candidates for platform images.
+			storage.storage !== this.options.customImageStorage &&
 			this.storageSupportsContent(storage.content, 'import') &&
 			storage.active !== 0 &&
 			storage.enabled !== 0
@@ -618,6 +627,74 @@ export class ProxmoxBackend implements VmBackend {
 			checksumAlgorithm: params.checksumAlgorithm,
 			verifyCertificates: params.verifyCertificates
 		});
+	}
+
+	private requireCustomImageStorage() {
+		const storage = this.options.customImageStorage;
+		if (!storage) {
+			throw new Error('Custom image storage is not configured');
+		}
+		return storage;
+	}
+
+	private assertCustomImageVolid(volid: string) {
+		const storage = this.requireCustomImageStorage();
+		if (!volid.startsWith(`${storage}:import/`)) {
+			throw new Error(`Refusing to touch volume outside custom image storage: ${volid}`);
+		}
+	}
+
+	async importCustomImage(params: {
+		checksum?: string;
+		checksumAlgorithm?: 'sha256' | 'sha512';
+		filename: string;
+		url: string;
+	}) {
+		const storage = this.requireCustomImageStorage();
+		const node = await this.firstSchedulableNode();
+		const upid = await this.client.importStorageContentFromUrl(node.node, storage, {
+			url: params.url,
+			filename: params.filename,
+			content: 'import',
+			checksum: params.checksum,
+			checksumAlgorithm: params.checksum ? params.checksumAlgorithm : undefined,
+			verifyCertificates: true
+		});
+		return { node: node.node, storage, upid, volid: `${storage}:import/${params.filename}` };
+	}
+
+	async listCustomImageVolumes() {
+		const storage = this.requireCustomImageStorage();
+		const node = await this.firstSchedulableNode();
+		const contents = await this.client.listStorageContent(node.node, storage, 'import');
+		return contents.map((item) => ({
+			volid: item.volid,
+			size: item.size,
+			format: item.format,
+			createdAt: item.ctime ? item.ctime * 1000 : undefined
+		}));
+	}
+
+	async getCustomImageVolume(volid: string) {
+		this.assertCustomImageVolid(volid);
+		const volumes = await this.listCustomImageVolumes();
+		return volumes.find((volume) => volume.volid === volid) ?? null;
+	}
+
+	async getCustomImageVolumeInfo(volid: string) {
+		this.assertCustomImageVolid(volid);
+		const storage = this.requireCustomImageStorage();
+		const node = await this.firstSchedulableNode();
+		const info = await this.client.getStorageVolumeInfo(node.node, storage, volid);
+		return { format: info.format, virtualSize: info.size };
+	}
+
+	async deleteCustomImageVolume(volid: string) {
+		this.assertCustomImageVolid(volid);
+		const storage = this.requireCustomImageStorage();
+		const node = await this.firstSchedulableNode();
+		const upid = await this.client.deleteStorageVolume(node.node, storage, volid);
+		await this.client.waitForTask(node.node, upid);
 	}
 
 	async getTaskStatus(node: string, upid: string) {

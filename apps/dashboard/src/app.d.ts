@@ -59,6 +59,7 @@ declare global {
 			ORIGIN: string;
 			PROXMOX_API_SECRET?: string;
 			PROXMOX_API_URL?: string;
+			PROXMOX_CUSTOM_IMAGE_STORAGE?: string;
 			PROXMOX_EXCLUDED_NODES?: string;
 			PROXMOX_SNIPPETS_ENDPOINT_PASSWORD?: string;
 			PROXMOX_SNIPPETS_ENDPOINT_URL?: string;

@@ -33,7 +33,8 @@
 		"PROXMOX_SNIPPETS_USE_VPC": "true",
 		"PROXMOX_SNIPPETS_ENDPOINT_URL": "https://pxmx-01.example:8005",
 		"PROXMOX_SNIPPETS_ENDPOINT_USERNAME": "pvecic",
-		"PROXMOX_SNIPPETS_STORAGE": "cephfs"
+		"PROXMOX_SNIPPETS_STORAGE": "cephfs",
+		"PROXMOX_CUSTOM_IMAGE_STORAGE": "stack-user-images"
 	},
 	"assets": {
 		"binding": "ASSETS",
@@ -134,7 +135,8 @@
 				"PROXMOX_SNIPPETS_USE_VPC": "true",
 				"PROXMOX_SNIPPETS_ENDPOINT_URL": "https://pxmx-01.example:8005",
 				"PROXMOX_SNIPPETS_ENDPOINT_USERNAME": "pvecic",
-				"PROXMOX_SNIPPETS_STORAGE": "cephfs"
+				"PROXMOX_SNIPPETS_STORAGE": "cephfs",
+				"PROXMOX_CUSTOM_IMAGE_STORAGE": "stack-user-images"
 			},
 			"hyperdrive": [
 				{

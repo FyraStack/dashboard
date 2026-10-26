@@ -60,6 +60,28 @@ export interface BackendImageImportParams {
 	verifyCertificates?: boolean;
 }
 
+export type CustomImageFormat = 'qcow2' | 'raw';
+
+export interface CustomImageImport {
+	node: string;
+	storage: string;
+	upid: string;
+	volid: string;
+}
+
+export interface CustomImageVolume {
+	createdAt?: number;
+	format: string;
+	size: number;
+	volid: string;
+}
+
+export interface CustomImageVolumeInfo {
+	format: string;
+	/** Virtual disk size, as reported by qemu-img. */
+	virtualSize: number;
+}
+
 export interface VmNetworkConfig {
 	firewallIpSet?: string[];
 	ipv4?: { address: string; prefixLength: number; gateway: string };
@@ -124,6 +146,7 @@ export class VmResizeError extends Error {
 
 export interface VmBackend {
 	createVm: (params: VmCreateParams) => Promise<VmCreateResult>;
+	deleteCustomImageVolume: (volid: string) => Promise<void>;
 	deleteVm: (id: string, proxmoxId?: number) => Promise<void>;
 	finishProvisioning: (
 		id: string,
@@ -131,6 +154,8 @@ export interface VmBackend {
 		params: { diskGb: number },
 		options?: Pick<VmLookupOptions, 'proxmoxNode'>
 	) => Promise<boolean>;
+	getCustomImageVolume: (volid: string) => Promise<CustomImageVolume | null>;
+	getCustomImageVolumeInfo: (volid: string) => Promise<CustomImageVolumeInfo>;
 	getTaskStatus: (
 		node: string,
 		upid: string
@@ -147,8 +172,16 @@ export interface VmBackend {
 		proxmoxId?: number,
 		options?: Pick<VmLookupOptions, 'proxmoxNode'>
 	) => Promise<VmInfo['networkInterfaces']>;
+	/** Download a project-uploaded image into the isolated custom image storage. */
+	importCustomImage: (params: {
+		checksum?: string;
+		checksumAlgorithm?: 'sha256' | 'sha512';
+		filename: string;
+		url: string;
+	}) => Promise<CustomImageImport>;
 	importImageFromUrl: (params: BackendImageImportParams) => Promise<string>;
 	killVm: (id: string, proxmoxId?: number) => Promise<void>;
+	listCustomImageVolumes: () => Promise<CustomImageVolume[]>;
 	listImageImportTargets: () => Promise<BackendImageImportTarget[]>;
 	listImages: () => Promise<BackendImage[]>;
 	listUsedProxmoxIds?: () => Promise<Set<number>>;

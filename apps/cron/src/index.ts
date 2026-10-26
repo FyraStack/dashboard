@@ -6,6 +6,7 @@ interface Env {
 
 const METER_PATH = '/api/internal/billing/meter';
 const IPAM_RECONCILE_PATH = '/api/internal/ipam/reconcile';
+const IMAGES_RECONCILE_PATH = '/api/internal/images/reconcile';
 
 async function runInternalCronRoute(env: Env, path: string, label: string): Promise<void> {
 	const response = await env.DASHBOARD.fetch(`https://dashboard.internal${path}`, {
@@ -37,6 +38,7 @@ export default {
 			ctx.waitUntil(runInternalCronRoute(env, METER_PATH, 'billing meter'));
 		}
 		ctx.waitUntil(runInternalCronRoute(env, IPAM_RECONCILE_PATH, 'ipam reconcile'));
+		ctx.waitUntil(runInternalCronRoute(env, IMAGES_RECONCILE_PATH, 'images reconcile'));
 	},
 	fetch(): Response {
 		return new Response('stack-dashboard-cron: billing meter worker', { status: 200 });

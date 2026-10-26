@@ -1,22 +1,28 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { toast } from 'svelte-sonner';
 	import BillingSetupDialog from '#lib/components/billing-setup-dialog.svelte';
+	import ImportImageDialog, {
+		type ImportImageRequest
+	} from '#lib/components/dialogs/import-image-dialog.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import type { FeatureFlags } from '#lib/feature-flags.js';
 	import { idempotent } from '#lib/idempotency.js';
 	import { generateServerName } from '#lib/name-generator.js';
+	import { importCustomImage } from '#lib/remote/custom-images.remote.js';
 	import { createVm } from '#lib/remote/vms.remote.js';
 	import { createVolume as createProjectVolume } from '#lib/remote/volumes.remote.js';
 	import { requestServerStatusRefresh } from '#lib/state/servers.svelte.js';
 	import { userSettingsHref } from '#lib/state/user-settings.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
-	import { goto } from '$app/navigation';
+	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import ArrowLeft from '~icons/lucide/arrow-left';
 	import Check from '~icons/lucide/check';
+	import Download from '~icons/lucide/download';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
 	import X from '~icons/lucide/x';
@@ -35,12 +41,20 @@
 		billing?: { status?: string; setupRequired?: boolean } | null;
 		canManageBilling?: boolean;
 		currentProject?: { id: string } | null;
+		customImages?: {
+			atLimit: boolean;
+			canImport: boolean;
+			enabled: boolean;
+			maxImageBytes: number;
+			maxImagesPerProject: number;
+		};
 		dbImages?: DbImage[];
 		featureFlags?: FeatureFlags;
 		ipamAvailability?: {
 			ipv4: { available: boolean; availableCount: string };
 			ipv6: { available: boolean; availableCount: string };
 		};
+		pendingProjectImages?: PendingProjectImage[];
 		sshKeys?: {
 			id: string;
 			name: string;
@@ -48,6 +62,13 @@
 		}[];
 		vmTypes?: VmType[];
 		volumes?: ExistingVolume[];
+	}
+
+	interface PendingProjectImage {
+		id: string;
+		name: string;
+		status: 'importing' | 'ready' | 'failed';
+		statusError: string | null;
 	}
 
 	type ImageTab = 'os' | 'snapshots' | 'apps';
@@ -68,12 +89,13 @@
 		accentColor: string;
 		color: string;
 		description: string;
-		filePath: string;
 		icon: string | null;
 		id: string;
 		imageType: string;
+		isCustom?: boolean;
 		isOfficial: boolean;
 		logoSvg: string | null;
+		minDiskGb?: number;
 		name: string;
 		version: string;
 	}
@@ -88,7 +110,58 @@
 	const vmTypes = $derived(data.vmTypes ?? []);
 	const dbImages = $derived(data.dbImages ?? []);
 	const officialDbImages = $derived(dbImages.filter((image) => image.isOfficial));
-	const customDbImages = $derived(dbImages.filter((image) => !image.isOfficial));
+	const otherPlatformImages = $derived(
+		dbImages.filter((image) => !(image.isOfficial || image.isCustom))
+	);
+	const projectImages = $derived(dbImages.filter((image) => image.isCustom));
+	const pendingProjectImages = $derived(data.pendingProjectImages ?? []);
+	const customImagesEnabled = $derived(Boolean(data.customImages?.enabled));
+	let importDialogOpen = $state(false);
+	// Image the user just imported here; selected automatically once it's ready.
+	let awaitingImageId = $state<string | null>(null);
+
+	const hasImportingImages = $derived(
+		pendingProjectImages.some((image) => image.status === 'importing')
+	);
+	$effect(() => {
+		if (!hasImportingImages) {
+			return;
+		}
+		const interval = setInterval(() => invalidate('project:create-server'), 5000);
+		return () => clearInterval(interval);
+	});
+	$effect(() => {
+		if (!awaitingImageId) {
+			return;
+		}
+		const ready = projectImages.find((image) => image.id === awaitingImageId);
+		if (ready) {
+			awaitingImageId = null;
+			if (!selectedImageId) {
+				selectedImageId = ready.id;
+				selectedImageVersion = ready.version || null;
+			}
+		} else if (!pendingProjectImages.some((image) => image.id === awaitingImageId)) {
+			awaitingImageId = null;
+		}
+	});
+
+	async function startImageImport(request: ImportImageRequest) {
+		const { imageId } = await importCustomImage({ projectId, ...request });
+		awaitingImageId = imageId;
+		toast.success(`Importing ${request.name}. It will be selectable once it's ready.`);
+		await invalidate('project:create-server');
+	}
+
+	function toggleImage(img: DbImage) {
+		if (selectedImageId === img.id) {
+			selectedImageId = null;
+			selectedImageVersion = null;
+		} else {
+			selectedImageId = img.id;
+			selectedImageVersion = img.version || null;
+		}
+	}
 	interface ImageGroup {
 		accentColor: string;
 		description: string;
@@ -165,6 +238,15 @@
 
 	let selectedImage = $derived(dbImages.find((i) => i.id === selectedImageId) ?? null);
 	let selectedPlan = $derived(vmTypes.find((t) => t.id === selectedPlanId) ?? null);
+	const selectedImageMinDiskGb = $derived(selectedImage?.minDiskGb ?? 0);
+	function planFitsImage(plan: { storageAmount: number }) {
+		return plan.storageAmount >= selectedImageMinDiskGb;
+	}
+	$effect(() => {
+		if (selectedPlan && !planFitsImage(selectedPlan)) {
+			selectedPlanId = null;
+		}
+	});
 	let usePasswordAuthentication = $derived(selectedSshKeyIds.length === 0);
 	let availableVolumes = $derived(
 		volumesEnabled
@@ -466,6 +548,12 @@
 </svelte:head>
 
 <div class="flex h-full flex-col overflow-hidden">
+	<ImportImageDialog
+		bind:open={importDialogOpen}
+		maxImageBytes={data.customImages?.maxImageBytes ?? 0}
+		onSubmit={startImageImport}
+	/>
+
 	<BillingSetupDialog
 		bind:open={billingSetupOpen}
 		{projectId}
@@ -615,7 +703,7 @@
 									</div>
 								{/if}
 
-								{#if customDbImages.length > 0}
+								{#if otherPlatformImages.length > 0}
 									<div class="mt-4">
 										<div class="flex items-center gap-2 border-b border-border/50 pb-2">
 											<span
@@ -624,7 +712,7 @@
 											>
 										</div>
 										<div class="mt-2 divide-y divide-border/30">
-											{#each customDbImages as img (img.id)}
+											{#each otherPlatformImages as img (img.id)}
 												<button
 													type="button"
 													aria-pressed={selectedImageId === img.id}
@@ -632,15 +720,7 @@
 													img.id
 														? 'border-l-2 border-l-red-500 bg-muted/40'
 														: ''}"
-													onclick={() => {
-														if (selectedImageId === img.id) {
-															selectedImageId = null;
-															selectedImageVersion = null;
-														} else {
-															selectedImageId = img.id;
-															selectedImageVersion = img.version || null;
-														}
-													}}
+													onclick={() => toggleImage(img)}
 												>
 													<HardDrive class="size-4 shrink-0 text-muted-foreground" />
 													<span class="truncate text-sm text-foreground sm:text-xs"
@@ -654,6 +734,102 @@
 												</button>
 											{/each}
 										</div>
+									</div>
+								{/if}
+
+								{#if customImagesEnabled}
+									<div class="mt-4">
+										<div class="flex items-center gap-2 border-b border-border/50 pb-2">
+											<span
+												class="text-xs font-semibold tracking-wider text-muted-foreground uppercase sm:text-[10px]"
+												>Your Images</span
+											>
+											<div class="ml-auto flex items-center gap-3">
+												{#if projectImages.length > 0 || pendingProjectImages.length > 0}
+													<a
+														href={resolve(`projects/${projectId}/images`)}
+														class="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline sm:text-[10px]"
+														>Manage</a
+													>
+												{/if}
+												{#if data.customImages?.canImport}
+													<Button
+														variant="outline"
+														size="sm"
+														class="h-8 gap-1.5 px-2.5 text-xs sm:h-6 sm:text-[10px]"
+														disabled={data.customImages.atLimit}
+														title={data.customImages.atLimit
+															? `Projects can have at most ${data.customImages.maxImagesPerProject} images`
+															: undefined}
+														onclick={() => (importDialogOpen = true)}
+													>
+														<Download class="size-3" />
+														Import from URL
+													</Button>
+												{/if}
+											</div>
+										</div>
+										{#if projectImages.length === 0 && pendingProjectImages.length === 0}
+											<p class="px-3 py-4 text-sm text-muted-foreground sm:text-[11px]">
+												Boot from your own OS build by importing a qcow2 image from a URL. Images
+												are private to this project.
+											</p>
+										{:else}
+											<div class="mt-2 divide-y divide-border/30">
+												{#each projectImages as img (img.id)}
+													<button
+														type="button"
+														aria-pressed={selectedImageId === img.id}
+														class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/20 sm:py-2.5 {selectedImageId ===
+														img.id
+															? 'border-l-2 border-l-red-500 bg-muted/40'
+															: ''}"
+														onclick={() => toggleImage(img)}
+													>
+														<HardDrive class="size-4 shrink-0 text-muted-foreground" />
+														<span class="truncate text-sm text-foreground sm:text-xs"
+															>{img.name}</span
+														>
+														{#if img.version}
+															<span class="shrink-0 text-xs text-muted-foreground sm:text-[10px]"
+																>{img.version}</span
+															>
+														{/if}
+														{#if img.minDiskGb}
+															<span
+																class="ml-auto shrink-0 text-xs text-muted-foreground sm:text-[10px]"
+																>≥{img.minDiskGb}GB disk</span
+															>
+														{/if}
+													</button>
+												{/each}
+												{#each pendingProjectImages as img (img.id)}
+													<div
+														class="flex w-full items-center gap-3 px-3 py-3 opacity-70 sm:py-2.5"
+													>
+														{#if img.status === 'importing'}
+															<Loader2 class="size-4 shrink-0 animate-spin text-muted-foreground" />
+														{:else}
+															<X class="size-4 shrink-0 text-red-500" />
+														{/if}
+														<span class="truncate text-sm text-foreground sm:text-xs"
+															>{img.name}</span
+														>
+														<span
+															class="ml-auto min-w-0 truncate text-xs sm:text-[10px] {img.status ===
+															'failed'
+																? 'text-red-500'
+																: 'text-muted-foreground'}"
+															title={img.statusError ?? undefined}
+														>
+															{img.status === 'importing'
+																? 'Importing...'
+																: (img.statusError ?? 'Import failed')}
+														</span>
+													</div>
+												{/each}
+											</div>
+										{/if}
 									</div>
 								{/if}
 							</Tabs.Content>
@@ -704,7 +880,11 @@
 											type="button"
 											aria-pressed={selectedPlanId === plan.id}
 											aria-label={`${plan.name} plan`}
-											class="flex flex-col gap-1 border p-4 text-left transition-colors sm:p-3 {selectedPlanId ===
+											disabled={!planFitsImage(plan)}
+											title={planFitsImage(plan)
+												? undefined
+												: `The selected image needs at least ${selectedImageMinDiskGb}GB of disk`}
+											class="flex flex-col gap-1 border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:p-3 {selectedPlanId ===
 											plan.id
 												? 'border-red-500 bg-red-950/20'
 												: 'border-border hover:border-ring'}"

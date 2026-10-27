@@ -426,7 +426,9 @@
 
 <!-- Image Dialog -->
 <Dialog.Root bind:open={admin.imgDialogOpen}>
-	<Dialog.Content class="max-h-[90vh] overflow-y-auto border-border bg-background sm:max-w-2xl">
+	<Dialog.Content
+		class="max-h-[90vh] grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto border-border bg-background sm:max-w-2xl"
+	>
 		<Dialog.Header>
 			<Dialog.Title>{dialogTitles[admin.imgMode]}</Dialog.Title>
 			<Dialog.Description>
@@ -440,7 +442,7 @@
 				{/if}
 			</Dialog.Description>
 		</Dialog.Header>
-		<div class="flex flex-col gap-4 py-4">
+		<div class="flex min-w-0 flex-col gap-4 py-4">
 			{#if admin.imgError}
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
@@ -463,7 +465,7 @@
 					</span>
 					<div class="flex min-w-0 flex-1 flex-col">
 						<span class="text-sm font-medium text-foreground">{admin.imgName}</span>
-						<span class="truncate text-xs text-muted-foreground">
+						<span class="line-clamp-2 text-xs text-muted-foreground">
 							{groupVersionCount}
 							existing version{groupVersionCount === 1 ? '' : 's'}{admin.imgDescription
 								? ` · ${admin.imgDescription}`

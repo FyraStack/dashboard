@@ -95,14 +95,18 @@ export interface PveImage {
 	volid: string;
 }
 
-export type ImageDialogMode = 'create' | 'addVersions' | 'edit' | 'editGroup';
-
 export interface ImageVersionDraft {
+	error: string;
 	filePath: string;
+	/** Existing base image id, or null for a version that hasn't been created yet. */
+	id: string | null;
 	key: number;
+	removed: boolean;
 	secureBoot: boolean;
 	version: string;
 }
+
+export type ImageVersionStatus = 'new' | 'changed' | 'removed' | 'unchanged';
 
 export interface ImageGroup {
 	name: string;
@@ -260,10 +264,9 @@ export class AdminState {
 	importError = $state('');
 	importTasks = $state<ImportTask[]>([]);
 	imgDialogOpen = $state(false);
-	imgMode = $state<ImageDialogMode>('create');
-	imgEditing = $state<BaseImage | null>(null);
-	/** Name of the image family being edited or extended (as it was when the dialog opened). */
+	/** Saved name of the image family being managed, or null when creating a new one. */
 	imgGroupName = $state<string | null>(null);
+	imgDetailsExpanded = $state(true);
 	imgSaving = $state(false);
 	imgError = $state('');
 	imgName = $state('');
@@ -804,7 +807,25 @@ export class AdminState {
 
 	private imgNewRow(partial: Partial<ImageVersionDraft> = {}): ImageVersionDraft {
 		this.imgRowSeq += 1;
-		return { key: this.imgRowSeq, version: '', filePath: '', secureBoot: true, ...partial };
+		return {
+			key: this.imgRowSeq,
+			id: null,
+			version: '',
+			filePath: '',
+			secureBoot: true,
+			removed: false,
+			error: '',
+			...partial
+		};
+	}
+
+	private imgRowFromImage(image: BaseImage) {
+		return this.imgNewRow({
+			id: image.id,
+			version: image.version,
+			filePath: image.filePath,
+			secureBoot: image.secureBoot
+		});
 	}
 
 	private imgResetShared(source?: BaseImage) {
@@ -818,7 +839,18 @@ export class AdminState {
 		this.imgIsa = 'x86';
 	}
 
-	private imgShow() {
+	private imgLoadGroup(group: ImageGroup) {
+		this.imgGroupName = group.name;
+		this.imgResetShared(group.representative);
+		this.imgDetailsExpanded = false;
+	}
+
+	/** Start a brand new image family. */
+	imgOpenCreate(filePath = '') {
+		this.imgGroupName = null;
+		this.imgResetShared();
+		this.imgDetailsExpanded = true;
+		this.imgRows = [this.imgNewRow({ filePath, version: guessVersionFromFilename(filePath) })];
 		this.imgError = '';
 		this.imgSaving = false;
 		this.imgDialogOpen = true;
@@ -827,34 +859,26 @@ export class AdminState {
 		}
 	}
 
-	/** Brand new image family with one or more versions. */
-	imgOpenCreate(filePath = '') {
-		this.imgMode = 'create';
-		this.imgEditing = null;
-		this.imgGroupName = null;
-		this.imgResetShared();
-		this.imgRows = [this.imgNewRow({ filePath, version: guessVersionFromFilename(filePath) })];
-		this.imgShow();
-	}
-
-	/** Add versions to an existing family, reusing its shared details. */
-	imgOpenAddVersions(groupName: string) {
+	/** Manage an existing family: shared details plus every version, saved in one go. */
+	imgOpenManage(groupName: string) {
 		const group = this.imageGroups.find((g) => g.name === groupName);
 		if (!group) {
 			this.imgOpenCreate();
 			return;
 		}
-		this.imgMode = 'addVersions';
-		this.imgEditing = null;
-		this.imgGroupName = group.name;
-		this.imgResetShared(group.representative);
-		this.imgRows = [this.imgNewRow({ secureBoot: group.representative.secureBoot })];
-		this.imgShow();
+		this.imgLoadGroup(group);
+		this.imgRows = group.versions.map((image) => this.imgRowFromImage(image));
+		this.imgError = '';
+		this.imgSaving = false;
+		this.imgDialogOpen = true;
+		if (this.pveImages.length === 0) {
+			this.loadPveImages();
+		}
 	}
 
-	/** While creating, typing an existing family name switches to "add versions" for it. */
+	/** While creating, typing an existing family name pulls that family in (keeping new rows). */
 	imgAdoptExistingName() {
-		if (this.imgMode !== 'create') {
+		if (this.imgGroupName !== null) {
 			return;
 		}
 		const name = this.imgName.trim();
@@ -862,54 +886,36 @@ export class AdminState {
 		if (!group) {
 			return;
 		}
-		this.imgMode = 'addVersions';
-		this.imgGroupName = group.name;
-		this.imgResetShared(group.representative);
-	}
-
-	/** Back out of "add versions" into creating a new family (keeps the rows). */
-	imgDetachFromGroup() {
-		this.imgMode = 'create';
-		this.imgGroupName = null;
-		this.imgName = '';
-	}
-
-	/** Edit shared details (name, logo, ...) for every version in a family. */
-	imgOpenEditGroup(groupName: string) {
-		const group = this.imageGroups.find((g) => g.name === groupName);
-		if (!group) {
-			return;
-		}
-		this.imgMode = 'editGroup';
-		this.imgEditing = null;
-		this.imgGroupName = group.name;
-		this.imgResetShared(group.representative);
-		this.imgRows = [];
-		this.imgShow();
-	}
-
-	/** Edit a single version (version label, Proxmox file, secure boot). */
-	imgOpenEdit(img: BaseImage) {
-		this.imgMode = 'edit';
-		this.imgEditing = img;
-		this.imgGroupName = img.name;
-		this.imgResetShared(img);
+		const pending = this.imgRows.filter((row) => row.version.trim() || row.filePath);
+		this.imgLoadGroup(group);
 		this.imgRows = [
-			this.imgNewRow({ version: img.version, filePath: img.filePath, secureBoot: img.secureBoot })
+			...group.versions.map((image) => this.imgRowFromImage(image)),
+			...(pending.length > 0
+				? pending
+				: [this.imgNewRow({ secureBoot: group.representative.secureBoot })])
 		];
-		this.imgShow();
 	}
 
 	imgAddRow() {
-		const last = this.imgRows.at(-1);
+		const last = this.imgRows.findLast((row) => !row.removed);
 		this.imgRows.push(this.imgNewRow({ secureBoot: last?.secureBoot ?? true }));
 	}
 
-	imgRemoveRow(key: number) {
-		if (this.imgRows.length <= 1) {
+	/** New rows are dropped outright; existing versions are marked for deletion on save. */
+	imgToggleRemoveRow(row: ImageVersionDraft) {
+		if (row.id === null) {
+			this.imgRows = this.imgRows.filter((r) => r.key !== row.key);
 			return;
 		}
-		this.imgRows = this.imgRows.filter((row) => row.key !== key);
+		row.removed = !row.removed;
+	}
+
+	/** Mark every existing version for deletion and discard unsaved ones. */
+	imgRemoveAll() {
+		this.imgRows = this.imgRows.filter((row) => row.id !== null);
+		for (const row of this.imgRows) {
+			row.removed = true;
+		}
 	}
 
 	imgRowFileChanged(row: ImageVersionDraft) {
@@ -918,41 +924,101 @@ export class AdminState {
 		}
 	}
 
-	/** Volids that are already referenced by a configured image, with a label for display. */
-	get imgUsedFiles(): Map<string, string> {
-		return new Map(
-			this.images
-				.filter((image) => image.id !== this.imgEditing?.id)
-				.map((image) => [image.filePath, `${image.name} ${image.version}`.trim()])
+	imgRowStatus(row: ImageVersionDraft): ImageVersionStatus {
+		if (row.id === null) {
+			return 'new';
+		}
+		if (row.removed) {
+			return 'removed';
+		}
+		const original = this.images.find((image) => image.id === row.id);
+		if (
+			!original ||
+			original.version !== row.version.trim() ||
+			original.filePath !== row.filePath ||
+			original.secureBoot !== row.secureBoot
+		) {
+			return 'changed';
+		}
+		return 'unchanged';
+	}
+
+	/** Label of another configured image already using this Proxmox file, if any. */
+	imgFileUsedBy(volid: string, rowId: string | null) {
+		const other = this.images.find((image) => image.filePath === volid && image.id !== rowId);
+		return other ? `${other.name} ${other.version}`.trim() : null;
+	}
+
+	private imgSharedData() {
+		return {
+			name: this.imgName.trim(),
+			description: this.imgDescription.trim(),
+			color: this.imgColor,
+			isOfficial: this.imgIsOfficial,
+			accentColor: this.imgAccentColor.trim() || '#6b7280',
+			icon: this.imgIcon.trim(),
+			logoSvg: this.imgIsOfficial ? this.imgLogoSvg.trim() : ''
+		};
+	}
+
+	get imgSharedChanged() {
+		if (this.imgGroupName === null) {
+			return false;
+		}
+		const rep = this.imageGroups.find((g) => g.name === this.imgGroupName)?.representative;
+		if (!rep) {
+			return true;
+		}
+		const shared = this.imgSharedData();
+		return (
+			shared.name !== rep.name ||
+			shared.description !== rep.description ||
+			shared.color !== rep.color ||
+			shared.isOfficial !== rep.isOfficial ||
+			shared.accentColor !== rep.accentColor ||
+			shared.icon !== (rep.icon ?? '') ||
+			shared.logoSvg !== (rep.isOfficial ? (rep.logoSvg ?? '') : '')
 		);
+	}
+
+	get imgPending() {
+		const counts = { new: 0, changed: 0, removed: 0 };
+		for (const row of this.imgRows) {
+			const status = this.imgRowStatus(row);
+			if (status !== 'unchanged') {
+				counts[status] += 1;
+			}
+		}
+		return { ...counts, details: this.imgSharedChanged };
+	}
+
+	get imgHasChanges() {
+		const pending = this.imgPending;
+		return pending.details || pending.new + pending.changed + pending.removed > 0;
+	}
+
+	get imgActiveRows() {
+		return this.imgRows.filter((row) => !row.removed);
 	}
 
 	get imgRowsValid() {
-		if (this.imgMode === 'editGroup') {
-			return true;
-		}
 		const volids = new Set(this.pveImages.map((image) => image.volid));
-		return (
-			this.imgRows.length > 0 &&
-			this.imgRows.every((row) => row.version.trim() && volids.has(row.filePath))
-		);
+		const active = this.imgActiveRows;
+		if (active.length === 0 && this.imgGroupName === null) {
+			return false;
+		}
+		return active.every((row) => row.version.trim() && volids.has(row.filePath));
 	}
 
 	get imgDuplicateVersions(): string[] {
-		const group = this.imageGroups.find((g) => g.name === this.imgName.trim());
-		const taken = new Set(
-			(group?.versions ?? [])
-				.filter((image) => image.id !== this.imgEditing?.id)
-				.map((image) => image.version.trim().toLowerCase())
-		);
 		const seen = new Set<string>();
 		const dupes = new Set<string>();
-		for (const row of this.imgRows) {
+		for (const row of this.imgActiveRows) {
 			const version = row.version.trim().toLowerCase();
 			if (!version) {
 				continue;
 			}
-			if (taken.has(version) || seen.has(version)) {
+			if (seen.has(version)) {
 				dupes.add(row.version.trim());
 			}
 			seen.add(version);
@@ -960,35 +1026,36 @@ export class AdminState {
 		return [...dupes];
 	}
 
-	private imgSharedData() {
-		const icon = this.imgIcon.trim();
-		const logoSvg = this.imgLogoSvg.trim();
-		return {
-			name: this.imgName.trim(),
-			description: this.imgDescription.trim(),
-			color: this.imgColor,
-			isOfficial: this.imgIsOfficial,
-			accentColor: this.imgAccentColor.trim() || '#6b7280',
-			isa: 'x86' as const,
-			icon,
-			logoSvg: this.imgIsOfficial ? logoSvg : ''
-		};
+	get imgCanSave() {
+		if (this.imgSaving || !this.imgHasChanges) {
+			return false;
+		}
+		if (this.imgActiveRows.length === 0) {
+			// Deleting the whole family doesn't need valid details.
+			return this.imgGroupName !== null;
+		}
+		return Boolean(this.imgName.trim()) && this.imgRowsValid;
 	}
 
 	async imgSave() {
-		if (!(this.imgName.trim() && this.imgRowsValid)) {
+		if (!this.imgCanSave) {
 			return;
 		}
 		this.imgSaving = true;
 		this.imgError = '';
+		for (const row of this.imgRows) {
+			row.error = '';
+		}
+
 		const shared = this.imgSharedData();
+		const sharedChanged = this.imgSharedChanged;
 		const remoteShared = {
 			name: shared.name,
 			description: shared.description,
 			color: shared.color,
 			isOfficial: shared.isOfficial,
 			accentColor: shared.accentColor,
-			isa: shared.isa,
+			isa: 'x86' as const,
 			...(shared.icon ? { icon: shared.icon } : {})
 		};
 		const localShared = {
@@ -996,56 +1063,80 @@ export class AdminState {
 			icon: shared.icon || null,
 			logoSvg: shared.logoSvg || null
 		};
+		const versionData = (row: ImageVersionDraft) => ({
+			version: row.version.trim(),
+			filePath: row.filePath,
+			secureBoot: row.secureBoot
+		});
+		const formatOf = (volid: string) =>
+			this.pveImages.find((image) => image.volid === volid)?.format || 'qcow2';
+		let failed = false;
+
 		try {
-			if (this.imgMode === 'editGroup') {
-				const members = this.images.filter((image) => image.name === this.imgGroupName);
-				await Promise.all(
-					members.map((image) =>
-						updateImage({ imageId: image.id, ...remoteShared, logoSvg: shared.logoSvg })
-					)
-				);
-				this.images = this.images.map((image) =>
-					image.name === this.imgGroupName ? { ...image, ...localShared } : image
-				);
-			} else if (this.imgMode === 'edit' && this.imgEditing) {
-				const [row] = this.imgRows;
-				const file = this.pveImages.find((image) => image.volid === row.filePath);
-				const versionData = {
-					version: row.version.trim(),
-					filePath: row.filePath,
-					secureBoot: row.secureBoot
-				};
-				const { id } = this.imgEditing;
-				await updateImage({ imageId: id, ...versionData });
-				this.images = this.images.map((image) =>
-					image.id === id ? { ...image, ...versionData, imageType: file?.format || 'qcow2' } : image
-				);
-			} else {
-				// Sequential so sort order follows the row order.
-				for (const row of this.imgRows) {
-					const file = this.pveImages.find((image) => image.volid === row.filePath);
-					const versionData = {
-						version: row.version.trim(),
-						filePath: row.filePath,
-						secureBoot: row.secureBoot
-					};
+			// Deletions and updates can go in parallel.
+			const existingWork = this.imgRows
+				.filter((row) => row.id !== null)
+				.map(async (row) => {
+					const id = row.id as string;
+					const status = this.imgRowStatus(row);
+					try {
+						if (status === 'removed') {
+							await deleteImage({ imageId: id });
+							this.images = this.images.filter((image) => image.id !== id);
+							this.imgRows = this.imgRows.filter((r) => r.key !== row.key);
+						} else if (status === 'changed' || sharedChanged) {
+							const data = {
+								...(sharedChanged ? { ...remoteShared, logoSvg: shared.logoSvg } : {}),
+								...versionData(row)
+							};
+							await updateImage({ imageId: id, ...data });
+							this.images = this.images.map((image) =>
+								image.id === id
+									? {
+											...image,
+											...(sharedChanged ? localShared : {}),
+											...versionData(row),
+											imageType: formatOf(row.filePath)
+										}
+									: image
+							);
+						}
+					} catch (err) {
+						failed = true;
+						row.error = getErrorMessage(err, 'Failed to save');
+					}
+				});
+			await Promise.all(existingWork);
+
+			// Creations run sequentially so sort order follows the row order.
+			for (const row of this.imgRows.filter((r) => r.id === null)) {
+				try {
 					// biome-ignore lint/performance/noAwaitInLoops: preserve insertion order for sortOrder
 					const result = await createImage({
 						...remoteShared,
 						...(shared.logoSvg ? { logoSvg: shared.logoSvg } : {}),
-						...versionData
+						...versionData(row)
 					});
 					this.images.push({
 						id: result.id,
 						...localShared,
-						...versionData,
-						imageType: file?.format || 'qcow2'
+						...versionData(row),
+						imageType: formatOf(row.filePath)
 					});
-					// Drop saved rows so a partial failure can be retried without duplicates.
-					this.imgRows = this.imgRows.filter((r) => r.key !== row.key);
+					row.id = result.id;
+				} catch (err) {
+					failed = true;
+					row.error = getErrorMessage(err, 'Failed to create');
 				}
 			}
 
+			if (failed) {
+				this.imgError = 'Some changes failed to save. Fix the highlighted rows and try again.';
+				if (this.images.some((image) => image.name === shared.name)) {
+					this.imgGroupName = shared.name;
+				}
+				return;
+			}
 			this.imgDialogOpen = false;
 		} catch (err) {
 			this.imgError = getErrorMessage(err, 'Failed to save');
@@ -1074,15 +1165,6 @@ export class AdminState {
 		} catch (err) {
 			this.images = previous;
 			toast.error(getErrorMessage(err, 'Failed to reorder images'));
-		}
-	}
-
-	async imgRemove(id: string) {
-		try {
-			await deleteImage({ imageId: id });
-			this.images = this.images.filter((image) => image.id !== id);
-		} catch (err) {
-			toast.error(getErrorMessage(err, 'Failed to delete image'));
 		}
 	}
 }

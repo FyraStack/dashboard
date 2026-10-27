@@ -10,6 +10,7 @@
 	import GripVertical from '~icons/lucide/grip-vertical';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
+	import Undo from '~icons/lucide/undo-2';
 	import X from '~icons/lucide/x';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
 	import Disc from '~icons/nucleo/disc';
@@ -85,30 +86,40 @@
 		admin.imgReorderGroups(index, event.key === 'ArrowUp' ? index - 1 : index + 1);
 	}
 
-	const dialogTitles = {
-		create: 'Add Image',
-		addVersions: 'Add Versions',
-		edit: 'Edit Version',
-		editGroup: 'Edit Image Details'
-	} as const;
-
-	let showSharedFields = $derived(admin.imgMode === 'create' || admin.imgMode === 'editGroup');
-	let showVersionRows = $derived(admin.imgMode !== 'editGroup');
-	let groupVersionCount = $derived(
-		admin.imgGroupName
-			? (admin.imageGroups.find((group) => group.name === admin.imgGroupName)?.versions.length ?? 0)
-			: 0
-	);
-	let saveLabel = $derived.by(() => {
-		if (admin.imgMode === 'edit' || admin.imgMode === 'editGroup') {
-			return 'Save';
+	let isNewImage = $derived(admin.imgGroupName === null);
+	let pendingSummary = $derived.by(() => {
+		const { new: added, changed, removed, details } = admin.imgPending;
+		const parts: string[] = [];
+		if (details) {
+			parts.push('details');
 		}
-		const count = admin.imgRows.length;
-		if (count > 1) {
-			return `Add ${count} versions`;
+		if (added) {
+			parts.push(`${added} new`);
 		}
-		return admin.imgMode === 'create' ? 'Create' : 'Add version';
+		if (changed) {
+			parts.push(`${changed} changed`);
+		}
+		if (removed) {
+			parts.push(`${removed} removed`);
+		}
+		return parts.join(', ');
 	});
+	let saveLabel = $derived.by(() => {
+		if (isNewImage) {
+			return 'Create image';
+		}
+		if (admin.imgActiveRows.length === 0) {
+			return 'Delete image';
+		}
+		return 'Save changes';
+	});
+
+	const statusStyles = {
+		new: 'text-emerald-700 dark:text-emerald-400',
+		changed: 'text-amber-700 dark:text-amber-400',
+		removed: 'text-red-600 dark:text-red-400',
+		unchanged: 'text-muted-foreground'
+	} as const;
 	let localImportTargets = $derived(
 		admin.pveImageImportTargets.filter((target) => target.storage === admin.importStorage)
 	);
@@ -217,24 +228,15 @@
 							</div>
 						</td>
 						<td class="px-5 py-3 text-right">
-							<div class="flex items-center justify-end gap-1">
-								<Button
-									variant="outline"
-									size="sm"
-									class="h-7 gap-1 px-2 text-xs"
-									onclick={() => admin.imgOpenAddVersions(group.name)}
-									><Plus class="h-3 w-3" />
-									Version</Button
-								>
-								<Button
-									variant="ghost"
-									size="sm"
-									aria-label={`Edit details for ${group.name}`}
-									class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-									onclick={() => admin.imgOpenEditGroup(group.name)}
-									><Pencil class="h-3 w-3" /></Button
-								>
-							</div>
+							<Button
+								variant="outline"
+								size="sm"
+								aria-label={`Manage ${group.name}`}
+								class="h-7 gap-1 px-2 text-xs"
+								onclick={() => admin.imgOpenManage(group.name)}
+								><Pencil class="h-3 w-3" />
+								Manage</Button
+							>
 						</td>
 					</tr>
 					{#each group.versions as img (img.id)}
@@ -256,26 +258,7 @@
 							<td class="px-5 py-2 text-xs text-muted-foreground">
 								{img.secureBoot ? 'On' : 'Off'}
 							</td>
-							<td class="px-5 py-2 text-right">
-								<div class="flex items-center justify-end gap-1">
-									<Button
-										variant="ghost"
-										size="sm"
-										aria-label={`Edit ${img.name} ${img.version}`}
-										class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-										onclick={() => admin.imgOpenEdit(img)}
-										><Pencil class="h-3 w-3" /></Button
-									>
-									<Button
-										variant="ghost"
-										size="sm"
-										aria-label={`Delete ${img.name} ${img.version}`}
-										class="h-7 w-7 p-0 text-red-400 hover:text-red-300"
-										onclick={() => admin.imgRemove(img.id)}
-										><Trash2 class="h-3 w-3" /></Button
-									>
-								</div>
-							</td>
+							<td></td>
 						</tr>
 					{/each}
 				</tbody>
@@ -424,25 +407,20 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<!-- Image Dialog -->
+<!-- Manage Image Dialog -->
 <Dialog.Root bind:open={admin.imgDialogOpen}>
 	<Dialog.Content
-		class="max-h-[90vh] grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto border-border bg-background sm:max-w-2xl"
+		class="max-h-[90vh] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-border bg-background sm:max-w-3xl"
 	>
 		<Dialog.Header>
-			<Dialog.Title>{dialogTitles[admin.imgMode]}</Dialog.Title>
+			<Dialog.Title>{isNewImage ? 'Add Image' : `Manage ${admin.imgGroupName}`}</Dialog.Title>
 			<Dialog.Description>
-				{#if admin.imgMode === 'editGroup'}
-					Changes apply to all {groupVersionCount} version{groupVersionCount === 1 ? '' : 's'}
-					of this image.
-				{:else if admin.imgMode === 'edit'}
-					Edit this version. Name, logo and description are shared, so edit them from the image row.
-				{:else}
-					Configure a base image and one or more versions for VM provisioning.
-				{/if}
+				{isNewImage
+					? 'Configure a base image and its versions for VM provisioning.'
+					: 'Edit details and versions. Nothing is saved until you hit Save.'}
 			</Dialog.Description>
 		</Dialog.Header>
-		<div class="flex min-w-0 flex-col gap-4 py-4">
+		<div class="-mx-4 flex min-h-0 min-w-0 flex-col gap-5 overflow-y-auto px-4 py-2">
 			{#if admin.imgError}
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
@@ -451,8 +429,8 @@
 				</div>
 			{/if}
 
-			{#if !showSharedFields}
-				<!-- Compact summary of the family these versions belong to -->
+			<!-- Shared details -->
+			<section class="flex flex-col gap-3">
 				<div class="flex items-center gap-3 border border-border bg-muted/40 px-3 py-2.5">
 					<span
 						class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden text-white {admin.imgColor}"
@@ -464,159 +442,176 @@
 						{/if}
 					</span>
 					<div class="flex min-w-0 flex-1 flex-col">
-						<span class="text-sm font-medium text-foreground">{admin.imgName}</span>
-						<span class="line-clamp-2 text-xs text-muted-foreground">
-							{groupVersionCount}
-							existing version{groupVersionCount === 1 ? '' : 's'}{admin.imgDescription
-								? ` · ${admin.imgDescription}`
-								: ''}
+						<span class="flex items-center gap-2 text-sm font-medium text-foreground">
+							{admin.imgName || 'New image'}
+							{#if admin.imgIsOfficial}
+								<Badge
+									variant="secondary"
+									class="text-[10px] text-emerald-700 dark:text-emerald-300"
+									>Official</Badge
+								>
+							{/if}
 						</span>
+						{#if admin.imgDescription}
+							<span class="line-clamp-2 text-xs text-muted-foreground">{admin.imgDescription}</span>
+						{/if}
 					</div>
-					{#if admin.imgMode === 'addVersions'}
-						<Button
-							variant="ghost"
-							size="sm"
-							class="h-7 px-2 text-xs text-muted-foreground"
-							onclick={() => admin.imgDetachFromGroup()}
-							>New image instead</Button
-						>
-					{/if}
-				</div>
-			{/if}
-
-			{#if showSharedFields}
-				<div class="flex flex-col gap-2">
-					<Label for="img-name">Name</Label>
-					<Input
-						id="img-name"
-						bind:value={admin.imgName}
-						placeholder="Fedora Server"
-						list={admin.imgMode === 'create' ? 'img-existing-names' : undefined}
-						onchange={() => admin.imgAdoptExistingName()}
-					/>
-					<datalist id="img-existing-names">
-						{#each admin.imageGroups as group (group.name)}
-							<option value={group.name}></option>
-						{/each}
-					</datalist>
-					{#if admin.imgMode === 'create'}
-						<p class="text-[11px] text-muted-foreground">
-							Pick an existing name to add versions to it instead of re-entering details.
-						</p>
-					{/if}
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-7 shrink-0 px-2 text-xs text-muted-foreground"
+						aria-expanded={admin.imgDetailsExpanded}
+						onclick={() => (admin.imgDetailsExpanded = !admin.imgDetailsExpanded)}
+					>
+						{admin.imgDetailsExpanded ? 'Hide details' : 'Edit details'}
+					</Button>
 				</div>
 
-				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-					<div class="flex flex-col gap-2">
-						<Label>Architecture</Label>
-						<div
-							class="flex h-9 items-center border border-border bg-muted px-3 text-sm text-muted-foreground"
-						>
-							x86
-						</div>
-					</div>
-					<div class="flex flex-col gap-2">
-						<Label>Official</Label>
-						<label
-							class="flex h-9 items-center gap-2 border border-border bg-muted px-3 text-sm text-muted-foreground"
-						>
-							<input type="checkbox" bind:checked={admin.imgIsOfficial} class="h-4 w-4" />
-							Official image
-						</label>
-					</div>
-				</div>
-
-				<div class="flex flex-col gap-2">
-					<Label>Description</Label>
-					<textarea
-						bind:value={admin.imgDescription}
-						placeholder="Short description of this image..."
-						rows="2"
-						class="w-full resize-none border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
-					></textarea>
-				</div>
-
-				{#if admin.imgIsOfficial}
-					<div class="grid grid-cols-[1fr_auto] gap-3">
-						<div class="flex flex-col gap-2">
-							<Label
-								>Logo SVG
-								<span class="font-normal text-muted-foreground">(official only)</span></Label
-							>
-							<textarea
-								bind:value={admin.imgLogoSvg}
-								placeholder="<svg ...></svg>"
-								rows="3"
-								class="w-full resize-none border border-border bg-muted px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
-							></textarea>
-						</div>
-						<div class="flex flex-col gap-2">
-							<Label>Preview</Label>
-							<div
-								class="flex h-20 w-20 items-center justify-center border border-border bg-muted p-3 text-muted-foreground"
-								style:color={admin.imgAccentColor}
-							>
-								{#if admin.imgLogoSvg.trim()}
-									<img src={svgDataUrl(admin.imgLogoSvg)} alt="" class="h-12 w-12" />
-								{:else}
-									<Image class="h-6 w-6" />
+				{#if admin.imgDetailsExpanded}
+					<div class="flex flex-col gap-4 border-l-2 border-border pl-4">
+						<div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
+							<div class="flex flex-col gap-2">
+								<Label for="img-name">Name</Label>
+								<Input
+									id="img-name"
+									bind:value={admin.imgName}
+									placeholder="Fedora Server"
+									list={isNewImage ? 'img-existing-names' : undefined}
+									onchange={() => admin.imgAdoptExistingName()}
+								/>
+								{#if isNewImage}
+									<datalist id="img-existing-names">
+										{#each admin.imageGroups as group (group.name)}
+											<option value={group.name}></option>
+										{/each}
+									</datalist>
 								{/if}
 							</div>
+							<div class="flex flex-col gap-2">
+								<Label>Official</Label>
+								<label
+									class="flex h-9 items-center gap-2 border border-border bg-muted px-3 text-sm text-muted-foreground"
+								>
+									<input type="checkbox" bind:checked={admin.imgIsOfficial} class="h-4 w-4" />
+									Official image
+								</label>
+							</div>
 						</div>
-					</div>
-					<div class="flex flex-col gap-2">
-						<Label>Accent Color</Label>
-						<Input bind:value={admin.imgAccentColor} placeholder="#6b7280" />
+						{#if isNewImage}
+							<p class="-mt-2 text-[11px] text-muted-foreground">
+								Picking an existing name opens that image so you can add versions to it.
+							</p>
+						{/if}
+
+						<div class="flex flex-col gap-2">
+							<Label>Description</Label>
+							<textarea
+								bind:value={admin.imgDescription}
+								placeholder="Short description of this image..."
+								rows="2"
+								class="w-full resize-none border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
+							></textarea>
+						</div>
+
+						{#if admin.imgIsOfficial}
+							<div class="grid grid-cols-[1fr_auto] gap-3">
+								<div class="flex flex-col gap-2">
+									<Label>Logo SVG</Label>
+									<textarea
+										bind:value={admin.imgLogoSvg}
+										placeholder="<svg ...></svg>"
+										rows="3"
+										class="w-full resize-none border border-border bg-muted px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
+									></textarea>
+								</div>
+								<div class="flex flex-col gap-2">
+									<Label>Preview</Label>
+									<div
+										class="flex h-20 w-20 items-center justify-center border border-border bg-muted p-3 text-muted-foreground"
+										style:color={admin.imgAccentColor}
+									>
+										{#if admin.imgLogoSvg.trim()}
+											<img src={svgDataUrl(admin.imgLogoSvg)} alt="" class="h-12 w-12" />
+										{:else}
+											<Image class="h-6 w-6" />
+										{/if}
+									</div>
+								</div>
+							</div>
+							<div class="flex flex-col gap-2">
+								<Label>Accent Color</Label>
+								<Input bind:value={admin.imgAccentColor} placeholder="#6b7280" />
+							</div>
+						{/if}
+
+						{#if !isNewImage}
+							<p class="text-[11px] text-muted-foreground">
+								Detail changes apply to every version of this image.
+							</p>
+						{/if}
 					</div>
 				{/if}
-			{/if}
+			</section>
 
-			{#if showVersionRows}
-				<div class="flex flex-col gap-2">
-					<div class="flex items-center justify-between">
-						<Label>{admin.imgMode === 'edit' ? 'Version' : 'Versions'}</Label>
-						<Button
-							variant="ghost"
-							size="sm"
-							class="h-6 gap-1 px-2 text-[10px] text-muted-foreground"
-							onclick={() => admin.loadPveImages()}
-							disabled={admin.isoLoading}
-						>
-							{#if admin.isoLoading}
-								<Loader2 class="h-3 w-3 animate-spin" />
-							{:else}
-								<RefreshCw class="h-3 w-3" />
-							{/if}
-							Refresh images
-						</Button>
+			<!-- Versions -->
+			<section class="flex flex-col gap-2">
+				<div class="flex items-center justify-between">
+					<Label>Versions</Label>
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-6 gap-1 px-2 text-[10px] text-muted-foreground"
+						onclick={() => admin.loadPveImages()}
+						disabled={admin.isoLoading}
+					>
+						{#if admin.isoLoading}
+							<Loader2 class="h-3 w-3 animate-spin" />
+						{:else}
+							<RefreshCw class="h-3 w-3" />
+						{/if}
+						Refresh images
+					</Button>
+				</div>
+
+				<div class="flex flex-col divide-y divide-border/60 border border-border">
+					<div
+						class="grid grid-cols-[7rem_minmax(0,1fr)_5rem_4.5rem_1.75rem] items-center gap-2 bg-muted/40 px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase"
+					>
+						<span>Version</span>
+						<span>Proxmox image</span>
+						<span class="text-center">Secure Boot</span>
+						<span>Status</span>
+						<span class="sr-only">Remove</span>
 					</div>
-
-					<div class="flex flex-col divide-y divide-border/60 border border-border">
-						<div
-							class="grid grid-cols-[7rem_1fr_auto_1.75rem] items-center gap-2 bg-muted/40 px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase"
-						>
-							<span>Version</span>
-							<span>Proxmox image</span>
-							<span>Secure Boot</span>
-							<span class="sr-only">Remove</span>
-						</div>
-						{#each admin.imgRows as row, rowIndex (row.key)}
-							<div class="grid grid-cols-[7rem_1fr_auto_1.75rem] items-center gap-2 px-2 py-2">
+					{#each admin.imgRows as row, rowIndex (row.key)}
+						{@const status = admin.imgRowStatus(row)}
+						<div class={row.error ? 'bg-red-950/20' : ''}>
+							<div
+								class="grid grid-cols-[7rem_minmax(0,1fr)_5rem_4.5rem_1.75rem] items-center gap-2 px-2 py-2 {row.removed
+									? 'opacity-50'
+									: ''}"
+							>
 								<Input
 									bind:value={row.version}
-									placeholder="42"
+									placeholder="e.g. 42"
+									disabled={row.removed}
 									aria-label={`Version ${rowIndex + 1}`}
-									class="h-8 text-sm"
+									class="h-8 text-sm {row.removed ? 'line-through' : ''}"
 								/>
 								<select
 									bind:value={row.filePath}
 									onchange={() => admin.imgRowFileChanged(row)}
+									disabled={row.removed}
 									aria-label={`Proxmox image for version ${rowIndex + 1}`}
 									class="h-8 w-full min-w-0 border border-border bg-muted px-2 font-mono text-xs text-foreground focus:border-ring focus:outline-none"
 								>
 									<option value="">Select an imported image</option>
+									{#if row.filePath &&
+										!admin.pveImages.some((image) => image.volid === row.filePath)}
+										<option value={row.filePath} disabled>{row.filePath} · missing</option>
+									{/if}
 									{#each admin.pveImages as image (image.volid)}
-										{@const usedBy = admin.imgUsedFiles.get(image.volid)}
+										{@const usedBy = admin.imgFileUsedBy(image.volid, row.id)}
 										<option value={image.volid}>
 											{image.volid}
 											· {formatSize(image.size)}{usedBy ? ` · used by ${usedBy}` : ''}
@@ -624,72 +619,109 @@
 									{/each}
 								</select>
 								<label
-									class="flex h-8 items-center justify-center px-2"
+									class="flex h-8 items-center justify-center"
 									title="Enable UEFI Secure Boot for VMs using this version"
 								>
 									<input
 										type="checkbox"
 										bind:checked={row.secureBoot}
+										disabled={row.removed}
 										class="h-4 w-4"
 										aria-label={`Secure Boot for version ${rowIndex + 1}`}
 									/>
 								</label>
-								{#if admin.imgRows.length > 1}
-									<Button
-										variant="ghost"
-										size="sm"
-										aria-label={`Remove version ${rowIndex + 1}`}
-										class="h-7 w-7 p-0 text-muted-foreground hover:text-red-400"
-										onclick={() => admin.imgRemoveRow(row.key)}
-										><X class="h-3 w-3" /></Button
-									>
-								{:else}
-									<span></span>
-								{/if}
+								<span class="text-[11px] capitalize {statusStyles[status]}">
+									{status === 'unchanged' ? '' : status}
+								</span>
+								<Button
+									variant="ghost"
+									size="sm"
+									aria-label={row.removed
+										? `Restore version ${rowIndex + 1}`
+										: `Remove version ${rowIndex + 1}`}
+									title={row.removed ? 'Undo remove' : 'Remove version'}
+									class="h-7 w-7 p-0 text-muted-foreground {row.removed
+										? 'hover:text-foreground'
+										: 'hover:text-red-400'}"
+									onclick={() => admin.imgToggleRemoveRow(row)}
+								>
+									{#if row.removed}
+										<Undo class="h-3 w-3" />
+									{:else}
+										<X class="h-3 w-3" />
+									{/if}
+								</Button>
 							</div>
-						{/each}
-					</div>
-
-					{#if admin.imgMode !== 'edit'}
-						<Button
-							variant="outline"
-							size="sm"
-							class="h-7 w-fit gap-1 text-xs"
-							onclick={() => admin.imgAddRow()}
-							><Plus class="h-3 w-3" />
-							Add another version</Button
-						>
-					{/if}
-
-					{#if admin.isoError}
-						<p class="text-xs text-red-400">{admin.isoError}</p>
-					{:else if admin.pveImages.length === 0 && !admin.isoLoading}
-						<p class="text-xs text-muted-foreground">
-							No imported images found. Use Upload/Import Image first.
-						</p>
-					{/if}
-					{#if admin.imgDuplicateVersions.length > 0}
-						<p class="text-xs text-amber-600 dark:text-amber-400">
-							Heads up: {admin.imgDuplicateVersions.join(', ')} already exists for this image.
-						</p>
-					{/if}
+							{#if row.error}
+								<p class="px-2 pb-2 text-xs text-red-400">{row.error}</p>
+							{/if}
+						</div>
+					{:else}
+						<p class="px-3 py-4 text-center text-xs text-muted-foreground">No versions yet.</p>
+					{/each}
 				</div>
-			{/if}
-		</div>
-		<Dialog.Footer>
-			<Button variant="outline" size="sm" onclick={() => (admin.imgDialogOpen = false)}
-				>Cancel</Button
-			>
-			<Button
-				size="sm"
-				onclick={() => admin.imgSave()}
-				disabled={admin.imgSaving || !admin.imgName.trim() || !admin.imgRowsValid}
-			>
-				{#if admin.imgSaving}
-					<Loader2 class="h-3 w-3 animate-spin" />
+
+				<Button
+					variant="outline"
+					size="sm"
+					class="h-7 w-fit gap-1 text-xs"
+					onclick={() => admin.imgAddRow()}
+					><Plus class="h-3 w-3" />
+					Add version</Button
+				>
+
+				{#if admin.isoError}
+					<p class="text-xs text-red-400">{admin.isoError}</p>
+				{:else if admin.pveImages.length === 0 && !admin.isoLoading}
+					<p class="text-xs text-muted-foreground">
+						No imported images found. Use Upload/Import Image first.
+					</p>
 				{/if}
-				{saveLabel}
-			</Button>
+				{#if admin.imgDuplicateVersions.length > 0}
+					<p class="text-xs text-amber-600 dark:text-amber-400">
+						Heads up: {admin.imgDuplicateVersions.join(', ')} is listed more than once.
+					</p>
+				{/if}
+				{#if !isNewImage && admin.imgActiveRows.length === 0}
+					<p class="text-xs text-red-400">
+						Every version is marked for removal. Saving will delete this image entirely.
+					</p>
+				{/if}
+			</section>
+		</div>
+		<Dialog.Footer class="items-center sm:justify-between">
+			<div class="flex items-center gap-3">
+				{#if !isNewImage}
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-8 gap-1 px-2 text-xs text-red-400 hover:text-red-300"
+						onclick={() => admin.imgRemoveAll()}
+						disabled={admin.imgSaving || admin.imgActiveRows.length === 0}
+						><Trash2 class="h-3 w-3" />
+						Delete image</Button
+					>
+				{/if}
+				{#if pendingSummary && !isNewImage}
+					<span class="text-xs text-muted-foreground">Pending: {pendingSummary}</span>
+				{/if}
+			</div>
+			<div class="flex items-center gap-2">
+				<Button variant="outline" size="sm" onclick={() => (admin.imgDialogOpen = false)}
+					>Cancel</Button
+				>
+				<Button
+					size="sm"
+					variant={saveLabel === 'Delete image' ? 'destructive' : 'default'}
+					onclick={() => admin.imgSave()}
+					disabled={!admin.imgCanSave}
+				>
+					{#if admin.imgSaving}
+						<Loader2 class="h-3 w-3 animate-spin" />
+					{/if}
+					{saveLabel}
+				</Button>
+			</div>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

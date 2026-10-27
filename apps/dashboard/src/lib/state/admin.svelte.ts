@@ -98,7 +98,6 @@ export interface PveImage {
 export interface ImageVersionDraft {
 	error: string;
 	filePath: string;
-	/** Existing base image id, or null for a version that hasn't been created yet. */
 	id: string | null;
 	key: number;
 	removed: boolean;
@@ -264,7 +263,6 @@ export class AdminState {
 	importError = $state('');
 	importTasks = $state<ImportTask[]>([]);
 	imgDialogOpen = $state(false);
-	/** Saved name of the image family being managed, or null when creating a new one. */
 	imgGroupName = $state<string | null>(null);
 	imgDetailsExpanded = $state(true);
 	imgSaving = $state(false);
@@ -280,7 +278,6 @@ export class AdminState {
 	imgRows = $state<ImageVersionDraft[]>([]);
 	private imgRowSeq = 0;
 
-	/** Images grouped by name, in display order (by first appearance in sortOrder). */
 	get imageGroups(): ImageGroup[] {
 		const groups = new Map<string, BaseImage[]>();
 		for (const image of this.images) {
@@ -845,7 +842,6 @@ export class AdminState {
 		this.imgDetailsExpanded = false;
 	}
 
-	/** Start a brand new image family. */
 	imgOpenCreate(filePath = '') {
 		this.imgGroupName = null;
 		this.imgResetShared();
@@ -859,7 +855,6 @@ export class AdminState {
 		}
 	}
 
-	/** Manage an existing family: shared details plus every version, saved in one go. */
 	imgOpenManage(groupName: string) {
 		const group = this.imageGroups.find((g) => g.name === groupName);
 		if (!group) {
@@ -876,7 +871,6 @@ export class AdminState {
 		}
 	}
 
-	/** While creating, typing an existing family name pulls that family in (keeping new rows). */
 	imgAdoptExistingName() {
 		if (this.imgGroupName !== null) {
 			return;
@@ -901,7 +895,6 @@ export class AdminState {
 		this.imgRows.push(this.imgNewRow({ secureBoot: last?.secureBoot ?? true }));
 	}
 
-	/** New rows are dropped outright; existing versions are marked for deletion on save. */
 	imgToggleRemoveRow(row: ImageVersionDraft) {
 		if (row.id === null) {
 			this.imgRows = this.imgRows.filter((r) => r.key !== row.key);
@@ -910,7 +903,6 @@ export class AdminState {
 		row.removed = !row.removed;
 	}
 
-	/** Mark every existing version for deletion and discard unsaved ones. */
 	imgRemoveAll() {
 		this.imgRows = this.imgRows.filter((row) => row.id !== null);
 		for (const row of this.imgRows) {
@@ -943,7 +935,6 @@ export class AdminState {
 		return 'unchanged';
 	}
 
-	/** Label of another configured image already using this Proxmox file, if any. */
 	imgFileUsedBy(volid: string, rowId: string | null) {
 		const other = this.images.find((image) => image.filePath === volid && image.id !== rowId);
 		return other ? `${other.name} ${other.version}`.trim() : null;
@@ -1145,7 +1136,6 @@ export class AdminState {
 		}
 	}
 
-	/** Reorder whole image families; versions inside a family are sorted by version. */
 	async imgReorderGroups(fromIndex: number, toIndex: number) {
 		const groups = this.imageGroups;
 		if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) {

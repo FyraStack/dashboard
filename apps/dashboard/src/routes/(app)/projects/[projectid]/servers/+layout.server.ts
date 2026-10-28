@@ -1,8 +1,8 @@
 import { error } from '@sveltejs/kit';
-import { listVms } from '$lib/remote/vms.remote';
+import { listVms } from '#lib/remote/vms.remote.js';
+import { instrument } from '#lib/server/observability.js';
 import type { LayoutServerLoad } from './$types';
 import { toServerInfo } from './lib/server-summary';
-import { instrument } from '$lib/server/observability';
 
 export const load: LayoutServerLoad = async ({ params, parent, depends }) => {
 	depends('project:vms');
@@ -20,7 +20,7 @@ export const load: LayoutServerLoad = async ({ params, parent, depends }) => {
 	});
 	const servers = vms
 		.filter((vm) => vm.active)
-		.map(toServerInfo)
+		.map((vm) => ({ ...toServerInfo(vm), vmTypeId: vm.vmTypeId, vmType: vm.vmType }))
 		.sort((a, b) => a.id.localeCompare(b.id));
 
 	return {

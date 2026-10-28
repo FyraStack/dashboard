@@ -1,11 +1,14 @@
 <script lang="ts">
-	import { CreditCard, Info, Loader2, ShieldAlert } from '@lucide/svelte';
-	import { Button } from '$lib/components/ui/button';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { openBillingPortal, setupProjectBillingPayment } from '$lib/remote/billing.remote';
-	import { getErrorMessage } from '$lib/utils';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { openBillingPortal, setupProjectBillingPayment } from '#lib/remote/billing.remote.js';
+	import { getErrorMessage } from '#lib/utils.js';
+	import Loader2 from '~icons/lucide/loader-2';
+	import CreditCard from '~icons/nucleo/credit-card';
+	import Info from '~icons/nucleo/info';
+	import ShieldAlert from '~icons/nucleo/shield-alert';
 
 	type Mode = 'server-create' | 'billing-page';
 
@@ -30,17 +33,18 @@
 	let discountCode = $state('');
 
 	const title = $derived(billingReady ? 'Manage billing' : 'Set up billing');
+	const blockedResource = $derived(mode === 'server-create' ? 'servers' : 'resources');
 	const description = $derived(
 		billingReady
 			? 'Manage payment methods, invoices, and project billing settings.'
-			: mode === 'server-create'
-				? 'This project needs a payment method before servers can be created.'
-				: 'This project needs a payment method before resources can be created.'
+			: `This project needs a payment method before ${blockedResource} can be created.`
 	);
 	const primaryLabel = $derived(billingReady ? 'Open billing portal' : 'Add payment method');
 
 	async function handlePrimaryAction() {
-		if (!projectId || loading || !canManageBilling) return;
+		if (!projectId || loading || !canManageBilling) {
+			return;
+		}
 
 		loading = true;
 		actionError = '';
@@ -62,10 +66,10 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="border-gray-800 bg-gray-900 text-gray-100 sm:max-w-lg">
+	<Dialog.Content class="border-border bg-background text-foreground sm:max-w-lg">
 		<Dialog.Header>
 			<div
-				class="mb-2 flex size-10 items-center justify-center rounded-lg border border-gray-800 bg-gray-950"
+				class="mb-2 flex size-10 items-center justify-center rounded-lg border border-border bg-background"
 			>
 				{#if canManageBilling}
 					<CreditCard class="size-5 text-red-300" />
@@ -74,7 +78,7 @@
 				{/if}
 			</div>
 			<Dialog.Title>{canManageBilling ? title : 'Billing setup required'}</Dialog.Title>
-			<Dialog.Description class="text-gray-500">
+			<Dialog.Description class="text-muted-foreground">
 				{#if canManageBilling}
 					{description}
 				{:else}
@@ -84,17 +88,17 @@
 		</Dialog.Header>
 
 		{#if !billingReady}
-			<div class="flex gap-3 rounded-lg border border-gray-800/80 bg-gray-950/60 p-4">
-				<Info class="mt-0.5 size-4 shrink-0 text-gray-500" />
-				<p class="text-sm text-gray-500">
+			<div class="flex gap-3 rounded-lg border border-border/80 bg-background/60 p-4">
+				<Info class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+				<p class="text-sm text-muted-foreground">
 					This payment method is used for this project only. You can change it from Billing anytime.
 				</p>
 			</div>
 
 			{#if canManageBilling}
 				<div class="space-y-1.5">
-					<Label for="billing-discount-code" class="text-sm text-gray-400">
-						Discount code <span class="text-gray-600">(optional)</span>
+					<Label for="billing-discount-code" class="text-sm text-muted-foreground">
+						Discount code <span class="text-muted-foreground">(optional)</span>
 					</Label>
 					<Input
 						id="billing-discount-code"
@@ -103,14 +107,16 @@
 						autocomplete="off"
 						spellcheck={false}
 						disabled={loading}
-						class="border-gray-800 bg-gray-950 text-gray-100 placeholder:text-gray-600"
+						class="border-border bg-background text-foreground placeholder:text-muted-foreground"
 					/>
 				</div>
 			{/if}
 		{/if}
 
 		{#if actionError}
-			<div class="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-300">
+			<div
+				class="rounded-md border border-red-300 bg-red-100 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+			>
 				{actionError}
 			</div>
 		{/if}

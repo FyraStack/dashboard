@@ -1,12 +1,15 @@
 <script lang="ts">
 	import type { HTMLInputAttributes, HTMLInputTypeAttribute } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/utils.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
+	import { autofillAttributes } from './autofill.js';
 
 	type InputType = Exclude<HTMLInputTypeAttribute, 'file'>;
 
 	type Props = WithElementRef<
-		Omit<HTMLInputAttributes, 'type'> &
-			({ type: 'file'; files?: FileList } | { type?: InputType; files?: undefined })
+		Omit<HTMLInputAttributes, 'type'> & {
+			/** Let password managers fill this field even without a credential `autocomplete` token. */
+			allowAutofill?: boolean;
+		} & ({ type: 'file'; files?: FileList } | { type?: InputType; files?: undefined })
 	>;
 
 	let {
@@ -16,8 +19,12 @@
 		files = $bindable(),
 		class: className,
 		'data-slot': dataSlot = 'input',
+		autocomplete,
+		allowAutofill = false,
 		...restProps
 	}: Props = $props();
+
+	const autofill = $derived(autofillAttributes(autocomplete, { allow: allowAutofill }));
 </script>
 
 {#if type === 'file'}
@@ -25,12 +32,13 @@
 		bind:this={ref}
 		data-slot={dataSlot}
 		class={cn(
-			'h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40',
+			'h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 high-contrast:bg-background high-contrast:disabled:bg-background high-contrast:disabled:border-dashed high-contrast:disabled:text-muted-foreground high-contrast:disabled:opacity-100',
 			className
 		)}
 		type="file"
 		bind:files
 		bind:value
+		{autocomplete}
 		{...restProps}
 	/>
 {:else}
@@ -38,11 +46,12 @@
 		bind:this={ref}
 		data-slot={dataSlot}
 		class={cn(
-			'h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40',
+			'h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 high-contrast:bg-background high-contrast:disabled:bg-background high-contrast:disabled:border-dashed high-contrast:disabled:text-muted-foreground high-contrast:disabled:opacity-100',
 			className
 		)}
 		{type}
 		bind:value
+		{...autofill}
 		{...restProps}
 	/>
 {/if}

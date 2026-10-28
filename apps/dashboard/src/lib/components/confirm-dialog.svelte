@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { confirmController } from '$lib/confirm.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { confirmController } from '#lib/confirm.svelte.js';
 
 	let typed = $state('');
 
@@ -22,13 +22,17 @@
 	});
 
 	function decide(ok: boolean) {
-		if (ok && !canConfirm) return;
+		if (ok && !canConfirm) {
+			return;
+		}
 		confirmController.resolve(ok);
 		confirmController.open = false;
 	}
 
 	function onKeydown(e: KeyboardEvent) {
-		if (!confirmController.open) return;
+		if (!confirmController.open) {
+			return;
+		}
 		if (e.key === 'Escape') {
 			e.preventDefault();
 			decide(false);
@@ -52,14 +56,14 @@
 			aria-modal="true"
 			aria-labelledby="confirm-title"
 			aria-describedby="confirm-desc"
-			class="relative z-10 w-full max-w-md border border-gray-800 bg-gray-900 p-4 text-sm text-gray-100 ring-1 ring-foreground/10"
+			class="relative z-10 w-full max-w-md border border-border bg-background p-4 text-sm text-foreground ring-1 ring-foreground/10"
 		>
-			<h2 id="confirm-title" class="text-base font-semibold text-gray-50">{req?.title}</h2>
-			<p id="confirm-desc" class="mt-1 text-sm text-gray-400">{req?.description}</p>
+			<h2 id="confirm-title" class="text-base font-semibold text-foreground">{req?.title}</h2>
+			<p id="confirm-desc" class="mt-1 text-sm text-muted-foreground">{req?.description}</p>
 			{#if needsWord}
 				<div class="mt-4 space-y-1.5">
-					<label for="confirm-name-input" class="block text-xs text-gray-400">
-						Type <span class="font-mono text-gray-200">{req?.confirmWord}</span> to confirm
+					<label for="confirm-name-input" class="block text-xs text-muted-foreground">
+						Type <span class="font-mono text-foreground">{req?.confirmWord}</span> to confirm
 					</label>
 					<Input
 						id="confirm-name-input"
@@ -68,7 +72,9 @@
 						autocapitalize="off"
 						spellcheck={false}
 						onkeydown={(e) => {
-							if (e.key === 'Enter') decide(true);
+							if (e.key === 'Enter') {
+								decide(true);
+							}
 						}}
 					/>
 				</div>

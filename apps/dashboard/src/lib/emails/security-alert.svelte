@@ -13,12 +13,12 @@
 	import EmailHeader from './email-header.svelte';
 
 	interface Props {
-		userName?: string | null;
+		actionUrl?: string | null;
 		alertType: string;
+		details?: string | null;
 		message: string;
 		timestamp: string;
-		details?: string | null;
-		actionUrl?: string | null;
+		userName?: string | null;
 	}
 
 	let {
@@ -42,13 +42,17 @@
 					{alertType}
 				</Heading>
 				<Text class="mt-4 text-sm leading-5 text-gray-400">
-					{#if userName}Hi {userName},{:else}Hi there,{/if}
+					{#if userName}
+						Hi {userName},
+					{:else}
+						Hi there,
+					{/if}
 				</Text>
 				<Text class="mt-2 text-sm leading-5 text-gray-400">
 					{message}
 				</Text>
 				{#if details}
-					<Section class="mt-4 border border-gray-800 bg-gray-950/50 p-4">
+					<Section class="mt-4 border border-gray-800 bg-gray-950 p-4">
 						<Text class="m-0 text-sm leading-5 text-gray-300">{details}</Text>
 					</Section>
 				{/if}

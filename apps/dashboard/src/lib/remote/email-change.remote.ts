@@ -1,11 +1,12 @@
-import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { and, eq, gt } from 'drizzle-orm';
-import { initAuth } from '$lib/server/auth';
-import { initDrizzle } from '$lib/server/db';
-import { user, verification } from '$lib/server/db/schema';
-import { ulid } from '$lib/server/id';
+import { initAuth } from '#lib/server/auth.js';
+import { user, verification } from '#lib/server/db/auth.schema.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { ulid } from '#lib/server/id.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
+import { command, getRequestEvent, query } from '$app/server';
 
 const EMAIL_CHANGE_TTL_MS = 60 * 60 * 1000;
 
@@ -18,7 +19,9 @@ const emailChangeParams = type({ newEmail: 'string', callbackURL: 'string' });
 export const getPendingEmailChange = query(async () => {
 	const event = getRequestEvent();
 	const sessionUser = event.locals.user;
-	if (!sessionUser) error(401, 'Authentication required');
+	if (!sessionUser) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const [record] = await db
@@ -38,11 +41,17 @@ export const getPendingEmailChange = query(async () => {
 export const requestEmailChange = command(emailChangeParams, async (params) => {
 	const event = getRequestEvent();
 	const sessionUser = event.locals.user;
-	if (!sessionUser) error(401, 'Authentication required');
+	if (!sessionUser) {
+		error(401, 'Authentication required');
+	}
 
 	const newEmail = params.newEmail.trim().toLowerCase();
-	if (!newEmail) error(400, 'Enter an email address.');
-	if (newEmail === sessionUser.email.toLowerCase()) error(400, 'Email is the same.');
+	if (!newEmail) {
+		error(400, 'Enter an email address.');
+	}
+	if (newEmail === sessionUser.email.toLowerCase()) {
+		error(400, 'Email is the same.');
+	}
 
 	const db = initDrizzle();
 	const [existingUser] = await db
@@ -51,7 +60,9 @@ export const requestEmailChange = command(emailChangeParams, async (params) => {
 		.where(eq(user.email, newEmail))
 		.limit(1);
 
-	if (existingUser) error(400, 'That email address is already in use.');
+	if (existingUser) {
+		error(400, 'That email address is already in use.');
+	}
 
 	const auth = initAuth();
 	await auth.api.changeEmail({
@@ -67,6 +78,8 @@ export const requestEmailChange = command(emailChangeParams, async (params) => {
 		value: newEmail,
 		expiresAt: new Date(Date.now() + EMAIL_CHANGE_TTL_MS)
 	});
+
+	captureServerEvent('email_change_requested');
 
 	return { email: newEmail };
 });

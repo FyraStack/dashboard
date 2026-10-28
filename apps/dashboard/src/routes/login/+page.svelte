@@ -1,15 +1,22 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { authClient } from '$lib/auth-client';
-	import { AlertCircle, CheckCircle2, Eye, EyeOff, Fingerprint, Loader2 } from '@lucide/svelte';
 	import SiGithub from '@icons-pack/svelte-simple-icons/icons/SiGithub';
+	import { authClient } from '#lib/auth-client.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { goto } from '$app/navigation';
+	import Loader2 from '~icons/lucide/loader-2';
+	import AlertCircle from '~icons/nucleo/alert-circle';
+	import CheckCircle2 from '~icons/nucleo/check-circle';
+	import Eye from '~icons/nucleo/eye';
+	import EyeOff from '~icons/nucleo/eye-off';
+	import Fingerprint from '~icons/nucleo/fingerprint';
 	import type { PageData } from './$types';
-	type SignInDataWithTwoFactor = {
-		twoFactorRedirect?: boolean;
+
+	interface SignInDataWithTwoFactor {
 		twoFactorMethods?: string[] | null;
-	};
+		twoFactorRedirect?: boolean;
+	}
 
 	let { data }: { data: PageData } = $props();
 	const redirectTo = $derived(data.redirectTo ?? '/');
@@ -21,23 +28,25 @@
 	let email = $state('');
 	let password = $state('');
 	let showPassword = $state(false);
-	let error = $state('');
+	let errorMessage = $state('');
 	let loading = $state(false);
 	let passkeyLoading = $state(false);
 	let socialLoading = $state<'github' | null>(null);
 
 	async function signInWithSocial(provider: 'github') {
-		if (socialLoading) return;
-		error = '';
+		if (socialLoading) {
+			return;
+		}
+		errorMessage = '';
 		socialLoading = provider;
 		try {
 			const { error: err } = await authClient.signIn.social({ provider, callbackURL: redirectTo });
 			if (err) {
-				error = err.message ?? 'Unable to sign in.';
+				errorMessage = err.message ?? 'Unable to sign in.';
 				socialLoading = null;
 			}
 		} catch {
-			error = 'Unable to sign in.';
+			errorMessage = 'Unable to sign in.';
 			socialLoading = null;
 		}
 	}
@@ -48,14 +57,16 @@
 	}
 
 	async function handleLogin() {
-		if (!email || !password) return;
-		error = '';
+		if (!(email && password)) {
+			return;
+		}
+		errorMessage = '';
 		loading = true;
 
 		const res = await authClient.signIn.email({ email, password });
 
 		if (res.error) {
-			error = res.error.message ?? 'Invalid credentials';
+			errorMessage = res.error.message ?? 'Invalid credentials';
 			loading = false;
 			return;
 		}
@@ -64,24 +75,23 @@
 
 		if (loginData?.twoFactorRedirect) {
 			const methods = loginData.twoFactorMethods;
-			const missingMethodsMeansTotp = !methods || methods.includes('totp');
 
-			if (missingMethodsMeansTotp) {
-				goto(twoFactorHref('totp'));
+			if (methods?.includes('passkey')) {
+				goto(twoFactorHref('passkey'));
 				return;
 			}
 
-			if (methods.includes('passkey')) {
-				goto(twoFactorHref('passkey'));
+			if (!methods || methods.includes('totp')) {
+				goto(twoFactorHref('totp'));
 				return;
 			}
 		}
 
-		goto(redirectTo);
+		goto(redirectTo).catch(() => goto('/'));
 	}
 
 	async function handlePasskeySignIn() {
-		error = '';
+		errorMessage = '';
 		passkeyLoading = true;
 
 		const { error: err } = await authClient.signIn.passkey({ autoFill: false });
@@ -89,11 +99,11 @@
 		passkeyLoading = false;
 
 		if (err) {
-			error = err.message ?? 'Unable to sign in with passkey.';
+			errorMessage = err.message ?? 'Unable to sign in with passkey.';
 			return;
 		}
 
-		goto(redirectTo);
+		goto(redirectTo).catch(() => goto('/'));
 	}
 </script>
 
@@ -101,30 +111,31 @@
 	<title>Sign in / Stack</title>
 </svelte:head>
 
-<div class="flex min-h-screen items-center justify-center bg-gray-950 px-4">
+<main class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">
 		<div class="mb-10 flex items-center justify-center gap-2">
 			<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
-			<span class="text-base font-semibold tracking-tight text-gray-50">Stack</span>
+			<span class="text-base font-semibold tracking-tight text-foreground">Stack</span>
+			<Badge class="h-4 px-1.5 text-[10px]" variant="secondary">Alpha</Badge>
 		</div>
 
 		<div class="space-y-5">
-			<h1 class="text-center text-lg font-medium text-gray-50">Sign in</h1>
+			<h1 class="text-center text-lg font-medium text-foreground">Sign in</h1>
 
-			{#if error}
+			{#if errorMessage}
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
-					<AlertCircle class="h-3.5 w-3.5 shrink-0" />
-					{error}
+					<AlertCircle class="size-4 shrink-0" />
+					{errorMessage}
 				</div>
 			{/if}
 
 			{#if verified}
 				<div
-					class="flex items-center gap-2 border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300"
+					class="flex items-center gap-2 border border-border bg-background px-3 py-2 text-sm text-muted-foreground"
 				>
-					<CheckCircle2 class="h-3.5 w-3.5 shrink-0 text-red-400" />
+					<CheckCircle2 class="size-4 shrink-0 text-red-400" />
 					Email verified! Please sign in.
 				</div>
 			{/if}
@@ -136,21 +147,36 @@
 				}}
 				class="space-y-3"
 			>
-				<Input type="email" bind:value={email} placeholder="Email" required />
+				<Input
+					type="email"
+					bind:value={email}
+					placeholder="Email"
+					aria-label="Email"
+					autocomplete="username"
+					required
+				/>
 
 				<div class="relative">
 					<Input
 						type={showPassword ? 'text' : 'password'}
 						bind:value={password}
 						placeholder="Password"
+						aria-label="Password"
+						autocomplete="current-password"
+						class="pr-10"
 						required
 					/>
 					<button
 						type="button"
-						class="absolute top-1/2 right-2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+						aria-label={showPassword ? 'Hide password' : 'Show password'}
+						class="absolute top-1/2 right-1 flex size-8 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
 						onclick={() => (showPassword = !showPassword)}
 					>
-						{#if showPassword}<EyeOff class="h-3.5 w-3.5" />{:else}<Eye class="h-3.5 w-3.5" />{/if}
+						{#if showPassword}
+							<EyeOff class="size-4" />
+						{:else}
+							<Eye class="size-4" />
+						{/if}
 					</button>
 				</div>
 
@@ -161,12 +187,21 @@
 						Sign in
 					{/if}
 				</Button>
+
+				<div class="flex justify-center">
+					<a
+						href="/forgot-password"
+						class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+					>
+						Forgot password?
+					</a>
+				</div>
 			</form>
 
 			<div class="flex items-center gap-2">
-				<div class="h-px flex-1 bg-gray-800"></div>
-				<span class="text-[10px] text-gray-500">or</span>
-				<div class="h-px flex-1 bg-gray-800"></div>
+				<div class="h-px flex-1 bg-muted"></div>
+				<span class="text-[10px] text-muted-foreground">or</span>
+				<div class="h-px flex-1 bg-muted"></div>
 			</div>
 
 			<Button
@@ -193,14 +228,20 @@
 				{#if passkeyLoading}
 					<Loader2 class="h-3.5 w-3.5 animate-spin" />
 				{:else}
-					<Fingerprint class="h-3.5 w-3.5" />
+					<Fingerprint class="size-4" />
 					Sign in with passkey
 				{/if}
 			</Button>
 
-			<p class="text-center text-xs text-gray-500">
-				No account? <a href={registerHref} class="text-red-400 hover:text-red-300">Create one</a>
+			<p class="text-center text-xs text-muted-foreground">
+				No account?
+				<a
+					href={registerHref}
+					class="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
+				>
+					Create one
+				</a>
 			</p>
 		</div>
 	</div>
-</div>
+</main>

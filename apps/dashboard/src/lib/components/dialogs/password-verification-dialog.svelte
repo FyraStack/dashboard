@@ -1,30 +1,30 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { authClient } from '$lib/auth-client';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import * as Dialog from '$lib/components/ui/dialog';
+	import { authClient } from '#lib/auth-client.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 	import {
 		confirmPasswordChangeWithEmail,
 		confirmPasswordChangeWithPasskey,
 		confirmPasswordChangeWithTotp,
 		sendPasswordChangeCode
-	} from '$lib/remote/password-change.remote';
-	import { getErrorMessage } from '$lib/utils';
-	import { Fingerprint } from '@lucide/svelte';
+	} from '#lib/remote/password-change.remote.js';
+	import { getErrorMessage } from '#lib/utils.js';
+	import Fingerprint from '~icons/nucleo/fingerprint';
 
 	type VerificationMethod = 'passkey' | 'totp' | 'email';
 
-	type Props = {
-		open?: boolean;
-		hasPassword?: boolean;
-		hasPasskey?: boolean;
-		twoFactorEnabled: boolean;
+	interface Props {
 		currentPassword: string;
+		hasPasskey?: boolean;
+		hasPassword?: boolean;
 		newPassword: string;
 		onVerified?: () => void;
-	};
+		open?: boolean;
+		twoFactorEnabled: boolean;
+	}
 
 	let {
 		open = $bindable(false),
@@ -42,9 +42,12 @@
 	let passwordCodeSent = $state(false);
 	let passwordVerifying = $state(false);
 	let passwordVerificationError = $state('');
-	let verificationMethod: VerificationMethod = $derived(
-		hasPasskey ? 'passkey' : twoFactorEnabled ? 'totp' : 'email'
-	);
+	let verificationMethod: VerificationMethod = $derived.by(() => {
+		if (hasPasskey) {
+			return 'passkey';
+		}
+		return twoFactorEnabled ? 'totp' : 'email';
+	});
 	let normalizedPasswordVerificationCode = $derived(passwordVerificationCode.replace(/\D/g, ''));
 	let passwordVerificationDescription = $derived.by(() => {
 		if (verificationMethod === 'passkey') {
@@ -57,6 +60,9 @@
 	});
 	let passwordVerificationLabel = $derived(
 		verificationMethod === 'totp' ? 'Authenticator Code' : 'Email Verification Code'
+	);
+	let verifyButtonLabel = $derived(
+		verificationMethod === 'passkey' ? 'Verify with passkey' : 'Verify'
 	);
 	let passwordVerificationDisabled = $derived(
 		passwordVerifying ||
@@ -153,7 +159,7 @@
 	$effect(() => {
 		if (open && verificationMethod === 'email' && !passwordCodeRequested && !passwordCodeSending) {
 			untrack(() => {
-				void sendPasswordCode();
+				sendPasswordCode();
 			});
 		}
 	});
@@ -162,10 +168,12 @@
 <Dialog.Root
 	bind:open
 	onOpenChange={(value) => {
-		if (!value) resetPasswordVerification();
+		if (!value) {
+			resetPasswordVerification();
+		}
 	}}
 >
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Verify password change</Dialog.Title>
 			<Dialog.Description>{passwordVerificationDescription}</Dialog.Description>
@@ -175,13 +183,13 @@
 			class="flex flex-col gap-4 pt-4"
 			onsubmit={(e) => {
 				e.preventDefault();
-				void verifyPasswordChange();
+				verifyPasswordChange();
 			}}
 		>
 			{#if verificationMethod === 'passkey'}
-				<div class="flex items-center gap-3 rounded-xs border border-gray-800 bg-gray-950/40 p-3">
-					<Fingerprint class="size-5 shrink-0 text-gray-500" />
-					<p class="text-sm text-gray-300">
+				<div class="flex items-center gap-3 rounded-xs border border-border bg-background/40 p-3">
+					<Fingerprint class="size-5 shrink-0 text-muted-foreground" />
+					<p class="text-sm text-muted-foreground">
 						Your browser will ask you to authenticate with your registered passkey.
 					</p>
 				</div>
@@ -199,7 +207,7 @@
 						autocomplete="one-time-code"
 					/>
 					{#if verificationMethod === 'email' && passwordCodeSent}
-						<p class="text-xs text-gray-500">We sent a code to your email address.</p>
+						<p class="text-xs text-muted-foreground">We sent a code to your email address.</p>
 					{/if}
 					{#if passwordVerificationError}
 						<p class="text-xs text-red-400">{passwordVerificationError}</p>
@@ -227,11 +235,7 @@
 					Cancel
 				</Button>
 				<Button type="submit" class="gap-1.5" disabled={passwordVerificationDisabled}>
-					{passwordVerifying
-						? 'Verifying...'
-						: verificationMethod === 'passkey'
-							? 'Verify with passkey'
-							: 'Verify'}
+					{passwordVerifying ? 'Verifying...' : verifyButtonLabel}
 				</Button>
 			</Dialog.Footer>
 		</form>

@@ -1,52 +1,41 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import { resolve } from '$app/paths';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { confirmDestructive } from '$lib/confirm.svelte';
-	import { featureFlagKeys } from '$lib/feature-flags';
-	import { parseCsv } from '$lib/csv';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { autofillAttributes } from '#lib/components/ui/input/autofill.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
 	import {
 		CAMPAIGN_BATCH_SIZE,
 		campaignTemplates,
 		extractPlaceholders,
 		fieldToken
-	} from '$lib/emails/campaign-registry';
+	} from '#lib/emails/campaign-registry.js';
+	import { idempotencyScope } from '#lib/idempotency.js';
+	import type { AdminUser } from '#lib/remote/admin-users.remote.js';
 	import {
 		previewCampaignEmail,
 		renderCampaignEditor,
 		sendCampaignEmails
-	} from '$lib/remote/email-campaign.remote';
-	import { getErrorMessage } from '$lib/utils';
-	import { AdminState, type AdminPageData } from '$lib/state/admin.svelte';
-	import {
-		AlertTriangle,
-		Check,
-		Cpu,
-		Disc,
-		Eye,
-		Flag,
-		Loader2,
-		Mail,
-		Network,
-		Send,
-		Server,
-		UserCog,
-		Users
-	} from '@lucide/svelte';
+	} from '#lib/remote/email-campaign.remote.js';
+	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
+	import { getErrorMessage } from '#lib/utils.js';
+	import { page } from '$app/state';
+	import Check from '~icons/lucide/check';
+	import Loader2 from '~icons/lucide/loader-2';
+	import Plus from '~icons/lucide/plus';
+	import X from '~icons/lucide/x';
+	import AlertTriangle from '~icons/nucleo/alert-triangle';
+	import Eye from '~icons/nucleo/eye';
+	import Send from '~icons/nucleo/send';
+	import Users from '~icons/nucleo/users';
 
-	type AdminTab = 'features' | 'vmTypes' | 'images' | 'ipam' | 'users' | 'vms' | 'emails';
 	let { data }: { data: AdminPageData } = $props();
-	const activeTab = 'emails' as AdminTab;
 	const admin = new AdminState(untrack(() => data));
 	$effect(() => {
 		admin.sync(data);
 	});
-
-	const userCount = $derived(admin.adminUsers.length);
 
 	let selectedTemplateKey = $state(campaignTemplates[0].key);
 	let subject = $state(campaignTemplates[0].defaultSubject);
@@ -59,16 +48,20 @@
 	function defaultFieldValues(key: string) {
 		const entry = campaignTemplates.find((candidate) => candidate.key === key);
 		const values: Record<string, string> = {};
-		for (const field of entry?.fields ?? []) values[field.name] = field.defaultValue ?? '';
+		for (const field of entry?.fields ?? []) {
+			values[field.name] = field.defaultValue ?? '';
+		}
 		return values;
 	}
 
 	function selectTemplate(key: string) {
-		if (key === selectedTemplateKey || sending) return;
+		if (key === selectedTemplateKey || sending) {
+			return;
+		}
 		selectedTemplateKey = key;
 		subject = campaignTemplates.find((entry) => entry.key === key)?.defaultSubject ?? '';
 		fieldValues = defaultFieldValues(key);
-		void loadEditor();
+		loadEditor();
 	}
 
 	let editorHtml = $state('');
@@ -81,37 +74,46 @@
 		const doc = new DOMParser().parseFromString(raw, 'text/html');
 		let html = doc.body.innerHTML;
 		for (const field of template.fields) {
-			if (!field.inline) continue;
+			if (!field.inline) {
+				continue;
+			}
 			html = html.replaceAll(fieldToken(field.name), `<span data-field="${field.name}"></span>`);
 		}
 		return html;
 	}
 
 	async function loadEditor() {
-		const request = ++editorRequest;
+		editorRequest += 1;
+		const request = editorRequest;
 		editorLoading = true;
 		editorError = '';
 		try {
 			const settings: Record<string, string> = {};
-			for (const field of settingsFields) settings[field.name] = fieldValues[field.name] ?? '';
+			for (const field of settingsFields) {
+				settings[field.name] = fieldValues[field.name] ?? '';
+			}
 			const result = await renderCampaignEditor({
 				template: selectedTemplateKey,
 				fields: settings
 			});
-			if (request !== editorRequest) return;
+			if (request !== editorRequest) {
+				return;
+			}
 			editorHtml = prepareEditorHtml(result.html);
 		} catch (err) {
 			if (request === editorRequest) {
 				editorError = getErrorMessage(err, 'Failed to render the template');
 			}
 		} finally {
-			if (request === editorRequest) editorLoading = false;
+			if (request === editorRequest) {
+				editorLoading = false;
+			}
 		}
 	}
 
 	function scheduleEditorRefresh() {
 		clearTimeout(refreshTimer);
-		refreshTimer = setTimeout(() => void loadEditor(), 500);
+		refreshTimer = setTimeout(() => loadEditor(), 500);
 	}
 
 	function hydrateFields(node: HTMLElement) {
@@ -132,55 +134,187 @@
 				for (const other of node.querySelectorAll<HTMLElement>(
 					`[data-field="${CSS.escape(name)}"]`
 				)) {
-					if (other !== span) other.textContent = value;
+					if (other !== span) {
+						other.textContent = value;
+					}
 				}
 			});
 		}
 	}
 
 	onMount(() => {
-		void loadEditor();
+		loadEditor();
 		return () => clearTimeout(refreshTimer);
 	});
 
-	let csvFileName = $state('');
-	let csvColumns = $state<string[]>([]);
-	let csvRows = $state<Record<string, string>[]>([]);
-	let csvError = $state('');
-	let emailColumn = $state('');
+	const recipientColumns = ['name', 'email'];
 
-	async function handleCsvChange(event: Event) {
-		const input = event.currentTarget as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-		csvError = '';
-		try {
-			const parsed = parseCsv(await file.text());
-			if (parsed.columns.length === 0 || parsed.rows.length === 0) {
-				throw new Error('The CSV needs a header row and at least one data row');
+	const activeVmsByOwnerEmail = $derived.by(() => {
+		const map = new Map<string, { count: number; types: Set<string> }>();
+		for (const vm of admin.adminVms) {
+			if (!(vm.active && vm.ownerEmail)) {
+				continue;
 			}
-			csvFileName = file.name;
-			csvColumns = parsed.columns;
-			csvRows = parsed.rows;
-			emailColumn = guessEmailColumn(parsed.columns, parsed.rows);
-			sendComplete = false;
-			sentCount = 0;
-			sendFailures = [];
-		} catch (err) {
-			csvError = getErrorMessage(err, 'Failed to parse CSV');
-			csvFileName = '';
-			csvColumns = [];
-			csvRows = [];
-			emailColumn = '';
+			const entry = map.get(vm.ownerEmail) ?? { count: 0, types: new Set<string>() };
+			entry.count += 1;
+			if (vm.vmTypeName) {
+				entry.types.add(vm.vmTypeName);
+			}
+			map.set(vm.ownerEmail, entry);
 		}
-		input.value = '';
+		return map;
+	});
+	const vmTypeOptions = $derived(
+		[
+			...new Set(
+				admin.adminVms.flatMap((vm) => (vm.active && vm.vmTypeName ? [vm.vmTypeName] : []))
+			)
+		].sort()
+	);
+
+	type AudienceField =
+		| 'signedUp'
+		| 'vmCount'
+		| 'vmType'
+		| 'verified'
+		| 'billingExempt'
+		| 'disabled'
+		| 'totp'
+		| 'twoFactor'
+		| 'passkey';
+	interface AudienceCondition {
+		field: AudienceField;
+		op: string;
+		value: string;
 	}
 
-	function guessEmailColumn(columns: string[], rows: Record<string, string>[]) {
-		const byName = columns.find((column) => column.toLowerCase().includes('email'));
-		if (byName) return byName;
-		return columns.find((column) => rows.some((row) => row[column]?.includes('@'))) ?? '';
+	const audienceFieldDefs: Record<
+		AudienceField,
+		{ label: string; ops: { value: string; label: string }[] }
+	> = {
+		signedUp: {
+			label: 'Signed up',
+			ops: [
+				{ value: 'before', label: 'before' },
+				{ value: 'after', label: 'after' }
+			]
+		},
+		vmCount: {
+			label: 'Active VMs',
+			ops: [
+				{ value: 'gte', label: 'at least' },
+				{ value: 'eq', label: 'exactly' }
+			]
+		},
+		vmType: {
+			label: 'Owns VM type',
+			ops: [
+				{ value: 'is', label: 'is' },
+				{ value: 'not', label: 'is not' }
+			]
+		},
+		verified: { label: 'Email verified', ops: [{ value: 'is', label: 'is' }] },
+		billingExempt: { label: 'Billing exempt', ops: [{ value: 'is', label: 'is' }] },
+		disabled: { label: 'Disabled', ops: [{ value: 'is', label: 'is' }] },
+		totp: { label: 'TOTP enabled', ops: [{ value: 'is', label: 'is' }] },
+		twoFactor: { label: '2FA enabled (any)', ops: [{ value: 'is', label: 'is' }] },
+		passkey: { label: 'Passkey enabled', ops: [{ value: 'is', label: 'is' }] }
+	};
+
+	function defaultCondition(field: AudienceField): AudienceCondition {
+		if (field === 'signedUp') {
+			return { field, op: 'before', value: '' };
+		}
+		if (field === 'vmCount') {
+			return { field, op: 'gte', value: '1' };
+		}
+		if (field === 'vmType') {
+			return { field, op: 'is', value: vmTypeOptions[0] ?? '' };
+		}
+		return { field, op: 'is', value: 'yes' };
 	}
+
+	let audienceConditions = $state<AudienceCondition[]>([defaultCondition('vmCount')]);
+
+	function matchesFlag(actual: boolean, condition: AudienceCondition) {
+		return actual === (condition.value === 'yes');
+	}
+
+	function matchesSignedUp(createdAt: Date, condition: AudienceCondition) {
+		if (!condition.value) {
+			return true;
+		}
+		const cutoff = new Date(condition.value).getTime();
+		if (Number.isNaN(cutoff)) {
+			return true;
+		}
+		const created = new Date(createdAt).getTime();
+		return condition.op === 'before' ? created < cutoff : created > cutoff;
+	}
+
+	function matchesVmCount(ownedCount: number, condition: AudienceCondition) {
+		const target = Number.parseInt(condition.value, 10);
+		if (Number.isNaN(target)) {
+			return true;
+		}
+		return condition.op === 'gte' ? ownedCount >= target : ownedCount === target;
+	}
+
+	function matchesVmType(ownedTypes: Set<string> | undefined, condition: AudienceCondition) {
+		if (!condition.value) {
+			return true;
+		}
+		const hasType = ownedTypes?.has(condition.value) ?? false;
+		return condition.op === 'is' ? hasType : !hasType;
+	}
+
+	function matchesAudienceCondition(account: AdminUser, condition: AudienceCondition): boolean {
+		const owned = activeVmsByOwnerEmail.get(account.email);
+		switch (condition.field) {
+			case 'signedUp':
+				return matchesSignedUp(account.createdAt, condition);
+			case 'vmCount':
+				return matchesVmCount(owned?.count ?? 0, condition);
+			case 'vmType':
+				return matchesVmType(owned?.types, condition);
+			case 'verified':
+				return matchesFlag(account.emailVerified, condition);
+			case 'billingExempt':
+				return matchesFlag(account.billingExempt, condition);
+			case 'disabled':
+				return matchesFlag(account.disabled, condition);
+			case 'totp':
+				return matchesFlag(account.twoFactorEnabled, condition);
+			case 'twoFactor':
+				return matchesFlag(account.twoFactorEnabled || account.passkeyCount > 0, condition);
+			case 'passkey':
+				return matchesFlag(account.passkeyCount > 0, condition);
+			default: {
+				const unhandledField: never = condition.field;
+				return unhandledField;
+			}
+		}
+	}
+
+	const queryRecipients = $derived(
+		admin.adminUsers.filter((account) =>
+			audienceConditions.every((condition) => matchesAudienceCondition(account, condition))
+		)
+	);
+	const queryLabel = $derived(
+		audienceConditions.length === 0
+			? 'All users'
+			: audienceConditions
+					.map((condition) => {
+						const def = audienceFieldDefs[condition.field];
+						const op = def.ops.find((entry) => entry.value === condition.op)?.label ?? condition.op;
+						return `${def.label} ${op} ${condition.value}`.trim();
+					})
+					.join(' and ')
+	);
+	const recipientRows = $derived(
+		queryRecipients.map((account) => ({ name: account.name, email: account.email }))
+	);
 
 	const usedPlaceholders = $derived([
 		...new Set(
@@ -190,8 +324,8 @@
 		)
 	]);
 	const missingColumns = $derived(
-		csvColumns.length > 0
-			? usedPlaceholders.filter((placeholder) => !csvColumns.includes(placeholder))
+		recipientRows.length > 0
+			? usedPlaceholders.filter((placeholder) => !recipientColumns.includes(placeholder))
 			: []
 	);
 
@@ -209,7 +343,7 @@
 				template: selectedTemplateKey,
 				subject,
 				fields: $state.snapshot(fieldValues),
-				row: $state.snapshot(csvRows)[0] ?? {}
+				row: $state.snapshot(recipientRows)[0] ?? {}
 			});
 			previewSubject = result.subject;
 			previewHtml = result.html;
@@ -234,39 +368,47 @@
 	);
 	const canPreview = $derived(!previewLoading && subject.trim() !== '' && fieldsComplete);
 	const canSend = $derived(
-		!sending && csvRows.length > 0 && emailColumn !== '' && subject.trim() !== '' && fieldsComplete
+		!sending && recipientRows.length > 0 && subject.trim() !== '' && fieldsComplete
 	);
 	const processedCount = $derived(sentCount + sendFailures.length);
 
 	async function startSend() {
-		if (!canSend) return;
+		if (!canSend) {
+			return;
+		}
 		const ok = await confirmDestructive({
 			title: 'Send emails',
-			description: `This sends the "${template.label}" template to ${csvRows.length} recipient${csvRows.length === 1 ? '' : 's'} from ${csvFileName}. This cannot be undone.`,
+			description: `This sends the "${template.label}" template to ${recipientRows.length} recipient${recipientRows.length === 1 ? '' : 's'} (${queryLabel}). This cannot be undone.`,
 			confirmWord: 'send',
 			confirmLabel: 'Send emails'
 		});
-		if (!ok) return;
+		if (!ok) {
+			return;
+		}
 
 		sending = true;
 		sendComplete = false;
 		sentCount = 0;
 		sendFailures = [];
 		sendError = '';
-		const rows = $state.snapshot(csvRows);
+		const rows = $state.snapshot(recipientRows);
 		const fields = $state.snapshot(fieldValues);
+		const campaign = idempotencyScope();
 		try {
 			for (let i = 0; i < rows.length; i += CAMPAIGN_BATCH_SIZE) {
-				const result = await sendCampaignEmails({
+				const batch = {
 					template: selectedTemplateKey,
 					subject,
 					fields,
 					rows: rows.slice(i, i + CAMPAIGN_BATCH_SIZE),
-					emailColumn
-				});
+					emailColumn: 'email'
+				};
+				// biome-ignore lint/performance/noAwaitInLoops: batches go out one at a time to stay under the email provider's rate limit and report progress
+				const result = await campaign.run(sendCampaignEmails, 'admin.sendCampaignEmails', batch);
 				sentCount += result.sent;
 				sendFailures = [...sendFailures, ...result.failures];
 			}
+			campaign.complete();
 			sendComplete = true;
 		} catch (err) {
 			sendError = getErrorMessage(err, 'Failed to send emails');
@@ -280,362 +422,348 @@
 	<title>Emails</title>
 </svelte:head>
 
-<div class="flex flex-1 flex-col overflow-hidden">
-	<!-- Tabs -->
-	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-gray-800">
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'vmTypes'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
-			href={resolve('/admin')}
-		>
-			<Cpu class="h-3.5 w-3.5 shrink-0" />
-			VM Types
-			<Badge variant="secondary" class="text-[10px]">{admin.vmTypes.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'vms'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
-			href={resolve('/admin/vms')}
-		>
-			<Server class="h-3.5 w-3.5 shrink-0" />
-			VMs
-			<Badge variant="secondary" class="text-[10px]">
-				{admin.adminVms.filter((vm) => vm.active).length}
-			</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'images'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
-			href={resolve('/admin/images')}
-		>
-			<Disc class="h-3.5 w-3.5 shrink-0" />
-			Images
-			<Badge variant="secondary" class="text-[10px]">{admin.images.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'features'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
-			href={resolve('/admin/features')}
-		>
-			<Flag class="h-3.5 w-3.5 shrink-0" />
-			Feature Flags
-			<Badge variant="secondary" class="text-[10px]">
-				{featureFlagKeys.filter((key) => admin.featureFlags[key]).length}
-			</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'ipam'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
-			href={resolve('/admin/ipam')}
-		>
-			<Network class="h-3.5 w-3.5 shrink-0" />
-			IPAM
-			<Badge variant="secondary" class="text-[10px]">{admin.ipamPrefixes.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'users'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
-			href={resolve('/admin/users')}
-		>
-			<UserCog class="h-3.5 w-3.5 shrink-0" />
-			Users
-			<Badge variant="secondary" class="text-[10px]">{userCount}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'emails'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
-			href={resolve('/admin/emails')}
-		>
-			<Mail class="h-3.5 w-3.5 shrink-0" />
-			Emails
-		</a>
-	</div>
+<div class="flex-1 overflow-auto">
+	<div class="mx-auto flex w-full max-w-3xl flex-col gap-6 p-5">
+		<!-- Template -->
+		<div class="flex flex-wrap gap-1.5">
+			{#each campaignTemplates as entry (entry.key)}
+				<button
+					type="button"
+					title={entry.description}
+					class="border px-3 py-1.5 text-xs font-medium transition-colors {selectedTemplateKey ===
+					entry.key
+						? 'border-red-500 bg-red-950/20 text-foreground'
+						: 'border-border text-muted-foreground hover:border-ring hover:text-foreground'}"
+					onclick={() => selectTemplate(entry.key)}
+					disabled={sending}
+				>
+					{entry.label}
+				</button>
+			{/each}
+		</div>
 
-	<!-- Content -->
-	<div class="flex-1 overflow-auto">
-		<div class="mx-auto flex w-full max-w-3xl flex-col gap-6 p-5">
-			<!-- Template -->
-			<div class="flex flex-wrap gap-1.5">
-				{#each campaignTemplates as entry (entry.key)}
-					<button
-						type="button"
-						title={entry.description}
-						class="border px-3 py-1.5 text-xs font-medium transition-colors {selectedTemplateKey ===
-						entry.key
-							? 'border-red-500 bg-red-950/20 text-gray-100'
-							: 'border-gray-800 text-gray-400 hover:border-gray-700 hover:text-gray-200'}"
-						onclick={() => selectTemplate(entry.key)}
-						disabled={sending}
-					>
-						{entry.label}
-					</button>
-				{/each}
+		<!-- Editor -->
+		<div class="flex flex-col gap-3">
+			<div class="flex items-center gap-3 border border-border bg-background px-3">
+				<span class="shrink-0 text-xs font-medium text-muted-foreground">Subject</span>
+				<input
+					bind:value={subject}
+					{...autofillAttributes()}
+					placeholder="Subject line"
+					disabled={sending}
+					aria-label="Subject"
+					class="h-9 w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+				/>
 			</div>
-
-			<!-- Editor -->
-			<div class="flex flex-col gap-3">
-				<div class="flex items-center gap-3 border border-gray-800 bg-gray-900 px-3">
-					<span class="shrink-0 text-xs font-medium text-gray-500">Subject</span>
-					<input
-						bind:value={subject}
-						placeholder="Subject line"
-						disabled={sending}
-						class="h-9 w-full bg-transparent text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none"
-					/>
-				</div>
-				{#if settingsFields.length > 0}
-					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-						{#each settingsFields as field (template.key + field.name)}
-							<div class="flex flex-col gap-1.5">
-								<Label>
-									{field.label}
-									{#if !field.required}<span class="font-normal text-gray-500">(optional)</span
-										>{/if}
-								</Label>
+			{#if settingsFields.length > 0}
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+					{#each settingsFields as field (template.key + field.name)}
+						<div class="flex flex-col gap-1.5">
+							<Label>
+								{field.label}
+								{#if !field.required}
+									<span class="font-normal text-muted-foreground">(optional)</span>
+								{/if}
+							</Label>
+							{#if field.options}
+								<select
+									bind:value={fieldValues[field.name]}
+									disabled={sending}
+									onchange={scheduleEditorRefresh}
+									class="h-9 w-full border border-border bg-muted px-3 text-sm text-foreground focus:border-ring focus:outline-none"
+								>
+									{#each field.options as option (option.value)}
+										<option value={option.value}>{option.label}</option>
+									{/each}
+								</select>
+							{:else}
 								<Input
 									bind:value={fieldValues[field.name]}
 									placeholder={field.placeholder}
 									disabled={sending}
 									oninput={scheduleEditorRefresh}
 								/>
-							</div>
-						{/each}
-					</div>
-				{/if}
-				{#if editorError}
-					<div
-						class="flex items-center justify-between gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-					>
-						<span class="flex items-center gap-2">
-							<AlertTriangle class="h-3.5 w-3.5 shrink-0" />{editorError}
-						</span>
-						<Button variant="outline" size="sm" class="h-6 text-xs" onclick={() => loadEditor()}>
-							Retry
-						</Button>
-					</div>
-				{/if}
-				<div class="relative min-h-48 border border-gray-800 bg-gray-950">
-					{#if editorHtml}
-						{#key editorHtml}
-							<div class="email-editor px-4" use:hydrateFields>
-								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-								{@html editorHtml}
-							</div>
-						{/key}
-					{/if}
-					{#if editorLoading}
-						<div class="absolute inset-0 flex items-center justify-center bg-gray-950/60">
-							<Loader2 class="h-4 w-4 animate-spin text-gray-500" />
+							{/if}
 						</div>
-					{/if}
+					{/each}
 				</div>
-				<p class="text-xs text-gray-500">
-					Click the outlined text in the email to edit it in place. Use <span
-						class="font-mono text-gray-400">{'{{column}}'}</span
-					>
-					to pull values from the CSV. HTML tags like
-					<span class="font-mono text-gray-400">{'<a href="...">link</a>'}</span> render in the sent email
-					— check them with Preview.
-				</p>
-				{#if missingColumns.length > 0}
-					<div
-						class="flex items-center gap-2 border border-amber-700 bg-amber-950/40 px-3 py-2 text-xs text-amber-400"
-					>
-						<AlertTriangle class="h-3.5 w-3.5 shrink-0" />
-						No CSV column matches {missingColumns.map((name) => `{{${name}}}`).join(', ')} — those placeholders
-						will be blank.
+			{/if}
+			{#if editorError}
+				<div
+					class="flex items-center justify-between gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
+				>
+					<span class="flex items-center gap-2">
+						<AlertTriangle class="size-4 shrink-0" />{editorError}
+					</span>
+					<Button variant="outline" size="sm" class="h-6 text-xs" onclick={() => loadEditor()}>
+						Retry
+					</Button>
+				</div>
+			{/if}
+			<div class="relative min-h-48 border border-border bg-background">
+				{#if editorHtml}
+					{#key editorHtml}
+						<div class="email-editor px-4" use:hydrateFields>
+							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+							{@html editorHtml}
+						</div>
+					{/key}
+				{/if}
+				{#if editorLoading}
+					<div class="absolute inset-0 flex items-center justify-center bg-background/60">
+						<Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
 					</div>
 				{/if}
 			</div>
-
-			<!-- Recipients -->
-			<div class="flex flex-col gap-3">
-				<span class="text-xs font-medium tracking-wider text-gray-500 uppercase">Recipients</span>
-				<div class="flex flex-col gap-2">
-					<Label>
-						CSV file <span class="font-normal text-gray-500">(first row is the header)</span>
-					</Label>
-					<Input type="file" accept=".csv,text/csv" onchange={handleCsvChange} disabled={sending} />
+			<p class="text-xs text-muted-foreground">
+				Click the outlined text in the email to edit it in place. Use
+				<span class="font-mono text-muted-foreground">{'{{column}}'}</span>
+				to pull values from the audience columns (name, email). HTML tags like
+				<span class="font-mono text-muted-foreground">{'<a href="...">link</a>'}</span>
+				render in the sent email. Check them with Preview.
+			</p>
+			{#if missingColumns.length > 0}
+				<div
+					class="flex items-center gap-2 border border-amber-300 bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+				>
+					<AlertTriangle class="size-4 shrink-0" />
+					No audience column matches {missingColumns.map((name) => `{{${name}}}`).join(', ')}, so
+					those placeholders will be blank.
 				</div>
-				{#if csvError}
-					<div
-						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-					>
-						<AlertTriangle class="h-3.5 w-3.5 shrink-0" />{csvError}
-					</div>
-				{/if}
-				{#if csvRows.length > 0}
-					<div class="flex flex-wrap items-center gap-1.5 text-xs text-gray-400">
-						<Users class="h-3.5 w-3.5 text-gray-500" />
-						{csvFileName} · {csvRows.length} recipient{csvRows.length === 1 ? '' : 's'} ·
-						{#each csvColumns as column (column)}
-							<Badge variant="secondary" class="font-mono text-[10px]">{`{{${column}}}`}</Badge>
-						{/each}
-					</div>
-					<div class="flex flex-col gap-2">
-						<Label>Email column</Label>
+			{/if}
+		</div>
+
+		<div class="flex flex-col gap-3">
+			<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+				>Recipients</span
+			>
+			<div class="flex flex-col gap-2">
+				{#each audienceConditions as condition, index (index)}
+					<div class="flex flex-wrap items-center gap-2">
+						{#if index > 0}
+							<span class="w-8 text-right text-[11px] text-muted-foreground">and</span>
+						{:else}
+							<span class="w-8 text-right text-[11px] text-muted-foreground">where</span>
+						{/if}
 						<select
-							bind:value={emailColumn}
+							value={condition.field}
+							onchange={(event) =>
+								(audienceConditions[index] = defaultCondition(
+									event.currentTarget.value as AudienceField
+								))}
 							disabled={sending}
-							class="h-9 w-full border border-gray-700 bg-gray-800 px-3 text-sm text-gray-100 focus:border-gray-500 focus:outline-none"
+							aria-label="Condition field"
+							class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
 						>
-							<option value="">Select the column with email addresses</option>
-							{#each csvColumns as column (column)}
-								<option value={column}>{column}</option>
+							{#each Object.entries(audienceFieldDefs) as [value, def] (value)}
+								<option {value}>{def.label}</option>
 							{/each}
 						</select>
-					</div>
-					<div class="overflow-x-auto border border-gray-800">
-						<table class="w-full whitespace-nowrap">
-							<thead>
-								<tr class="border-b border-gray-800">
-									{#each csvColumns as column (column)}
-										<th class="px-3 py-2 text-left text-xs font-medium text-gray-500">
-											{column}
-											{#if column === emailColumn}
-												<Badge variant="secondary" class="ml-1 text-[10px]">email</Badge>
-											{/if}
-										</th>
-									{/each}
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-gray-800/50">
-								{#each csvRows.slice(0, 5) as row, index (index)}
-									<tr>
-										{#each csvColumns as column (column)}
-											<td class="max-w-48 truncate px-3 py-2 text-xs text-gray-300">
-												{row[column] ?? ''}
-											</td>
-										{/each}
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-						{#if csvRows.length > 5}
-							<p class="border-t border-gray-800 px-3 py-1.5 text-[11px] text-gray-500">
-								and {csvRows.length - 5} more
-							</p>
-						{/if}
-					</div>
-				{/if}
-			</div>
-
-			<!-- Actions -->
-			<div class="flex flex-col gap-3 border-t border-gray-800 pt-4">
-				{#if previewError}
-					<div
-						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-					>
-						<AlertTriangle class="h-3.5 w-3.5 shrink-0" />{previewError}
-					</div>
-				{/if}
-				{#if sendError}
-					<div
-						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-					>
-						<AlertTriangle class="h-3.5 w-3.5 shrink-0" />{sendError}
-					</div>
-				{/if}
-				<div class="flex items-center gap-2">
-					<Button
-						variant="outline"
-						size="sm"
-						class="gap-1.5 text-xs"
-						onclick={() => openPreview()}
-						disabled={!canPreview}
-					>
-						{#if previewLoading}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Eye
-								class="h-3 w-3"
-							/>{/if}
-						Preview{csvRows.length > 0 ? ' with first row' : ''}
-					</Button>
-					<Button size="sm" class="gap-1.5 text-xs" onclick={() => startSend()} disabled={!canSend}>
-						{#if sending}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Send
-								class="h-3 w-3"
-							/>{/if}
-						Send to {csvRows.length} recipient{csvRows.length === 1 ? '' : 's'}
-					</Button>
-				</div>
-				{#if sending || sendComplete}
-					<div class="flex flex-col gap-1.5">
-						<div class="h-1.5 w-full bg-gray-800">
-							<div
-								class="h-full bg-red-500 transition-all"
-								style="width: {csvRows.length > 0
-									? Math.round((processedCount / csvRows.length) * 100)
-									: 0}%"
-							></div>
-						</div>
-						<p class="flex items-center gap-1.5 text-xs text-gray-400">
-							{#if sending}
-								<Loader2 class="h-3 w-3 animate-spin text-gray-500" />
-								Sending {processedCount} of {csvRows.length}...
-							{:else if sendFailures.length === 0}
-								<Check class="h-3 w-3 text-emerald-400" />
-								Sent {sentCount} email{sentCount === 1 ? '' : 's'}.
-							{:else}
-								<AlertTriangle class="h-3 w-3 text-amber-400" />
-								Sent {sentCount} of {csvRows.length}; {sendFailures.length} failed.
-							{/if}
-						</p>
-					</div>
-				{/if}
-				{#if sendFailures.length > 0}
-					<div class="max-h-48 overflow-y-auto border border-gray-800">
-						{#each sendFailures as failure, index (index)}
-							<div
-								class="flex items-center justify-between gap-3 border-b border-gray-800/50 px-3 py-1.5 last:border-b-0"
+						<select
+							bind:value={condition.op}
+							disabled={sending}
+							aria-label="Condition operator"
+							class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
+						>
+							{#each audienceFieldDefs[condition.field].ops as op (op.value)}
+								<option value={op.value}>{op.label}</option>
+							{/each}
+						</select>
+						{#if condition.field === 'signedUp'}
+							<input
+								type="date"
+								bind:value={condition.value}
+								disabled={sending}
+								aria-label="Condition value"
+								class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
+							/>
+						{:else if condition.field === 'vmCount'}
+							<input
+								type="number"
+								min="0"
+								bind:value={condition.value}
+								disabled={sending}
+								aria-label="Condition value"
+								class="h-8 w-20 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
+							/>
+						{:else if condition.field === 'vmType'}
+							<select
+								bind:value={condition.value}
+								disabled={sending}
+								aria-label="Condition value"
+								class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
 							>
-								<span class="truncate font-mono text-xs text-gray-300">{failure.recipient}</span>
-								<span class="shrink-0 text-xs text-red-400">{failure.reason}</span>
-							</div>
-						{/each}
+								{#each vmTypeOptions as typeName (typeName)}
+									<option value={typeName}>{typeName}</option>
+								{/each}
+							</select>
+						{:else}
+							<select
+								bind:value={condition.value}
+								disabled={sending}
+								aria-label="Condition value"
+								class="h-8 border border-border bg-muted px-2 text-xs text-foreground focus:border-ring focus:outline-none"
+							>
+								<option value="yes">yes</option>
+								<option value="no">no</option>
+							</select>
+						{/if}
+						<Button
+							variant="ghost"
+							size="sm"
+							class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+							onclick={() =>
+								(audienceConditions = audienceConditions.filter((_, i) => i !== index))}
+							disabled={sending}
+							aria-label="Remove condition"
+						>
+							<X class="h-3.5 w-3.5" />
+						</Button>
 					</div>
-				{/if}
+				{/each}
+				<Button
+					variant="outline"
+					size="sm"
+					class="w-fit gap-1.5 border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+					onclick={() =>
+						(audienceConditions = [...audienceConditions, defaultCondition('verified')])}
+					disabled={sending}
+				>
+					<Plus class="h-3 w-3" />
+					Add condition
+				</Button>
 			</div>
+			<div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+				<Users class="size-4 text-muted-foreground" />
+				{queryRecipients.length}
+				recipient{queryRecipients.length === 1 ? '' : 's'}
+				matched
+			</div>
+			{#if queryRecipients.length > 0}
+				<div class="max-h-48 overflow-y-auto border border-border">
+					{#each queryRecipients as recipient (recipient.id)}
+						<div
+							class="flex items-center justify-between gap-3 border-b border-border/50 px-3 py-1.5 last:border-b-0"
+						>
+							<span class="truncate text-xs text-foreground">{recipient.name}</span>
+							<span class="shrink-0 font-mono text-xs text-muted-foreground"
+								>{recipient.email}</span
+							>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+
+		<!-- Actions -->
+		<div class="flex flex-col gap-3 border-t border-border pt-4">
+			{#if previewError}
+				<div
+					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
+				>
+					<AlertTriangle class="size-4 shrink-0" />{previewError}
+				</div>
+			{/if}
+			{#if sendError}
+				<div
+					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
+				>
+					<AlertTriangle class="size-4 shrink-0" />{sendError}
+				</div>
+			{/if}
+			<div class="flex items-center gap-2">
+				<Button
+					variant="outline"
+					size="sm"
+					class="gap-1.5 text-xs"
+					onclick={() => openPreview()}
+					disabled={!canPreview}
+				>
+					{#if previewLoading}
+						<Loader2 class="h-3 w-3 animate-spin" />
+					{:else}
+						<Eye class="h-3 w-3" />
+					{/if}
+					Preview{recipientRows.length > 0 ? ' with first row' : ''}
+				</Button>
+				<Button size="sm" class="gap-1.5 text-xs" onclick={() => startSend()} disabled={!canSend}>
+					{#if sending}
+						<Loader2 class="h-3 w-3 animate-spin" />
+					{:else}
+						<Send class="h-3 w-3" />
+					{/if}
+					Send to {recipientRows.length} recipient{recipientRows.length === 1 ? '' : 's'}
+				</Button>
+			</div>
+			{#if sending || sendComplete}
+				<div class="flex flex-col gap-1.5">
+					<div class="h-1.5 w-full bg-muted">
+						<div
+							class="h-full bg-red-500 transition-all"
+							style="width: {recipientRows.length > 0
+								? Math.round((processedCount / recipientRows.length) * 100)
+								: 0}%"
+						></div>
+					</div>
+					<p class="flex items-center gap-1.5 text-xs text-muted-foreground">
+						{#if sending}
+							<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
+							Sending {processedCount} of {recipientRows.length}...
+						{:else if sendFailures.length === 0}
+							<Check class="h-3 w-3 text-emerald-400" />
+							Sent {sentCount} email{sentCount === 1 ? '' : 's'}.
+						{:else}
+							<AlertTriangle class="h-3 w-3 text-amber-400" />
+							Sent {sentCount} of {recipientRows.length}; {sendFailures.length} failed.
+						{/if}
+					</p>
+				</div>
+			{/if}
+			{#if sendFailures.length > 0}
+				<div class="max-h-48 overflow-y-auto border border-border">
+					{#each sendFailures as failure, index (index)}
+						<div
+							class="flex items-center justify-between gap-3 border-b border-border/50 px-3 py-1.5 last:border-b-0"
+						>
+							<span class="truncate font-mono text-xs text-muted-foreground"
+								>{failure.recipient}</span
+							>
+							<span class="shrink-0 text-xs text-red-400">{failure.reason}</span>
+						</div>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	</div>
 </div>
 
 <!-- Preview Dialog -->
 <Dialog.Root bind:open={previewOpen}>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-2xl">
+	<Dialog.Content class="border-border bg-background sm:max-w-2xl">
 		<Dialog.Header>
 			<Dialog.Title>Preview</Dialog.Title>
 			<Dialog.Description>
 				Subject: {previewSubject}
-				{#if csvRows.length > 0}· rendered with the first CSV row{/if}
+				{#if recipientRows.length > 0}
+					· rendered with the first recipient
+				{/if}
 			</Dialog.Description>
 		</Dialog.Header>
 		<iframe
 			sandbox=""
 			srcdoc={previewHtml}
 			title="Email preview"
-			class="h-[480px] w-full border border-gray-800 bg-gray-950"
+			class="h-[480px] w-full border border-border bg-background"
 		></iframe>
 	</Dialog.Content>
 </Dialog.Root>
 
 <style>
 	:global(.email-editor [data-field]) {
-		outline: 1px dashed rgb(75 85 99 / 0.8);
-		outline-offset: 2px;
 		white-space: pre-wrap;
 		cursor: text;
+		outline: 1px dashed rgb(75 85 99 / 0.8);
+		outline-offset: 2px;
 		transition: outline-color 120ms;
 	}
 
@@ -648,7 +776,7 @@
 	}
 
 	:global(.email-editor [data-field]:empty::before) {
-		content: attr(data-placeholder);
 		color: rgb(107 114 128);
+		content: attr(data-placeholder);
 	}
 </style>

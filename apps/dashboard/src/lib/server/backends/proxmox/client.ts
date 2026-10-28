@@ -1,20 +1,20 @@
-import ky, { HTTPError, type KyInstance } from 'ky';
 import type { Fetcher } from '@cloudflare/workers-types';
-import { createVpcFetch, insecureDirectFetch } from '$lib/server/vpc';
+import ky, { HTTPError, type KyInstance } from 'ky';
+import { createVpcFetch, insecureDirectFetch } from '#lib/server/vpc.js';
 import type {
-	PveResponse,
+	PveAgentNetworkInterface,
+	PveClusterResource,
+	PveCreateQemuParams,
 	PveNode,
-	PveQemuVm,
 	PveQemuConfig,
-	PveQemuStatus,
 	PveQemuRrdData,
+	PveQemuStatus,
+	PveQemuVm,
+	PveResponse,
 	PveStorage,
 	PveStorageContent,
-	PveTaskStatus,
-	PveNextId,
-	PveCreateQemuParams,
-	PveClusterResource,
-	PveAgentNetworkInterface
+	PveTaskLogLine,
+	PveTaskStatus
 } from './types';
 
 export interface ProxmoxClientConfig {
@@ -25,17 +25,23 @@ export interface ProxmoxClientConfig {
 	vpc?: Fetcher;
 }
 
+const TRAILING_SLASHES = /\/+$/;
+const WARNING_LOG_LINE = /^WARN/;
+
+const isTaskWarning = (exitstatus?: string): exitstatus is string =>
+	!!exitstatus && exitstatus.startsWith('WARNINGS:');
+
 export class ProxmoxClient {
-	private api: KyInstance;
+	private readonly api: KyInstance;
 
 	constructor(config: ProxmoxClientConfig) {
 		const { baseUrl, tokenId, tokenSecret, verifySsl = true, vpc } = config;
 
-		const usingInsecureDirectFetch = !vpc && !verifySsl;
+		const usingInsecureDirectFetch = !(vpc || verifySsl);
 		const directFetch = usingInsecureDirectFetch ? insecureDirectFetch : globalThis.fetch;
 
 		this.api = ky.create({
-			prefix: `${baseUrl.replace(/\/+$/, '')}/api2/json`,
+			prefix: `${baseUrl.replace(TRAILING_SLASHES, '')}/api2/json`,
 			headers: {
 				Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}`,
 				Accept: 'application/json',
@@ -96,7 +102,9 @@ export class ProxmoxClient {
 	async getNode(node: string): Promise<PveNode> {
 		const nodes = await this.listNodes();
 		const found = nodes.find((n) => n.node === node);
-		if (!found) throw new Error(`Proxmox node "${node}" not found`);
+		if (!found) {
+			throw new Error(`Proxmox node "${node}" not found`);
+		}
 		return found;
 	}
 
@@ -176,6 +184,31 @@ export class ProxmoxClient {
 		}
 	}
 
+	async updateQemuConfig(
+		node: string,
+		vmid: number,
+		params: Record<string, unknown>
+	): Promise<void> {
+		try {
+			await this.api
+				.put(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/config`, {
+					body: this.toForm(params)
+				})
+				.json<PveResponse<null>>();
+		} catch (error) {
+			await this.logHttpError(`updateQemuConfig(${node}, ${vmid})`, error, params);
+			throw error;
+		}
+	}
+
+	async regenerateCloudInit(node: string, vmid: number): Promise<void> {
+		await this.api
+			.put(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/cloudinit`, {
+				body: this.toForm({})
+			})
+			.json<PveResponse<null>>();
+	}
+
 	async resizeDisk(node: string, vmid: number, disk: string, size: string): Promise<void> {
 		await this.api
 			.put(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/resize`, {
@@ -212,7 +245,9 @@ export class ProxmoxClient {
 				})
 				.json<PveResponse<null>>();
 		} catch (error) {
-			if (error instanceof HTTPError && error.response.status === 400) return;
+			if (error instanceof HTTPError && error.response.status === 400) {
+				return;
+			}
 			await this.logHttpError(`createQemuFirewallIpset(${node}, ${vmid}, ${name})`, error, {
 				name
 			});
@@ -251,8 +286,12 @@ export class ProxmoxClient {
 		options?: { purge?: boolean; destroyUnreferencedDisks?: boolean }
 	): Promise<string> {
 		const searchParams: Record<string, string> = {};
-		if (options?.purge) searchParams.purge = '1';
-		if (options?.destroyUnreferencedDisks) searchParams['destroy-unreferenced-disks'] = '1';
+		if (options?.purge) {
+			searchParams.purge = '1';
+		}
+		if (options?.destroyUnreferencedDisks) {
+			searchParams['destroy-unreferenced-disks'] = '1';
+		}
 
 		const res = await this.api
 			.delete(`nodes/${encodeURIComponent(node)}/qemu/${vmid}`, { searchParams, timeout: 120_000 })
@@ -312,13 +351,25 @@ export class ProxmoxClient {
 		content?: 'iso' | 'vztmpl' | 'backup' | 'images' | 'rootdir' | 'import'
 	): Promise<PveStorageContent[]> {
 		const searchParams: Record<string, string> = {};
-		if (content) searchParams['content'] = content;
+		if (content) {
+			searchParams.content = content;
+		}
 
 		const res = await this.api
 			.get(`nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content`, {
 				searchParams
 			})
 			.json<PveResponse<PveStorageContent[]>>();
+		return res.data;
+	}
+
+	async deleteStorageVolume(node: string, storage: string, volume: string): Promise<string> {
+		const res = await this.api
+			.delete(
+				`nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content/${encodeURIComponent(volume)}`,
+				{ timeout: 120_000 }
+			)
+			.json<PveResponse<string>>();
 		return res.data;
 	}
 
@@ -369,18 +420,32 @@ export class ProxmoxClient {
 		return res.data;
 	}
 
+	async getTaskLog(node: string, upid: string): Promise<PveTaskLogLine[]> {
+		const res = await this.api
+			.get(`nodes/${encodeURIComponent(node)}/tasks/${encodeURIComponent(upid)}/log`, {
+				searchParams: { limit: '500' }
+			})
+			.json<PveResponse<PveTaskLogLine[]>>();
+		return res.data;
+	}
+
 	async waitForTask(
 		node: string,
 		upid: string,
 		opts?: { intervalMs?: number; timeoutMs?: number }
 	): Promise<PveTaskStatus> {
-		const interval = opts?.intervalMs ?? 1_000;
+		const interval = opts?.intervalMs ?? 1000;
 		const timeout = opts?.timeoutMs ?? 120_000;
 		const deadline = Date.now() + timeout;
 
 		while (Date.now() < deadline) {
+			// biome-ignore lint/performance/noAwaitInLoops: polling a Proxmox task until it stops is inherently sequential
 			const status = await this.getTaskStatus(node, upid);
 			if (status.status === 'stopped') {
+				if (isTaskWarning(status.exitstatus)) {
+					await this.logTaskWarnings(node, upid, status.exitstatus);
+					return status;
+				}
 				if (status.exitstatus && status.exitstatus !== 'OK') {
 					throw new Error(`Proxmox task failed: ${status.exitstatus} (UPID: ${upid})`);
 				}
@@ -392,16 +457,26 @@ export class ProxmoxClient {
 		throw new Error(`Proxmox task timed out after ${timeout}ms (UPID: ${upid})`);
 	}
 
-	// Cluster
-
-	async getNextVmId(): Promise<number> {
-		const res = await this.api.get('cluster/nextid').json<PveResponse<PveNextId>>();
-		return typeof res.data === 'string' ? parseInt(res.data, 10) : res.data;
+	private async logTaskWarnings(node: string, upid: string, exitstatus: string): Promise<void> {
+		try {
+			const lines = await this.getTaskLog(node, upid);
+			const warnings = lines.map((l) => l.t).filter((t) => WARNING_LOG_LINE.test(t));
+			console.warn(`Proxmox task finished with ${exitstatus} (UPID: ${upid})`, warnings);
+		} catch (err) {
+			console.warn(
+				`Proxmox task finished with ${exitstatus} (UPID: ${upid}); log unavailable`,
+				err
+			);
+		}
 	}
+
+	// Cluster
 
 	async getClusterResources(type?: 'vm' | 'storage' | 'node'): Promise<PveClusterResource[]> {
 		const searchParams: Record<string, string> = {};
-		if (type) searchParams['type'] = type;
+		if (type) {
+			searchParams.type = type;
+		}
 
 		const res = await this.api
 			.get('cluster/resources', { searchParams })
@@ -413,7 +488,12 @@ export class ProxmoxClient {
 
 	async getNetworkInterfaces(node: string, vmid: number): Promise<PveAgentNetworkInterface[]> {
 		const res = await this.api
-			.get(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/agent/network-get-interfaces`)
+			// diable retry for fetching network interfaces
+			// causes performance issues on querying VM network interfaces, ky retries 3x then gives up anyway
+			// so we give up early after first attempt
+			.get(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/agent/network-get-interfaces`, {
+				retry: 0
+			})
 			.json<PveResponse<{ result: PveAgentNetworkInterface[] }>>();
 		return res.data.result;
 	}

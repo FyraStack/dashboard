@@ -13,7 +13,11 @@ function getDbCredentials(connectionString: string) {
 }
 
 export default defineConfig({
-	schema: './src/lib/server/db/schema.ts',
+	schema: [
+		'./src/lib/server/db/schema.ts',
+		'./src/lib/server/db/auth.schema.ts',
+		'./src/lib/server/db/analytics.schema.ts'
+	],
 	dialect: 'postgresql',
 	...(url ? { dbCredentials: getDbCredentials(url) } : {}),
 	verbose: true,

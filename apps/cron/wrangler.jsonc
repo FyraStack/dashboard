@@ -5,10 +5,16 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2026-04-05",
 	"observability": {
-		"enabled": true
+		"enabled": true,
+		"issues": {
+			"enabled": true
+		}
 	},
 	"triggers": {
 		"crons": ["*/15 * * * *"]
+	},
+	"vars": {
+		"BILLING_DISABLED": "false"
 	},
 	"services": [
 		{
@@ -19,10 +25,16 @@
 	"env": {
 		"preview": {
 			"observability": {
-				"enabled": true
+				"enabled": true,
+				"issues": {
+					"enabled": true
+				}
 			},
 			"triggers": {
-				"crons": ["*/15 * * * *"]
+				"crons": []
+			},
+			"vars": {
+				"BILLING_DISABLED": "false"
 			},
 			"services": [
 				{

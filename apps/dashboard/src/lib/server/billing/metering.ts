@@ -1,70 +1,141 @@
-import { and, asc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
-import { initDrizzle } from '$lib/server/db';
+import { and, asc, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { organization } from '#lib/server/db/auth.schema.js';
+import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	billingMeters,
+	type billingResourceTypeEnum,
 	billingUsageEvents,
+	type vmStatusEnum,
 	vms,
-	vmTypes,
-	type billingResourceTypeEnum
-} from '$lib/server/db/schema';
-import { requireVmFeatureId, usageIdempotencyKey, usageQuantity } from './features';
+	vmTypes
+} from '#lib/server/db/schema.js';
 import {
+	autumnStatus,
 	createAutumnClient,
 	ensureProjectCustomer,
 	ensureProjectServerEntity,
 	formatAutumnError,
 	isBillingConfigured,
-	isProjectBillingExempt
+	isProjectBillingExempt,
+	lookupProjectBillingPeriod,
+	type ProjectBillingPeriodLookup
 } from './autumn';
+import {
+	billingCyclePeriod,
+	type CapPeriod,
+	type CapSegment,
+	calendarMonthPeriod,
+	capHoursFor,
+	sliceCapUsage
+} from './caps';
+import { billedQuantity, hoursBetween, requireVmFeatureId, usageIdempotencyKey } from './features';
 
 type BillingResourceType = (typeof billingResourceTypeEnum.enumValues)[number];
+type VmStatus = (typeof vmStatusEnum.enumValues)[number];
 type BillingMeter = typeof billingMeters.$inferSelect;
 type BillingUsageEvent = typeof billingUsageEvents.$inferSelect;
 
-async function recordMeterUsage(meter: BillingMeter, now: number) {
-	const db = initDrizzle();
-	if (now <= meter.lastMeteredAt) return null;
+const CAPPED_USAGE_NOTE = 'Clamped to the monthly price cap';
+const MAX_METERING_GAP_MS = 48 * 3_600_000;
 
-	const quantity = usageQuantity(meter.units, meter.lastMeteredAt, now);
-	if (quantity <= 0) return null;
+function meteringWindowStart(meter: Pick<BillingMeter, 'id' | 'lastMeteredAt'>, now: number) {
+	const earliest = now - MAX_METERING_GAP_MS;
+	if (meter.lastMeteredAt >= earliest) {
+		return meter.lastMeteredAt;
+	}
 
-	const idempotencyKey = usageIdempotencyKey({
+	const skippedHours = hoursBetween(meter.lastMeteredAt, earliest).toFixed(2);
+	console.error(
+		`Billing meter ${meter.id} was last metered ${skippedHours}h beyond the catch-up limit; skipping unbilled hours before ${new Date(earliest).toISOString()}`
+	);
+	return earliest;
+}
+
+type SegmentInsert = Pick<
+	BillingMeter,
+	'projectId' | 'resourceType' | 'resourceId' | 'featureId' | 'units'
+>;
+
+function segmentEventValues(meter: SegmentInsert, segment: CapSegment, now: number) {
+	const quantity = billedQuantity(meter.units, segment.billableHours);
+	if (quantity <= 0) {
+		return null;
+	}
+
+	return {
+		projectId: meter.projectId,
 		resourceType: meter.resourceType,
 		resourceId: meter.resourceId,
 		featureId: meter.featureId,
-		units: meter.units,
-		periodStart: meter.lastMeteredAt,
-		periodEnd: now
-	});
+		quantity: quantity.toString(),
+		periodStart: segment.periodStart,
+		periodEnd: segment.periodEnd,
+		idempotencyKey: usageIdempotencyKey({
+			resourceType: meter.resourceType,
+			resourceId: meter.resourceId,
+			featureId: meter.featureId,
+			units: meter.units,
+			periodStart: segment.periodStart,
+			periodEnd: segment.periodEnd
+		}),
+		note: segment.capped ? CAPPED_USAGE_NOTE : null,
+		createdAt: now
+	};
+}
 
-	return db.transaction(async (tx) => {
-		const claimed = await tx
+async function recordMeterUsage(
+	meter: BillingMeter,
+	now: number,
+	capHours: number,
+	periodAt: (at: number) => CapPeriod
+) {
+	const db = initDrizzle();
+	if (now <= meter.lastMeteredAt) {
+		return [];
+	}
+
+	return await db.transaction(async (tx) => {
+		const [locked] = await tx
+			.select()
+			.from(billingMeters)
+			.where(and(eq(billingMeters.id, meter.id), eq(billingMeters.active, true)))
+			.for('update');
+
+		if (!locked || now <= locked.lastMeteredAt) {
+			return [];
+		}
+
+		const { segments, state } = sliceCapUsage({
+			from: meteringWindowStart(locked, now),
+			to: now,
+			capHours,
+			state: locked,
+			periodAt
+		});
+
+		const values = segments
+			.map((segment) => segmentEventValues(locked, segment, now))
+			.filter((value) => value !== null);
+
+		await tx
 			.update(billingMeters)
-			.set({ lastMeteredAt: now })
-			.where(
-				and(eq(billingMeters.id, meter.id), eq(billingMeters.lastMeteredAt, meter.lastMeteredAt))
-			)
-			.returning({ id: billingMeters.id });
-
-		if (claimed.length === 0) return null;
-
-		const [event] = await tx
-			.insert(billingUsageEvents)
-			.values({
-				projectId: meter.projectId,
-				resourceType: meter.resourceType,
-				resourceId: meter.resourceId,
-				featureId: meter.featureId,
-				quantity: quantity.toString(),
-				periodStart: meter.lastMeteredAt,
-				periodEnd: now,
-				idempotencyKey,
-				createdAt: now
+			.set({
+				lastMeteredAt: now,
+				capPeriodStart: state.capPeriodStart,
+				capPeriodEnd: state.capPeriodEnd,
+				hoursThisPeriod: state.hoursThisPeriod.toFixed(6)
 			})
+			.where(eq(billingMeters.id, meter.id));
+
+		if (values.length === 0) {
+			return [];
+		}
+
+		return tx
+			.insert(billingUsageEvents)
+			.values(values)
 			.onConflictDoNothing({ target: billingUsageEvents.idempotencyKey })
 			.returning();
-
-		return event ?? null;
 	});
 }
 
@@ -95,7 +166,6 @@ export async function createBillingMeter(input: {
 
 export async function reconcileMissingMeters(now = Date.now(), limit = 100, projectId?: string) {
 	const db = initDrizzle();
-	let created = 0;
 
 	const missing = await db
 		.select({
@@ -119,25 +189,115 @@ export async function reconcileMissingMeters(now = Date.now(), limit = 100, proj
 		)
 		.limit(limit);
 
-	for (const vm of missing) {
-		if (!vm.ownerProjectId) continue;
+	const reseeded = await Promise.all(missing.map((vm) => reseedMissingMeter(vm, now)));
+	return { created: reseeded.filter(Boolean).length };
+}
 
-		try {
-			await createBillingMeter({
-				projectId: vm.ownerProjectId,
-				resourceType: 'vm',
-				resourceId: vm.id,
-				featureId: requireVmFeatureId(vm.vmType),
-				units: 1,
-				now: vm.createdAt
-			});
-			created += 1;
-		} catch (err) {
-			console.warn(`Skipping billing meter reconciliation for VM ${vm.id}`, err);
+async function reseedMissingMeter(
+	vm: {
+		id: string;
+		ownerProjectId: string | null;
+		createdAt: number;
+		vmType: Parameters<typeof requireVmFeatureId>[0];
+	},
+	now: number
+) {
+	if (!vm.ownerProjectId) {
+		return false;
+	}
+
+	try {
+		await createBillingMeter({
+			projectId: vm.ownerProjectId,
+			resourceType: 'vm',
+			resourceId: vm.id,
+			featureId: requireVmFeatureId(vm.vmType),
+			units: 1,
+			now
+		});
+		console.error(
+			`Reseeded missing billing meter for VM ${vm.id} (project ${vm.ownerProjectId}, created ${new Date(vm.createdAt).toISOString()}); metering resumes from now`
+		);
+		return true;
+	} catch (err) {
+		console.warn(`Skipping billing meter reconciliation for VM ${vm.id}`, err);
+		return false;
+	}
+}
+
+async function vmTypeBilledByMeter(meter: Pick<BillingMeter, 'featureId' | 'resourceId'>) {
+	const db = initDrizzle();
+	const [byFeature] = await db
+		.select({ rate: vmTypes.rate, cap: vmTypes.cap })
+		.from(vmTypes)
+		.where(eq(vmTypes.autumnFeatureId, meter.featureId))
+		.limit(1);
+	if (byFeature) {
+		return byFeature;
+	}
+
+	const [byVm] = await db
+		.select({ rate: vmTypes.rate, cap: vmTypes.cap })
+		.from(vms)
+		.innerJoin(vmTypes, eq(vmTypes.id, vms.vmTypeId))
+		.where(eq(vms.id, meter.resourceId))
+		.limit(1);
+	return byVm;
+}
+
+async function meterCapContext(meter: BillingMeter) {
+	let capHours = Number.POSITIVE_INFINITY;
+	if (meter.resourceType === 'vm') {
+		const vmType = await vmTypeBilledByMeter(meter);
+		capHours = capHoursFor(vmType?.rate, vmType?.cap);
+
+		if (await vmMeterIsUnbillable(meter)) {
+			return { capHours, periodAt: makePeriodAt(null), billable: false };
 		}
 	}
 
-	return { created };
+	const lookup = await lookupProjectBillingPeriod(meter.projectId);
+	if (lookup.customer === 'missing') {
+		logUnbillableProject(meter.projectId);
+		return { capHours, periodAt: makePeriodAt(null), billable: false };
+	}
+
+	return { capHours, periodAt: makePeriodAt(lookup.anchor), billable: true };
+}
+
+async function vmMeterIsUnbillable(meter: Pick<BillingMeter, 'resourceId'>) {
+	const db = initDrizzle();
+	const vm = await db.query.vms.findFirst({
+		where: eq(vms.id, meter.resourceId),
+		columns: { status: true }
+	});
+	return vmIsUnbillable(vm?.status);
+}
+
+export async function hasUnsyncedUsageEvents(
+	resourceType: BillingResourceType,
+	resourceId: string
+) {
+	const db = initDrizzle();
+	const pending = await db.query.billingUsageEvents.findFirst({
+		where: and(
+			eq(billingUsageEvents.resourceType, resourceType),
+			eq(billingUsageEvents.resourceId, resourceId),
+			inArray(billingUsageEvents.syncStatus, ['pending', 'failed'])
+		),
+		columns: { id: true }
+	});
+	return pending !== undefined;
+}
+
+function logUnbillableProject(projectId: string) {
+	console.warn(
+		`Project ${projectId} has no billing customer; skipping usage for its meters until one exists`
+	);
+}
+
+function makePeriodAt(anchor: CapPeriod | null) {
+	return (at: number) => (anchor ? billingCyclePeriod(anchor, at) : calendarMonthPeriod(at));
 }
 
 export async function meterResourceThrough(
@@ -154,58 +314,209 @@ export async function meterResourceThrough(
 		)
 	});
 
-	if (!meter) return null;
+	if (!meter) {
+		return null;
+	}
 
-	const event = await db.transaction(async (tx) => {
+	const { capHours, periodAt, billable } = await meterCapContext(meter);
+
+	const events = await db.transaction(async (tx) => {
 		const [locked] = await tx
 			.select()
 			.from(billingMeters)
 			.where(and(eq(billingMeters.id, meter.id), eq(billingMeters.active, true)))
 			.for('update');
 
-		if (!locked) return null;
-
-		let inserted: BillingUsageEvent | null = null;
-		const quantity = usageQuantity(locked.units, locked.lastMeteredAt, now);
-		if (now > locked.lastMeteredAt && quantity > 0) {
-			const idempotencyKey = usageIdempotencyKey({
-				resourceType: locked.resourceType,
-				resourceId: locked.resourceId,
-				featureId: locked.featureId,
-				units: locked.units,
-				periodStart: locked.lastMeteredAt,
-				periodEnd: now
-			});
-
-			const rows = await tx
-				.insert(billingUsageEvents)
-				.values({
-					projectId: locked.projectId,
-					resourceType: locked.resourceType,
-					resourceId: locked.resourceId,
-					featureId: locked.featureId,
-					quantity: quantity.toString(),
-					periodStart: locked.lastMeteredAt,
-					periodEnd: now,
-					idempotencyKey,
-					createdAt: now
-				})
-				.onConflictDoNothing({ target: billingUsageEvents.idempotencyKey })
-				.returning();
-			inserted = rows[0] ?? null;
+		if (!locked) {
+			return [];
 		}
+
+		const { segments, state } = sliceCapUsage({
+			from: meteringWindowStart(locked, Math.max(now, locked.lastMeteredAt)),
+			to: Math.max(now, locked.lastMeteredAt),
+			capHours,
+			state: locked,
+			periodAt
+		});
+
+		const values = billable
+			? segments
+					.map((segment) => segmentEventValues(locked, segment, now))
+					.filter((value) => value !== null)
+			: [];
+
+		const inserted =
+			values.length > 0
+				? await tx
+						.insert(billingUsageEvents)
+						.values(values)
+						.onConflictDoNothing({ target: billingUsageEvents.idempotencyKey })
+						.returning()
+				: [];
 
 		await tx
 			.update(billingMeters)
-			.set({ lastMeteredAt: now, active: false, endedAt: now })
+			.set({
+				lastMeteredAt: now,
+				capPeriodStart: state.capPeriodStart,
+				capPeriodEnd: state.capPeriodEnd,
+				hoursThisPeriod: state.hoursThisPeriod.toFixed(6),
+				active: false,
+				endedAt: now
+			})
 			.where(eq(billingMeters.id, meter.id));
 
 		return inserted;
 	});
 
-	const syncStatus = event ? await syncUsageEvent(event.id) : null;
+	let syncStatus: Awaited<ReturnType<typeof syncUsageEvent>> = null;
+	for (const event of events) {
+		// biome-ignore lint/performance/noAwaitInLoops: usage events are pushed to Autumn in creation order, one at a time
+		const status = await syncUsageEvent(event.id);
+		if (syncStatus !== 'failed') {
+			syncStatus = status;
+		}
+	}
 
-	return { event, syncStatus };
+	return { events, syncStatus };
+}
+
+async function rotateMeterFeature(
+	meter: BillingMeter,
+	now: number,
+	nextFeatureId: string,
+	anchorFor: (projectId: string) => Promise<CapPeriod | null>
+) {
+	const db = initDrizzle();
+	const previousType = await vmTypeBilledByMeter(meter);
+	const capHours = capHoursFor(previousType?.rate, previousType?.cap);
+	const anchor = Number.isFinite(capHours) ? await anchorFor(meter.projectId) : null;
+	const periodAt = makePeriodAt(anchor);
+	const closeAt = Math.max(now, meter.lastMeteredAt);
+
+	console.error(
+		`Billing meter ${meter.id} for VM ${meter.resourceId} changed feature ${meter.featureId} -> ${nextFeatureId}; closing out the old rate and restarting the cap`
+	);
+
+	return db.transaction(async (tx) => {
+		const [locked] = await tx
+			.select()
+			.from(billingMeters)
+			.where(and(eq(billingMeters.id, meter.id), eq(billingMeters.active, true)))
+			.for('update');
+
+		if (!locked || locked.featureId !== meter.featureId) {
+			return [];
+		}
+
+		const { segments } = sliceCapUsage({
+			from: meteringWindowStart(locked, closeAt),
+			to: closeAt,
+			capHours,
+			state: locked,
+			periodAt
+		});
+
+		const values = segments
+			.map((segment) => segmentEventValues(locked, segment, closeAt))
+			.filter((value) => value !== null);
+
+		await tx
+			.update(billingMeters)
+			.set({
+				featureId: nextFeatureId,
+				lastMeteredAt: closeAt,
+				capPeriodStart: null,
+				capPeriodEnd: null,
+				hoursThisPeriod: '0'
+			})
+			.where(eq(billingMeters.id, meter.id));
+
+		if (values.length === 0) {
+			return [];
+		}
+
+		return tx
+			.insert(billingUsageEvents)
+			.values(values)
+			.onConflictDoNothing({ target: billingUsageEvents.idempotencyKey })
+			.returning();
+	});
+}
+
+export async function reconcileOrphanedMeters(now = Date.now(), limit = 100) {
+	const db = initDrizzle();
+	const orphans = await db
+		.select({
+			id: billingMeters.id,
+			projectId: billingMeters.projectId,
+			resourceId: billingMeters.resourceId
+		})
+		.from(billingMeters)
+		.leftJoin(vms, eq(vms.id, billingMeters.resourceId))
+		.leftJoin(organization, eq(organization.id, billingMeters.projectId))
+		.where(
+			and(
+				eq(billingMeters.active, true),
+				eq(billingMeters.resourceType, 'vm'),
+				or(
+					isNull(vms.id),
+					eq(vms.active, false),
+					isNull(organization.id),
+					isNotNull(organization.deletedAt)
+				)
+			)
+		)
+		.limit(limit);
+
+	if (orphans.length === 0) {
+		return { closed: 0 };
+	}
+
+	await db
+		.update(billingMeters)
+		.set({ active: false, endedAt: now })
+		.where(
+			inArray(
+				billingMeters.id,
+				orphans.map((orphan) => orphan.id)
+			)
+		);
+
+	for (const orphan of orphans) {
+		console.error(
+			`Closed orphaned billing meter ${orphan.id} for project ${orphan.projectId}, resource ${orphan.resourceId}`
+		);
+	}
+
+	return { closed: orphans.length };
+}
+
+export async function closeProjectMeters(projectId: string, now = Date.now()) {
+	const db = initDrizzle();
+	const closed = await db
+		.update(billingMeters)
+		.set({ active: false, endedAt: now })
+		.where(and(eq(billingMeters.projectId, projectId), eq(billingMeters.active, true)))
+		.returning({ id: billingMeters.id });
+
+	return closed.length;
+}
+
+export async function abandonProjectUsageEvents(projectId: string, reason: string) {
+	const db = initDrizzle();
+	const abandoned = await db
+		.update(billingUsageEvents)
+		.set({ syncStatus: 'abandoned', syncError: reason })
+		.where(
+			and(
+				eq(billingUsageEvents.projectId, projectId),
+				inArray(billingUsageEvents.syncStatus, ['pending', 'failed'])
+			)
+		)
+		.returning({ id: billingUsageEvents.id });
+
+	return abandoned.length;
 }
 
 export async function meterActiveResources(now = Date.now(), limit = 100) {
@@ -213,31 +524,95 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 	await reconcileMissingMeters(now, limit);
 
 	const meters = await db
-		.select()
+		.select({
+			meter: billingMeters,
+			rate: vmTypes.rate,
+			cap: vmTypes.cap,
+			currentFeatureId: vmTypes.autumnFeatureId,
+			vmStatus: vms.status
+		})
 		.from(billingMeters)
+		.leftJoin(vms, eq(vms.id, billingMeters.resourceId))
+		.leftJoin(vmTypes, eq(vmTypes.id, vms.vmTypeId))
 		.where(
 			and(
 				eq(billingMeters.resourceType, 'vm'),
 				eq(billingMeters.active, true),
-				lt(billingMeters.lastMeteredAt, now)
+				or(
+					lt(billingMeters.lastMeteredAt, now),
+					and(
+						isNotNull(vmTypes.autumnFeatureId),
+						ne(vmTypes.autumnFeatureId, billingMeters.featureId)
+					)
+				)
 			)
 		)
 		.orderBy(asc(billingMeters.lastMeteredAt))
 		.limit(limit);
 
-	const events: BillingUsageEvent[] = [];
-	await runBounded(meters, METER_CONCURRENCY, async (meter) => {
-		const event = await recordMeterUsage(meter, now);
-		if (event) events.push(event);
-	});
+	const lookups = new Map<string, Promise<ProjectBillingPeriodLookup>>();
+	const lookupFor = (projectId: string) => {
+		let lookup = lookups.get(projectId);
+		if (!lookup) {
+			lookup = lookupProjectBillingPeriod(projectId).then((result) => {
+				if (result.customer === 'missing') {
+					logUnbillableProject(projectId);
+				}
+				return result;
+			});
+			lookups.set(projectId, lookup);
+		}
+		return lookup;
+	};
+	const anchorFor = async (projectId: string) => {
+		const lookup = await lookupFor(projectId);
+		return lookup.customer === 'found' ? lookup.anchor : null;
+	};
 
-	return { meters: meters.length, events: events.length };
+	let events = 0;
+	const skipped = { errored: 0, unbillable: 0 };
+	await runBounded(
+		meters,
+		METER_CONCURRENCY,
+		async ({ meter, rate, cap, currentFeatureId, vmStatus }) => {
+			if (vmIsUnbillable(vmStatus)) {
+				skipped.errored += 1;
+				return;
+			}
+
+			const lookup = await lookupFor(meter.projectId);
+			if (lookup.customer === 'missing') {
+				skipped.unbillable += 1;
+				return;
+			}
+
+			if (currentFeatureId && currentFeatureId !== meter.featureId) {
+				const inserted = await rotateMeterFeature(meter, now, currentFeatureId, anchorFor);
+				events += inserted.length;
+				return;
+			}
+
+			const capHours = capHoursFor(rate, cap);
+			const anchor = Number.isFinite(capHours) ? await anchorFor(meter.projectId) : null;
+			const inserted = await recordMeterUsage(meter, now, capHours, makePeriodAt(anchor));
+			events += inserted.length;
+		}
+	);
+
+	return { meters: meters.length, events, skipped };
 }
 
-type EnsureCaches = {
-	projects: Map<string, Promise<boolean>>;
+function vmIsUnbillable(status: VmStatus | null | undefined) {
+	return status === 'error' || status === 'deleting';
+}
+
+type ProjectTargetStatus = 'ok' | 'failed' | 'gone';
+type EventTargetStatus = 'ready' | 'failed' | 'abandoned';
+
+interface EnsureCaches {
 	entities: Map<string, Promise<boolean>>;
-};
+	projects: Map<string, Promise<ProjectTargetStatus>>;
+}
 
 const SYNC_CONCURRENCY = 6;
 const METER_CONCURRENCY = 5;
@@ -246,7 +621,10 @@ async function runBounded<T>(items: T[], limit: number, worker: (item: T) => Pro
 	let index = 0;
 	const runner = async () => {
 		while (index < items.length) {
-			await worker(items[index++]);
+			const item = items[index];
+			index += 1;
+			// biome-ignore lint/performance/noAwaitInLoops: each runner is one lane of a bounded worker pool and must finish an item before taking the next
+			await worker(item);
 		}
 	};
 	await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runner));
@@ -260,6 +638,25 @@ async function markUsageEventFailed(eventId: string, error: string) {
 		.where(eq(billingUsageEvents.id, eventId));
 }
 
+async function markUsageEventAbandoned(eventId: string, error: string) {
+	const db = initDrizzle();
+	await db
+		.update(billingUsageEvents)
+		.set({ syncStatus: 'abandoned', syncError: error })
+		.where(eq(billingUsageEvents.id, eventId));
+}
+
+async function projectIsGone(projectId: string) {
+	const db = initDrizzle();
+	const [org] = await db
+		.select({ deletedAt: organization.deletedAt })
+		.from(organization)
+		.where(eq(organization.id, projectId))
+		.limit(1);
+
+	return !org || org.deletedAt !== null;
+}
+
 async function markUsageEventSynced(eventId: string) {
 	const db = initDrizzle();
 	await db
@@ -268,12 +665,20 @@ async function markUsageEventSynced(eventId: string) {
 		.where(eq(billingUsageEvents.id, eventId));
 }
 
+async function resolveProjectTargetStatus(projectId: string): Promise<ProjectTargetStatus> {
+	try {
+		await ensureProjectCustomer(projectId);
+		return 'ok';
+	} catch {
+		const gone = await projectIsGone(projectId).catch(() => false);
+		return gone ? 'gone' : 'failed';
+	}
+}
+
 function ensureProjectTarget(projectId: string, caches: EnsureCaches) {
 	let ensured = caches.projects.get(projectId);
 	if (!ensured) {
-		ensured = ensureProjectCustomer(projectId)
-			.then(() => true)
-			.catch(() => false);
+		ensured = resolveProjectTargetStatus(projectId);
 		caches.projects.set(projectId, ensured);
 	}
 
@@ -308,22 +713,29 @@ function ensureEntityTarget(
 	return ensured;
 }
 
-async function ensureEventTarget(event: BillingUsageEvent, caches: EnsureCaches) {
-	const customerEnsured = await ensureProjectTarget(event.projectId, caches);
-	if (!customerEnsured) {
+async function ensureEventTarget(
+	event: BillingUsageEvent,
+	caches: EnsureCaches
+): Promise<EventTargetStatus> {
+	const customerStatus = await ensureProjectTarget(event.projectId, caches);
+	if (customerStatus === 'gone') {
+		await markUsageEventAbandoned(event.id, 'Project no longer exists');
+		return 'abandoned';
+	}
+	if (customerStatus !== 'ok') {
 		await markUsageEventFailed(event.id, 'Failed to ensure Autumn customer');
-		return false;
+		return 'failed';
 	}
 
 	if (event.resourceType === 'vm') {
-		const entityEnsured = await ensureEntityTarget(event, caches, customerEnsured);
+		const entityEnsured = await ensureEntityTarget(event, caches, true);
 		if (!entityEnsured) {
 			await markUsageEventFailed(event.id, 'Failed to ensure Autumn entity');
-			return false;
+			return 'failed';
 		}
 	}
 
-	return true;
+	return 'ready';
 }
 
 async function trackUsageEvent(event: BillingUsageEvent) {
@@ -343,7 +755,8 @@ async function trackUsageEvent(event: BillingUsageEvent) {
 				resourceType: event.resourceType,
 				resourceId: event.resourceId,
 				periodStart: event.periodStart,
-				periodEnd: event.periodEnd
+				periodEnd: event.periodEnd,
+				...(event.note ? { note: event.note } : {})
 			}
 		};
 
@@ -357,6 +770,10 @@ async function trackUsageEvent(event: BillingUsageEvent) {
 			.where(eq(billingUsageEvents.id, event.id));
 		return 'synced' as const;
 	} catch (err) {
+		if (autumnStatus(err) === 404) {
+			await markUsageEventAbandoned(event.id, formatAutumnError(err));
+			return 'abandoned' as const;
+		}
 		await markUsageEventFailed(event.id, formatAutumnError(err));
 		return 'failed' as const;
 	}
@@ -367,6 +784,7 @@ async function syncUsageEvents(events: BillingUsageEvent[]) {
 	const ready: BillingUsageEvent[] = [];
 	let synced = 0;
 	let failed = 0;
+	let abandoned = 0;
 
 	await runBounded(events, SYNC_CONCURRENCY, async (event) => {
 		if (event.syncStatus === 'synced') {
@@ -378,17 +796,28 @@ async function syncUsageEvents(events: BillingUsageEvent[]) {
 			synced += 1;
 			return;
 		}
-		if (await ensureEventTarget(event, caches)) ready.push(event);
-		else failed += 1;
+		const target = await ensureEventTarget(event, caches);
+		if (target === 'ready') {
+			ready.push(event);
+		} else if (target === 'abandoned') {
+			abandoned += 1;
+		} else {
+			failed += 1;
+		}
 	});
 
 	await runBounded(ready, SYNC_CONCURRENCY, async (event) => {
 		const status = await trackUsageEvent(event);
-		if (status === 'synced') synced += 1;
-		else failed += 1;
+		if (status === 'synced') {
+			synced += 1;
+		} else if (status === 'abandoned') {
+			abandoned += 1;
+		} else {
+			failed += 1;
+		}
 	});
 
-	return { synced, failed };
+	return { synced, failed, abandoned };
 }
 
 export async function syncUsageEvent(id: string) {
@@ -397,21 +826,53 @@ export async function syncUsageEvent(id: string) {
 		where: eq(billingUsageEvents.id, id)
 	});
 
-	if (!event) return null;
-	if (event.syncStatus === 'synced') return 'synced' as const;
+	if (!event) {
+		return null;
+	}
+	if (event.syncStatus === 'synced') {
+		return 'synced' as const;
+	}
 	if (await isProjectBillingExempt(event.projectId)) {
 		await markUsageEventSynced(event.id);
 		return 'synced' as const;
 	}
 
 	const caches: EnsureCaches = { projects: new Map(), entities: new Map() };
-	if (!(await ensureEventTarget(event, caches))) return 'failed' as const;
+	const target = await ensureEventTarget(event, caches);
+	if (target !== 'ready') {
+		return target === 'abandoned' ? ('abandoned' as const) : ('failed' as const);
+	}
 
 	return trackUsageEvent(event);
 }
 
+const FAILED_EVENT_MAX_AGE_MS = 7 * 86_400_000;
+
+async function abandonStaleFailedEvents(now: number) {
+	const db = initDrizzle();
+	const stale = await db
+		.update(billingUsageEvents)
+		.set({ syncStatus: 'abandoned' })
+		.where(
+			and(
+				eq(billingUsageEvents.syncStatus, 'failed'),
+				lt(billingUsageEvents.createdAt, now - FAILED_EVENT_MAX_AGE_MS)
+			)
+		)
+		.returning({ id: billingUsageEvents.id });
+
+	if (stale.length > 0) {
+		console.error(
+			`Abandoned ${stale.length} usage events that stayed failed for over ${FAILED_EVENT_MAX_AGE_MS / 86_400_000} days`
+		);
+	}
+
+	return stale.length;
+}
+
 export async function syncPendingUsage(limit = 50) {
 	const db = initDrizzle();
+	const expired = await abandonStaleFailedEvents(Date.now());
 	const events = await db
 		.select()
 		.from(billingUsageEvents)
@@ -422,9 +883,9 @@ export async function syncPendingUsage(limit = 50) {
 		)
 		.limit(limit);
 
-	const { synced, failed } = await syncUsageEvents(events);
+	const { synced, failed, abandoned } = await syncUsageEvents(events);
 
-	return { attempted: events.length, synced, failed };
+	return { attempted: events.length, synced, failed, abandoned, expired };
 }
 
 export async function syncProjectUsage(projectId: string, limit = 50) {
@@ -444,7 +905,7 @@ export async function syncProjectUsage(projectId: string, limit = 50) {
 		)
 		.limit(limit);
 
-	const { synced, failed } = await syncUsageEvents(events);
+	const { synced, failed, abandoned } = await syncUsageEvents(events);
 
-	return { attempted: events.length, synced, failed };
+	return { attempted: events.length, synced, failed, abandoned };
 }

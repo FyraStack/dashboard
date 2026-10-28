@@ -1,9 +1,11 @@
-import { Autumn } from 'autumn-js';
-import { and, eq, isNull } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
-import { initDrizzle } from '$lib/server/db';
-import { member, organization, projectBillingCustomers, user } from '$lib/server/db/schema';
-import { getRuntimeEnv } from '$lib/server/env';
+import { Autumn } from 'autumn-js';
+import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
+import { member, organization, user } from '#lib/server/db/auth.schema.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { projectBillingCustomers } from '#lib/server/db/schema.js';
+import { getRuntimeEnv } from '#lib/server/env.js';
+import type { CapPeriod } from './caps';
 
 export function isBillingConfigured() {
 	const env = getRuntimeEnv();
@@ -12,7 +14,9 @@ export function isBillingConfigured() {
 
 export function createAutumnClient() {
 	const secretKey = getRuntimeEnv().AUTUMN_SECRET;
-	if (!secretKey) throw new Error('AUTUMN_SECRET is not set');
+	if (!secretKey) {
+		throw new Error('AUTUMN_SECRET is not set');
+	}
 
 	return new Autumn({ secretKey, failOpen: false });
 }
@@ -21,7 +25,7 @@ function errorMessage(err: unknown) {
 	return err instanceof Error ? err.message : String(err);
 }
 
-function autumnStatus(err: unknown) {
+export function autumnStatus(err: unknown) {
 	return typeof err === 'object' && err !== null && 'statusCode' in err
 		? Number(err.statusCode)
 		: null;
@@ -29,13 +33,19 @@ function autumnStatus(err: unknown) {
 
 function serverEntityFeatureId() {
 	const featureId = getRuntimeEnv().AUTUMN_SERVER_ENTITY_FEATURE_ID;
-	if (!featureId) throw new Error('AUTUMN_SERVER_ENTITY_FEATURE_ID is not set');
+	if (!featureId) {
+		throw new Error('AUTUMN_SERVER_ENTITY_FEATURE_ID is not set');
+	}
 
 	return featureId;
 }
 
 function defaultPlanId() {
 	return getRuntimeEnv().AUTUMN_DEFAULT_PLAN_ID;
+}
+
+export function creditsFeatureId() {
+	return getRuntimeEnv().AUTUMN_CREDITS_FEATURE_ID || null;
 }
 
 function isActiveSubscription(subscription: {
@@ -60,7 +70,9 @@ async function getProjectCustomerData(projectId: string) {
 		with: { members: { with: { user: true } } }
 	});
 
-	if (!project) error(404, `Project "${projectId}" not found`);
+	if (!project || project.deletedAt !== null) {
+		error(404, `Project "${projectId}" not found`);
+	}
 
 	const owner = project.members.find((item) => item.role === 'owner') ?? project.members[0];
 
@@ -77,7 +89,9 @@ export async function ensureLocalProjectBillingCustomer(projectId: string) {
 		where: eq(projectBillingCustomers.projectId, projectId)
 	});
 
-	if (existing) return existing;
+	if (existing) {
+		return existing;
+	}
 
 	const [inserted] = await db
 		.insert(projectBillingCustomers)
@@ -95,12 +109,16 @@ export async function ensureLocalProjectBillingCustomer(projectId: string) {
 export async function ensureProjectCustomer(projectId: string) {
 	const db = initDrizzle();
 	const now = Date.now();
+
+	if (!isBillingConfigured()) {
+		await ensureLocalProjectBillingCustomer(projectId);
+		return;
+	}
+
+	const customer = await getProjectCustomerData(projectId);
 	await ensureLocalProjectBillingCustomer(projectId);
 
-	if (!isBillingConfigured()) return;
-
 	try {
-		const customer = await getProjectCustomerData(projectId);
 		await createAutumnClient().customers.getOrCreate({
 			customerId: projectId,
 			name: customer.name,
@@ -123,7 +141,9 @@ export async function ensureProjectCustomer(projectId: string) {
 }
 
 export async function updateProjectCustomer(projectId: string) {
-	if (!isBillingConfigured()) return;
+	if (!isBillingConfigured()) {
+		return;
+	}
 
 	const db = initDrizzle();
 	const now = Date.now();
@@ -156,10 +176,14 @@ export async function attachDefaultProjectPlan(
 	discountCode?: string
 ) {
 	const planId = defaultPlanId();
-	if (!planId) return null;
+	if (!planId) {
+		return null;
+	}
 
 	await ensureProjectCustomer(projectId);
-	if (!isBillingConfigured()) return null;
+	if (!isBillingConfigured()) {
+		return null;
+	}
 
 	const attachPlan = (withDiscount: boolean) =>
 		createAutumnClient().billing.attach({
@@ -172,7 +196,9 @@ export async function attachDefaultProjectPlan(
 
 	try {
 		const response = await attachPlan(true).catch((err) => {
-			if (!discountCode || autumnStatus(err) !== 400) throw err;
+			if (!discountCode || autumnStatus(err) !== 400) {
+				throw err;
+			}
 
 			return attachPlan(false);
 		});
@@ -180,7 +206,9 @@ export async function attachDefaultProjectPlan(
 		invalidateProjectBillingState(projectId);
 		return response.paymentUrl;
 	} catch (err) {
-		if (autumnStatus(err) === 409) return null;
+		if (autumnStatus(err) === 409) {
+			return null;
+		}
 
 		const db = initDrizzle();
 		await db
@@ -192,7 +220,9 @@ export async function attachDefaultProjectPlan(
 }
 
 export async function cancelProjectBilling(projectId: string) {
-	if (!isBillingConfigured()) return true;
+	if (!isBillingConfigured()) {
+		return true;
+	}
 
 	const planId = defaultPlanId();
 
@@ -204,7 +234,9 @@ export async function cancelProjectBilling(projectId: string) {
 		});
 		return true;
 	} catch (err) {
-		if (autumnStatus(err) === 404) return true;
+		if (autumnStatus(err) === 404) {
+			return true;
+		}
 
 		const db = initDrizzle();
 		await db
@@ -221,11 +253,12 @@ export async function retryOrphanedProjectBillingCancellations(limit = 100) {
 		.select({ projectId: projectBillingCustomers.projectId })
 		.from(projectBillingCustomers)
 		.leftJoin(organization, eq(organization.id, projectBillingCustomers.projectId))
-		.where(isNull(organization.id))
+		.where(or(isNull(organization.id), isNotNull(organization.deletedAt)))
 		.limit(limit);
 
 	let cancelled = 0;
 	for (const { projectId } of orphans) {
+		// biome-ignore lint/performance/noAwaitInLoops: orphan cancellations hit Autumn one at a time to stay within its rate limits
 		if (await cancelProjectBilling(projectId)) {
 			await deleteLocalProjectBillingCustomer(projectId);
 			cancelled += 1;
@@ -237,7 +270,9 @@ export async function retryOrphanedProjectBillingCancellations(limit = 100) {
 
 export async function validateProjectDiscountCode(projectId: string, discountCode: string) {
 	const planId = defaultPlanId();
-	if (!planId || !isBillingConfigured()) return;
+	if (!(planId && isBillingConfigured())) {
+		return;
+	}
 
 	await ensureProjectCustomer(projectId);
 
@@ -256,7 +291,9 @@ export async function validateProjectDiscountCode(projectId: string, discountCod
 }
 
 export async function setupProjectPayment(projectId: string, successUrl: string) {
-	if (!isBillingConfigured()) error(501, 'Billing is not configured in this environment.');
+	if (!isBillingConfigured()) {
+		error(501, 'Billing is not configured in this environment.');
+	}
 
 	await ensureProjectCustomer(projectId);
 
@@ -380,7 +417,9 @@ export async function getProjectBillingState(
 	const now = Date.now();
 	if (!options.live) {
 		const cached = billingStateCache.get(projectId);
-		if (cached && now < cached.expiresAt) return cached.state;
+		if (cached && now < cached.expiresAt) {
+			return cached.state;
+		}
 	}
 
 	const state = await computeProjectBillingState(projectId);
@@ -390,6 +429,16 @@ export async function getProjectBillingState(
 
 export async function isProjectBillingExempt(projectId: string) {
 	const db = initDrizzle();
+
+	const [project] = await db
+		.select({ billingExempt: organization.billingExempt })
+		.from(organization)
+		.where(eq(organization.id, projectId))
+		.limit(1);
+	if (project?.billingExempt) {
+		return true;
+	}
+
 	const [exemptOwner] = await db
 		.select({ userId: member.userId })
 		.from(member)
@@ -407,7 +456,9 @@ export async function isProjectBillingExempt(projectId: string) {
 }
 
 export async function requireProjectBillingActive(projectId: string) {
-	if (await isProjectBillingExempt(projectId)) return;
+	if (await isProjectBillingExempt(projectId)) {
+		return;
+	}
 
 	const state = await getProjectBillingState(projectId, { live: true });
 
@@ -416,8 +467,165 @@ export async function requireProjectBillingActive(projectId: string) {
 	}
 }
 
+export async function getProjectCreditsBalance(projectId: string) {
+	const featureId = creditsFeatureId();
+	if (!(featureId && isBillingConfigured())) {
+		return null;
+	}
+
+	try {
+		const customer = await createAutumnClient().customers.get({ customerId: projectId });
+		const balance = customer.balances?.[featureId];
+		if (!balance) {
+			return null;
+		}
+
+		const breakdowns = balance.breakdown ?? [];
+		const overage = breakdowns.find((item) => item.price?.billingMethod === 'usage_based');
+		const prepaid = breakdowns.find((item) => item.price?.billingMethod === 'prepaid');
+		const overagePrice = overage?.price;
+		const overageRate =
+			overagePrice && typeof overagePrice.amount === 'number' && overagePrice.billingUnits > 0
+				? overagePrice.amount / overagePrice.billingUnits
+				: null;
+		const overageUsage = overage?.usage ?? 0;
+
+		return {
+			featureId,
+			remaining: balance.remaining ?? 0,
+			usage: balance.usage ?? 0,
+			overageUsage,
+			overageRate,
+			estimatedOverageCost:
+				overageRate === null ? null : Number((overageUsage * overageRate).toFixed(2)),
+			prepaidPrice: prepaid?.price
+				? { amount: prepaid.price.amount ?? null, billingUnits: prepaid.price.billingUnits }
+				: null,
+			nextResetAt: balance.nextResetAt ?? null
+		};
+	} catch {
+		return null;
+	}
+}
+
+const creditPurchaseLocks = new Map<string, Promise<void>>();
+
+function withProjectCreditPurchaseLock<T>(projectId: string, task: () => Promise<T>): Promise<T> {
+	const previous = creditPurchaseLocks.get(projectId) ?? Promise.resolve();
+	const result = previous.then(task);
+	const settled = result.then(
+		() => undefined,
+		() => undefined
+	);
+	creditPurchaseLocks.set(projectId, settled);
+	settled.then(() => {
+		if (creditPurchaseLocks.get(projectId) === settled) {
+			creditPurchaseLocks.delete(projectId);
+		}
+	});
+	return result;
+}
+
+export function purchaseProjectCredits(projectId: string, credits: number, idempotencyKey: string) {
+	return withProjectCreditPurchaseLock(projectId, async () => {
+		const featureId = creditsFeatureId();
+		const planId = defaultPlanId();
+		if (!(isBillingConfigured() && featureId && planId)) {
+			error(501, 'Credit purchases are not configured in this environment.');
+		}
+
+		await ensureProjectCustomer(projectId);
+
+		const response = await createAutumnClient().billing.update(
+			{
+				customerId: projectId,
+				planId,
+				featureQuantities: [{ featureId, quantity: credits }],
+				redirectMode: 'if_required'
+			},
+			{ headers: { 'Idempotency-Key': `credit-purchase:${projectId}:${idempotencyKey}` } }
+		);
+
+		invalidateProjectBillingState(projectId);
+		return response.paymentUrl ?? null;
+	});
+}
+
+const ISSUED_INVOICE_STATUSES = new Set(['open', 'paid', 'uncollectible']);
+
+function isIssuedInvoice(invoice: { status: string }) {
+	return ISSUED_INVOICE_STATUSES.has(invoice.status.toLowerCase());
+}
+
+export async function getProjectInvoices(projectId: string) {
+	if (!isBillingConfigured()) {
+		return [];
+	}
+
+	try {
+		const customer = await createAutumnClient().customers.get({
+			customerId: projectId,
+			expand: ['invoices']
+		});
+
+		return (customer.invoices ?? []).filter(isIssuedInvoice).map((invoice) => ({
+			stripeId: invoice.stripeId,
+			status: invoice.status,
+			total: invoice.total,
+			currency: invoice.currency,
+			createdAt: invoice.createdAt,
+			hostedInvoiceUrl: invoice.hostedInvoiceUrl ?? null
+		}));
+	} catch {
+		return [];
+	}
+}
+
+export type ProjectBillingPeriodLookup =
+	| { customer: 'found'; anchor: CapPeriod | null }
+	| { customer: 'missing' };
+
+async function findAutumnCustomer(projectId: string) {
+	try {
+		return await createAutumnClient().customers.get({ customerId: projectId });
+	} catch (err) {
+		if (autumnStatus(err) === 404) {
+			return null;
+		}
+		throw err;
+	}
+}
+
+export async function lookupProjectBillingPeriod(
+	projectId: string
+): Promise<ProjectBillingPeriodLookup> {
+	if (!isBillingConfigured()) {
+		return { customer: 'found', anchor: null };
+	}
+
+	const customer = await findAutumnCustomer(projectId);
+	if (!customer) {
+		return { customer: 'missing' };
+	}
+
+	const planId = defaultPlanId();
+	const subscription = planId
+		? customer.subscriptions.find((item) => item.planId === planId)
+		: undefined;
+	if (!(subscription?.currentPeriodStart && subscription.currentPeriodEnd)) {
+		return { customer: 'found', anchor: null };
+	}
+
+	return {
+		customer: 'found',
+		anchor: { start: subscription.currentPeriodStart, end: subscription.currentPeriodEnd }
+	};
+}
+
 export async function openProjectBillingPortal(projectId: string, returnUrl: string) {
-	if (!isBillingConfigured()) error(501, 'Billing is not configured in this environment.');
+	if (!isBillingConfigured()) {
+		error(501, 'Billing is not configured in this environment.');
+	}
 
 	await ensureProjectCustomer(projectId);
 
@@ -435,7 +643,9 @@ export async function ensureProjectServerEntity(input: {
 	name?: string | null;
 	customerEnsured?: boolean;
 }) {
-	if (!isBillingConfigured()) return;
+	if (!isBillingConfigured()) {
+		return;
+	}
 
 	if (!input.customerEnsured) {
 		await ensureProjectCustomer(input.projectId);
@@ -446,7 +656,9 @@ export async function ensureProjectServerEntity(input: {
 		await client.entities.get({ customerId: input.projectId, entityId: input.serverId });
 		return;
 	} catch (err) {
-		if (autumnStatus(err) !== 404) throw err;
+		if (autumnStatus(err) !== 404) {
+			throw err;
+		}
 	}
 
 	try {
@@ -457,17 +669,23 @@ export async function ensureProjectServerEntity(input: {
 			name: input.name ?? input.serverId
 		});
 	} catch (err) {
-		if (autumnStatus(err) !== 409) throw err;
+		if (autumnStatus(err) !== 409) {
+			throw err;
+		}
 	}
 }
 
 export async function deleteProjectServerEntity(projectId: string, serverId: string) {
-	if (!isBillingConfigured()) return;
+	if (!isBillingConfigured()) {
+		return;
+	}
 
 	try {
 		await createAutumnClient().entities.delete({ customerId: projectId, entityId: serverId });
 	} catch (err) {
-		if (autumnStatus(err) !== 404) throw err;
+		if (autumnStatus(err) !== 404) {
+			throw err;
+		}
 	}
 }
 

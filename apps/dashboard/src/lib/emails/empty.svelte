@@ -11,9 +11,9 @@
 	import EmailHeader from './email-header.svelte';
 
 	interface Props {
+		body: string;
 		label?: string | null;
 		preview?: string | null;
-		body: string;
 	}
 
 	let { label = null, preview = null, body }: Props = $props();

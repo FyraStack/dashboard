@@ -1,26 +1,26 @@
-import { dev } from '$app/environment';
-import { getRequestEvent } from '$app/server';
-import { error } from '@sveltejs/kit';
+import { waitUntil } from 'cloudflare:workers';
 import type { KVNamespace } from '@cloudflare/workers-types';
+import { error } from '@sveltejs/kit';
 import {
 	defaultFeatureFlags,
 	developmentFeatureFlags,
-	featureFlagKeys,
 	type FeatureFlagKey,
-	type FeatureFlags
-} from '$lib/feature-flags';
-import { getRuntimeEnv } from '$lib/server/env';
-import { instrument, timingLog } from '$lib/server/observability';
+	type FeatureFlags,
+	featureFlagKeys
+} from '#lib/feature-flags.js';
+import { getRuntimeEnv } from '#lib/server/env.js';
+import { instrument, timingLog } from '#lib/server/observability.js';
+import { dev } from '$app/env';
 
 const FEATURE_FLAGS_KEY = 'feature-flags';
 const FLAGS_FRESH_TTL_MS = 60_000;
 const FLAGS_STALE_TTL_MS = 15 * 60_000;
 
-type FlagsCache = {
+interface FlagsCache {
 	flags: FeatureFlags;
 	freshUntil: number;
 	staleUntil: number;
-};
+}
 
 let flagsCache: FlagsCache | null = null;
 let flagsRefresh: Promise<FeatureFlags> | null = null;
@@ -47,7 +47,7 @@ function cacheFlags(flags: FeatureFlags): FeatureFlags {
 }
 
 async function loadFeatureFlagsFromKv(kv: KVNamespace): Promise<FeatureFlags> {
-	return instrument('featureFlags.kv.get', async () => {
+	return await instrument('featureFlags.kv.get', async () => {
 		const storedFlags = await kv.get(FEATURE_FLAGS_KEY, 'json');
 		return cacheFlags(
 			normalizeFeatureFlags(storedFlags as Partial<Record<FeatureFlagKey, unknown>> | null)
@@ -67,11 +67,7 @@ function scheduleFeatureFlagRefresh(kv: KVNamespace): Promise<FeatureFlags> {
 			});
 	}
 
-	try {
-		getRequestEvent().platform?.ctx?.waitUntil(flagsRefresh.then(() => undefined));
-	} catch {
-		// getFeatureFlags can be imported in non-request contexts during local tooling.
-	}
+	waitUntil(flagsRefresh.then(() => undefined));
 
 	return flagsRefresh;
 }
@@ -95,17 +91,17 @@ export async function getFeatureFlags(options?: { fresh?: boolean }): Promise<Fe
 
 	if (options?.fresh) {
 		timingLog('featureFlags.freshRead');
-		return loadFeatureFlagsFromKv(kv);
+		return await loadFeatureFlagsFromKv(kv);
 	}
 
 	if (flagsCache && now < flagsCache.staleUntil) {
-		void scheduleFeatureFlagRefresh(kv);
+		scheduleFeatureFlagRefresh(kv);
 		timingLog('featureFlags.cache.stale');
 		return flagsCache.flags;
 	}
 
 	timingLog(flagsCache ? 'featureFlags.cache.expiredRead' : 'featureFlags.cache.coldRead');
-	return scheduleFeatureFlagRefresh(kv);
+	return await scheduleFeatureFlagRefresh(kv);
 }
 
 export async function setFeatureFlag(

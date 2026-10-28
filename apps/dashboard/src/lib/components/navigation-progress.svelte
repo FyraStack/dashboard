@@ -15,19 +15,25 @@
 	let fadeTimer: ReturnType<typeof setTimeout> | null = null;
 
 	function clearAppear() {
-		if (appearTimer === null) return;
+		if (appearTimer === null) {
+			return;
+		}
 		clearTimeout(appearTimer);
 		appearTimer = null;
 	}
 
 	function clearTrickle() {
-		if (trickleTimer === null) return;
+		if (trickleTimer === null) {
+			return;
+		}
 		clearInterval(trickleTimer);
 		trickleTimer = null;
 	}
 
 	function clearFade() {
-		if (fadeTimer === null) return;
+		if (fadeTimer === null) {
+			return;
+		}
 		clearTimeout(fadeTimer);
 		fadeTimer = null;
 	}
@@ -42,7 +48,9 @@
 	function start() {
 		clearFade();
 		dimmed = false;
-		if (appearTimer !== null) return;
+		if (appearTimer !== null) {
+			return;
+		}
 		if (visible) {
 			if (trickleTimer === null) {
 				width = 12;
@@ -61,7 +69,9 @@
 	function finish() {
 		clearAppear();
 		clearTrickle();
-		if (!visible) return;
+		if (!visible) {
+			return;
+		}
 		width = 100;
 		fadeTimer = setTimeout(() => {
 			dimmed = true;
@@ -74,8 +84,11 @@
 	}
 
 	$effect(() => {
-		if (navigating.to) start();
-		else finish();
+		if (navigating.to) {
+			start();
+		} else {
+			finish();
+		}
 	});
 
 	$effect(() => () => {

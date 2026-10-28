@@ -1,22 +1,21 @@
+import { relations, sql } from 'drizzle-orm';
 import {
-	pgTable,
-	pgEnum,
-	text,
-	boolean,
 	bigint,
-	integer,
-	numeric,
+	boolean,
+	cidr,
 	date,
 	index,
-	uniqueIndex,
 	inet,
-	cidr
+	integer,
+	numeric,
+	pgEnum,
+	pgSequence,
+	pgTable,
+	text,
+	uniqueIndex
 } from 'drizzle-orm/pg-core';
-import { relations, sql } from 'drizzle-orm';
+import { ulid } from '#lib/server/id.js';
 import { organization } from './auth.schema';
-import { ulid } from '$lib/server/id';
-
-export * from './auth.schema';
 
 const ulidPk = () => text('id').primaryKey().$defaultFn(ulid);
 const ulidFk = (name: string) => text(name);
@@ -27,7 +26,12 @@ export const vmBackendEnum = pgEnum('vm_backend', ['proxmox']);
 
 export const vmStatusEnum = pgEnum('vm_status', ['provisioning', 'ready', 'error', 'deleting']);
 
-export const billingSyncStatusEnum = pgEnum('billing_sync_status', ['pending', 'synced', 'failed']);
+export const billingSyncStatusEnum = pgEnum('billing_sync_status', [
+	'pending',
+	'synced',
+	'failed',
+	'abandoned'
+]);
 
 export const billingResourceTypeEnum = pgEnum('billing_resource_type', ['vm', 'volume']);
 
@@ -67,6 +71,7 @@ export const vms = pgTable(
 		lastKnownUptime: integer('last_known_uptime').notNull().default(0),
 		lastKnownAt: bigint('last_known_at', { mode: 'number' }),
 		active: boolean('active').notNull().default(true),
+		deletedAt: bigint('deleted_at', { mode: 'number' }),
 		ownerProjectId: ulidFk('owner_project_id').references(() => organization.id),
 		vmTypeId: ulidFk('vm_type_id')
 			.notNull()
@@ -82,9 +87,16 @@ export const vms = pgTable(
 	(table) => [
 		index('vms_owner_project_id_index').on(table.ownerProjectId),
 		index('vms_owner_project_active_index').on(table.ownerProjectId, table.active),
-		index('vms_proxmox_id_index').on(table.proxmoxId)
+		index('vms_proxmox_id_index').on(table.proxmoxId),
+		uniqueIndex('vms_active_proxmox_id_unique').on(table.proxmoxId).where(sql`${table.active}`)
 	]
 );
+
+export const proxmoxVmidSequence = pgSequence('proxmox_vmid_seq', {
+	startWith: 1000,
+	minValue: 1000,
+	maxValue: 999_999_999
+});
 
 export const vmsRelations = relations(vms, ({ one, many }) => ({
 	project: one(organization, {
@@ -190,6 +202,9 @@ export const billingMeters = pgTable(
 		featureId: text('feature_id').notNull(),
 		units: numeric('units').notNull(),
 		lastMeteredAt: bigint('last_metered_at', { mode: 'number' }).notNull(),
+		capPeriodStart: bigint('cap_period_start', { mode: 'number' }),
+		capPeriodEnd: bigint('cap_period_end', { mode: 'number' }),
+		hoursThisPeriod: numeric('hours_this_period').notNull().default('0'),
 		active: boolean('active').notNull().default(true),
 		createdAt: bigint('created_at', { mode: 'number' }).notNull(),
 		endedAt: bigint('ended_at', { mode: 'number' })
@@ -213,6 +228,7 @@ export const billingUsageEvents = pgTable(
 		periodStart: bigint('period_start', { mode: 'number' }).notNull(),
 		periodEnd: bigint('period_end', { mode: 'number' }).notNull(),
 		idempotencyKey: text('idempotency_key').notNull(),
+		note: text('note'),
 		syncStatus: billingSyncStatusEnum('sync_status').notNull().default('pending'),
 		syncError: text('sync_error'),
 		syncedAt: bigint('synced_at', { mode: 'number' }),
@@ -280,6 +296,7 @@ export const ipamPrefixes = pgTable(
 		whitelistStart: inet('whitelist_start'),
 		whitelistEnd: inet('whitelist_end'),
 		gatewayAddress: inet('gateway_address'),
+		bunnyDnsZone: text('bunny_dns_zone'),
 		createdAt: bigint('created_at', { mode: 'number' })
 			.notNull()
 			.default(sql`(extract(epoch from now()) * 1000)::bigint`)
@@ -322,7 +339,33 @@ export const ipamAllocations = pgTable(
 	]
 );
 
-export const ipamAllocationsRelations = relations(ipamAllocations, ({ one }) => ({
+export const ipamSettings = pgTable('ipam_settings', {
+	id: text('id').primaryKey(),
+	defaultPtrFormatIpv4: text('default_ptr_format_ipv4'),
+	defaultPtrFormatIpv6: text('default_ptr_format_ipv6')
+});
+
+export const ipamPtrRecords = pgTable(
+	'ipam_ptr_records',
+	{
+		id: ulidPk(),
+		ipamAllocationId: ulidFk('ipam_allocation_id')
+			.notNull()
+			.references(() => ipamAllocations.id, { onDelete: 'cascade' }),
+		address: inet('address').notNull(),
+		value: text('value').notNull(),
+		bunnyRecordId: bigint('bunny_record_id', { mode: 'number' }),
+		createdAt: bigint('created_at', { mode: 'number' })
+			.notNull()
+			.default(sql`(extract(epoch from now()) * 1000)::bigint`)
+	},
+	(table) => [
+		index('ipam_ptr_records_ipam_allocation_id_index').on(table.ipamAllocationId),
+		uniqueIndex('ipam_ptr_records_address_index').on(table.address)
+	]
+);
+
+export const ipamAllocationsRelations = relations(ipamAllocations, ({ one, many }) => ({
 	ipamPrefix: one(ipamPrefixes, {
 		fields: [ipamAllocations.ipamPrefixId],
 		references: [ipamPrefixes.id]
@@ -330,6 +373,14 @@ export const ipamAllocationsRelations = relations(ipamAllocations, ({ one }) => 
 	vm: one(vms, {
 		fields: [ipamAllocations.associatedVmId],
 		references: [vms.id]
+	}),
+	ptrRecords: many(ipamPtrRecords)
+}));
+
+export const ipamPtrRecordsRelations = relations(ipamPtrRecords, ({ one }) => ({
+	ipamAllocation: one(ipamAllocations, {
+		fields: [ipamPtrRecords.ipamAllocationId],
+		references: [ipamAllocations.id]
 	})
 }));
 
@@ -346,6 +397,28 @@ export const sshKeys = pgTable(
 		description: text('description')
 	},
 	(table) => [index('ssh_keys_user_id_index').on(table.userId)]
+);
+
+// Idempotency Keys
+
+export const idempotencyStatusEnum = pgEnum('idempotency_status', ['pending', 'completed']);
+
+export const idempotencyKeys = pgTable(
+	'idempotency_keys',
+	{
+		key: text('key').primaryKey(),
+		fingerprint: text('fingerprint').notNull(),
+		status: idempotencyStatusEnum('status').notNull().default('pending'),
+		result: text('result'),
+		createdAt: bigint('created_at', { mode: 'number' })
+			.notNull()
+			.default(sql`(extract(epoch from now()) * 1000)::bigint`),
+		updatedAt: bigint('updated_at', { mode: 'number' })
+			.notNull()
+			.default(sql`(extract(epoch from now()) * 1000)::bigint`),
+		expiresAt: bigint('expires_at', { mode: 'number' }).notNull()
+	},
+	(table) => [index('idempotency_keys_expires_at_index').on(table.expiresAt)]
 );
 
 // API Tokens

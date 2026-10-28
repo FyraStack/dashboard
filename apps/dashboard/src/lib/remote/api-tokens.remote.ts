@@ -1,20 +1,17 @@
-import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { eq, and } from 'drizzle-orm';
-import { initDrizzle } from '$lib/server/db';
-import { apiTokens } from '$lib/server/db/schema';
-
-type ListResult = {
-	id: string;
-	name: string;
-	createdAt: number;
-	lastUsedAt: number | null;
-}[];
+import { and, eq } from 'drizzle-orm';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { apiTokens } from '#lib/server/db/schema.js';
+import { withIdempotency } from '#lib/server/idempotency.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
+import { command, getRequestEvent, query } from '$app/server';
 
 export const listApiTokens = query(async () => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const tokens = await db.query.apiTokens.findMany({
@@ -43,44 +40,71 @@ async function hashToken(token: string): Promise<string> {
 	return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-const createParams = type({ name: 'string' });
-type CreateResult = { id: string; token: string };
+const createParams = type({ name: 'string', idempotencyKey: '0 < string <= 128' });
 
 export const createApiToken = command(createParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
+	const userId = event.locals.user.id;
 	const plainToken = generateToken();
 	const tokenHash = await hashToken(plainToken);
+	let insertedNow = false;
 
-	const [inserted] = await db
-		.insert(apiTokens)
-		.values({
-			userId: event.locals.user.id,
-			name: params.name,
-			tokenHash,
-			createdAt: Date.now()
-		})
-		.returning();
+	const { id } = await withIdempotency(
+		db,
+		{
+			key: params.idempotencyKey,
+			operation: 'apiTokens.createApiToken',
+			args: { name: params.name, userId }
+		},
+		async () => {
+			const [inserted] = await db
+				.insert(apiTokens)
+				.values({ userId, name: params.name, tokenHash, createdAt: Date.now() })
+				.returning();
+			insertedNow = true;
+			captureServerEvent('api_token_created', { token_id: inserted.id });
+			return { id: inserted.id };
+		}
+	);
 
-	return { id: inserted.id, token: plainToken };
+	if (!insertedNow) {
+		const [rotated] = await db
+			.update(apiTokens)
+			.set({ tokenHash })
+			.where(and(eq(apiTokens.id, id), eq(apiTokens.userId, userId)))
+			.returning({ id: apiTokens.id });
+		if (!rotated) {
+			error(409, 'This token was revoked. Create a new one.');
+		}
+	}
+
+	return { id, token: plainToken };
 });
 
 const revokeParams = type({ tokenId: 'string' });
 
 export const revokeApiToken = command(revokeParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const token = await db.query.apiTokens.findFirst({
 		where: and(eq(apiTokens.id, params.tokenId), eq(apiTokens.userId, event.locals.user.id))
 	});
 
-	if (!token) error(404, 'API token not found');
+	if (!token) {
+		error(404, 'API token not found');
+	}
 
 	await db
 		.delete(apiTokens)
 		.where(and(eq(apiTokens.id, params.tokenId), eq(apiTokens.userId, event.locals.user.id)));
+	captureServerEvent('api_token_revoked', { token_id: params.tokenId });
 });

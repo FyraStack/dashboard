@@ -1,39 +1,52 @@
-import { dev } from '$app/environment';
-import type { VmBackend } from './types';
+import { timingLog } from '#lib/server/observability.js';
+import { dev } from '$app/env';
+import { getBackendEnv } from './env';
 import { ProxmoxBackend } from './proxmox';
 import { ProxmoxClient } from './proxmox/client';
-import { getBackendEnv } from './env';
-import { timingLog } from '$lib/server/observability';
+import type { VmBackend } from './types';
 
 export type {
 	BackendImage,
-	BackendImageImportTarget,
 	BackendImageImportParams,
+	BackendImageImportTarget,
 	VmBackend,
+	VmCreateParams,
+	VmCreateResult,
 	VmInfo,
 	VmMetricsHistorySample,
 	VmMetricsTimeframe,
-	VmCreateParams,
-	VmCreateResult,
+	VmResizeParams,
 	VmStatus
 } from './types';
 
 let cached: { key: string; backend: VmBackend } | null = null;
 
+function parseNodeList(value: string | undefined): string[] {
+	if (!value) {
+		return [];
+	}
+	return value
+		.split(',')
+		.map((node) => node.trim())
+		.filter(Boolean);
+}
+
 function createProxmox(): ProxmoxBackend {
 	const started = performance.now();
 	const env = getBackendEnv();
 
-	if (!env.PROXMOX_API_URL || !env.PROXMOX_TOKEN_ID || !env.PROXMOX_TOKEN_SECRET) {
+	if (!(env.PROXMOX_API_URL && env.PROXMOX_TOKEN_ID && env.PROXMOX_TOKEN_SECRET)) {
 		throw new Error(
 			'Proxmox backend requires PROXMOX_API_URL, PROXMOX_TOKEN_ID, and PROXMOX_TOKEN_SECRET'
 		);
 	}
 
 	if (
-		!env.PROXMOX_SNIPPETS_ENDPOINT_URL ||
-		!env.PROXMOX_SNIPPETS_ENDPOINT_USERNAME ||
-		!env.PROXMOX_SNIPPETS_ENDPOINT_PASSWORD
+		!(
+			env.PROXMOX_SNIPPETS_ENDPOINT_URL &&
+			env.PROXMOX_SNIPPETS_ENDPOINT_USERNAME &&
+			env.PROXMOX_SNIPPETS_ENDPOINT_PASSWORD
+		)
 	) {
 		throw new Error(
 			'Proxmox backend requires PROXMOX_SNIPPETS_ENDPOINT_URL, PROXMOX_SNIPPETS_ENDPOINT_USERNAME, and PROXMOX_SNIPPETS_ENDPOINT_PASSWORD'
@@ -62,7 +75,8 @@ function createProxmox(): ProxmoxBackend {
 		snippetsEndpointVerifySsl: env.PROXMOX_SNIPPETS_ENDPOINT_VERIFY_SSL !== 'false',
 		snippetsStorage: env.PROXMOX_SNIPPETS_STORAGE,
 		firewallSecurityGroup: env.PROXMOX_VM_FIREWALL_SECURITY_GROUP,
-		vmCpuType: env.PROXMOX_VM_CPU_TYPE
+		vmCpuType: env.PROXMOX_VM_CPU_TYPE,
+		excludedNodes: parseNodeList(env.PROXMOX_EXCLUDED_NODES)
 	});
 
 	timingLog('backend.proxmox.create.end', {
@@ -79,7 +93,7 @@ export function getBackend(name: string): VmBackend {
 	const cacheHit = !dev && cached?.key === name;
 	timingLog('backend.get.start', { 'backend.name': name, 'backend.cache_hit': cacheHit });
 	if (!dev && cached?.key === name) {
-		const backend = cached.backend;
+		const { backend } = cached;
 		timingLog('backend.get.end', {
 			'backend.name': name,
 			'backend.cache_hit': true,

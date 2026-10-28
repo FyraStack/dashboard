@@ -1,5 +1,6 @@
 # Dependencies
 node_modules
+.pnpm-store
 
 # Build output
 .svelte-kit
@@ -27,6 +28,11 @@ Thumbs.db
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
+# Playwright
+test-results
+playwright-report
+blob-report
+
 # traces for local dev
 Trace-*.json
 
@@ -35,3 +41,4 @@ dev/vyos/.cache
 
 # local wireguard config
 dev/fyra-wg.conf
+core.*

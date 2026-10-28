@@ -1,41 +1,53 @@
 <script lang="ts">
+	import { isProjectRole, projectRoleLabels } from '#lib/auth/organization-permissions.js';
+	import { authClient } from '#lib/auth-client.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { goto } from '$app/navigation';
-	import { Button } from '$lib/components/ui/button';
-	import { authClient } from '$lib/auth-client';
-	import { AlertCircle } from '@lucide/svelte';
-	import { isProjectRole, projectRoleLabels } from '$lib/auth/organization-permissions';
+	import AlertCircle from '~icons/nucleo/alert-circle';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	let error = $state('');
+	let errorMessage = $state('');
 	let accepting = $state(false);
 	let declining = $state(false);
 	let switching = $state(false);
 
+	const roleAccess = $derived(
+		data.role && isProjectRole(data.role) ? ` with ${projectRoleLabels[data.role]} access` : ''
+	);
+	const invitationSummary = $derived(
+		`${data.inviterEmail} invited you to join ${data.organizationName}${roleAccess}.`
+	);
+
 	async function accept() {
-		if (accepting || declining) return;
-		error = '';
+		if (accepting || declining) {
+			return;
+		}
+		errorMessage = '';
 		accepting = true;
 		const { data: res, error: err } = await authClient.organization.acceptInvitation({
 			invitationId: data.invitationId
 		});
 		if (err || !res) {
-			error = err?.message ?? 'Unable to accept invitation.';
+			errorMessage = err?.message ?? 'Unable to accept invitation.';
 			accepting = false;
 			return;
 		}
-		await goto(`/projects/${res.member.organizationId}/servers`, { invalidateAll: true });
+		await goto(`/projects/${res.member.organizationId}/servers`, { refreshAll: true });
 	}
 
 	async function decline() {
-		if (accepting || declining) return;
-		error = '';
+		if (accepting || declining) {
+			return;
+		}
+		errorMessage = '';
 		declining = true;
 		const { error: err } = await authClient.organization.rejectInvitation({
 			invitationId: data.invitationId
 		});
 		if (err) {
-			error = err.message ?? 'Unable to decline invitation.';
+			errorMessage = err.message ?? 'Unable to decline invitation.';
 			declining = false;
 			return;
 		}
@@ -53,26 +65,29 @@
 	<title>Invitation / Stack</title>
 </svelte:head>
 
-<div class="flex min-h-screen items-center justify-center bg-gray-950 px-4">
+<div class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">
 		<div class="mb-10 flex items-center justify-center gap-2">
 			<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
-			<span class="text-base font-semibold tracking-tight text-gray-50">Stack</span>
+			<span class="text-base font-semibold tracking-tight text-foreground">Stack</span>
+			<Badge class="h-4 px-1.5 text-[10px]" variant="secondary">Alpha</Badge>
 		</div>
 
 		{#if data.error}
 			<div class="space-y-5">
-				<h1 class="text-center text-lg font-medium text-gray-50">Invitation</h1>
+				<h1 class="text-center text-lg font-medium text-foreground">Invitation</h1>
 
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
-					<AlertCircle class="h-3.5 w-3.5 shrink-0" />
+					<AlertCircle class="size-4 shrink-0" />
 					{data.error}
 				</div>
 
 				{#if data.wrongAccount}
-					<p class="text-center text-xs text-gray-500">You are signed in as {data.email}.</p>
+					<p class="text-center text-xs text-muted-foreground">
+						You are signed in as {data.email}.
+					</p>
 					<Button class="w-full" loading={switching} onclick={switchAccount}>
 						Sign in with a different account
 					</Button>
@@ -82,22 +97,18 @@
 			</div>
 		{:else}
 			<div class="space-y-5">
-				<h1 class="text-center text-lg font-medium text-gray-50">
+				<h1 class="text-center text-lg font-medium text-foreground">
 					Join {data.organizationName}
 				</h1>
 
-				<p class="text-center text-xs text-gray-500">
-					{data.inviterEmail} invited you to join {data.organizationName}
-					{#if data.role && isProjectRole(data.role)}
-						with {projectRoleLabels[data.role]} access{/if}.
-				</p>
+				<p class="text-center text-xs text-muted-foreground">{invitationSummary}</p>
 
-				{#if error}
+				{#if errorMessage}
 					<div
 						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 					>
-						<AlertCircle class="h-3.5 w-3.5 shrink-0" />
-						{error}
+						<AlertCircle class="size-4 shrink-0" />
+						{errorMessage}
 					</div>
 				{/if}
 
@@ -115,7 +126,7 @@
 					Decline
 				</Button>
 
-				<p class="text-center text-xs text-gray-500">Signed in as {data.email}</p>
+				<p class="text-center text-xs text-muted-foreground">Signed in as {data.email}</p>
 			</div>
 		{/if}
 	</div>

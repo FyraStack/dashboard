@@ -1,57 +1,73 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import CreateVolumeDialog from '$lib/components/dialogs/create-volume-dialog.svelte';
-	import AttachVolumeDialog from '$lib/components/dialogs/attach-volume-dialog.svelte';
+	import { untrack } from 'svelte';
+	import AttachVolumeDialog from '#lib/components/dialogs/attach-volume-dialog.svelte';
+	import CreateVolumeDialog from '#lib/components/dialogs/create-volume-dialog.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
 	import {
 		attachVolume as attachProjectVolume,
 		createVolume as createProjectVolume,
 		deleteVolume as deleteProjectVolume,
 		detachVolume as detachProjectVolume
-	} from '$lib/remote/volumes.remote';
-	import { getErrorMessage } from '$lib/utils';
-	import { confirmDestructive } from '$lib/confirm.svelte';
-	import { untrack } from 'svelte';
-	import { Plus, Trash2, Link, Unlink, HardDrive } from '@lucide/svelte';
+	} from '#lib/remote/volumes.remote.js';
+	import { getErrorMessage } from '#lib/utils.js';
+	import { page } from '$app/state';
+	import Plus from '~icons/lucide/plus';
+	import HardDrive from '~icons/nucleo/hard-drive';
+	import Link from '~icons/nucleo/link';
+	import Trash2 from '~icons/nucleo/trash';
+	import Unlink from '~icons/nucleo/unlink';
 
-	type PageData = {
+	interface PageData {
 		currentProject: { id: string } | null;
-		volumes?: LoadedVolume[];
 		vms?: LoadedVm[];
-	};
+		volumes?: LoadedVolume[];
+	}
 
-	type LoadedVolume = {
-		id: string;
-		name: string;
-		size: number;
+	interface LoadedVolume {
 		associatedVmId: string | null;
-	};
-
-	type LoadedVm = {
-		id: string;
-		active: boolean;
-		live: { disk?: number | null } | null;
-	};
-
-	type Volume = {
 		id: string;
 		name: string;
 		size: number;
-		used: number;
-		usageHistory: number[];
-		server: string | null;
+	}
+
+	interface LoadedVm {
+		active: boolean;
+		id: string;
+		live: { disk?: number | null } | null;
+	}
+
+	interface Volume {
+		id: string;
+		name: string;
 		region: string;
+		server: string | null;
+		size: number;
 		status: 'attached' | 'available' | 'deleting';
-	};
+		usageHistory: number[];
+		used: number;
+	}
 
 	let { data }: { data: PageData } = $props();
 	let volumes = $state<Volume[]>([]);
 
+	function usageBarClass(usedRatio: number): string {
+		if (usedRatio > 0.8) {
+			return 'bg-red-500';
+		}
+		if (usedRatio > 0.5) {
+			return 'bg-amber-500';
+		}
+		return 'bg-red-400';
+	}
+
 	function getPath(history: number[], max: number, width = 72, height = 20): string {
-		if (history.length === 0) return '';
+		if (history.length === 0) {
+			return '';
+		}
 		const points = history.map((val, i) => {
 			const x = (i / (history.length - 1)) * width;
 			const y = height - (val / max) * height;
@@ -62,15 +78,23 @@
 
 	function getUsageColor(used: number, size: number) {
 		const ratio = used / size;
-		if (ratio > 0.8) return 'text-rose-500';
-		if (ratio > 0.5) return 'text-amber-500';
+		if (ratio > 0.8) {
+			return 'text-rose-500';
+		}
+		if (ratio > 0.5) {
+			return 'text-amber-500';
+		}
 		return 'text-rose-400';
 	}
 
 	function getUsageColorHex(used: number, size: number) {
 		const ratio = used / size;
-		if (ratio > 0.8) return '#f43f5e';
-		if (ratio > 0.5) return '#f59e0b';
+		if (ratio > 0.8) {
+			return '#f43f5e';
+		}
+		if (ratio > 0.5) {
+			return '#f59e0b';
+		}
 		return '#fb7185';
 	}
 
@@ -124,7 +148,9 @@
 
 	async function createVolume() {
 		const projectId = page.params.projectid;
-		if (!projectId || !newName.trim() || creatingVolume) return;
+		if (!(projectId && newName.trim()) || creatingVolume) {
+			return;
+		}
 		actionError = '';
 		creatingVolume = true;
 		try {
@@ -157,16 +183,22 @@
 	}
 
 	async function deleteVolume(id: string) {
-		if (deletingVolumeIds.includes(id)) return;
+		if (deletingVolumeIds.includes(id)) {
+			return;
+		}
 		const idx = volumes.findIndex((v) => v.id === id);
-		if (idx === -1) return;
+		if (idx === -1) {
+			return;
+		}
 		const ok = await confirmDestructive({
 			title: 'Delete volume',
 			description: `This permanently destroys all data on ${volumes[idx].name} and cannot be undone.`,
 			confirmWord: volumes[idx].name,
 			confirmLabel: 'Delete volume'
 		});
-		if (!ok) return;
+		if (!ok) {
+			return;
+		}
 		actionError = '';
 		deletingVolumeIds = [...deletingVolumeIds, id];
 		volumes[idx].status = 'deleting';
@@ -182,9 +214,13 @@
 	}
 
 	async function detach(id: string) {
-		if (detachingVolumeIds.includes(id)) return;
+		if (detachingVolumeIds.includes(id)) {
+			return;
+		}
 		const idx = volumes.findIndex((v) => v.id === id);
-		if (idx === -1) return;
+		if (idx === -1) {
+			return;
+		}
 		actionError = '';
 		detachingVolumeIds = [...detachingVolumeIds, id];
 		try {
@@ -202,18 +238,23 @@
 
 	function openAttach(vol: Volume) {
 		attachTarget = vol;
-		attachServer = serverOptions[0];
+		[attachServer] = serverOptions;
 		attachOpen = true;
 	}
 
 	async function confirmAttach() {
-		if (!attachTarget || !attachServer || attachingVolume) return;
-		const idx = volumes.findIndex((v) => v.id === attachTarget!.id);
-		if (idx === -1) return;
+		if (!(attachTarget && attachServer) || attachingVolume) {
+			return;
+		}
+		const volumeId = attachTarget.id;
+		const idx = volumes.findIndex((v) => v.id === volumeId);
+		if (idx === -1) {
+			return;
+		}
 		actionError = '';
 		attachingVolume = true;
 		try {
-			await attachProjectVolume({ volumeId: attachTarget.id, vmId: attachServer });
+			await attachProjectVolume({ volumeId, vmId: attachServer });
 			volumes[idx].server = attachServer;
 			volumes[idx].used = Math.round(volumes[idx].size * 0.7);
 			volumes[idx].usageHistory = buildUsageHistory(volumes[idx].size, volumes[idx].used);
@@ -230,10 +271,10 @@
 
 <div class="flex flex-1 flex-col overflow-hidden">
 	<!-- Header -->
-	<div class="flex h-10 shrink-0 items-center justify-between border-b border-gray-800 px-5">
+	<div class="flex h-10 shrink-0 items-center justify-between border-b border-border px-5">
 		<div class="flex items-center gap-2">
-			<HardDrive class="h-4 w-4 text-gray-400" />
-			<span class="text-sm font-semibold text-gray-100">Volumes</span>
+			<HardDrive class="h-4 w-4 text-muted-foreground" />
+			<span class="text-sm font-semibold text-foreground">Volumes</span>
 			<Badge variant="secondary" class="text-[10px]">{volumes.length}</Badge>
 		</div>
 		<Button
@@ -247,7 +288,9 @@
 		</Button>
 	</div>
 	{#if actionError}
-		<div class="border-b border-red-900/40 bg-red-950/20 px-5 py-2 text-xs text-red-400">
+		<div
+			class="border-b border-red-300 bg-red-100 px-5 py-2 text-xs text-red-800 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400"
+		>
 			{actionError}
 		</div>
 	{/if}
@@ -258,7 +301,7 @@
 			{@const colorClass = getUsageColor(vol.used, vol.size)}
 			{@const colorHex = getUsageColorHex(vol.used, vol.size)}
 			<div
-				class="flex items-center gap-4 border-b border-gray-800 px-5 py-3 transition-colors duration-100 hover:bg-gray-800/20 {vol.status ===
+				class="flex items-center gap-4 border-b border-border px-5 py-3 transition-colors duration-100 hover:bg-muted/20 {vol.status ===
 				'deleting'
 					? 'opacity-40'
 					: ''}"
@@ -267,22 +310,24 @@
 				<div
 					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg {vol.status ===
 					'attached'
-						? 'bg-emerald-950/30'
-						: 'bg-gray-800'}"
+						? 'bg-emerald-100 dark:bg-emerald-950/30'
+						: 'bg-muted'}"
 				>
 					<HardDrive
-						class="h-5 w-5 {vol.status === 'attached' ? 'text-emerald-400' : 'text-gray-500'}"
+						class="h-5 w-5 {vol.status === 'attached'
+							? 'text-emerald-700 dark:text-emerald-400'
+							: 'text-muted-foreground'}"
 					/>
 				</div>
 
 				<!-- Info -->
 				<div class="min-w-0 flex-1">
 					<div class="flex items-center gap-2">
-						<span class="text-sm font-medium text-gray-100">{vol.name}</span>
+						<span class="text-sm font-medium text-foreground">{vol.name}</span>
 						{#if vol.status === 'attached'}
 							<Badge
 								variant="outline"
-								class="border-emerald-800 bg-emerald-950/40 text-[10px] text-emerald-400"
+								class="border-emerald-300 bg-emerald-100 text-[10px] text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"
 								>Attached</Badge
 							>
 						{:else if vol.status === 'deleting'}
@@ -291,24 +336,22 @@
 							<Badge variant="secondary" class="text-[10px]">Available</Badge>
 						{/if}
 					</div>
-					<div class="mt-1 flex items-center gap-3 text-xs text-gray-500">
+					<div class="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
 						<span>{vol.id}</span>
-						<span class="h-1 w-1 rounded-full bg-gray-700"></span>
+						<span class="h-1 w-1 rounded-full bg-muted"></span>
 						<span>{vol.region}</span>
 					</div>
 					<!-- Storage Graph (mobile only) -->
 					<div class="mt-2 flex items-center gap-2 lg:hidden">
-						<div class="h-1.5 w-20 overflow-hidden rounded-full bg-gray-800">
+						<div class="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
 							<div
-								class="h-full rounded-full transition-all duration-500 {vol.used / vol.size > 0.8
-									? 'bg-red-500'
-									: vol.used / vol.size > 0.5
-										? 'bg-amber-500'
-										: 'bg-red-400'}"
+								class="h-full rounded-full transition-all duration-500 {usageBarClass(
+									vol.used / vol.size
+								)}"
 								style="width: {(vol.used / vol.size) * 100}%"
 							></div>
 						</div>
-						<span class="text-[10px] text-gray-500">
+						<span class="text-[10px] text-muted-foreground">
 							{vol.used > 0 ? `${vol.used} used` : 'empty'}
 						</span>
 					</div>
@@ -317,7 +360,7 @@
 				<!-- Usage Chart (desktop only) -->
 				<div class="hidden shrink-0 items-center gap-2 lg:flex">
 					<div class="relative" style="width: 90px; height: 24px">
-						<svg width="90" height="24" class="overflow-visible">
+						<svg width="90" height="24" class="overflow-visible" aria-hidden="true">
 							<defs>
 								<linearGradient id="chart-gradient-{vol.id}" x1="0" y1="0" x2="0" y2="1">
 									<stop offset="0%" stop-color={colorHex} stop-opacity="0.4" />
@@ -349,19 +392,20 @@
 							{/if}
 						</svg>
 					</div>
-					<span class="w-14 text-right text-[10px] text-gray-400 tabular-nums">
-						{vol.used}/{vol.size} GB
+					<span class="w-14 text-right text-[10px] text-muted-foreground tabular-nums">
+						{vol.used}/{vol.size}
+						GB
 					</span>
 				</div>
 
 				<!-- Size -->
 				<div class="w-20 text-right">
-					<span class="text-sm font-semibold text-gray-200">{vol.size} GB</span>
+					<span class="text-sm font-semibold text-foreground">{vol.size} GB</span>
 				</div>
 
 				<!-- Server -->
 				<div class="w-28">
-					<span class="text-xs text-gray-500">{vol.server ?? '—'}</span>
+					<span class="text-xs text-muted-foreground">{vol.server ?? '-'}</span>
 				</div>
 
 				<!-- Actions -->
@@ -405,7 +449,7 @@
 		{/each}
 
 		{#if volumes.length === 0}
-			<div class="flex flex-col items-center justify-center py-20 text-gray-500">
+			<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
 				<HardDrive class="mb-3 h-8 w-8" />
 				<p class="text-sm">No volumes yet</p>
 			</div>

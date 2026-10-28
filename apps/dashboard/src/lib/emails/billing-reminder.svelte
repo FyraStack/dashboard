@@ -14,11 +14,11 @@
 	import EmailHeader from './email-header.svelte';
 
 	interface Props {
-		userName?: string | null;
 		amount: string;
 		dueDate: string;
 		invoiceUrl: string;
 		planName?: string | null;
+		userName?: string | null;
 	}
 
 	let { userName = null, amount, dueDate, invoiceUrl, planName = null }: Props = $props();
@@ -33,11 +33,17 @@
 			<Section class="p-8">
 				<Heading as="h1" class="m-0 text-xl font-semibold text-gray-50">Invoice ready</Heading>
 				<Text class="mt-4 text-sm leading-5 text-gray-400">
-					{#if userName}Hi {userName},{:else}Hi there,{/if}
+					{#if userName}
+						Hi {userName},
+					{:else}
+						Hi there,
+					{/if}
 				</Text>
 				<Text class="mt-2 text-sm leading-5 text-gray-400">
 					Your Stack invoice for <strong class="text-gray-50">{amount}</strong>
-					{#if planName}({planName}){/if}
+					{#if planName}
+						({planName})
+					{/if}
 					is ready. Payment is due by {dueDate}.
 				</Text>
 				<Section class="mt-6">

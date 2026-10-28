@@ -6,12 +6,12 @@
  * If you add or remove plugins in auth.ts, update this file to match.
  */
 
-import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { admin, organization, twoFactor } from 'better-auth/plugins';
 import { passkey } from '@better-auth/passkey';
 import { autumn } from 'autumn-js/better-auth';
+import { betterAuth } from 'better-auth';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { admin, organization, twoFactor } from 'better-auth/plugins';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import { ac, organizationRoles } from './src/lib/auth/organization-permissions';
 
 // Drizzle doesn't open a connection until the first query, so this is
@@ -41,7 +41,34 @@ export default betterAuth({
 		admin({ defaultRole: 'user' }),
 		twoFactor(),
 		passkey(),
-		organization({ ac, roles: organizationRoles }),
+		organization({
+			ac,
+			roles: organizationRoles,
+			schema: {
+				organization: {
+					additionalFields: {
+						billingExempt: {
+							type: 'boolean',
+							input: false,
+							required: true,
+							defaultValue: false
+						},
+						disabled: {
+							type: 'boolean',
+							input: false,
+							required: true,
+							defaultValue: false
+						},
+						deletedAt: {
+							type: 'number',
+							bigint: true,
+							input: false,
+							required: false
+						}
+					}
+				}
+			}
+		}),
 		autumn({ customerScope: 'organization' })
 	]
 });

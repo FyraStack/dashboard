@@ -1,14 +1,66 @@
-import { redirect, type Handle } from '@sveltejs/kit';
-import { building } from '$app/environment';
-import { getCachedAuthSession, hasAuthSessionCookie } from '$lib/server/auth-lite';
-import { closeRequestDb } from '$lib/server/db';
-import { instrument, timingLog } from '$lib/server/observability';
+import { waitUntil } from 'cloudflare:workers';
+import { handleErrorWithSentry, initCloudflareSentryHandle, sentryHandle } from '@sentry/sveltekit';
+import { type RequestEvent, redirect } from '@sveltejs/kit';
+import { type Handle, type HandleServerError, sequence } from '@sveltejs/kit/hooks';
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureSession,
+	accessibilityFixtureUser
+} from '#lib/server/accessibility-fixtures.js';
+import { getCachedAuthSession, hasAuthSessionCookie } from '#lib/server/auth-lite.js';
+import { closeRequestDb } from '#lib/server/db/index.js';
+import { instrument, timingLog } from '#lib/server/observability.js';
+import { captureServerException } from '#lib/server/posthog.js';
+import { handlePostHogProxy } from '#lib/server/posthog-proxy.js';
+import { building, dev } from '$app/env';
+import { PUBLIC_SENTRY_DSN } from '$app/env/public';
 
-const publicRoutes = ['/health', '/login', '/register', '/signup', '/accept-invitation', '/api/'];
-const authPages = ['/login', '/register', '/signup'];
+const publicRoutes = [
+	'/health',
+	'/login',
+	'/register',
+	'/signup',
+	'/forgot-password',
+	'/reset-password',
+	'/accept-invitation',
+	'/api/',
+	'/internal/',
+	'/_app/remote/'
+];
+const authPages = ['/login', '/register', '/signup', '/forgot-password'];
+
+function isPublicRequest(event: RequestEvent) {
+	return (
+		event.route.id === null || publicRoutes.some((route) => event.url.pathname.startsWith(route))
+	);
+}
 
 const moduleLoadedAt = performance.now();
 let isFirstRequestOnIsolate = true;
+let authPrewarmScheduled = false;
+
+function scheduleAuthPrewarm(requestAttrs: Record<string, string | number | boolean | undefined>) {
+	if (authPrewarmScheduled) {
+		return;
+	}
+	authPrewarmScheduled = true;
+
+	waitUntil(
+		instrument(
+			'auth.prewarm',
+			async () => {
+				const [{ initAuth }] = await Promise.all([
+					import('#lib/server/auth.js'),
+					import('better-auth/svelte-kit')
+				]);
+				initAuth();
+			},
+			requestAttrs
+		).catch((error) => {
+			console.warn('Auth prewarm failed', error);
+		})
+	);
+}
 
 async function runFullAuth(
 	event: Parameters<Handle>[0]['event'],
@@ -17,7 +69,7 @@ async function runFullAuth(
 ) {
 	const [{ initAuth }, { svelteKitHandler }] = await instrument(
 		'auth.full.import',
-		() => Promise.all([import('$lib/server/auth'), import('better-auth/svelte-kit')]),
+		() => Promise.all([import('#lib/server/auth.js'), import('better-auth/svelte-kit')]),
 		requestAttrs
 	);
 
@@ -34,9 +86,9 @@ async function runFullAuth(
 		event.locals.activeProjectId = session.session.activeOrganizationId ?? null;
 	}
 
-	const isPublic = publicRoutes.some((route) => event.url.pathname.startsWith(route));
+	const isPublic = isPublicRequest(event);
 
-	if (!session && !isPublic) {
+	if (!(session || isPublic)) {
 		throw redirect(303, '/login');
 	}
 
@@ -68,6 +120,16 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	timingLog('request.handle.enter', requestAttrs);
 
 	try {
+		if (
+			accessibilityFixtureEnabled &&
+			!authPages.some((route) => event.url.pathname.startsWith(route))
+		) {
+			event.locals.session = accessibilityFixtureSession;
+			event.locals.user = accessibilityFixtureUser;
+			event.locals.activeProjectId = accessibilityFixtureSession.activeOrganizationId;
+			return await instrument('sveltekit.resolve', () => resolve(event), requestAttrs);
+		}
+
 		return await instrument(
 			'request.handle',
 			async () => {
@@ -78,7 +140,7 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 					return await instrument('sveltekit.resolve', () => resolve(event), requestAttrs);
 				}
 
-				const isPublic = publicRoutes.some((route) => event.url.pathname.startsWith(route));
+				const isPublic = isPublicRequest(event);
 				if (!isAuthEndpoint && isPublic && !hasAuthSessionCookie(event.request)) {
 					timingLog('request.auth.publicNoSession', requestAttrs);
 					return await instrument('sveltekit.resolve', () => resolve(event), requestAttrs);
@@ -103,10 +165,46 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 			requestAttrs
 		);
 	} finally {
+		scheduleAuthPrewarm(requestAttrs);
 		timingLog('request.closeRequestDb.schedule', requestAttrs);
 		closeRequestDb(event);
 		timingLog('request.handle.exit', requestAttrs);
 	}
 };
 
-export const handle: Handle = handleBetterAuth;
+let sentryRequestHandle: Handle | undefined;
+
+const handleSentryInit: Handle = (input) => {
+	if (!PUBLIC_SENTRY_DSN) {
+		return input.resolve(input.event);
+	}
+
+	const requestHandle =
+		sentryRequestHandle ??
+		initCloudflareSentryHandle({
+			dsn: PUBLIC_SENTRY_DSN,
+			tracesSampleRate: dev ? 1.0 : 0.1,
+			environment: dev ? 'development' : 'production'
+		});
+	sentryRequestHandle = requestHandle;
+	return requestHandle(input);
+};
+
+export const handle: Handle = sequence(
+	handleSentryInit,
+	sentryHandle({ injectFetchProxyScript: false }),
+	handlePostHogProxy,
+	handleBetterAuth
+);
+
+const logServerError: HandleServerError = ({ kind, error, event }) => {
+	// Kit 3 also passes expected (app, framework and validation) errors here
+	if (kind !== 'unknown') {
+		return;
+	}
+
+	console.error('Unhandled server error', { pathname: event.url.pathname, error });
+	captureServerException(error, event);
+};
+
+export const handleError = handleErrorWithSentry(logServerError);

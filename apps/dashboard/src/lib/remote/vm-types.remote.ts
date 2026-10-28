@@ -1,26 +1,24 @@
-import { query, command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { asc, desc, eq } from 'drizzle-orm';
-import { initDrizzle } from '$lib/server/db';
-import { vmTypes } from '$lib/server/db/schema';
-import { requireAdmin } from '$lib/server/auth-context';
-
-type VmTypeRow = {
-	id: string;
-	name: string;
-	isa: string;
-	cores: number;
-	ramCapacity: number;
-	storageAmount: number;
-	rate: string;
-	cap: string;
-	autumnFeatureId: string | null;
-};
+import {
+	accessibilityFixtureEnabled,
+	accessibilityFixtureVmTypes
+} from '#lib/server/accessibility-fixtures.js';
+import { requireAdmin } from '#lib/server/auth-context.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { vmTypes } from '#lib/server/db/schema.js';
+import { command, getRequestEvent, query } from '$app/server';
 
 export const listVmTypes = query(async () => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
+
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureVmTypes;
+	}
 
 	const db = initDrizzle();
 	const rows = await db.query.vmTypes.findMany({
@@ -51,7 +49,9 @@ const createParams = type({
 });
 export const createVmType = command(createParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
@@ -91,7 +91,9 @@ const updateParams = type({
 });
 export const updateVmType = command(updateParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
@@ -99,7 +101,9 @@ export const updateVmType = command(updateParams, async (params) => {
 	const existing = await db.query.vmTypes.findFirst({
 		where: eq(vmTypes.id, params.vmTypeId)
 	});
-	if (!existing) error(404, 'VM type not found');
+	if (!existing) {
+		error(404, 'VM type not found');
+	}
 
 	const { vmTypeId, ...fields } = params;
 	const updates = Object.fromEntries(
@@ -110,7 +114,9 @@ export const updateVmType = command(updateParams, async (params) => {
 				key === 'autumnFeatureId' ? String(value).trim() || null : value
 			])
 	);
-	if (Object.keys(updates).length === 0) return;
+	if (Object.keys(updates).length === 0) {
+		return;
+	}
 
 	await db.update(vmTypes).set(updates).where(eq(vmTypes.id, params.vmTypeId));
 });
@@ -118,7 +124,9 @@ export const updateVmType = command(updateParams, async (params) => {
 const reorderParams = type({ vmTypeIds: 'string[]' });
 export const reorderVmTypes = command(reorderParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
@@ -144,7 +152,9 @@ export const reorderVmTypes = command(reorderParams, async (params) => {
 const deleteParams = type({ vmTypeId: 'string' });
 export const deleteVmType = command(deleteParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
@@ -152,7 +162,9 @@ export const deleteVmType = command(deleteParams, async (params) => {
 	const existing = await db.query.vmTypes.findFirst({
 		where: eq(vmTypes.id, params.vmTypeId)
 	});
-	if (!existing) error(404, 'VM type not found');
+	if (!existing) {
+		error(404, 'VM type not found');
+	}
 
 	try {
 		await db.delete(vmTypes).where(eq(vmTypes.id, params.vmTypeId));

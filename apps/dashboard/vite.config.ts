@@ -1,5 +1,9 @@
-import tailwindcss from '@tailwindcss/vite';
+import { sentrySvelteKit } from '@sentry/sveltekit/vite';
+import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
+import tailwindcss from '@tailwindcss/vite';
+import { FileSystemIconLoader } from 'unplugin-icons/loaders';
+import Icons from 'unplugin-icons/vite';
 import { defineConfig, loadEnv } from 'vite';
 
 export default defineConfig(({ mode }) => {
@@ -16,14 +20,42 @@ export default defineConfig(({ mode }) => {
 	}
 
 	return {
-		plugins: [tailwindcss(), sveltekit()],
+		server: {
+			host: '127.0.0.1'
+		},
+		plugins: [
+			tailwindcss(),
+			sentrySvelteKit({
+				autoUploadSourceMaps: Boolean(env.SENTRY_AUTH_TOKEN),
+				org: env.SENTRY_ORG,
+				project: env.SENTRY_PROJECT,
+				authToken: env.SENTRY_AUTH_TOKEN,
+				// Bundles CJS deps like `pg` into the SSR output, which crashes under workerd
+				// We should open an issue for this
+				buildTimeInstrumentation: false
+			}),
+
+			sveltekit({
+				compilerOptions: { experimental: { async: true } },
+				adapter: adapter({ platformProxy: { configPath: 'wrangler.local.jsonc' } }),
+				experimental: { remoteFunctions: true },
+				tracing: { server: true }
+			}),
+
+			Icons({
+				compiler: 'svelte',
+				customCollections: {
+					nucleo: FileSystemIconLoader('./src/lib/icons')
+				},
+				transform(svg, collection) {
+					return collection === 'lucide'
+						? svg.replace(/stroke-width="2"/g, 'stroke-width="1.5"')
+						: svg;
+				}
+			})
+		],
 		ssr: {
 			external: ['postcss']
-		},
-		build: {
-			rollupOptions: {
-				external: ['cloudflare:workers']
-			}
 		}
 	};
 });

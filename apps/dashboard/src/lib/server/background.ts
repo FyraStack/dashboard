@@ -1,5 +1,6 @@
+import { waitUntil } from 'cloudflare:workers';
+import { instrument } from '#lib/server/observability.js';
 import { getRequestEvent } from '$app/server';
-import { instrument } from '$lib/server/observability';
 
 export function runInBackground(work: Promise<unknown>, label?: string) {
 	const event = getRequestEvent();
@@ -11,5 +12,5 @@ export function runInBackground(work: Promise<unknown>, label?: string) {
 
 	event.locals.backgroundTasks ??= [];
 	event.locals.backgroundTasks.push(guarded);
-	event.platform?.ctx?.waitUntil(guarded);
+	waitUntil(guarded);
 }

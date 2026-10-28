@@ -1,31 +1,17 @@
 <script lang="ts">
-	import SiLinux from '@icons-pack/svelte-simple-icons/icons/SiLinux';
 	import SiAlmalinux from '@icons-pack/svelte-simple-icons/icons/SiAlmalinux';
 	import SiAlpinelinux from '@icons-pack/svelte-simple-icons/icons/SiAlpinelinux';
 	import SiCentos from '@icons-pack/svelte-simple-icons/icons/SiCentos';
 	import SiDebian from '@icons-pack/svelte-simple-icons/icons/SiDebian';
 	import SiFedora from '@icons-pack/svelte-simple-icons/icons/SiFedora';
+	import SiLinux from '@icons-pack/svelte-simple-icons/icons/SiLinux';
 	import SiRedhat from '@icons-pack/svelte-simple-icons/icons/SiRedhat';
 	import SiUbuntu from '@icons-pack/svelte-simple-icons/icons/SiUbuntu';
-
-	const icons = {
-		fedora: SiFedora,
-		debian: SiDebian,
-		ubuntu: SiUbuntu,
-		centos: SiCentos,
-		almalinux: SiAlmalinux,
-		'alma-linux': SiAlmalinux,
-		redhat: SiRedhat,
-		'red-hat': SiRedhat,
-		alpine: SiAlpinelinux,
-		linux: SiLinux,
-		ultramarine: SiLinux
-	} as const;
 
 	let {
 		name,
 		class: className = '',
-		title = undefined
+		title
 	}: {
 		name?: string | null;
 		class?: string;

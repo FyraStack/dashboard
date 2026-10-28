@@ -1,22 +1,33 @@
 <script lang="ts">
+	import { authClient } from '#lib/auth-client.js';
+	import TotpResetFlow from '#lib/components/totp-reset-flow.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
 	import { goto } from '$app/navigation';
-	import { authClient } from '$lib/auth-client';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { ShieldCheck, Loader2, AlertCircle } from '@lucide/svelte';
+	import Loader2 from '~icons/lucide/loader-2';
+	import AlertCircle from '~icons/nucleo/alert-circle';
+	import ShieldCheck from '~icons/nucleo/shield-check';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	const redirectTo: string = $derived(data.redirectTo ?? '/');
+	const passkeyHref = $derived(
+		redirectTo === '/'
+			? '/login/two-factor/passkey'
+			: `/login/two-factor/passkey?redirectTo=${encodeURIComponent(redirectTo)}`
+	);
 
 	let code = $state('');
-	let error = $state('');
+	let errorMessage = $state('');
 	let loading = $state(false);
 	let normalizedCode = $derived(code.replace(/\D/g, ''));
 
 	async function handleVerify() {
-		if (!normalizedCode) return;
-		error = '';
+		if (!normalizedCode) {
+			return;
+		}
+		errorMessage = '';
 		loading = true;
 
 		const { error: err } = await authClient.twoFactor.verifyTotp({
@@ -26,11 +37,11 @@
 		loading = false;
 
 		if (err) {
-			error = err.message ?? 'Invalid code. Please try again.';
+			errorMessage = err.message ?? 'Invalid code. Please try again.';
 			return;
 		}
 
-		goto(redirectTo);
+		goto(redirectTo).catch(() => goto('/'));
 	}
 </script>
 
@@ -38,62 +49,89 @@
 	<title>Two-Factor Authentication / Stack</title>
 </svelte:head>
 
-<div class="flex min-h-screen items-center justify-center bg-gray-950 px-4">
+<div class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">
 		<div class="mb-10 flex items-center justify-center gap-2">
 			<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
-			<span class="text-base font-semibold tracking-tight text-gray-50">Stack</span>
+			<span class="text-base font-semibold tracking-tight text-foreground">Stack</span>
+			<Badge class="h-4 px-1.5 text-[10px]" variant="secondary">Alpha</Badge>
 		</div>
 
-		<div class="space-y-5">
-			<div class="flex flex-col items-center gap-3">
-				<div class="flex h-12 w-12 items-center justify-center border border-gray-800 bg-gray-900">
-					<ShieldCheck class="h-5 w-5 text-red-400" />
+		{#if data.resetRequired}
+			<div class="space-y-5">
+				<div class="flex flex-col items-center gap-3">
+					<div
+						class="flex h-12 w-12 items-center justify-center border border-border bg-background"
+					>
+						<ShieldCheck class="h-5 w-5 text-red-400" />
+					</div>
+					<h1 class="text-lg font-medium text-foreground">Set up your authenticator again</h1>
+					<p class="text-center text-sm text-muted-foreground">
+						Due to a migration, you'll need to re-enroll your TOTP code. This is a one-time event,
+						and your existing authenticator will no longer work.
+					</p>
 				</div>
-				<h1 class="text-lg font-medium text-gray-50">Two-Factor Authentication</h1>
-				<p class="text-center text-sm text-gray-400">
-					Enter the verification code from your authenticator app.
+
+				<TotpResetFlow
+					centered
+					userEmail={data.resetEmail}
+					onComplete={() => goto(redirectTo).catch(() => goto('/'))}
+					onPasskeyChallenge={() => goto(passkeyHref)}
+				/>
+			</div>
+		{:else}
+			<div class="space-y-5">
+				<div class="flex flex-col items-center gap-3">
+					<div
+						class="flex h-12 w-12 items-center justify-center border border-border bg-background"
+					>
+						<ShieldCheck class="h-5 w-5 text-red-400" />
+					</div>
+					<h1 class="text-lg font-medium text-foreground">Two-Factor Authentication</h1>
+					<p class="text-center text-sm text-muted-foreground">
+						Enter the verification code from your authenticator app.
+					</p>
+				</div>
+
+				{#if errorMessage}
+					<div
+						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
+					>
+						<AlertCircle class="size-4 shrink-0" />
+						{errorMessage}
+					</div>
+				{/if}
+
+				<form
+					onsubmit={(e) => {
+						e.preventDefault();
+						handleVerify();
+					}}
+					class="space-y-3"
+				>
+					<Input
+						bind:value={code}
+						placeholder="000000"
+						class="text-center font-mono tracking-widest"
+						autocomplete="one-time-code"
+						inputmode="numeric"
+						pattern="[0-9]*"
+						maxlength={6}
+					/>
+
+					<Button type="submit" class="w-full" disabled={loading || !normalizedCode}>
+						{#if loading}
+							<Loader2 class="h-3.5 w-3.5 animate-spin" />
+						{:else}
+							Verify
+						{/if}
+					</Button>
+				</form>
+
+				<p class="text-center text-xs text-muted-foreground">
+					Lost your device? Use a backup code from when you set up 2FA.
 				</p>
 			</div>
-
-			{#if error}
-				<div
-					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-				>
-					<AlertCircle class="h-3.5 w-3.5 shrink-0" />
-					{error}
-				</div>
-			{/if}
-
-			<form
-				onsubmit={(e) => {
-					e.preventDefault();
-					handleVerify();
-				}}
-				class="space-y-3"
-			>
-				<Input
-					bind:value={code}
-					placeholder="000000"
-					class="text-center font-mono tracking-widest"
-					autocomplete="one-time-code"
-					inputmode="numeric"
-					pattern="[0-9]*"
-					maxlength={6}
-				/>
-
-				<Button type="submit" class="w-full" disabled={loading || !normalizedCode}>
-					{#if loading}
-						<Loader2 class="h-3.5 w-3.5 animate-spin" />
-					{:else}
-						Verify
-					{/if}
-				</Button>
-			</form>
-
-			<p class="text-center text-xs text-gray-500">
-				Lost your device? Use a backup code from when you set up 2FA.
-			</p>
-		</div>
+		{/if}
 	</div>
 </div>

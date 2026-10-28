@@ -1,6 +1,10 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import { Check, Copy, Power, PowerOff, RotateCw } from '@lucide/svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import Check from '~icons/lucide/check';
+	import Copy from '~icons/nucleo/copy';
+	import Power from '~icons/nucleo/power';
+	import PowerOff from '~icons/nucleo/power-off';
+	import RotateCw from '~icons/nucleo/rotate-cw';
 	import { getColocationContext } from '../../colocation-context.svelte';
 
 	const colo = getColocationContext();
@@ -17,7 +21,9 @@
 	}
 
 	function generateIpmiPassword() {
-		if (generatingIpmiPassword) return;
+		if (generatingIpmiPassword) {
+			return;
+		}
 		generatingIpmiPassword = true;
 		ipmiPassword = Array.from(
 			{ length: 16 },
@@ -31,7 +37,9 @@
 	}
 
 	function ipmiCommand(action: string) {
-		if (ipmiAction) return;
+		if (ipmiAction) {
+			return;
+		}
 		ipmiAction = action;
 		if (action === 'power-on') {
 			colo.updateSelectedUnit({
@@ -65,9 +73,9 @@
 
 {#if colo.selectedUnit}
 	<div class="flex-1 overflow-auto">
-		<div class="divide-y divide-gray-800/50">
+		<div class="divide-y divide-border/50">
 			<div class="px-5 py-3">
-				<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+				<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
 					>IPMI Credentials</span
 				>
 			</div>
@@ -75,40 +83,46 @@
 				<div class="px-5 py-3">
 					<div class="flex flex-col gap-2.5">
 						<div class="flex items-center justify-between">
-							<span class="text-xs text-gray-500">IPMI Address</span>
+							<span class="text-xs text-muted-foreground">IPMI Address</span>
 							<div class="flex items-center gap-1.5">
-								<span class="font-mono text-xs text-gray-200"
+								<span class="font-mono text-xs text-foreground"
 									>ipmi-{colo.selectedUnit.id}.stack.sh</span
 								>
 								<button
-									class="text-gray-500 hover:text-gray-300"
+									type="button"
+									class="text-muted-foreground hover:text-foreground"
 									aria-label="Copy IPMI address"
-									onclick={() => copyText(`ipmi-${colo.selectedUnit!.id}.stack.sh`, 'ipmi-host')}
+									onclick={() => copyText(`ipmi-${colo.selectedUnitId}.stack.sh`, 'ipmi-host')}
 								>
-									{#if copied === 'ipmi-host'}<Check class="h-3 w-3 text-emerald-500" />{:else}<Copy
-											class="h-3 w-3"
-										/>{/if}
+									{#if copied === 'ipmi-host'}
+										<Check class="h-3 w-3 text-emerald-500" />
+									{:else}
+										<Copy class="h-3 w-3" />
+									{/if}
 								</button>
 							</div>
 						</div>
 						<div class="flex items-center justify-between">
-							<span class="text-xs text-gray-500">Username</span>
-							<span class="font-mono text-xs text-gray-200">admin</span>
+							<span class="text-xs text-muted-foreground">Username</span>
+							<span class="font-mono text-xs text-foreground">admin</span>
 						</div>
 						<div class="flex items-center justify-between">
-							<span class="text-xs text-gray-500">Password</span>
+							<span class="text-xs text-muted-foreground">Password</span>
 							<div class="flex items-center gap-1.5">
-								<code class="bg-gray-800 px-2 py-0.5 font-mono text-xs text-gray-100"
+								<code class="bg-muted px-2 py-0.5 font-mono text-xs text-foreground"
 									>{ipmiPassword}</code
 								>
 								<button
-									class="text-gray-500 hover:text-gray-300"
+									type="button"
+									class="text-muted-foreground hover:text-foreground"
 									aria-label="Copy IPMI password"
 									onclick={() => copyText(ipmiPassword, 'ipmi-pw')}
 								>
-									{#if copied === 'ipmi-pw'}<Check class="h-3 w-3 text-emerald-500" />{:else}<Copy
-											class="h-3 w-3"
-										/>{/if}
+									{#if copied === 'ipmi-pw'}
+										<Check class="h-3 w-3 text-emerald-500" />
+									{:else}
+										<Copy class="h-3 w-3" />
+									{/if}
 								</button>
 							</div>
 						</div>
@@ -138,7 +152,7 @@
 			{/if}
 
 			<div class="px-5 py-3">
-				<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+				<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
 					>Power Control</span
 				>
 			</div>
@@ -157,7 +171,7 @@
 					<Button
 						variant="outline"
 						size="sm"
-						class="h-9 gap-1.5 border-red-700 text-xs text-red-400 hover:bg-red-950"
+						class="h-9 gap-1.5 border-red-300 text-xs text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950"
 						disabled={ipmiAction !== '' || colo.selectedUnit.status === 'offline'}
 						onclick={() => ipmiCommand('power-off')}
 					>
@@ -188,7 +202,7 @@
 			</div>
 
 			<div class="px-5 py-3">
-				<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+				<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
 					>Boot Options</span
 				>
 			</div>

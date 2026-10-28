@@ -3,12 +3,12 @@
 // action is enabled. A single <ConfirmDialog /> host (mounted in the app
 // layout) reads this controller and drives the dialog with bind:open.
 
-type ConfirmRequest = {
-	title: string;
-	description: string;
+interface ConfirmRequest {
 	confirmLabel: string;
 	confirmWord?: string;
-};
+	description: string;
+	title: string;
+}
 
 class ConfirmController {
 	open = $state(false);

@@ -1,102 +1,91 @@
-import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { and, asc, count, desc, eq, gt, inArray } from 'drizzle-orm';
-import AdminUserDeletionCodeEmail from '$lib/emails/admin-user-deletion-code.svelte';
-import { hasAdminRole, requireAdmin } from '$lib/server/auth-context';
-import { initAuth } from '$lib/server/auth';
-import { initDrizzle } from '$lib/server/db';
+import { asc, count, desc, eq } from 'drizzle-orm';
+import AdminUserDeletionCodeEmail from '#lib/emails/admin-user-deletion-code.svelte';
+import {
+	accessibilityFixtureAdminUsers,
+	accessibilityFixtureEnabled
+} from '#lib/server/accessibility-fixtures.js';
+import {
+	ADMIN_VERIFICATION_CODE_TTL_MS,
+	beginAdminVerification,
+	consumeAdminVerification
+} from '#lib/server/admin-verification.js';
+import { hasAdminRole, requireAdmin } from '#lib/server/auth-context.js';
+import { updateProjectCustomer } from '#lib/server/billing/autumn.js';
 import {
 	account,
-	apiTokens,
-	invitation,
-	ipAssignments,
 	member,
 	organization,
 	passkey,
-	paymentPeriods,
 	session,
-	sshKeys,
-	twoFactor,
-	user,
-	verification,
-	volumes,
-	vms
-} from '$lib/server/db/schema';
-import { getBackend } from '$lib/server/backends';
-import {
-	cancelProjectBilling,
-	deleteLocalProjectBillingCustomer,
-	deleteProjectServerEntity,
-	updateProjectCustomer
-} from '$lib/server/billing/autumn';
-import { meterResourceThrough, syncProjectUsage } from '$lib/server/billing/metering';
-import { sendRenderedEmail } from '$lib/server/email';
-import { ulid } from '$lib/server/id';
-import { releaseVmNetworking } from '$lib/server/ipam';
+	user
+} from '#lib/server/db/auth.schema.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { apiTokens, sshKeys, vms, volumes } from '#lib/server/db/schema.js';
+import { sendRenderedEmail } from '#lib/server/email.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
+import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
+import { command, getRequestEvent, query } from '$app/server';
 
-const CODE_LENGTH = 6;
-const USER_DELETE_CODE_TTL_MS = 10 * 60 * 1000;
-const USER_DELETE_INTENT_TTL_MS = 60 * 1000;
-
-type UserDeletionVerificationMethod = 'passkey' | 'totp' | 'email';
-
-export type UserSession = {
-	id: string;
+export interface UserSession {
 	createdAt: Date;
+	id: string;
 	ipAddress: string | null;
 	userAgent: string | null;
-};
+}
 
-export type UserAccount = {
-	id: string;
-	providerId: string;
+export interface UserAccount {
 	accountId: string;
 	createdAt: Date;
-};
+	id: string;
+	providerId: string;
+}
 
-export type UserOrganization = {
+export interface UserOrganization {
 	id: string;
 	name: string;
 	role: string;
-};
+}
 
-export type UserSshKey = {
-	id: string;
-	name: string;
+export interface UserSshKey {
 	fingerprint: string;
-};
-
-export type UserApiToken = {
 	id: string;
 	name: string;
+}
+
+export interface UserApiToken {
 	createdAt: number;
-};
-
-export type AdminUser = {
 	id: string;
 	name: string;
-	email: string;
-	image: string | null;
-	emailVerified: boolean;
-	role: string | null;
-	isAdmin: boolean;
-	disabled: boolean;
-	billingExempt: boolean;
-	twoFactorEnabled: boolean;
-	passkeyCount: number;
-	createdAt: Date;
-	updatedAt: Date;
-	sessionCount: number;
+}
+
+export interface AdminUser {
 	accountCount: number;
-	orgCount: number;
-	sshKeyCount: number;
 	apiTokenCount: number;
-};
+	billingExempt: boolean;
+	createdAt: Date;
+	disabled: boolean;
+	email: string;
+	emailVerified: boolean;
+	id: string;
+	image: string | null;
+	isAdmin: boolean;
+	name: string;
+	orgCount: number;
+	passkeyCount: number;
+	role: string | null;
+	sessionCount: number;
+	sshKeyCount: number;
+	twoFactorEnabled: boolean;
+	updatedAt: Date;
+}
 
 async function requireCurrentAdmin() {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
@@ -104,122 +93,29 @@ async function requireCurrentAdmin() {
 	return { db, userId: event.locals.user.id };
 }
 
-function adminUserDeletionIntentIdentifier(adminUserId: string) {
-	return `admin-user-delete-intent:${adminUserId}`;
-}
-
-function adminUserDeletionPasskeyIdentifier(adminUserId: string, targetUserId: string) {
-	return `admin-user-delete-passkey:${adminUserId}:${targetUserId}`;
-}
-
-function adminUserDeletionEmailIdentifier(adminUserId: string, targetUserId: string) {
-	return `admin-user-delete-email:${adminUserId}:${targetUserId}`;
-}
-
-function generateCode() {
-	const max = 10 ** CODE_LENGTH;
-	const value = crypto.getRandomValues(new Uint32Array(1))[0] % max;
-	return value.toString().padStart(CODE_LENGTH, '0');
-}
-
-function normalizeCode(code: string) {
-	return code.replace(/\D/g, '');
-}
-
-async function hashCode(adminUserId: string, targetUserId: string, code: string) {
-	const data = new TextEncoder().encode(`${adminUserId}:${targetUserId}:${code}`);
-	const hash = await crypto.subtle.digest('SHA-256', data);
-	return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-async function getDeletionVerificationMethod(
-	db: ReturnType<typeof initDrizzle>,
-	adminUserId: string
-): Promise<UserDeletionVerificationMethod> {
-	const [registeredPasskey] = await db
-		.select({ id: passkey.id })
-		.from(passkey)
-		.where(eq(passkey.userId, adminUserId))
-		.limit(1);
-
-	if (registeredPasskey) return 'passkey';
-
-	const [registeredTotp] = await db
-		.select({ id: twoFactor.id })
-		.from(twoFactor)
-		.where(eq(twoFactor.userId, adminUserId))
-		.limit(1);
-
-	return registeredTotp ? 'totp' : 'email';
-}
-
 async function assertCanDeleteUser(
 	db: ReturnType<typeof initDrizzle>,
 	adminUserId: string,
 	targetUserId: string
 ) {
-	if (adminUserId === targetUserId) error(400, 'You cannot delete your own account.');
+	if (adminUserId === targetUserId) {
+		error(400, 'You cannot delete your own account.');
+	}
 
 	const target = await db.query.user.findFirst({ where: eq(user.id, targetUserId) });
-	if (!target) error(404, 'User not found');
+	if (!target) {
+		error(404, 'User not found');
+	}
 
 	if (hasAdminRole(target.role) || target.isAdmin) {
 		const adminRows = await db.select({ role: user.role, isAdmin: user.isAdmin }).from(user);
-		const adminCount = adminRows.filter(
-			(account) => hasAdminRole(account.role) || account.isAdmin
-		).length;
-		if (adminCount <= 1) error(400, 'At least one admin is required.');
+		const adminCount = adminRows.filter((row) => hasAdminRole(row.role) || row.isAdmin).length;
+		if (adminCount <= 1) {
+			error(400, 'At least one admin is required.');
+		}
 	}
 
 	return target;
-}
-
-async function verifyDeletionEmailCode(
-	db: ReturnType<typeof initDrizzle>,
-	adminUserId: string,
-	targetUserId: string,
-	code: string
-) {
-	const normalizedCode = normalizeCode(code);
-	if (normalizedCode.length !== CODE_LENGTH)
-		error(400, 'Enter the verification code from your email.');
-
-	const identifier = adminUserDeletionEmailIdentifier(adminUserId, targetUserId);
-	const value = await hashCode(adminUserId, targetUserId, normalizedCode);
-	const [record] = await db
-		.select({ id: verification.id })
-		.from(verification)
-		.where(
-			and(
-				eq(verification.identifier, identifier),
-				eq(verification.value, value),
-				gt(verification.expiresAt, new Date())
-			)
-		)
-		.limit(1);
-
-	if (!record) error(400, 'Invalid or expired verification code.');
-	await db.delete(verification).where(eq(verification.id, record.id));
-}
-
-async function verifyDeletionPasskey(
-	db: ReturnType<typeof initDrizzle>,
-	adminUserId: string,
-	targetUserId: string
-) {
-	const [record] = await db
-		.select({ id: verification.id })
-		.from(verification)
-		.where(
-			and(
-				eq(verification.identifier, adminUserDeletionPasskeyIdentifier(adminUserId, targetUserId)),
-				gt(verification.expiresAt, new Date())
-			)
-		)
-		.limit(1);
-
-	if (!record) error(400, 'Verify with your passkey before deleting this user.');
-	await db.delete(verification).where(eq(verification.id, record.id));
 }
 
 async function deleteUserData(db: ReturnType<typeof initDrizzle>, targetUserId: string) {
@@ -236,6 +132,7 @@ async function settleUserOrganizations(db: ReturnType<typeof initDrizzle>, targe
 		.where(eq(member.userId, targetUserId));
 
 	for (const membership of memberships) {
+		// biome-ignore lint/performance/noAwaitInLoops: each organization settlement syncs Autumn and tears down backend resources, so run them one at a time
 		const otherMembers = await db
 			.select({ id: member.id, userId: member.userId, createdAt: member.createdAt })
 			.from(member)
@@ -254,76 +151,25 @@ async function settleUserOrganizations(db: ReturnType<typeof initDrizzle>, targe
 			continue;
 		}
 
-		await deleteOrganizationResources(db, membership.organizationId);
+		await softDeleteOrganizationResources(db, membership.organizationId);
 	}
-}
-
-async function deleteOrganizationResources(
-	db: ReturnType<typeof initDrizzle>,
-	organizationId: string
-) {
-	const projectVms = await db.query.vms.findMany({
-		where: eq(vms.ownerProjectId, organizationId),
-		columns: {
-			id: true,
-			name: true,
-			proxmoxId: true,
-			active: true,
-			backend: true
-		}
-	});
-	const vmIds = projectVms.map((vm) => vm.id);
-
-	for (const vm of projectVms.filter((item) => item.active)) {
-		try {
-			await getBackend(vm.backend).deleteVm(vm.id, vm.proxmoxId ?? undefined);
-		} catch (err) {
-			console.warn(`Failed to deprovision VM ${vm.id} during user delete`, err);
-			error(502, `Failed to deprovision VM "${vm.name}" in Proxmox`);
-		}
-	}
-
-	for (const vm of projectVms.filter((item) => item.active)) {
-		const metered = await meterResourceThrough('vm', vm.id);
-		if (!metered?.event || metered.syncStatus === 'synced') {
-			await deleteProjectServerEntity(organizationId, vm.id).catch((err) => {
-				console.warn(`Failed to delete Autumn entity for VM ${vm.id}`, err);
-			});
-		}
-	}
-	await syncProjectUsage(organizationId);
-
-	await db.delete(volumes).where(eq(volumes.ownerProjectId, organizationId));
-	for (const vm of projectVms) {
-		await releaseVmNetworking(db, vm.id);
-	}
-	if (vmIds.length > 0) {
-		await db.delete(ipAssignments).where(inArray(ipAssignments.associatedVmId, vmIds));
-		await db.delete(paymentPeriods).where(inArray(paymentPeriods.vmId, vmIds));
-	}
-	await db.delete(vms).where(eq(vms.ownerProjectId, organizationId));
-	await db.delete(invitation).where(eq(invitation.organizationId, organizationId));
-	await db.delete(member).where(eq(member.organizationId, organizationId));
-	const billingCancelled = await cancelProjectBilling(organizationId).catch((err) => {
-		console.warn(`Failed to cancel Autumn billing for project ${organizationId}`, err);
-		return false;
-	});
-	if (billingCancelled) {
-		await deleteLocalProjectBillingCustomer(organizationId);
-	}
-	await db.delete(organization).where(eq(organization.id, organizationId));
 }
 
 function makeCountMap(rows: { userId: string | null; count: number }[]) {
 	const map = new Map<string, number>();
 	for (const row of rows) {
-		if (!row.userId) continue;
+		if (!row.userId) {
+			continue;
+		}
 		map.set(row.userId, row.count);
 	}
 	return map;
 }
 
 export const listAdminUsers = query(async (): Promise<AdminUser[]> => {
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureAdminUsers;
+	}
 	const { db } = await requireCurrentAdmin();
 
 	const users = await db
@@ -365,19 +211,19 @@ export const listAdminUsers = query(async (): Promise<AdminUser[]> => {
 	const apiTokenMap = makeCountMap(apiTokensData);
 	const passkeyMap = makeCountMap(passkeysData);
 
-	return users.map(({ legacyIsAdmin, role, ...account }) => ({
-		...account,
+	return users.map(({ legacyIsAdmin, role, ...userRow }) => ({
+		...userRow,
 		role,
-		disabled: account.disabled ?? false,
-		billingExempt: account.billingExempt ?? false,
-		twoFactorEnabled: account.twoFactorEnabled ?? false,
-		passkeyCount: passkeyMap.get(account.id) ?? 0,
+		disabled: userRow.disabled ?? false,
+		billingExempt: userRow.billingExempt ?? false,
+		twoFactorEnabled: userRow.twoFactorEnabled ?? false,
+		passkeyCount: passkeyMap.get(userRow.id) ?? 0,
 		isAdmin: hasAdminRole(role) || legacyIsAdmin,
-		sessionCount: sessionMap.get(account.id) ?? 0,
-		accountCount: accountMap.get(account.id) ?? 0,
-		orgCount: memberMap.get(account.id) ?? 0,
-		sshKeyCount: sshKeyMap.get(account.id) ?? 0,
-		apiTokenCount: apiTokenMap.get(account.id) ?? 0
+		sessionCount: sessionMap.get(userRow.id) ?? 0,
+		accountCount: accountMap.get(userRow.id) ?? 0,
+		orgCount: memberMap.get(userRow.id) ?? 0,
+		sshKeyCount: sshKeyMap.get(userRow.id) ?? 0,
+		apiTokenCount: apiTokenMap.get(userRow.id) ?? 0
 	}));
 });
 
@@ -385,12 +231,16 @@ const setAdminParams = type({ userId: 'string', isAdmin: 'boolean' });
 export const setUserAdmin = command(setAdminParams, async (params) => {
 	const { db } = await requireCurrentAdmin();
 	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) error(404, 'User not found');
+	if (!target) {
+		error(404, 'User not found');
+	}
 
 	if (!params.isAdmin && (hasAdminRole(target.role) || target.isAdmin)) {
 		const adminRows = await db.select({ role: user.role, isAdmin: user.isAdmin }).from(user);
 		const adminCount = adminRows.filter((row) => hasAdminRole(row.role) || row.isAdmin).length;
-		if (adminCount <= 1) error(400, 'At least one admin is required');
+		if (adminCount <= 1) {
+			error(400, 'At least one admin is required');
+		}
 	}
 
 	await db
@@ -405,12 +255,19 @@ const setDisabledParams = type({ userId: 'string', disabled: 'boolean' });
 export const setUserDisabled = command(setDisabledParams, async (params) => {
 	const { db } = await requireCurrentAdmin();
 	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) error(404, 'User not found');
+	if (!target) {
+		error(404, 'User not found');
+	}
 
 	await db
 		.update(user)
 		.set({ banned: params.disabled, banReason: params.disabled ? null : target.banReason })
 		.where(eq(user.id, params.userId));
+
+	captureServerEvent('admin_user_disabled_changed', {
+		target_user_id: params.userId,
+		disabled: params.disabled
+	});
 
 	return { userId: params.userId, disabled: params.disabled };
 });
@@ -419,12 +276,19 @@ const setBillingExemptParams = type({ userId: 'string', billingExempt: 'boolean'
 export const setUserBillingExempt = command(setBillingExemptParams, async (params) => {
 	const { db } = await requireCurrentAdmin();
 	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) error(404, 'User not found');
+	if (!target) {
+		error(404, 'User not found');
+	}
 
 	await db
 		.update(user)
 		.set({ billingExempt: params.billingExempt })
 		.where(eq(user.id, params.userId));
+
+	captureServerEvent('admin_user_billing_exempt_changed', {
+		target_user_id: params.userId,
+		billing_exempt: params.billingExempt
+	});
 
 	return { userId: params.userId, billingExempt: params.billingExempt };
 });
@@ -433,7 +297,9 @@ const setTwoFactorParams = type({ userId: 'string', twoFactorEnabled: 'boolean' 
 export const setUserTwoFactor = command(setTwoFactorParams, async (params) => {
 	const { db } = await requireCurrentAdmin();
 	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) error(404, 'User not found');
+	if (!target) {
+		error(404, 'User not found');
+	}
 
 	await db
 		.update(user)
@@ -447,12 +313,19 @@ const setRoleParams = type({ userId: 'string', role: 'string' });
 export const setUserRole = command(setRoleParams, async (params) => {
 	const { db } = await requireCurrentAdmin();
 	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) error(404, 'User not found');
+	if (!target) {
+		error(404, 'User not found');
+	}
 
 	await db
 		.update(user)
 		.set({ role: params.role, isAdmin: hasAdminRole(params.role) })
 		.where(eq(user.id, params.userId));
+
+	captureServerEvent('admin_user_role_changed', {
+		target_user_id: params.userId,
+		role: params.role
+	});
 
 	return { userId: params.userId, role: params.role, isAdmin: hasAdminRole(params.role) };
 });
@@ -461,42 +334,21 @@ const beginDeleteUserParams = type({ userId: 'string' });
 export const beginDeleteUser = command(beginDeleteUserParams, async (params) => {
 	const { db, userId: adminUserId } = await requireCurrentAdmin();
 	const adminUser = getRequestEvent().locals.user;
-	if (!adminUser) error(401, 'Authentication required');
+	if (!adminUser) {
+		error(401, 'Authentication required');
+	}
 
 	const target = await assertCanDeleteUser(db, adminUserId, params.userId);
-	const method = await getDeletionVerificationMethod(db, adminUserId);
+	const { method, code } = await beginAdminVerification(db, adminUserId, params.userId);
 
-	await db
-		.delete(verification)
-		.where(eq(verification.identifier, adminUserDeletionIntentIdentifier(adminUserId)));
-
-	if (method === 'passkey') {
-		await db.insert(verification).values({
-			id: ulid(),
-			identifier: adminUserDeletionIntentIdentifier(adminUserId),
-			value: params.userId,
-			expiresAt: new Date(Date.now() + USER_DELETE_INTENT_TTL_MS)
-		});
-	} else if (method === 'email') {
-		const code = generateCode();
-		const identifier = adminUserDeletionEmailIdentifier(adminUserId, params.userId);
-		const value = await hashCode(adminUserId, params.userId, code);
-
-		await db.delete(verification).where(eq(verification.identifier, identifier));
-		await db.insert(verification).values({
-			id: ulid(),
-			identifier,
-			value,
-			expiresAt: new Date(Date.now() + USER_DELETE_CODE_TTL_MS)
-		});
-
+	if (code) {
 		await sendRenderedEmail({
 			component: AdminUserDeletionCodeEmail,
 			props: {
 				userName: adminUser.name,
 				targetEmail: target.email,
 				code,
-				expiresInMinutes: USER_DELETE_CODE_TTL_MS / 60_000
+				expiresInMinutes: ADMIN_VERIFICATION_CODE_TTL_MS / 60_000
 			},
 			subject: 'Confirm Stack user deletion',
 			to: adminUser.email
@@ -510,28 +362,13 @@ const deleteUserParams = type({ userId: 'string', method: 'string', code: 'strin
 export const deleteUserWithVerification = command(deleteUserParams, async (params) => {
 	const { db, userId: adminUserId } = await requireCurrentAdmin();
 	const target = await assertCanDeleteUser(db, adminUserId, params.userId);
-	const method = await getDeletionVerificationMethod(db, adminUserId);
 
-	if (params.method !== method)
-		error(400, 'Use the required verification method for this account.');
-
-	if (method === 'passkey') {
-		await verifyDeletionPasskey(db, adminUserId, params.userId);
-	} else if (method === 'totp') {
-		const code = normalizeCode(params.code ?? '');
-		if (code.length !== CODE_LENGTH)
-			error(400, 'Enter the verification code from your authenticator app.');
-
-		const auth = initAuth();
-		await auth.api.verifyTOTP({
-			headers: getRequestEvent().request.headers,
-			body: { code, trustDevice: false }
-		});
-	} else {
-		await verifyDeletionEmailCode(db, adminUserId, params.userId, params.code ?? '');
-	}
-
+	await consumeAdminVerification(db, adminUserId, params.userId, params.method, params.code);
 	await deleteUserData(db, params.userId);
+	captureServerEvent('admin_user_deleted', {
+		target_user_id: params.userId,
+		verification_method: params.method
+	});
 
 	return { userId: params.userId, email: target.email };
 });
@@ -541,7 +378,9 @@ export const getUserResources = query(getUserResourcesParams, async (params) => 
 	const { db } = await requireCurrentAdmin();
 
 	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) error(404, 'User not found');
+	if (!target) {
+		error(404, 'User not found');
+	}
 
 	const [sessions, accounts, members, sshKeysList, apiTokenList] = await Promise.all([
 		db
@@ -591,7 +430,9 @@ export const getOrganizationResources = query(getOrgResourcesParams, async (para
 	const target = await db.query.organization.findFirst({
 		where: eq(organization.id, params.orgId)
 	});
-	if (!target) error(404, 'Organization not found');
+	if (!target) {
+		error(404, 'Organization not found');
+	}
 
 	const [vmsData, volumesData] = await Promise.all([
 		db

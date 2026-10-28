@@ -1,39 +1,56 @@
-import { command, getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { desc, eq } from 'drizzle-orm';
-import { requireAdmin } from '$lib/server/auth-context';
-import { initDrizzle } from '$lib/server/db';
-import { member, organization, user, vms, vmTypes } from '$lib/server/db/schema';
-import { getBackend, type VmInfo } from '$lib/server/backends';
-import { queueVmDeletion } from '$lib/server/vm-deletion';
+import {
+	accessibilityFixtureAdminVms,
+	accessibilityFixtureEnabled
+} from '#lib/server/accessibility-fixtures.js';
+import { requireAdmin } from '#lib/server/auth-context.js';
+import { getBackend, type VmInfo } from '#lib/server/backends/index.js';
+import { member, organization, user } from '#lib/server/db/auth.schema.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { vms, vmTypes } from '#lib/server/db/schema.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
+import { queueVmDeletion } from '#lib/server/vm-deletion.js';
+import { findLiveVm } from '#lib/server/vm-identity.js';
+import { command, getRequestEvent, query } from '$app/server';
 
-export type AdminVm = {
-	id: string;
-	name: string;
-	proxmoxId: number | null;
+export interface AdminVm {
 	active: boolean;
-	status: 'provisioning' | 'ready' | 'error' | 'deleting';
-	statusError: string | null;
-	liveStatus: string | null;
-	uptime: number;
+	cpuUsage: number | null;
 	createdAt: number;
+	deletedAt: number | null;
+	id: string;
+	lastKnownAt: number | null;
 	lastKnownIpv4: string | null;
 	lastKnownIpv6: string | null;
+	liveStatus: string | null;
+	memoryTotalBytes: number | null;
+	memoryUsageBytes: number | null;
+	name: string;
+	ownerBillingExempt: boolean;
+	ownerEmail: string | null;
+	ownerName: string | null;
+	projectBillingExempt: boolean;
 	projectId: string | null;
 	projectName: string | null;
-	ownerName: string | null;
-	ownerEmail: string | null;
-	ownerBillingExempt: boolean;
-	vmTypeName: string | null;
+	proxmoxId: number | null;
+	proxmoxNode: string | null;
+	status: 'provisioning' | 'ready' | 'error' | 'deleting';
+	statusError: string | null;
+	uptime: number;
 	vmTypeCores: number | null;
+	vmTypeName: string | null;
 	vmTypeRamCapacity: number | null;
+	vmTypeRate: string | null;
 	vmTypeStorageAmount: number | null;
-};
+}
 
 async function requireCurrentAdmin() {
 	const event = getRequestEvent();
-	if (!event?.locals.user) error(401, 'Authentication required');
+	if (!event?.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	await requireAdmin(db, event.locals.user.id);
@@ -41,7 +58,28 @@ async function requireCurrentAdmin() {
 	return db;
 }
 
+type LiveState = Pick<AdminVm, 'liveStatus' | 'cpuUsage' | 'memoryUsageBytes' | 'memoryTotalBytes'>;
+
+function describeLiveState(
+	active: boolean,
+	live: VmInfo | null,
+	lastKnownStatus: string | null
+): LiveState {
+	if (!active) {
+		return { liveStatus: null, cpuUsage: null, memoryUsageBytes: null, memoryTotalBytes: null };
+	}
+	return {
+		liveStatus: live?.status ?? lastKnownStatus,
+		cpuUsage: live?.metrics?.cpu ?? null,
+		memoryUsageBytes: live?.metrics?.memory ?? null,
+		memoryTotalBytes: live?.memory ?? null
+	};
+}
+
 export const listAllAdminVms = query(async (): Promise<AdminVm[]> => {
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureAdminVms;
+	}
 	const db = await requireCurrentAdmin();
 
 	const [rows, owners] = await Promise.all([
@@ -50,21 +88,26 @@ export const listAllAdminVms = query(async (): Promise<AdminVm[]> => {
 				id: vms.id,
 				name: vms.name,
 				proxmoxId: vms.proxmoxId,
+				proxmoxNode: vms.proxmoxNode,
 				active: vms.active,
 				backend: vms.backend,
 				status: vms.status,
 				statusError: vms.statusError,
 				lastKnownStatus: vms.lastKnownStatus,
 				lastKnownUptime: vms.lastKnownUptime,
+				lastKnownAt: vms.lastKnownAt,
 				createdAt: vms.createdAt,
+				deletedAt: vms.deletedAt,
 				lastKnownIpv4: vms.lastKnownIpv4,
 				lastKnownIpv6: vms.lastKnownIpv6,
 				projectId: vms.ownerProjectId,
 				projectName: organization.name,
+				projectBillingExempt: organization.billingExempt,
 				vmTypeName: vmTypes.name,
 				vmTypeCores: vmTypes.cores,
 				vmTypeRamCapacity: vmTypes.ramCapacity,
-				vmTypeStorageAmount: vmTypes.storageAmount
+				vmTypeStorageAmount: vmTypes.storageAmount,
+				vmTypeRate: vmTypes.rate
 			})
 			.from(vms)
 			.leftJoin(vmTypes, eq(vmTypes.id, vms.vmTypeId))
@@ -83,64 +126,44 @@ export const listAllAdminVms = query(async (): Promise<AdminVm[]> => {
 	]);
 
 	let liveVms: VmInfo[] = [];
-	let liveListLoaded = false;
 	try {
 		liveVms = await getBackend('proxmox').listVms();
-		liveListLoaded = true;
 	} catch (err) {
 		console.warn('Failed to load Proxmox VM statuses', err);
 	}
-	const liveByProxmoxId = new Map(
-		liveVms.filter((vm) => vm.proxmoxId != null).map((vm) => [vm.proxmoxId!, vm] as const)
-	);
-	const liveById = new Map(liveVms.map((vm) => [vm.id, vm]));
 	const ownerByProject = new Map(owners.map((owner) => [owner.organizationId, owner]));
 
-	if (liveListLoaded) {
-		const staleDeleting = rows.filter(
-			(row) =>
-				row.active &&
-				row.status === 'deleting' &&
-				!(row.proxmoxId != null ? liveByProxmoxId.get(row.proxmoxId) : null) &&
-				!liveById.get(row.id)
-		);
-		for (const row of staleDeleting) {
-			await queueVmDeletion(db, {
-				id: row.id,
-				backend: row.backend,
-				proxmoxId: row.proxmoxId,
-				ownerProjectId: row.projectId
-			}).catch((err) => {
-				console.warn(`Failed to re-queue deletion for VM ${row.id}`, err);
-			});
-		}
-	}
-
+	const now = Date.now();
 	return rows.map((row) => {
-		const live = row.proxmoxId != null ? liveByProxmoxId.get(row.proxmoxId) : null;
+		const live = findLiveVm(liveVms, row);
 		const owner = row.projectId ? ownerByProject.get(row.projectId) : null;
 
 		return {
 			id: row.id,
 			name: row.name,
 			proxmoxId: row.proxmoxId,
+			proxmoxNode: live?.proxmoxNode ?? row.proxmoxNode,
 			active: row.active,
 			status: row.status,
 			statusError: row.statusError,
-			liveStatus: row.active ? (live?.status ?? row.lastKnownStatus) : null,
+			...describeLiveState(row.active, live, row.lastKnownStatus),
 			uptime: live?.uptime ?? row.lastKnownUptime ?? 0,
 			createdAt: row.createdAt,
+			deletedAt: row.deletedAt,
+			lastKnownAt: live ? now : row.lastKnownAt,
 			lastKnownIpv4: row.lastKnownIpv4,
 			lastKnownIpv6: row.lastKnownIpv6,
 			projectId: row.projectId,
 			projectName: row.projectName,
+			projectBillingExempt: row.projectBillingExempt ?? false,
 			ownerName: owner?.name ?? null,
 			ownerEmail: owner?.email ?? null,
 			ownerBillingExempt: owner?.billingExempt ?? false,
 			vmTypeName: row.vmTypeName,
 			vmTypeCores: row.vmTypeCores,
 			vmTypeRamCapacity: row.vmTypeRamCapacity,
-			vmTypeStorageAmount: row.vmTypeStorageAmount
+			vmTypeStorageAmount: row.vmTypeStorageAmount,
+			vmTypeRate: row.vmTypeRate
 		};
 	});
 });
@@ -154,11 +177,22 @@ async function adminPowerAction(
 	const db = await requireCurrentAdmin();
 
 	const row = await db.query.vms.findFirst({ where: eq(vms.id, vmId) });
-	if (!row) error(404, `VM "${vmId}" not found`);
-	if (!row.active) error(400, `VM "${row.name}" is no longer active`);
-	if (row.status === 'deleting') error(409, `VM "${row.name}" is being deleted`);
+	if (!row) {
+		error(404, `VM "${vmId}" not found`);
+	}
+	if (!row.active) {
+		error(400, `VM "${row.name}" is no longer active`);
+	}
+	if (row.status === 'deleting') {
+		error(409, `VM "${row.name}" is being deleted`);
+	}
 
 	await getBackend(row.backend)[action](row.id, row.proxmoxId ?? undefined);
+	captureServerEvent(
+		'admin_vm_power_action',
+		{ vm_id: row.id, action },
+		{ projectId: row.ownerProjectId }
+	);
 }
 
 export const adminStartVm = command(powerParams, async (p) => adminPowerAction(p.vmId, 'startVm'));
@@ -172,9 +206,13 @@ export const adminDeleteVm = command(powerParams, async (params) => {
 	const db = await requireCurrentAdmin();
 
 	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
-	if (!row) error(404, `VM "${params.vmId}" not found`);
-	if (!row.active) return;
-	if (row.status === 'deleting') return;
+	if (!row) {
+		error(404, `VM "${params.vmId}" not found`);
+	}
+	if (!row.active) {
+		return;
+	}
 
 	await queueVmDeletion(db, row);
+	captureServerEvent('admin_vm_deleted', { vm_id: row.id }, { projectId: row.ownerProjectId });
 });

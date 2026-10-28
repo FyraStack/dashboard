@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
-	import { Label } from '$lib/components/ui/label';
-	import * as Dialog from '$lib/components/ui/dialog';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 
 	let {
 		open = $bindable(false),
@@ -21,7 +21,7 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Attach Volume</Dialog.Title>
 			<Dialog.Description>Attach {volumeName ?? 'this volume'} to a server.</Dialog.Description>
@@ -30,7 +30,7 @@
 			<Label>Server</Label>
 			<select
 				bind:value={server}
-				class="w-full appearance-none border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 focus:border-gray-500 focus:outline-none"
+				class="w-full appearance-none border border-border bg-muted px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none"
 			>
 				{#each serverOptions as option (option)}
 					<option value={option}>{option}</option>

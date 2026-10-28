@@ -1,13 +1,21 @@
 <script lang="ts">
-	import { Badge } from '$lib/components/ui/badge';
-	import { Button } from '$lib/components/ui/button';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Check, Copy, Pencil, Plus, X } from '@lucide/svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import Check from '~icons/lucide/check';
+	import Plus from '~icons/lucide/plus';
+	import X from '~icons/lucide/x';
+	import Copy from '~icons/nucleo/copy';
+	import Pencil from '~icons/nucleo/pencil';
 	import { getColocationContext } from '../../colocation-context.svelte';
 
-	type ColoIp = { address: string; rdns: string; type: 'Primary' | 'Additional' };
+	interface ColoIp {
+		address: string;
+		rdns: string;
+		type: 'Primary' | 'Additional';
+	}
 
 	const colo = getColocationContext();
 	let copied = $state('');
@@ -41,9 +49,13 @@
 	}
 
 	function addIp() {
-		if (!newIpAddr.trim() || addingIp) return;
+		if (!newIpAddr.trim() || addingIp) {
+			return;
+		}
 		addingIp = true;
-		if (!ips[colo.selectedUnitId]) ips[colo.selectedUnitId] = [];
+		if (!ips[colo.selectedUnitId]) {
+			ips[colo.selectedUnitId] = [];
+		}
 		ips[colo.selectedUnitId].push({
 			address: newIpAddr.trim(),
 			rdns: newIpRdns.trim(),
@@ -57,22 +69,26 @@
 
 	function saveRdns(idx: number) {
 		const unitIps = ips[colo.selectedUnitId];
-		if (unitIps?.[idx]) unitIps[idx].rdns = rdnsValue;
+		if (unitIps?.[idx]) {
+			unitIps[idx].rdns = rdnsValue;
+		}
 		editingRdns = null;
 	}
 
 	function deleteIp(idx: number) {
 		const unitIps = ips[colo.selectedUnitId];
-		if (unitIps) ips[colo.selectedUnitId] = unitIps.filter((_, i) => i !== idx);
+		if (unitIps) {
+			ips[colo.selectedUnitId] = unitIps.filter((_, i) => i !== idx);
+		}
 	}
 </script>
 
 {#if colo.selectedUnit}
 	<div class="flex-1 overflow-auto">
-		<div class="divide-y divide-gray-800/50">
+		<div class="divide-y divide-border/50">
 			<div class="px-5 py-3">
 				<div class="flex items-center justify-between">
-					<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase"
+					<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
 						>IP Addresses</span
 					>
 					<Button
@@ -90,7 +106,7 @@
 				<div class="flex items-center justify-between px-5 py-2.5">
 					<div>
 						<div class="flex items-center gap-2">
-							<span class="font-mono text-xs text-gray-200">{ip.address}</span>
+							<span class="font-mono text-xs text-foreground">{ip.address}</span>
 							<Badge variant="secondary" class="text-[9px]">{ip.type}</Badge>
 						</div>
 						{#if editingRdns === idx}
@@ -101,30 +117,37 @@
 									size="sm"
 									class="h-6 w-6 p-0 text-emerald-500"
 									aria-label="Save reverse DNS"
-									onclick={() => saveRdns(idx)}><Check class="h-2.5 w-2.5" /></Button
+									onclick={() => saveRdns(idx)}
+									><Check class="h-2.5 w-2.5" /></Button
 								>
 								<Button
 									variant="ghost"
 									size="sm"
 									class="h-6 w-6 p-0"
 									aria-label="Cancel reverse DNS edit"
-									onclick={() => (editingRdns = null)}><X class="h-2.5 w-2.5" /></Button
+									onclick={() => (editingRdns = null)}
+									><X class="h-2.5 w-2.5" /></Button
 								>
 							</div>
 						{:else}
-							<p class="mt-0.5 font-mono text-[11px] text-gray-500">{ip.rdns || 'No rDNS'}</p>
+							<p class="mt-0.5 font-mono text-[11px] text-muted-foreground">
+								{ip.rdns || 'No rDNS'}
+							</p>
 						{/if}
 					</div>
 					{#if editingRdns !== idx}
 						<div class="flex items-center gap-1">
 							<button
-								class="text-gray-500 hover:text-gray-300"
+								type="button"
+								class="text-muted-foreground hover:text-foreground"
 								aria-label="Copy IP address"
 								onclick={() => copyText(ip.address, `colo-ip-${idx}`)}
 							>
-								{#if copied === `colo-ip-${idx}`}<Check
-										class="h-3 w-3 text-emerald-500"
-									/>{:else}<Copy class="h-3 w-3" />{/if}
+								{#if copied === `colo-ip-${idx}`}
+									<Check class="h-3 w-3 text-emerald-500" />
+								{:else}
+									<Copy class="h-3 w-3" />
+								{/if}
 							</button>
 							<Button
 								variant="ghost"
@@ -134,7 +157,8 @@
 								onclick={() => {
 									editingRdns = idx;
 									rdnsValue = ip.rdns;
-								}}><Pencil class="h-3 w-3" /></Button
+								}}
+								><Pencil class="h-3 w-3" /></Button
 							>
 							{#if ip.type === 'Additional'}
 								<Button
@@ -142,7 +166,8 @@
 									size="sm"
 									class="h-7 w-7 p-0 text-red-400"
 									aria-label={`Delete IP ${ip.address}`}
-									onclick={() => deleteIp(idx)}><X class="h-3 w-3" /></Button
+									onclick={() => deleteIp(idx)}
+									><X class="h-3 w-3" /></Button
 								>
 							{/if}
 						</div>
@@ -150,21 +175,23 @@
 				</div>
 			{/each}
 			<div class="px-5 py-3">
-				<span class="text-xs font-semibold tracking-wider text-gray-500 uppercase">Network</span>
+				<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+					>Network</span
+				>
 			</div>
 			<div class="flex items-center justify-between px-5 py-2.5">
-				<span class="text-xs text-gray-500">Uplink</span>
-				<span class="text-xs font-medium text-gray-200">1 Gbps fair-use</span>
+				<span class="text-xs text-muted-foreground">Uplink</span>
+				<span class="text-xs font-medium text-foreground">1 Gbps fair-use</span>
 			</div>
 			<div class="flex items-center justify-between px-5 py-2.5">
-				<span class="text-xs text-gray-500">Bandwidth This Month</span>
-				<span class="text-xs font-medium text-gray-200">1.2 TB</span>
+				<span class="text-xs text-muted-foreground">Bandwidth This Month</span>
+				<span class="text-xs font-medium text-foreground">1.2 TB</span>
 			</div>
 		</div>
 	</div>
 
 	<Dialog.Root bind:open={addIpOpen}>
-		<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+		<Dialog.Content class="border-border bg-background sm:max-w-md">
 			<Dialog.Header>
 				<Dialog.Title>Add IP Address</Dialog.Title>
 				<Dialog.Description

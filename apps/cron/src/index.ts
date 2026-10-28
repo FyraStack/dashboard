@@ -1,29 +1,44 @@
 interface Env {
+	BILLING_DISABLED?: string;
 	DASHBOARD: Fetcher;
-	BILLING_METER_SECRET: string;
+	INTERNAL_CRON_SECRET: string;
 }
 
 const METER_PATH = '/api/internal/billing/meter';
+const IPAM_RECONCILE_PATH = '/api/internal/ipam/reconcile';
 
-async function runBillingMeter(env: Env): Promise<void> {
-	const response = await env.DASHBOARD.fetch(`https://dashboard.internal${METER_PATH}`, {
+async function runInternalCronRoute(env: Env, path: string, label: string): Promise<void> {
+	const response = await env.DASHBOARD.fetch(`https://dashboard.internal${path}`, {
 		method: 'POST',
-		headers: { authorization: `Bearer ${env.BILLING_METER_SECRET}` }
+		headers: {
+			authorization: `Bearer ${env.INTERNAL_CRON_SECRET}`,
+			'content-type': 'application/json'
+		},
+		body: '{}'
 	});
 
 	const body = await response.text();
 	if (!response.ok) {
-		throw new Error(`billing meter failed: ${response.status} ${response.statusText} ${body}`);
+		throw new Error(`${label} failed: ${response.status} ${response.statusText} ${body}`);
 	}
 
-	console.log(`billing meter ok: ${body}`);
+	console.log(`${label} ok: ${body}`);
+}
+
+function billingDisabled(env: Env) {
+	return env.BILLING_DISABLED === 'true';
 }
 
 export default {
-	async scheduled(_event, env, ctx): Promise<void> {
-		ctx.waitUntil(runBillingMeter(env));
+	scheduled(_event, env, ctx): void {
+		if (billingDisabled(env)) {
+			console.warn('billing meter skipped: BILLING_DISABLED is true');
+		} else {
+			ctx.waitUntil(runInternalCronRoute(env, METER_PATH, 'billing meter'));
+		}
+		ctx.waitUntil(runInternalCronRoute(env, IPAM_RECONCILE_PATH, 'ipam reconcile'));
 	},
-	async fetch(): Promise<Response> {
+	fetch(): Response {
 		return new Response('stack-dashboard-cron: billing meter worker', { status: 200 });
 	}
 } satisfies ExportedHandler<Env>;

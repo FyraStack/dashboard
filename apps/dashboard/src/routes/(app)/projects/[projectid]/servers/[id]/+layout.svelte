@@ -1,29 +1,37 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import { resolve } from '$app/paths';
-	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Play, Power, PowerOff, RotateCw, Loader2 } from '@lucide/svelte';
-	import type { FeatureFlags } from '$lib/feature-flags';
-	import { killVm, rebootVm, startVm, stopVm } from '$lib/remote/vms.remote';
-	import { getServerWithFallback } from '$lib/state/servers.svelte';
-	import { serverTabs, type ServerTab } from './lib/server-detail';
 	import { toast } from 'svelte-sonner';
-	import { getErrorMessage } from '$lib/utils';
-	import { confirmDestructive } from '$lib/confirm.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import type { FeatureFlags } from '#lib/feature-flags.js';
+	import { killVm, rebootVm, startVm, stopVm } from '#lib/remote/vms.remote.js';
+	import {
+		getServerWithFallback,
+		requestServerStatusRefresh,
+		type ServerInfo
+	} from '#lib/state/servers.svelte.js';
+	import { getErrorMessage } from '#lib/utils.js';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import Loader2 from '~icons/lucide/loader-2';
+	import Play from '~icons/nucleo/play';
+	import Power from '~icons/nucleo/power';
+	import PowerOff from '~icons/nucleo/power-off';
+	import RotateCw from '~icons/nucleo/rotate-cw';
+	import { type ServerTab, serverTabs } from './lib/server-detail';
 
 	type ServerTabHref =
-		| `/projects/${string}/servers/${string}`
-		| `/projects/${string}/servers/${string}/backups`
-		| `/projects/${string}/servers/${string}/console`
-		| `/projects/${string}/servers/${string}/images`
-		| `/projects/${string}/servers/${string}/logs`
-		| `/projects/${string}/servers/${string}/networking`
-		| `/projects/${string}/servers/${string}/rebuild`
-		| `/projects/${string}/servers/${string}/rescue`
-		| `/projects/${string}/servers/${string}/resize`
-		| `/projects/${string}/servers/${string}/settings`
-		| `/projects/${string}/servers/${string}/snapshots`;
+		| `projects/${string}/servers/${string}`
+		| `projects/${string}/servers/${string}/backups`
+		| `projects/${string}/servers/${string}/console`
+		| `projects/${string}/servers/${string}/images`
+		| `projects/${string}/servers/${string}/logs`
+		| `projects/${string}/servers/${string}/networking`
+		| `projects/${string}/servers/${string}/rebuild`
+		| `projects/${string}/servers/${string}/rescue`
+		| `projects/${string}/servers/${string}/resize`
+		| `projects/${string}/servers/${string}/settings`
+		| `projects/${string}/servers/${string}/snapshots`;
 
 	type PowerAction = 'start' | 'shutdown' | 'kill' | 'restart';
 
@@ -41,8 +49,49 @@
 		return visibleServerTabs.some((entry) => entry.id === tab) ? (tab as ServerTab) : 'overview';
 	});
 
+	const statusBadgeClasses = {
+		danger:
+			'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400',
+		running:
+			'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400',
+		provisioning:
+			'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-400',
+		restarting:
+			'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400',
+		unloaded: 'border-border bg-background/40 text-muted-foreground'
+	};
+
+	function statusBadgeClass(server: ServerInfo): string {
+		if (server.status === 'deleting') {
+			return statusBadgeClasses.danger;
+		}
+		if (!server.liveLoaded) {
+			return statusBadgeClasses.unloaded;
+		}
+		switch (server.status) {
+			case 'running':
+				return statusBadgeClasses.running;
+			case 'provisioning':
+				return statusBadgeClasses.provisioning;
+			case 'restarting':
+				return statusBadgeClasses.restarting;
+			default:
+				return statusBadgeClasses.danger;
+		}
+	}
+
+	function statusBadgeLabel(server: ServerInfo): string {
+		if (server.status === 'deleting') {
+			return 'deleting...';
+		}
+		if (!server.liveLoaded) {
+			return 'unknown';
+		}
+		return server.status === 'provisioning' ? 'provisioning...' : server.status;
+	}
+
 	function tabHref(tab: ServerTab): ServerTabHref {
-		const base = `/projects/${page.params.projectid}/servers/${serverId}`;
+		const base = `projects/${page.params.projectid}/servers/${serverId}`;
 		return (tab === 'overview' ? base : `${base}/${tab}`) as ServerTabHref;
 	}
 
@@ -54,7 +103,9 @@
 	} as const;
 
 	async function power(action: PowerAction) {
-		if (!selectedServer || powerLoading) return;
+		if (!selectedServer || powerLoading) {
+			return;
+		}
 
 		if (action === 'kill') {
 			const ok = await confirmDestructive({
@@ -62,7 +113,9 @@
 				description: `This forces ${selectedServer.name} off like pulling the plug, which can corrupt the filesystem or lose unsaved data. Use Shutdown for a clean stop.`,
 				confirmLabel: 'Force power off'
 			});
-			if (!ok) return;
+			if (!ok) {
+				return;
+			}
 		}
 
 		powerAction = action;
@@ -77,6 +130,7 @@
 			} else {
 				await killVm({ vmId: selectedServer.id });
 			}
+			requestServerStatusRefresh();
 			toast.success(powerMessages[action].success);
 		} catch (error) {
 			toast.error(getErrorMessage(error, powerMessages[action].error));
@@ -86,30 +140,11 @@
 	}
 </script>
 
-<div class="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-gray-800 px-4">
+<div class="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
 	<div class="flex min-w-0 items-center gap-2">
-		<span class="truncate text-sm font-medium text-gray-200">{selectedServer.name}</span>
-		<Badge
-			variant="outline"
-			class="text-[10px] {selectedServer.status === 'deleting'
-				? 'border-red-800 bg-red-950/40 text-red-400'
-				: !selectedServer.liveLoaded
-					? 'border-gray-700 bg-gray-900/40 text-gray-400'
-					: selectedServer.status === 'running'
-						? 'border-emerald-800 bg-emerald-950/40 text-emerald-400'
-						: selectedServer.status === 'provisioning'
-							? 'border-blue-800 bg-blue-950/40 text-blue-400'
-							: selectedServer.status === 'restarting'
-								? 'border-amber-800 bg-amber-950/40 text-amber-400'
-								: 'border-red-800 bg-red-950/40 text-red-400'}"
-		>
-			{selectedServer.status === 'deleting'
-				? 'deleting...'
-				: !selectedServer.liveLoaded
-					? 'unknown'
-					: selectedServer.status === 'provisioning'
-						? 'provisioning...'
-						: selectedServer.status}
+		<span class="truncate text-sm font-medium text-foreground">{selectedServer.name}</span>
+		<Badge variant="outline" class="text-[10px] {statusBadgeClass(selectedServer)}">
+			{statusBadgeLabel(selectedServer)}
 		</Badge>
 	</div>
 	<div class="flex shrink-0 items-center gap-1.5">
@@ -172,7 +207,7 @@
 		<Button
 			variant="outline"
 			size="sm"
-			class="h-7 gap-1.5 border-red-700 px-2.5 text-xs text-red-400 hover:bg-red-950 sm:px-3"
+			class="h-7 gap-1.5 border-red-300 px-2.5 text-xs text-red-700 hover:bg-red-100 sm:px-3 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950"
 			aria-label="Kill"
 			disabled={powerLoading ||
 				selectedServer.status === 'stopped' ||
@@ -190,14 +225,14 @@
 	</div>
 </div>
 
-<div class="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-gray-800 px-2">
+<div class="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-border px-2">
 	{#each visibleServerTabs as tab (tab.id)}
 		<a
 			aria-current={activeTab === tab.id ? 'page' : undefined}
 			class="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors duration-100 {activeTab ===
 			tab.id
-				? 'border-b-2 border-red-500 text-gray-50'
-				: 'text-gray-500 hover:text-gray-300'}"
+				? 'border-b-2 border-red-500 text-foreground'
+				: 'text-muted-foreground hover:text-foreground'}"
 			href={resolve(tabHref(tab.id))}
 			data-sveltekit-preload-data="hover"
 		>

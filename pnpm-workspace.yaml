@@ -3,9 +3,17 @@ packages:
   - 'packages/*'
 overrides:
   better-call: 1.3.7
+  'cookie@<0.7.0': ^0.7.0
+  '@esbuild-kit/core-utils>esbuild': ^0.25.0
 allowBuilds:
   '@prisma/client': false
+  '@sentry/cli': true
   better-sqlite3: true
+  core-js: false
   esbuild: true
   sharp: true
   workerd: true
+autoInstallPeers: false
+dedupePeerDependents: false
+minimumReleaseAge: 0
+sideEffectsCache: true

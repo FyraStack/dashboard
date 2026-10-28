@@ -1,14 +1,14 @@
-import { command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
 import { and, eq, gt } from 'drizzle-orm';
-import PasswordChangeCodeEmail from '$lib/emails/password-change-code.svelte';
-import { initAuth } from '$lib/server/auth';
-import { initDrizzle } from '$lib/server/db';
-import { verification } from '$lib/server/db/schema';
-import { sendRenderedEmail } from '$lib/server/email';
-import { ulid } from '$lib/server/id';
-import { account } from '$lib/server/db/auth.schema';
+import PasswordChangeCodeEmail from '#lib/emails/password-change-code.svelte';
+import { initAuth } from '#lib/server/auth.js';
+import { account, verification } from '#lib/server/db/auth.schema.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { sendRenderedEmail } from '#lib/server/email.js';
+import { ulid } from '#lib/server/id.js';
+import { captureServerEvent } from '#lib/server/posthog.js';
+import { command, getRequestEvent } from '$app/server';
 
 const CODE_LENGTH = 6;
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -23,8 +23,15 @@ function passwordChangePasskeyIdentifier(userId: string) {
 
 function generateCode() {
 	const max = 10 ** CODE_LENGTH;
-	const value = crypto.getRandomValues(new Uint32Array(1))[0] % max;
-	return value.toString().padStart(CODE_LENGTH, '0');
+	const range = 2 ** 32;
+	const limit = range - (range % max);
+	const values = new Uint32Array(1);
+
+	do {
+		crypto.getRandomValues(values);
+	} while (values[0] >= limit);
+
+	return (values[0] % max).toString().padStart(CODE_LENGTH, '0');
 }
 
 async function hashCode(userId: string, code: string) {
@@ -62,8 +69,10 @@ async function changePassword(currentPassword: string, newPassword: string) {
 
 export const sendPasswordChangeCode = command(async () => {
 	const event = getRequestEvent();
-	const user = event.locals.user;
-	if (!user) error(401, 'Authentication required');
+	const { user } = event.locals;
+	if (!user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const code = generateCode();
@@ -87,8 +96,10 @@ const emailParams = type({ currentPassword: 'string', newPassword: 'string', cod
 export const hasPassword = command(async () => {
 	const db = initDrizzle();
 	const event = getRequestEvent();
-	const user = event.locals.user;
-	if (!user) error(401, 'Authentication required');
+	const { user } = event.locals;
+	if (!user) {
+		error(401, 'Authentication required');
+	}
 	const [credentialAccount] = await db
 		.select({ id: account.id })
 		.from(account)
@@ -100,11 +111,15 @@ export const hasPassword = command(async () => {
 
 export const confirmPasswordChangeWithEmail = command(emailParams, async (params) => {
 	const event = getRequestEvent();
-	const user = event.locals.user;
-	if (!user) error(401, 'Authentication required');
+	const { user } = event.locals;
+	if (!user) {
+		error(401, 'Authentication required');
+	}
 
 	const code = normalizeCode(params.code);
-	if (code.length !== CODE_LENGTH) error(400, 'Enter the verification code from your email.');
+	if (code.length !== CODE_LENGTH) {
+		error(400, 'Enter the verification code from your email.');
+	}
 
 	const db = initDrizzle();
 	const identifier = passwordChangeIdentifier(user.id);
@@ -121,7 +136,9 @@ export const confirmPasswordChangeWithEmail = command(emailParams, async (params
 		)
 		.limit(1);
 
-	if (!record) error(400, 'Invalid or expired verification code.');
+	if (!record) {
+		error(400, 'Invalid or expired verification code.');
+	}
 
 	if (await hasPassword()) {
 		await changePassword(params.currentPassword, params.newPassword);
@@ -129,17 +146,21 @@ export const confirmPasswordChangeWithEmail = command(emailParams, async (params
 		await changePasswordOauth(params.newPassword);
 	}
 	await db.delete(verification).where(eq(verification.id, record.id));
+	captureServerEvent('password_changed', { verification_method: 'email' });
 });
 
 const totpParams = type({ currentPassword: 'string', newPassword: 'string', code: 'string' });
 
 export const confirmPasswordChangeWithTotp = command(totpParams, async (params) => {
 	const event = getRequestEvent();
-	if (!event.locals.user) error(401, 'Authentication required');
+	if (!event.locals.user) {
+		error(401, 'Authentication required');
+	}
 
 	const code = normalizeCode(params.code);
-	if (code.length !== CODE_LENGTH)
+	if (code.length !== CODE_LENGTH) {
 		error(400, 'Enter the verification code from your authenticator app.');
+	}
 
 	const auth = initAuth();
 	await auth.api.verifyTOTP({
@@ -152,14 +173,17 @@ export const confirmPasswordChangeWithTotp = command(totpParams, async (params) 
 	} else {
 		await changePasswordOauth(params.newPassword);
 	}
+	captureServerEvent('password_changed', { verification_method: 'totp' });
 });
 
 const passkeyParams = type({ currentPassword: 'string', newPassword: 'string' });
 
 export const confirmPasswordChangeWithPasskey = command(passkeyParams, async (params) => {
 	const event = getRequestEvent();
-	const user = event.locals.user;
-	if (!user) error(401, 'Authentication required');
+	const { user } = event.locals;
+	if (!user) {
+		error(401, 'Authentication required');
+	}
 
 	const db = initDrizzle();
 	const identifier = passwordChangePasskeyIdentifier(user.id);
@@ -169,7 +193,9 @@ export const confirmPasswordChangeWithPasskey = command(passkeyParams, async (pa
 		.where(and(eq(verification.identifier, identifier), gt(verification.expiresAt, new Date())))
 		.limit(1);
 
-	if (!record) error(400, 'Verify with your passkey before changing your password.');
+	if (!record) {
+		error(400, 'Verify with your passkey before changing your password.');
+	}
 
 	if (await hasPassword()) {
 		await changePassword(params.currentPassword, params.newPassword);
@@ -177,4 +203,5 @@ export const confirmPasswordChangeWithPasskey = command(passkeyParams, async (pa
 		await changePasswordOauth(params.newPassword);
 	}
 	await db.delete(verification).where(eq(verification.id, record.id));
+	captureServerEvent('password_changed', { verification_method: 'passkey' });
 });

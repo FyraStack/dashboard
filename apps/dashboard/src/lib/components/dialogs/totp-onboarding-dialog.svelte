@@ -1,16 +1,18 @@
 <script lang="ts">
-	import QRCode from 'qrcode-svg';
-	import { authClient } from '$lib/auth-client';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { Label } from '$lib/components/ui/label';
-	import { Copy, Check, ShieldCheck } from '@lucide/svelte';
+	import QRCode from 'qrcode';
+	import { authClient } from '#lib/auth-client.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import Check from '~icons/lucide/check';
+	import Copy from '~icons/nucleo/copy';
+	import ShieldCheck from '~icons/nucleo/shield-check';
 
-	type Props = {
-		open?: boolean;
+	interface Props {
 		onComplete?: () => void;
-	};
+		open?: boolean;
+	}
 
 	let { open = $bindable(false), onComplete }: Props = $props();
 
@@ -26,20 +28,40 @@
 	let copiedSecret = $state(false);
 	let copiedBackup = $state(false);
 
-	let qrSvg = $derived(
-		totpUri
-			? new QRCode({
-					content: totpUri,
-					width: 180,
-					height: 180,
-					padding: 0,
-					color: '#fafafa',
-					background: '#27272a',
-					ecl: 'M'
-				}).svg()
-			: ''
-	);
-	let qrCodeSrc = $derived(qrSvg ? `data:image/svg+xml;utf8,${encodeURIComponent(qrSvg)}` : '');
+	let qrCodeSrc = $state('');
+
+	$effect(() => {
+		const uri = totpUri;
+		if (!uri) {
+			qrCodeSrc = '';
+			return;
+		}
+
+		let cancelled = false;
+		QRCode.toDataURL(uri, {
+			width: 180,
+			margin: 0,
+			color: {
+				dark: '#fafafa',
+				light: '#27272a'
+			},
+			errorCorrectionLevel: 'M'
+		})
+			.then((src) => {
+				if (!cancelled) {
+					qrCodeSrc = src;
+				}
+			})
+			.catch(() => {
+				if (!cancelled) {
+					qrCodeSrc = '';
+				}
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	});
 	let normalizedVerifyCode = $derived(verifyCode.replace(/\D/g, ''));
 	const invalidCodeMessage =
 		'Invalid code. Use the newest scanned Fyra entry and make sure your device time is set automatically.';
@@ -55,7 +77,9 @@
 	};
 
 	async function enableTotp() {
-		if (!setupPassword) return;
+		if (!setupPassword) {
+			return;
+		}
 		setupSubmitting = true;
 		verifyError = '';
 		const { data, error } = await authClient.twoFactor.enable({
@@ -77,7 +101,9 @@
 	}
 
 	async function verifyTotp() {
-		if (!normalizedVerifyCode) return;
+		if (!normalizedVerifyCode) {
+			return;
+		}
 		verifying = true;
 		verifyError = '';
 		const { error } = await authClient.twoFactor.verifyTotp({
@@ -105,7 +131,7 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-md">
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Set Up Authenticator App</Dialog.Title>
 			<Dialog.Description>
@@ -121,6 +147,7 @@
 						bind:value={setupPassword}
 						type="password"
 						placeholder="********"
+						autocomplete="current-password"
 						onkeydown={(e) => e.key === 'Enter' && enableTotp()}
 					/>
 					{#if verifyError}
@@ -129,35 +156,35 @@
 				</div>
 
 				<Button onclick={enableTotp} disabled={setupSubmitting || !setupPassword} class="gap-1.5">
-					<ShieldCheck class="h-3.5 w-3.5" />
+					<ShieldCheck class="size-4" />
 					{setupSubmitting ? 'Confirming...' : 'Continue'}
 				</Button>
 			</div>
 		{:else if step === 'verify' && totpUri}
 			<div class="flex flex-col gap-4 py-4">
 				<div class="flex justify-center">
-					<div class="rounded-xs border border-gray-800 bg-gray-800 p-3">
+					<div class="rounded-xs border border-border bg-muted p-3">
 						<img src={qrCodeSrc} alt="Authenticator app QR code" />
 					</div>
 				</div>
 
 				<div class="flex flex-col gap-1.5">
-					<Label class="text-xs text-gray-400">Manual Entry Key</Label>
+					<Label class="text-xs text-muted-foreground">Manual Entry Key</Label>
 					<div class="flex items-center gap-2">
 						<code
-							class="flex-1 overflow-hidden rounded-xs border border-gray-800 bg-gray-800 px-2 py-1.5 font-mono text-xs text-ellipsis whitespace-nowrap text-gray-100"
+							class="flex-1 overflow-hidden rounded-xs border border-border bg-muted px-2 py-1.5 font-mono text-xs text-ellipsis whitespace-nowrap text-foreground"
 						>
 							{secretKey}
 						</code>
 						<button
 							type="button"
-							class="shrink-0 text-gray-500 hover:text-gray-300"
+							class="shrink-0 text-muted-foreground hover:text-foreground"
 							onclick={() => copyText(secretKey, 'secret')}
 						>
 							{#if copiedSecret}
 								<Check class="h-3.5 w-3.5 text-emerald-500" />
 							{:else}
-								<Copy class="h-3.5 w-3.5" />
+								<Copy class="size-4" />
 							{/if}
 						</button>
 					</div>
@@ -166,10 +193,10 @@
 				{#if backupCodes.length > 0}
 					<div class="flex flex-col gap-1.5">
 						<div class="flex items-center justify-between">
-							<Label class="text-xs text-gray-400">Backup Codes</Label>
+							<Label class="text-xs text-muted-foreground">Backup Codes</Label>
 							<button
 								type="button"
-								class="text-xs text-gray-500 hover:text-gray-300"
+								class="text-xs text-muted-foreground hover:text-foreground"
 								onclick={() => copyText(backupCodes.join('\n'), 'backup')}
 							>
 								{#if copiedBackup}
@@ -179,9 +206,9 @@
 								{/if}
 							</button>
 						</div>
-						<div class="grid grid-cols-2 gap-1 rounded-xs border border-gray-800 bg-gray-800 p-2">
+						<div class="grid grid-cols-2 gap-1 rounded-xs border border-border bg-muted p-2">
 							{#each backupCodes as code (code)}
-								<code class="font-mono text-xs text-gray-300">{code}</code>
+								<code class="font-mono text-xs text-muted-foreground">{code}</code>
 							{/each}
 						</div>
 					</div>
@@ -205,7 +232,7 @@
 				</div>
 
 				<Button onclick={verifyTotp} disabled={verifying || !normalizedVerifyCode} class="gap-1.5">
-					<ShieldCheck class="h-3.5 w-3.5" />
+					<ShieldCheck class="size-4" />
 					{verifying ? 'Verifying...' : 'Verify & Enable'}
 				</Button>
 			</div>

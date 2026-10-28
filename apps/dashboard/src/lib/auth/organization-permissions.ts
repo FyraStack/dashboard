@@ -65,6 +65,8 @@ export function isProjectRole(role: string): role is ProjectRole {
 }
 
 export function hasProjectRole(role: string, minLevel: PermissionLevel | 'owner'): boolean {
-	if (!isProjectRole(role)) return false;
+	if (!isProjectRole(role)) {
+		return false;
+	}
 	return projectRoleRank[role] >= projectRoleRank[minLevel];
 }

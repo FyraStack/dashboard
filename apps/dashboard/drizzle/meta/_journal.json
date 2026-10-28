@@ -169,6 +169,76 @@
       "when": 1783925195204,
       "tag": "0023_familiar_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784298548259,
+      "tag": "0024_curious_scourge",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784301658548,
+      "tag": "0025_charming_roland_deschain",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784316474741,
+      "tag": "0026_lively_talos",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1784357065417,
+      "tag": "0027_adorable_bedlam",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1785817075068,
+      "tag": "0028_flashy_sleeper",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1787096478484,
+      "tag": "0029_blue_wolfpack",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1787915454443,
+      "tag": "0030_condemned_wolverine",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789915985488,
+      "tag": "0031_proxmox_vmid_seq",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789916661919,
+      "tag": "0032_unique_active_proxmox_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1791959839230,
+      "tag": "0033_idempotency_keys",
+      "breakpoints": true
     }
   ]
 }

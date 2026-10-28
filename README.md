@@ -30,5 +30,6 @@ Details, one-time machine setup, and caveats: [dev/README.md](dev/README.md)
   - VyOS (values in [dev/README.md](dev/README.md))
   - GitHub
   - Google
-  - Billing meter secret
+  - Internal cron secret
   - Cloudflare email key
+  - Bunny.net API key

@@ -1,23 +1,53 @@
+import { and, eq, inArray, isNotNull, lt } from 'drizzle-orm';
+import { getBackend } from '#lib/server/backends/index.js';
+import { runInBackground } from '#lib/server/background.js';
+import { deleteProjectServerEntity } from '#lib/server/billing/autumn.js';
+import { hasUnsyncedUsageEvents, meterResourceThrough } from '#lib/server/billing/metering.js';
+import { closeRequestDb, type Database, initDrizzle } from '#lib/server/db/index.js';
+import { ipAssignments, paymentPeriods, vms, volumes } from '#lib/server/db/schema.js';
+import { releaseVmNetworking } from '#lib/server/ipam.js';
 import { getRequestEvent } from '$app/server';
-import { and, eq } from 'drizzle-orm';
-import { initDrizzle, closeRequestDb, type Database } from '$lib/server/db';
-import { vms } from '$lib/server/db/schema';
-import { getBackend } from '$lib/server/backends';
-import { deleteProjectServerEntity } from '$lib/server/billing/autumn';
-import { meterResourceThrough } from '$lib/server/billing/metering';
-import { releaseVmNetworking } from '$lib/server/ipam';
-import { runInBackground } from '$lib/server/background';
 
-type DeletableVm = {
-	id: string;
+interface DeletableVm {
 	backend: 'proxmox';
-	proxmoxId: number | null;
+	id: string;
 	ownerProjectId: string | null;
-};
+	proxmoxId: number | null;
+}
 
 export async function queueVmDeletion(db: Database, row: DeletableVm): Promise<void> {
+	await meterResourceThrough('vm', row.id).catch((err) => {
+		console.warn(`Failed to close billing meter for VM ${row.id} before deletion`, err);
+	});
 	await db.update(vms).set({ status: 'deleting', statusError: null }).where(eq(vms.id, row.id));
 	runInBackground(deleteVmResources(row), `vm-delete-${row.id}`);
+}
+
+export const DELETED_VM_RETENTION_DAYS = 90;
+
+export async function purgeExpiredDeletedVms(now = Date.now(), limit = 50) {
+	const db = initDrizzle();
+	const cutoff = now - DELETED_VM_RETENTION_DAYS * 86_400_000;
+
+	const expired = await db
+		.select({ id: vms.id })
+		.from(vms)
+		.where(and(eq(vms.active, false), isNotNull(vms.deletedAt), lt(vms.deletedAt, cutoff)))
+		.limit(limit);
+	const vmIds = expired.map((row) => row.id);
+	if (vmIds.length === 0) {
+		return { purged: 0 };
+	}
+
+	await db
+		.update(volumes)
+		.set({ associatedVmId: null })
+		.where(inArray(volumes.associatedVmId, vmIds));
+	await db.delete(ipAssignments).where(inArray(ipAssignments.associatedVmId, vmIds));
+	await db.delete(paymentPeriods).where(inArray(paymentPeriods.vmId, vmIds));
+	await db.delete(vms).where(inArray(vms.id, vmIds));
+
+	return { purged: vmIds.length };
 }
 
 function initOwnedDb() {
@@ -27,7 +57,9 @@ function initOwnedDb() {
 	return {
 		db,
 		close: () => {
-			if (ownsDb) closeRequestDb(event);
+			if (ownsDb) {
+				closeRequestDb(event);
+			}
 		}
 	};
 }
@@ -58,21 +90,26 @@ async function deleteVmResources(row: DeletableVm): Promise<void> {
 	try {
 		const claimed = await db
 			.update(vms)
-			.set({ active: false })
+			.set({ active: false, deletedAt: Date.now() })
 			.where(and(eq(vms.id, row.id), eq(vms.active, true)))
 			.returning({ id: vms.id });
-		if (claimed.length === 0) return;
-
-		const metered = await meterResourceThrough('vm', row.id);
-		if (row.ownerProjectId && (!metered?.event || metered.syncStatus === 'synced')) {
-			await deleteProjectServerEntity(row.ownerProjectId, row.id).catch((err) => {
-				console.warn(`Failed to delete Autumn entity for VM ${row.id}`, err);
-			});
+		if (claimed.length === 0) {
+			return;
 		}
 
 		await releaseVmNetworking(db, row.id).catch((err) => {
 			console.warn(`Failed to release networking for VM ${row.id}`, err);
 		});
+
+		const unsynced = await hasUnsyncedUsageEvents('vm', row.id).catch((err) => {
+			console.warn(`Failed to check usage events for VM ${row.id} during deletion`, err);
+			return true;
+		});
+		if (row.ownerProjectId && !unsynced) {
+			await deleteProjectServerEntity(row.ownerProjectId, row.id).catch((err) => {
+				console.warn(`Failed to delete Autumn entity for VM ${row.id}`, err);
+			});
+		}
 
 		console.log(`VM ${row.id} deletion completed`);
 	} catch (err) {

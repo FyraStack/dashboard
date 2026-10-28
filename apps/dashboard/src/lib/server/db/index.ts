@@ -1,11 +1,15 @@
+import { waitUntil } from 'cloudflare:workers';
+import type { RequestEvent } from '@sveltejs/kit';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import type { RequestEvent } from '@sveltejs/kit';
-import { dev } from '$app/environment';
-import * as schema from './schema';
+import { getRuntimeEnv } from '#lib/server/env.js';
+import { instrument, summarizeStatement, timingLog } from '#lib/server/observability.js';
+import { dev } from '$app/env';
 import { getRequestEvent } from '$app/server';
-import { getRuntimeEnv } from '$lib/server/env';
-import { instrument, summarizeStatement, timingLog } from '$lib/server/observability';
+import * as authSchema from './auth.schema';
+import * as appSchema from './schema';
+
+const schema = { ...appSchema, ...authSchema };
 
 export type Database = ReturnType<typeof drizzle<typeof schema>>;
 
@@ -43,9 +47,12 @@ function withQueryTracing(pool: Pool): Pool {
 	const runQuery = pool.query.bind(pool) as (...args: unknown[]) => unknown;
 
 	pool.query = function instrumentedQuery(...args: unknown[]) {
-		if (typeof args[args.length - 1] === 'function') return runQuery(...args);
+		if (typeof args.at(-1) === 'function') {
+			return runQuery(...args);
+		}
 
-		const first = args[0];
+		const [first] = args;
+
 		const statement =
 			typeof first === 'string' ? first : (first as { text?: string } | undefined)?.text;
 
@@ -84,7 +91,8 @@ export function initDrizzle(): Database {
 	timingLog('db.initDrizzle.start', { 'app.dev': dev });
 
 	if (dev) {
-		devDb ??= drizzle((devPool ??= createPool(resolveConnectionString())), { schema });
+		devPool ??= createPool(resolveConnectionString());
+		devDb ??= drizzle(devPool, { schema });
 		event.locals.db = devDb;
 		timingLog('db.initDrizzle.end', {
 			'app.dev': dev,
@@ -125,9 +133,6 @@ export function closeRequestDb(event: RequestEvent) {
 			console.error('Error closing PostgreSQL pool', error);
 		});
 
-	const ctx = event.platform?.ctx;
-	if (ctx) {
-		ctx.waitUntil(ending);
-		timingLog('db.closeRequestDb.waitUntil.scheduled');
-	}
+	waitUntil(ending);
+	timingLog('db.closeRequestDb.waitUntil.scheduled');
 }

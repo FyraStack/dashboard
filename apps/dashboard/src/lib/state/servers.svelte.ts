@@ -1,19 +1,12 @@
-export type ServerInfo = {
-	id: string;
-	name: string;
-	liveLoaded: boolean;
-	vcpu: number;
-	ram: string;
+export interface ServerInfo {
+	agentConnected: boolean;
+	backups: boolean;
+	created: string;
 	disk: string;
+	id: string;
 	ip: string;
 	ipv6: string;
-	status: 'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'unknown';
-	agentConnected: boolean;
-	region: string;
-	created: string;
-	uptime: string;
-	plan: string;
-	backups: boolean;
+	liveLoaded: boolean;
 	metrics: {
 		cpu?: number | null;
 		memory?: number | null;
@@ -23,17 +16,66 @@ export type ServerInfo = {
 		diskRead?: number | null;
 		diskWrite?: number | null;
 	} | null;
-};
+	name: string;
+	plan: string;
+	ram: string;
+	region: string;
+	status: 'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'error' | 'unknown';
+	uptime: string;
+	vcpu: number;
+}
 
 export const serversState = $state({
+	projectId: null as string | null,
 	servers: [] as ServerInfo[],
 	loading: false,
 	statusRefreshing: false,
-	firstStatusRefreshComplete: false
+	firstStatusRefreshComplete: false,
+	refreshVersion: 0
 });
 
 export function sortServers(items: ServerInfo[]): ServerInfo[] {
 	return [...items].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+export function syncServers(projectId: string | null, incoming: ServerInfo[]): void {
+	const sameProject = serversState.projectId === projectId;
+	const currentById = new Map(
+		(sameProject ? serversState.servers : []).map((server) => [server.id, server])
+	);
+	serversState.servers = sortServers(
+		incoming.map((server) => {
+			const current = currentById.get(server.id);
+			if (!current?.liveLoaded) {
+				return server;
+			}
+
+			// List data contains cached snapshots. Keep fresher live values during invalidation.
+			return {
+				...server,
+				liveLoaded: true,
+				status:
+					server.status === 'deleting' ||
+					server.status === 'error' ||
+					server.status === 'provisioning'
+						? server.status
+						: current.status,
+				agentConnected: current.agentConnected,
+				ip: current.ip === '-' ? server.ip : current.ip,
+				ipv6: current.ipv6 === '-' ? server.ipv6 : current.ipv6,
+				uptime: current.uptime === '-' ? server.uptime : current.uptime,
+				metrics: current.metrics ?? server.metrics
+			};
+		})
+	);
+	serversState.projectId = projectId;
+	serversState.loading = false;
+	serversState.firstStatusRefreshComplete =
+		incoming.length === 0 || (sameProject && serversState.firstStatusRefreshComplete);
+}
+
+export function requestServerStatusRefresh(): void {
+	serversState.refreshVersion += 1;
 }
 
 export function getServer(id: string): ServerInfo | null {
@@ -42,8 +84,12 @@ export function getServer(id: string): ServerInfo | null {
 
 export function getServerWithFallback(id: string, fallback: ServerInfo): ServerInfo {
 	const server = getServer(id);
-	if (!server) return fallback;
-	if (!server.liveLoaded && fallback.liveLoaded) return fallback;
+	if (!server) {
+		return fallback;
+	}
+	if (!server.liveLoaded && fallback.liveLoaded) {
+		return fallback;
+	}
 	return server;
 }
 

@@ -1,43 +1,34 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { invalidate } from '$app/navigation';
-	import { resolve } from '$app/paths';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import * as Dialog from '$lib/components/ui/dialog';
+	import { toast } from 'svelte-sonner';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { reverseDnsZoneForCidr } from '#lib/ptr.js';
 	import {
 		createIpamPrefix,
 		deleteIpamPrefix,
+		getIpamPtrDefaultFormats,
 		listIpamPrefixes,
 		setIpamPrefixDisabled,
-		updateIpamPrefix
-	} from '$lib/remote/ipam.remote';
-	import { AdminState, type AdminPageData, type IpamPrefix } from '$lib/state/admin.svelte';
-	import { getErrorMessage, runQuery } from '$lib/utils';
-	import { confirmDestructive } from '$lib/confirm.svelte';
-	import {
-		AlertTriangle,
-		Cpu,
-		Disc,
-		Flag,
-		Loader2,
-		Network,
-		Pencil,
-		Plus,
-		Power,
-		Server,
-		Trash2,
-		UserCog,
-		Mail
-	} from '@lucide/svelte';
-	import { featureFlagKeys } from '$lib/feature-flags';
-	import { toast } from 'svelte-sonner';
+		updateIpamPrefix,
+		updateIpamPtrDefaultFormats
+	} from '#lib/remote/ipam.remote.js';
+	import { type AdminPageData, AdminState, type IpamPrefix } from '#lib/state/admin.svelte.js';
+	import { getErrorMessage, runQuery } from '#lib/utils.js';
+	import { invalidate } from '$app/navigation';
+	import Loader2 from '~icons/lucide/loader-2';
+	import Plus from '~icons/lucide/plus';
+	import AlertTriangle from '~icons/nucleo/alert-triangle';
+	import Network from '~icons/nucleo/network';
+	import Pencil from '~icons/nucleo/pencil';
+	import Power from '~icons/nucleo/power';
+	import Trash2 from '~icons/nucleo/trash';
 
-	type AdminTab = 'features' | 'vmTypes' | 'images' | 'ipam' | 'users' | 'vms' | 'emails';
 	let { data }: { data: AdminPageData } = $props();
-	const activeTab = 'ipam' as AdminTab;
 	const admin = new AdminState(untrack(() => data));
 
 	$effect(() => {
@@ -53,11 +44,17 @@
 	let whitelistStart = $state('');
 	let whitelistEnd = $state('');
 	let gatewayAddress = $state('');
+	let bunnyDnsZone = $state('');
 	let disabled = $state(false);
 	let ipv6UseTransitAddress = $state(false);
 
-	const userCount = $derived(admin.adminUsers.length);
-	const enabledCount = $derived(featureFlagKeys.filter((key) => admin.featureFlags[key]).length);
+	let ptrDialogOpen = $state(false);
+	let ptrLoading = $state(false);
+	let ptrSaving = $state(false);
+	let ptrError = $state('');
+	let ptrFormatIpv4 = $state('');
+	let ptrFormatIpv6 = $state('');
+
 	const ipv4Count = $derived(
 		admin.ipamPrefixes.filter((prefix) => prefix.family === 'ipv4').length
 	);
@@ -68,9 +65,20 @@
 
 	function formatCount(value: string) {
 		const parsed = BigInt(value);
-		if (parsed < 1_000_000n) return parsed.toString();
-		if (parsed < 1_000_000_000n) return `${parsed / 1_000_000n}M`;
+		if (parsed < 1_000_000n) {
+			return parsed.toString();
+		}
+		if (parsed < 1_000_000_000n) {
+			return `${parsed / 1_000_000n}M`;
+		}
 		return `${parsed / 1_000_000_000n}B+`;
+	}
+
+	function allocationUnitLabel(prefix: IpamPrefix) {
+		if (prefix.family !== 'ipv6') {
+			return '/32 addresses';
+		}
+		return prefix.ipv6UseTransitAddress ? '/128 transit' : '/64 prefixes';
 	}
 
 	function openCreate() {
@@ -80,6 +88,7 @@
 		whitelistStart = '';
 		whitelistEnd = '';
 		gatewayAddress = '';
+		bunnyDnsZone = '';
 		disabled = false;
 		ipv6UseTransitAddress = false;
 		formError = '';
@@ -88,13 +97,11 @@
 
 	function openEdit(prefix: IpamPrefix) {
 		editing = prefix;
-		name = prefix.name;
-		cidr = prefix.cidr;
+		({ name, cidr, disabled, ipv6UseTransitAddress } = prefix);
 		whitelistStart = prefix.whitelistStart ?? '';
 		whitelistEnd = prefix.whitelistEnd ?? '';
 		gatewayAddress = prefix.gatewayAddress ?? '';
-		disabled = prefix.disabled;
-		ipv6UseTransitAddress = prefix.ipv6UseTransitAddress;
+		bunnyDnsZone = prefix.bunnyDnsZone ?? '';
 		formError = '';
 		dialogOpen = true;
 	}
@@ -105,7 +112,9 @@
 	}
 
 	async function savePrefix() {
-		if (!name.trim() || !cidr.trim() || (!isIpv6Prefix && !gatewayAddress.trim())) return;
+		if (!(name.trim() && cidr.trim() && (isIpv6Prefix || gatewayAddress.trim()))) {
+			return;
+		}
 
 		saving = true;
 		formError = '';
@@ -116,6 +125,7 @@
 			whitelistStart: whitelistStart.trim(),
 			whitelistEnd: whitelistEnd.trim(),
 			gatewayAddress: isIpv6Prefix ? '' : gatewayAddress.trim(),
+			bunnyDnsZone: bunnyDnsZone.trim(),
 			disabled,
 			ipv6UseTransitAddress: isIpv6Prefix && ipv6UseTransitAddress
 		};
@@ -150,6 +160,45 @@
 		}
 	}
 
+	function autoFillBunnyZone() {
+		const generated = reverseDnsZoneForCidr(cidr.trim());
+		if (generated) {
+			bunnyDnsZone = generated;
+		}
+	}
+
+	async function openPtrDefaults() {
+		ptrError = '';
+		ptrDialogOpen = true;
+		ptrLoading = true;
+		try {
+			const defaults = await runQuery(getIpamPtrDefaultFormats());
+			ptrFormatIpv4 = defaults.defaultPtrFormatIpv4;
+			ptrFormatIpv6 = defaults.defaultPtrFormatIpv6;
+		} catch (err) {
+			ptrError = getErrorMessage(err, 'Failed to load PTR defaults');
+		} finally {
+			ptrLoading = false;
+		}
+	}
+
+	async function savePtrDefaults() {
+		ptrSaving = true;
+		ptrError = '';
+		try {
+			await updateIpamPtrDefaultFormats({
+				defaultPtrFormatIpv4: ptrFormatIpv4.trim(),
+				defaultPtrFormatIpv6: ptrFormatIpv6.trim()
+			});
+			ptrDialogOpen = false;
+			toast.success('Default PTR formats saved');
+		} catch (err) {
+			ptrError = getErrorMessage(err, 'Failed to save PTR defaults');
+		} finally {
+			ptrSaving = false;
+		}
+	}
+
 	async function removePrefix(prefix: IpamPrefix) {
 		const ok = await confirmDestructive({
 			title: 'Delete prefix',
@@ -157,7 +206,9 @@
 			confirmWord: prefix.name,
 			confirmLabel: 'Delete prefix'
 		});
-		if (!ok) return;
+		if (!ok) {
+			return;
+		}
 		try {
 			await deleteIpamPrefix({ prefixId: prefix.id });
 			admin.ipamPrefixes = admin.ipamPrefixes.filter((item) => item.id !== prefix.id);
@@ -168,200 +219,121 @@
 	}
 </script>
 
-<div class="flex flex-1 flex-col overflow-hidden">
-	<div class="flex h-10 shrink-0 items-center gap-0 overflow-x-auto border-b border-gray-800">
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'vmTypes'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
-			href={resolve('/admin')}
-		>
-			<Cpu class="h-3.5 w-3.5 shrink-0" />
-			VM Types
-			<Badge variant="secondary" class="text-[10px]">{admin.vmTypes.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'vms'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
-			href={resolve('/admin/vms')}
-		>
-			<Server class="h-3.5 w-3.5 shrink-0" />
-			VMs
-			<Badge variant="secondary" class="text-[10px]">
-				{admin.adminVms.filter((vm) => vm.active).length}
-			</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'images'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
-			href={resolve('/admin/images')}
-		>
-			<Disc class="h-3.5 w-3.5 shrink-0" />
-			Images
-			<Badge variant="secondary" class="text-[10px]">{admin.images.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'features'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
-			href={resolve('/admin/features')}
-		>
-			<Flag class="h-3.5 w-3.5 shrink-0" />
-			Feature Flags
-			<Badge variant="secondary" class="text-[10px]">{enabledCount}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'ipam'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
-			href={resolve('/admin/ipam')}
-		>
-			<Network class="h-3.5 w-3.5 shrink-0" />
-			IPAM
-			<Badge variant="secondary" class="text-[10px]">{admin.ipamPrefixes.length}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'users'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
-			href={resolve('/admin/users')}
-		>
-			<UserCog class="h-3.5 w-3.5 shrink-0" />
-			Users
-			<Badge variant="secondary" class="text-[10px]">{userCount}</Badge>
-		</a>
-		<a
-			class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {activeTab ===
-			'emails'
-				? 'border-red-500 text-gray-100'
-				: 'border-transparent text-gray-500 hover:text-gray-300'}"
-			href={resolve('/admin/emails')}
-		>
-			<Mail class="h-3.5 w-3.5 shrink-0" />
-			Emails
-		</a>
-		<div class="flex-1"></div>
-		<div class="px-4">
+<div class="flex-1 overflow-auto">
+	<div class="flex items-center gap-4 border-b border-border/60 px-5 py-3">
+		<div class="flex items-center gap-2 text-xs text-muted-foreground">
+			<span class="text-muted-foreground">IPv4</span>
+			<span class="font-medium text-foreground">{ipv4Count}</span>
+		</div>
+		<div class="flex items-center gap-2 text-xs text-muted-foreground">
+			<span class="text-muted-foreground">IPv6</span>
+			<span class="font-medium text-foreground">{ipv6Count}</span>
+		</div>
+		<div class="ml-auto flex items-center gap-2">
+			<Button variant="outline" size="sm" class="h-7 gap-1.5 text-xs" onclick={openPtrDefaults}>
+				Default PTR Format
+			</Button>
 			<Button size="sm" class="h-7 gap-1.5 text-xs" onclick={openCreate}>
-				<Plus class="h-3 w-3" /> Add Prefix
+				<Plus class="h-3 w-3" />
+				Add Prefix
 			</Button>
 		</div>
 	</div>
 
-	<div class="flex-1 overflow-auto">
-		<div class="flex items-center gap-4 border-b border-gray-800/60 px-5 py-3">
-			<div class="flex items-center gap-2 text-xs text-gray-400">
-				<span class="text-gray-500">IPv4</span>
-				<span class="font-medium text-gray-200">{ipv4Count}</span>
-			</div>
-			<div class="flex items-center gap-2 text-xs text-gray-400">
-				<span class="text-gray-500">IPv6</span>
-				<span class="font-medium text-gray-200">{ipv6Count}</span>
-			</div>
+	{#if admin.ipamPrefixes.length === 0}
+		<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
+			<Network class="mb-3 h-6 w-6" />
+			<p class="text-xs">No IPAM prefixes configured</p>
+			<Button variant="outline" size="sm" class="mt-3 gap-1.5 text-xs" onclick={openCreate}>
+				<Plus class="h-3 w-3" />
+				Add Prefix
+			</Button>
 		</div>
+	{:else}
+		<table class="w-full whitespace-nowrap">
+			<thead>
+				<tr class="border-b border-border">
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Name</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Prefix</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Family</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Gateway</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Mode</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">DNS Zone</th>
+					<th class="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Available</th>
+					<th class="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-border/50">
+				{#each admin.ipamPrefixes as prefix (prefix.id)}
+					<tr class="transition-colors hover:bg-muted/20">
+						<td class="px-5 py-3">
+							<div class="flex items-center gap-2">
+								<span class="text-sm font-medium text-foreground">{prefix.name}</span>
+								{#if prefix.disabled}
+									<Badge variant="secondary" class="text-[10px]">Disabled</Badge>
+								{/if}
+							</div>
+						</td>
+						<td class="px-5 py-3 font-mono text-xs text-muted-foreground">{prefix.cidr}</td>
+						<td class="px-5 py-3">
+							<Badge variant="secondary" class="text-[10px]">{prefix.family}</Badge>
+						</td>
+						<td class="px-5 py-3 font-mono text-xs text-muted-foreground">
+							{prefix.gatewayAddress ?? '-'}
+						</td>
+						<td class="px-5 py-3">
+							<Badge variant="outline" class="text-[10px]">
+								{allocationUnitLabel(prefix)}
+							</Badge>
+						</td>
+						<td class="px-5 py-3 font-mono text-xs text-muted-foreground">
+							{prefix.bunnyDnsZone ?? '-'}
+						</td>
+						<td class="px-5 py-3 text-sm text-muted-foreground">
+							<span class="tabular-nums">{formatCount(prefix.available)}</span>
+							<span class="text-muted-foreground"> / {formatCount(prefix.capacity)}</span>
+						</td>
 
-		{#if admin.ipamPrefixes.length === 0}
-			<div class="flex flex-col items-center justify-center py-20 text-gray-500">
-				<Network class="mb-3 h-6 w-6" />
-				<p class="text-xs">No IPAM prefixes configured</p>
-				<Button variant="outline" size="sm" class="mt-3 gap-1.5 text-xs" onclick={openCreate}>
-					<Plus class="h-3 w-3" /> Add Prefix
-				</Button>
-			</div>
-		{:else}
-			<table class="w-full whitespace-nowrap">
-				<thead>
-					<tr class="border-b border-gray-800">
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Name</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Prefix</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Family</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Gateway</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Mode</th>
-						<th class="px-5 py-3 text-left text-xs font-medium text-gray-500">Available</th>
-						<th class="px-5 py-3 text-right text-xs font-medium text-gray-500">Actions</th>
+						<td class="px-5 py-3 text-right">
+							<div class="flex items-center justify-end gap-1">
+								<Button
+									variant="ghost"
+									size="sm"
+									class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+									onclick={() => togglePrefix(prefix)}
+									aria-label={prefix.disabled ? 'Enable prefix' : 'Disable prefix'}
+								>
+									<Power class="h-3 w-3" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+									onclick={() => openEdit(prefix)}
+									aria-label="Edit prefix"
+								>
+									<Pencil class="h-3 w-3" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									class="h-7 w-7 p-0 text-red-400 hover:text-red-300"
+									onclick={() => removePrefix(prefix)}
+									aria-label="Delete prefix"
+								>
+									<Trash2 class="h-3 w-3" />
+								</Button>
+							</div>
+						</td>
 					</tr>
-				</thead>
-				<tbody class="divide-y divide-gray-800/50">
-					{#each admin.ipamPrefixes as prefix (prefix.id)}
-						<tr class="transition-colors hover:bg-gray-800/20">
-							<td class="px-5 py-3">
-								<div class="flex items-center gap-2">
-									<span class="text-sm font-medium text-gray-100">{prefix.name}</span>
-									{#if prefix.disabled}
-										<Badge variant="secondary" class="text-[10px]">Disabled</Badge>
-									{/if}
-								</div>
-							</td>
-							<td class="px-5 py-3 font-mono text-xs text-gray-300">{prefix.cidr}</td>
-							<td class="px-5 py-3">
-								<Badge variant="secondary" class="text-[10px]">{prefix.family}</Badge>
-							</td>
-							<td class="px-5 py-3 font-mono text-xs text-gray-300">
-								{prefix.gatewayAddress ?? '—'}
-							</td>
-							<td class="px-5 py-3">
-								<Badge variant="outline" class="text-[10px]">
-									{prefix.family === 'ipv6'
-										? prefix.ipv6UseTransitAddress
-											? '/128 transit'
-											: '/64 prefixes'
-										: '/32 addresses'}
-								</Badge>
-							</td>
-							<td class="px-5 py-3 text-sm text-gray-300">
-								<span class="tabular-nums">{formatCount(prefix.available)}</span>
-								<span class="text-gray-500"> / {formatCount(prefix.capacity)}</span>
-							</td>
-
-							<td class="px-5 py-3 text-right">
-								<div class="flex items-center justify-end gap-1">
-									<Button
-										variant="ghost"
-										size="sm"
-										class="h-7 w-7 p-0 text-gray-400 hover:text-gray-100"
-										onclick={() => togglePrefix(prefix)}
-										aria-label={prefix.disabled ? 'Enable prefix' : 'Disable prefix'}
-									>
-										<Power class="h-3 w-3" />
-									</Button>
-									<Button
-										variant="ghost"
-										size="sm"
-										class="h-7 w-7 p-0 text-gray-400 hover:text-gray-100"
-										onclick={() => openEdit(prefix)}
-										aria-label="Edit prefix"
-									>
-										<Pencil class="h-3 w-3" />
-									</Button>
-									<Button
-										variant="ghost"
-										size="sm"
-										class="h-7 w-7 p-0 text-red-400 hover:text-red-300"
-										onclick={() => removePrefix(prefix)}
-										aria-label="Delete prefix"
-									>
-										<Trash2 class="h-3 w-3" />
-									</Button>
-								</div>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		{/if}
-	</div>
+				{/each}
+			</tbody>
+		</table>
+	{/if}
 </div>
 
 <Dialog.Root bind:open={dialogOpen}>
-	<Dialog.Content class="border-gray-800 bg-gray-900 sm:max-w-lg">
+	<Dialog.Content class="border-border bg-background sm:max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>{editing ? 'Edit Prefix' : 'Add Prefix'}</Dialog.Title>
 			<Dialog.Description>Global IPAM allocation source.</Dialog.Description>
@@ -371,7 +343,7 @@
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
-					<AlertTriangle class="h-3.5 w-3.5 shrink-0" />{formError}
+					<AlertTriangle class="size-4 shrink-0" />{formError}
 				</div>
 			{/if}
 			<div class="grid gap-2">
@@ -388,6 +360,29 @@
 					<Input id="ipam-gateway-address" bind:value={gatewayAddress} placeholder="203.0.113.1" />
 				</div>
 			{/if}
+			<div class="grid gap-2">
+				<Label for="ipam-bunny-zone">Bunny DNS Zone</Label>
+				<div class="flex items-center gap-2">
+					<Input
+						id="ipam-bunny-zone"
+						bind:value={bunnyDnsZone}
+						placeholder="252.155.23.in-addr.arpa"
+						class="flex-1"
+					/>
+					<Button
+						variant="outline"
+						size="sm"
+						class="h-9 px-3 text-xs"
+						disabled={!cidr.trim()}
+						onclick={autoFillBunnyZone}
+					>
+						Auto
+					</Button>
+				</div>
+				<p class="text-xs text-muted-foreground">
+					Reverse DNS zone in Bunny.net for this block. Leave empty to disable PTR records.
+				</p>
+			</div>
 			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 				<div class="grid gap-2">
 					<Label for="ipam-whitelist-start">Whitelist Start</Label>
@@ -399,7 +394,7 @@
 				</div>
 			</div>
 			{#if isIpv6Prefix}
-				<label class="flex items-start gap-2 text-sm text-gray-300">
+				<label class="flex items-start gap-2 text-sm text-muted-foreground">
 					<input
 						type="checkbox"
 						bind:checked={ipv6UseTransitAddress}
@@ -407,14 +402,14 @@
 					/>
 					<span>
 						Use this IPv6 block for /128 transit addresses
-						<span class="block text-xs text-gray-500"
+						<span class="block text-xs text-muted-foreground"
 							>Leave unchecked to allocate /64 prefixes.</span
 						>
 					</span>
 				</label>
 			{/if}
 
-			<label class="flex items-center gap-2 text-sm text-gray-300">
+			<label class="flex items-center gap-2 text-sm text-muted-foreground">
 				<input type="checkbox" bind:checked={disabled} class="accent-red-500" />
 				Disabled
 			</label>
@@ -428,9 +423,68 @@
 				disabled={saving ||
 					!name.trim() ||
 					!cidr.trim() ||
-					(!isIpv6Prefix && !gatewayAddress.trim())}
+					!(isIpv6Prefix || gatewayAddress.trim())}
 			>
 				{#if saving}
+					<Loader2 class="mr-2 h-3 w-3 animate-spin" />
+				{/if}
+				Save
+			</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={ptrDialogOpen}>
+	<Dialog.Content class="border-border bg-background sm:max-w-lg">
+		<Dialog.Header>
+			<Dialog.Title>Default PTR Format</Dialog.Title>
+			<Dialog.Description>
+				Applied automatically when a server is created. Ignored for blocks without a Bunny DNS zone,
+				or when the format is empty.
+			</Dialog.Description>
+		</Dialog.Header>
+		<div class="grid gap-4 py-4">
+			{#if ptrError}
+				<div
+					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
+				>
+					<AlertTriangle class="size-4 shrink-0" />{ptrError}
+				</div>
+			{/if}
+			<div class="grid gap-2">
+				<Label for="ipam-ptr-ipv4">IPv4 Format</Label>
+				<Input
+					id="ipam-ptr-ipv4"
+					bind:value={ptrFormatIpv4}
+					placeholder="ip-{'{octet1}'}-{'{octet2}'}-{'{octet3}'}-{'{octet4}'}.fyra.zone"
+					disabled={ptrLoading}
+				/>
+				<p class="text-xs text-muted-foreground">
+					Placeholders: <span class="font-mono">{'{octet1}'}</span> through
+					<span class="font-mono">{'{octet4}'}</span>
+				</p>
+			</div>
+			<div class="grid gap-2">
+				<Label for="ipam-ptr-ipv6">IPv6 Format</Label>
+				<Input
+					id="ipam-ptr-ipv6"
+					bind:value={ptrFormatIpv6}
+					placeholder="ip-{'{group7}'}-{'{group8}'}.fyra.zone"
+					disabled={ptrLoading}
+				/>
+				<p class="text-xs text-muted-foreground">
+					Placeholders: <span class="font-mono">{'{group1}'}</span> through
+					<span class="font-mono">{'{group8}'}</span>
+					(expanded hextets)
+				</p>
+			</div>
+		</div>
+		<Dialog.Footer>
+			<Button variant="outline" onclick={() => (ptrDialogOpen = false)} disabled={ptrSaving}>
+				Cancel
+			</Button>
+			<Button onclick={savePtrDefaults} disabled={ptrSaving || ptrLoading}>
+				{#if ptrSaving}
 					<Loader2 class="mr-2 h-3 w-3 animate-spin" />
 				{/if}
 				Save

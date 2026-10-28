@@ -1,18 +1,34 @@
 import { and, eq, sum } from 'drizzle-orm';
 import {
+	accessibilityFixtureBillingOverview,
+	accessibilityFixtureEnabled
+} from '#lib/server/accessibility-fixtures.js';
+import { initDrizzle } from '#lib/server/db/index.js';
+import { billingMeters, billingUsageEvents, vmTypes } from '#lib/server/db/schema.js';
+import {
 	ensureProjectCustomer,
 	getProjectBillingState,
+	getProjectCreditsBalance,
+	getProjectInvoices,
 	invalidateProjectBillingState
 } from './autumn';
-import { initDrizzle } from '$lib/server/db';
-import { billingMeters, billingUsageEvents, vmTypes } from '$lib/server/db/schema';
 
 function statusLabel(status: Awaited<ReturnType<typeof getProjectBillingState>>['status']) {
-	if (status === 'active') return 'Ready';
-	if (status === 'past_due') return 'Past due';
-	if (status === 'failed') return 'Needs attention';
-	if (status === 'payment_required') return 'Payment method required';
-	if (status === 'provider_unavailable') return 'Billing temporarily unavailable';
+	if (status === 'active') {
+		return 'Ready';
+	}
+	if (status === 'past_due') {
+		return 'Past due';
+	}
+	if (status === 'failed') {
+		return 'Needs attention';
+	}
+	if (status === 'payment_required') {
+		return 'Payment method required';
+	}
+	if (status === 'provider_unavailable') {
+		return 'Billing temporarily unavailable';
+	}
 	return 'Not set up';
 }
 
@@ -23,10 +39,31 @@ export async function refreshProjectBilling(projectId: string) {
 	invalidateProjectBillingState(projectId);
 }
 
+function billingSetupRequired(
+	status: Awaited<ReturnType<typeof getProjectBillingState>>['status']
+) {
+	return status !== 'active' && status !== 'provider_unavailable';
+}
+
+export async function getProjectBillingReadiness(projectId: string) {
+	const state = accessibilityFixtureEnabled
+		? accessibilityFixtureBillingOverview
+		: await getProjectBillingState(projectId);
+	return { status: state.status, setupRequired: billingSetupRequired(state.status) };
+}
+
 export async function getProjectBillingOverview(projectId: string) {
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureBillingOverview;
+	}
+
 	const db = initDrizzle();
 	const now = Date.now();
-	const billingState = await getProjectBillingState(projectId);
+	const [billingState, credits, invoices] = await Promise.all([
+		getProjectBillingState(projectId),
+		getProjectCreditsBalance(projectId),
+		getProjectInvoices(projectId)
+	]);
 
 	const activeMeters = await db
 		.select({
@@ -61,7 +98,9 @@ export async function getProjectBillingOverview(projectId: string) {
 	);
 	const vmTypeByFeature = new Map<string, { name: string; rate: string }>();
 	for (const row of vmTypeRows) {
-		if (row.featureId) vmTypeByFeature.set(row.featureId, { name: row.name, rate: row.rate });
+		if (row.featureId) {
+			vmTypeByFeature.set(row.featureId, { name: row.name, rate: row.rate });
+		}
 	}
 
 	const groups = new Map<string, { count: number; liveHours: number }>();
@@ -72,7 +111,9 @@ export async function getProjectBillingOverview(projectId: string) {
 		groups.set(meter.featureId, group);
 	}
 	for (const featureId of recordedByFeature.keys()) {
-		if (!groups.has(featureId)) groups.set(featureId, { count: 0, liveHours: 0 });
+		if (!groups.has(featureId)) {
+			groups.set(featureId, { count: 0, liveHours: 0 });
+		}
 	}
 
 	const activeResources = [...groups.entries()].map(([featureId, group]) => {
@@ -85,7 +126,7 @@ export async function getProjectBillingOverview(projectId: string) {
 			resourceType: 'vm' as const,
 			count: group.count,
 			hours: Number(hours.toFixed(2)),
-			cost: rate != null ? Number((hours * rate).toFixed(2)) : null
+			cost: rate === null ? null : Number((hours * rate).toFixed(2))
 		};
 	});
 
@@ -94,11 +135,12 @@ export async function getProjectBillingOverview(projectId: string) {
 		status: billingState.status,
 		statusLabel: statusLabel(billingState.status),
 		planLabel: 'Project billing',
-		setupRequired:
-			billingState.status !== 'active' && billingState.status !== 'provider_unavailable',
+		setupRequired: billingSetupRequired(billingState.status),
 		syncError: billingState.syncError,
 		lastUpdatedAt: now,
 		activeResourceCount: activeMeters.length,
-		activeResources
+		activeResources,
+		credits,
+		invoices
 	};
 }

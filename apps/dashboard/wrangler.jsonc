@@ -14,12 +14,16 @@
 	],
 	"vars": {
 		"ORIGIN": "https://dash.fyrastack.com",
+		"PUBLIC_POSTHOG_KEY": "phc_xpPsXXeqca5GUtozk5DvUdTFMwAjYN7z4SDYLHSqwHpX",
+		"PUBLIC_POSTHOG_HOST": "https://us.posthog.com",
+		"PUBLIC_SENTRY_DSN": "https://509fc8298796e65c16acbef704256178@o271654.ingest.us.sentry.io/4512122021412864",
 		"GITHUB_CLIENT_ID": "Ov23liHWucfwO0M7A6mb",
 		"EMAIL_FROM_ADDRESS": "no-reply@fyrastack.com",
 		"EMAIL_FROM_NAME": "Fyra Stack",
 		"EMAIL_REPLY_TO": "support@fyralabs.com",
 		"AUTUMN_DEFAULT_PLAN_ID": "stack",
-		"AUTUMN_SERVER_ENTITY_FEATURE_ID": "active_servers",
+		"AUTUMN_SERVER_ENTITY_FEATURE_ID": "vms",
+		"AUTUMN_CREDITS_FEATURE_ID": "credits",
 		"VYOS_API_URL": "https://vyos-01.example",
 		"VYOS_USE_VPC": "true",
 		"PROXMOX_API_URL": "https://pxmx-01.barking-kokanue.ts.net:8006",
@@ -37,6 +41,7 @@
 		"run_worker_first": [
 			"/",
 			"/_app/remote/*",
+			"/internal/*",
 			"/api/*",
 			"/admin/*",
 			"/projects/*",
@@ -91,16 +96,19 @@
 	},
 	"observability": {
 		"enabled": true,
+		"issues": {
+			"enabled": true
+		},
 		"traces": {
 			"enabled": true,
 			"head_sampling_rate": 1,
 			"persist": true,
-			"destinations": ["stack-otlp-traces"]
+			"destinations": ["sentry-traces"]
 		},
 		"logs": {
 			"enabled": true,
 			"persist": true,
-			"destinations": ["stack-otlp-logs"]
+			"destinations": ["sentry-logs"]
 		}
 	},
 	"env": {
@@ -108,6 +116,9 @@
 			"minify": true,
 			"vars": {
 				"ORIGIN": "https://stack-dashboard-preview.fyralabs.workers.dev",
+				"PUBLIC_POSTHOG_KEY": "phc_xpPsXXeqca5GUtozk5DvUdTFMwAjYN7z4SDYLHSqwHpX",
+				"PUBLIC_POSTHOG_HOST": "https://us.posthog.com",
+				"PUBLIC_SENTRY_DSN": "https://509fc8298796e65c16acbef704256178@o271654.ingest.us.sentry.io/4512122021412864",
 				"EMAIL_FROM_ADDRESS": "no-reply@fyrastack.com",
 				"EMAIL_FROM_NAME": "Fyra Stack",
 				"EMAIL_REPLY_TO": "support@fyralabs.com",
@@ -170,6 +181,9 @@
 			},
 			"observability": {
 				"enabled": true,
+				"issues": {
+					"enabled": true
+				},
 				"traces": {
 					"enabled": true,
 					"head_sampling_rate": 1,

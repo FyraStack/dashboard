@@ -3,7 +3,8 @@ RUN apk add --no-cache libarchive-tools squashfs-tools
 ARG ISO
 COPY ${ISO} /tmp/vyos.iso
 RUN bsdtar -xf /tmp/vyos.iso -C /tmp live/filesystem.squashfs && \
-	unsquashfs -no-exit-code -d /rootfs /tmp/live/filesystem.squashfs
+	unsquashfs -no-exit-code -d /rootfs /tmp/live/filesystem.squashfs && \
+	sed -i '/^    console {$/,/^    }$/d' /rootfs/usr/share/vyos/config.boot.default
 
 FROM scratch
 COPY --from=extract /rootfs/ /

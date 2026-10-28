@@ -1,15 +1,15 @@
-import { dev } from '$app/environment';
+import { getRuntimeEnv } from '#lib/server/env.js';
+import { instrument } from '#lib/server/observability.js';
+import { dev } from '$app/env';
 import appStyles from '../../routes/layout.css?raw';
-import { getRuntimeEnv } from '$lib/server/env';
-import { instrument } from '$lib/server/observability';
 
-type EmailRenderer = {
-	render(
+interface EmailRenderer {
+	render: (
 		component: unknown,
 		options: { props?: Record<string, unknown> }
-	): string | Promise<string>;
-	toPlainText(html: string): string;
-};
+	) => string | Promise<string>;
+	toPlainText: (html: string) => string;
+}
 
 let emailRendererPromise: Promise<EmailRenderer> | undefined;
 
@@ -26,15 +26,14 @@ function getEmailRenderer(): Promise<EmailRenderer> {
 	return emailRendererPromise;
 }
 
-type SendRenderedEmailParams = {
+interface SendRenderedEmailParams {
 	component: unknown;
 	props?: Record<string, unknown>;
 	subject: string;
 	to: string;
-};
+}
 
-type CloudflareEmailResponse = {
-	success?: boolean;
+interface CloudflareEmailResponse {
 	errors?: { code?: number; message?: string }[];
 	messages?: { code?: number; message?: string }[];
 	result?: {
@@ -42,7 +41,8 @@ type CloudflareEmailResponse = {
 		permanent_bounces?: string[];
 		queued?: string[];
 	};
-};
+	success?: boolean;
+}
 
 type CloudflareAccountsResponse = CloudflareEmailResponse & {
 	result?: { id: string; name?: string }[];
@@ -51,7 +51,9 @@ type CloudflareAccountsResponse = CloudflareEmailResponse & {
 let cachedCloudflareAccountId: string | null = null;
 
 async function getCloudflareAccountId(apiToken: string) {
-	if (cachedCloudflareAccountId) return cachedCloudflareAccountId;
+	if (cachedCloudflareAccountId) {
+		return cachedCloudflareAccountId;
+	}
 
 	const response = await fetch('https://api.cloudflare.com/client/v4/accounts?per_page=2', {
 		headers: { Authorization: `Bearer ${apiToken}` }
@@ -72,6 +74,7 @@ async function getCloudflareAccountId(apiToken: string) {
 						.map((entry) => entry.message ?? entry.code)
 						.filter(Boolean)
 						.join(', ');
+
 		throw new Error(
 			`Unable to discover Cloudflare account ID (${response.status}${details ? `: ${details}` : ''}). Set CLOUDFLARE_ACCOUNT_ID explicitly.`
 		);
@@ -159,6 +162,7 @@ async function sendCloudflareEmail({
 					.map((entry) => entry.message ?? entry.code)
 					.filter(Boolean)
 					.join(', ');
+
 	throw new Error(
 		`Cloudflare Email REST send failed (${response.status}${details ? `: ${details}` : ''})`
 	);
@@ -175,12 +179,12 @@ export async function emailToPlainText(html: string) {
 	return toPlainText(html);
 }
 
-type SendEmailParams = {
-	subject: string;
-	to: string;
+interface SendEmailParams {
 	html: string;
+	subject: string;
 	text: string;
-};
+	to: string;
+}
 
 export async function sendRenderedEmail({
 	component,
@@ -199,11 +203,12 @@ export async function sendEmail({ subject, to, html, text }: SendEmailParams) {
 	const fromName = env.EMAIL_FROM_NAME;
 	const replyTo = env.EMAIL_REPLY_TO;
 
-	if (env.EMAIL) {
+	const emailBinding = env.EMAIL;
+	if (emailBinding) {
 		await instrument(
 			'email.send',
 			() =>
-				env.EMAIL!.send({
+				emailBinding.send({
 					from: { name: fromName, email: fromAddress },
 					to,
 					subject,
@@ -220,6 +225,7 @@ export async function sendEmail({ subject, to, html, text }: SendEmailParams) {
 	if (cloudflareApiToken) {
 		const accountId =
 			env.CLOUDFLARE_ACCOUNT_ID ?? (await getCloudflareAccountId(cloudflareApiToken));
+
 		await instrument(
 			'email.send',
 			() =>

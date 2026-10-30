@@ -95,6 +95,48 @@ export interface PveImage {
 	volid: string;
 }
 
+export interface ImageVersionDraft {
+	error: string;
+	filePath: string;
+	id: string | null;
+	key: number;
+	removed: boolean;
+	secureBoot: boolean;
+	version: string;
+}
+
+export type ImageVersionStatus = 'new' | 'changed' | 'removed' | 'unchanged';
+
+export interface ImageGroup {
+	name: string;
+	representative: BaseImage;
+	versions: BaseImage[];
+}
+
+export function compareVersionsDesc(a: string, b: string): number {
+	const na = Number.parseFloat(a);
+	const nb = Number.parseFloat(b);
+	if (!(Number.isNaN(na) || Number.isNaN(nb)) && na !== nb) {
+		return nb - na;
+	}
+	return b.localeCompare(a, undefined, { numeric: true });
+}
+
+const ARCH_TOKEN_PATTERN = /(x86[-_]64|amd64|aarch64|arm64|i[3-6]86|ppc64le|s390x)/gi;
+const IMAGE_EXTENSION_PATTERN = /\.(qcow2|img|raw|vmdk|ova|xz|gz|zst)$/i;
+const PATH_SEPARATOR_PATTERN = /[/:]/;
+const VERSION_TOKEN_PATTERN = /(?:^|[^0-9a-z])v?(\d+(?:\.\d+)*)(?=$|[^0-9])/i;
+
+/** Best-effort version guess from an image filename, e.g. "debian-12-genericcloud-amd64.qcow2" -> "12". */
+export function guessVersionFromFilename(filePath: string): string {
+	let name = filePath.split(PATH_SEPARATOR_PATTERN).pop() ?? '';
+	while (IMAGE_EXTENSION_PATTERN.test(name)) {
+		name = name.replace(IMAGE_EXTENSION_PATTERN, '');
+	}
+	name = name.replace(ARCH_TOKEN_PATTERN, '');
+	return name.match(VERSION_TOKEN_PATTERN)?.[1] ?? '';
+}
+
 export interface PveImageImportTarget {
 	node: string;
 	storage: string;
@@ -221,20 +263,36 @@ export class AdminState {
 	importError = $state('');
 	importTasks = $state<ImportTask[]>([]);
 	imgDialogOpen = $state(false);
-	imgEditing = $state<BaseImage | null>(null);
+	imgGroupName = $state<string | null>(null);
+	imgDetailsExpanded = $state(true);
 	imgSaving = $state(false);
 	imgError = $state('');
 	imgName = $state('');
-	imgVersion = $state('');
 	imgDescription = $state('');
 	imgIcon = $state('');
 	imgColor = $state('bg-gray-600');
 	imgIsOfficial = $state(false);
 	imgLogoSvg = $state('');
 	imgAccentColor = $state('#6b7280');
-	imgSecureBoot = $state(true);
-	imgFilePath = $state('');
 	imgIsa = $state<VmIsa>('x86');
+	imgRows = $state<ImageVersionDraft[]>([]);
+	private imgRowSeq = 0;
+
+	get imageGroups(): ImageGroup[] {
+		const groups = new Map<string, BaseImage[]>();
+		for (const image of this.images) {
+			const existing = groups.get(image.name);
+			if (existing) {
+				existing.push(image);
+			} else {
+				groups.set(image.name, [image]);
+			}
+		}
+		return Array.from(groups, ([name, versions]) => {
+			const sorted = [...versions].sort((a, b) => compareVersionsDesc(a.version, b.version));
+			return { name, representative: sorted[0], versions: sorted };
+		});
+	}
 
 	constructor(data?: AdminPageData) {
 		if (data) {
@@ -744,87 +802,332 @@ export class AdminState {
 		}
 	}
 
-	imgOpenCreate() {
-		this.imgEditing = null;
-		this.imgName = '';
-		this.imgVersion = '';
-		this.imgDescription = '';
-		this.imgIcon = '';
-		this.imgColor = 'bg-gray-600';
-		this.imgIsOfficial = false;
-		this.imgLogoSvg = '';
-		this.imgAccentColor = '#6b7280';
-		this.imgSecureBoot = true;
-		this.imgFilePath = '';
+	private imgNewRow(partial: Partial<ImageVersionDraft> = {}): ImageVersionDraft {
+		this.imgRowSeq += 1;
+		return {
+			key: this.imgRowSeq,
+			id: null,
+			version: '',
+			filePath: '',
+			secureBoot: true,
+			removed: false,
+			error: '',
+			...partial
+		};
+	}
+
+	private imgRowFromImage(image: BaseImage) {
+		return this.imgNewRow({
+			id: image.id,
+			version: image.version,
+			filePath: image.filePath,
+			secureBoot: image.secureBoot
+		});
+	}
+
+	private imgResetShared(source?: BaseImage) {
+		this.imgName = source?.name ?? '';
+		this.imgDescription = source?.description ?? '';
+		this.imgIcon = source?.icon ?? '';
+		this.imgColor = source?.color ?? 'bg-gray-600';
+		this.imgIsOfficial = source?.isOfficial ?? false;
+		this.imgLogoSvg = source?.logoSvg ?? '';
+		this.imgAccentColor = source?.accentColor ?? '#6b7280';
 		this.imgIsa = 'x86';
+	}
+
+	private imgLoadGroup(group: ImageGroup) {
+		this.imgGroupName = group.name;
+		this.imgResetShared(group.representative);
+		this.imgDetailsExpanded = false;
+	}
+
+	imgOpenCreate(filePath = '') {
+		this.imgGroupName = null;
+		this.imgResetShared();
+		this.imgDetailsExpanded = true;
+		this.imgRows = [this.imgNewRow({ filePath, version: guessVersionFromFilename(filePath) })];
 		this.imgError = '';
+		this.imgSaving = false;
 		this.imgDialogOpen = true;
 		if (this.pveImages.length === 0) {
 			this.loadPveImages();
 		}
 	}
 
-	imgOpenEdit(img: BaseImage) {
-		this.imgEditing = img;
-		this.imgName = img.name;
-		this.imgVersion = img.version;
-		this.imgDescription = img.description;
-		this.imgIcon = img.icon ?? '';
-		this.imgColor = img.color;
-		this.imgIsOfficial = img.isOfficial;
-		this.imgLogoSvg = img.logoSvg ?? '';
-		this.imgAccentColor = img.accentColor;
-		this.imgSecureBoot = img.secureBoot;
-		this.imgFilePath = img.filePath;
-		this.imgIsa = 'x86';
+	imgOpenManage(groupName: string) {
+		const group = this.imageGroups.find((g) => g.name === groupName);
+		if (!group) {
+			this.imgOpenCreate();
+			return;
+		}
+		this.imgLoadGroup(group);
+		this.imgRows = group.versions.map((image) => this.imgRowFromImage(image));
 		this.imgError = '';
+		this.imgSaving = false;
 		this.imgDialogOpen = true;
 		if (this.pveImages.length === 0) {
 			this.loadPveImages();
 		}
+	}
+
+	imgAdoptExistingName() {
+		if (this.imgGroupName !== null) {
+			return;
+		}
+		const name = this.imgName.trim();
+		const group = this.imageGroups.find((g) => g.name === name);
+		if (!group) {
+			return;
+		}
+		const pending = this.imgRows.filter((row) => row.version.trim() || row.filePath);
+		this.imgLoadGroup(group);
+		this.imgRows = [
+			...group.versions.map((image) => this.imgRowFromImage(image)),
+			...(pending.length > 0
+				? pending
+				: [this.imgNewRow({ secureBoot: group.representative.secureBoot })])
+		];
+	}
+
+	imgAddRow() {
+		const last = this.imgRows.findLast((row) => !row.removed);
+		this.imgRows.push(this.imgNewRow({ secureBoot: last?.secureBoot ?? true }));
+	}
+
+	imgToggleRemoveRow(row: ImageVersionDraft) {
+		if (row.id === null) {
+			this.imgRows = this.imgRows.filter((r) => r.key !== row.key);
+			return;
+		}
+		row.removed = !row.removed;
+	}
+
+	imgRemoveAll() {
+		this.imgRows = this.imgRows.filter((row) => row.id !== null);
+		for (const row of this.imgRows) {
+			row.removed = true;
+		}
+	}
+
+	imgRowFileChanged(row: ImageVersionDraft) {
+		if (!row.version.trim()) {
+			row.version = guessVersionFromFilename(row.filePath);
+		}
+	}
+
+	imgRowStatus(row: ImageVersionDraft): ImageVersionStatus {
+		if (row.id === null) {
+			return 'new';
+		}
+		if (row.removed) {
+			return 'removed';
+		}
+		const original = this.images.find((image) => image.id === row.id);
+		if (
+			!original ||
+			original.version !== row.version.trim() ||
+			original.filePath !== row.filePath ||
+			original.secureBoot !== row.secureBoot
+		) {
+			return 'changed';
+		}
+		return 'unchanged';
+	}
+
+	imgFileUsedBy(volid: string, rowId: string | null) {
+		const other = this.images.find((image) => image.filePath === volid && image.id !== rowId);
+		return other ? `${other.name} ${other.version}`.trim() : null;
+	}
+
+	private imgSharedData() {
+		return {
+			name: this.imgName.trim(),
+			description: this.imgDescription.trim(),
+			color: this.imgColor,
+			isOfficial: this.imgIsOfficial,
+			accentColor: this.imgAccentColor.trim() || '#6b7280',
+			icon: this.imgIcon.trim(),
+			logoSvg: this.imgIsOfficial ? this.imgLogoSvg.trim() : ''
+		};
+	}
+
+	get imgSharedChanged() {
+		if (this.imgGroupName === null) {
+			return false;
+		}
+		const rep = this.imageGroups.find((g) => g.name === this.imgGroupName)?.representative;
+		if (!rep) {
+			return true;
+		}
+		const shared = this.imgSharedData();
+		return (
+			shared.name !== rep.name ||
+			shared.description !== rep.description ||
+			shared.color !== rep.color ||
+			shared.isOfficial !== rep.isOfficial ||
+			shared.accentColor !== rep.accentColor ||
+			shared.icon !== (rep.icon ?? '') ||
+			shared.logoSvg !== (rep.isOfficial ? (rep.logoSvg ?? '') : '')
+		);
+	}
+
+	get imgPending() {
+		const counts = { new: 0, changed: 0, removed: 0 };
+		for (const row of this.imgRows) {
+			const status = this.imgRowStatus(row);
+			if (status !== 'unchanged') {
+				counts[status] += 1;
+			}
+		}
+		return { ...counts, details: this.imgSharedChanged };
+	}
+
+	get imgHasChanges() {
+		const pending = this.imgPending;
+		return pending.details || pending.new + pending.changed + pending.removed > 0;
+	}
+
+	get imgActiveRows() {
+		return this.imgRows.filter((row) => !row.removed);
+	}
+
+	get imgRowsValid() {
+		const volids = new Set(this.pveImages.map((image) => image.volid));
+		const active = this.imgActiveRows;
+		if (active.length === 0 && this.imgGroupName === null) {
+			return false;
+		}
+		return active.every((row) => row.version.trim() && volids.has(row.filePath));
+	}
+
+	get imgDuplicateVersions(): string[] {
+		const seen = new Set<string>();
+		const dupes = new Set<string>();
+		for (const row of this.imgActiveRows) {
+			const version = row.version.trim().toLowerCase();
+			if (!version) {
+				continue;
+			}
+			if (seen.has(version)) {
+				dupes.add(row.version.trim());
+			}
+			seen.add(version);
+		}
+		return [...dupes];
+	}
+
+	get imgCanSave() {
+		if (this.imgSaving || !this.imgHasChanges) {
+			return false;
+		}
+		if (this.imgActiveRows.length === 0) {
+			// Deleting the whole family doesn't need valid details.
+			return this.imgGroupName !== null;
+		}
+		return Boolean(this.imgName.trim()) && this.imgRowsValid;
 	}
 
 	async imgSave() {
-		const selectedImage = this.pveImages.find((image) => image.volid === this.imgFilePath);
-		if (!(this.imgName.trim() && selectedImage)) {
+		if (!this.imgCanSave) {
 			return;
 		}
 		this.imgSaving = true;
 		this.imgError = '';
-		try {
-			const icon = this.imgIcon.trim();
-			const logoSvg = this.imgLogoSvg.trim();
-			const data = {
-				name: this.imgName.trim(),
-				version: this.imgVersion.trim(),
-				description: this.imgDescription.trim(),
-				color: this.imgColor,
-				isOfficial: this.imgIsOfficial,
-				accentColor: this.imgAccentColor.trim() || '#6b7280',
-				secureBoot: this.imgSecureBoot,
-				filePath: selectedImage.volid,
-				isa: 'x86' as const,
-				...(icon ? { icon } : {}),
-				...(this.imgIsOfficial && logoSvg ? { logoSvg } : {})
-			};
-			const localData = {
-				...data,
-				icon: icon || null,
-				logoSvg: this.imgIsOfficial ? logoSvg || null : null,
-				imageType: selectedImage.format || 'qcow2'
-			};
+		for (const row of this.imgRows) {
+			row.error = '';
+		}
 
-			if (this.imgEditing) {
-				await updateImage({ imageId: this.imgEditing.id, ...data });
-				const index = this.images.findIndex((image) => image.id === this.imgEditing?.id);
-				if (index !== -1) {
-					this.images[index] = { ...this.images[index], ...localData };
+		const shared = this.imgSharedData();
+		const sharedChanged = this.imgSharedChanged;
+		const remoteShared = {
+			name: shared.name,
+			description: shared.description,
+			color: shared.color,
+			isOfficial: shared.isOfficial,
+			accentColor: shared.accentColor,
+			isa: 'x86' as const,
+			...(shared.icon ? { icon: shared.icon } : {})
+		};
+		const localShared = {
+			...remoteShared,
+			icon: shared.icon || null,
+			logoSvg: shared.logoSvg || null
+		};
+		const versionData = (row: ImageVersionDraft) => ({
+			version: row.version.trim(),
+			filePath: row.filePath,
+			secureBoot: row.secureBoot
+		});
+		const formatOf = (volid: string) =>
+			this.pveImages.find((image) => image.volid === volid)?.format || 'qcow2';
+		let failed = false;
+
+		try {
+			// Deletions and updates can go in parallel.
+			const existingWork = this.imgRows
+				.filter((row) => row.id !== null)
+				.map(async (row) => {
+					const id = row.id as string;
+					const status = this.imgRowStatus(row);
+					try {
+						if (status === 'removed') {
+							await deleteImage({ imageId: id });
+							this.images = this.images.filter((image) => image.id !== id);
+							this.imgRows = this.imgRows.filter((r) => r.key !== row.key);
+						} else if (status === 'changed' || sharedChanged) {
+							const data = {
+								...(sharedChanged ? { ...remoteShared, logoSvg: shared.logoSvg } : {}),
+								...versionData(row)
+							};
+							await updateImage({ imageId: id, ...data });
+							this.images = this.images.map((image) =>
+								image.id === id
+									? {
+											...image,
+											...(sharedChanged ? localShared : {}),
+											...versionData(row),
+											imageType: formatOf(row.filePath)
+										}
+									: image
+							);
+						}
+					} catch (err) {
+						failed = true;
+						row.error = getErrorMessage(err, 'Failed to save');
+					}
+				});
+			await Promise.all(existingWork);
+
+			// Creations run sequentially so sort order follows the row order.
+			for (const row of this.imgRows.filter((r) => r.id === null)) {
+				try {
+					// biome-ignore lint/performance/noAwaitInLoops: preserve insertion order for sortOrder
+					const result = await createImage({
+						...remoteShared,
+						...(shared.logoSvg ? { logoSvg: shared.logoSvg } : {}),
+						...versionData(row)
+					});
+					this.images.push({
+						id: result.id,
+						...localShared,
+						...versionData(row),
+						imageType: formatOf(row.filePath)
+					});
+					row.id = result.id;
+				} catch (err) {
+					failed = true;
+					row.error = getErrorMessage(err, 'Failed to create');
 				}
-			} else {
-				const result = await createImage(data);
-				this.images.push({ id: result.id, ...localData });
 			}
 
+			if (failed) {
+				this.imgError = 'Some changes failed to save. Fix the highlighted rows and try again.';
+				if (this.images.some((image) => image.name === shared.name)) {
+					this.imgGroupName = shared.name;
+				}
+				return;
+			}
 			this.imgDialogOpen = false;
 		} catch (err) {
 			this.imgError = getErrorMessage(err, 'Failed to save');
@@ -833,32 +1136,25 @@ export class AdminState {
 		}
 	}
 
-	async imgReorder(fromIndex: number, toIndex: number) {
+	async imgReorderGroups(fromIndex: number, toIndex: number) {
+		const groups = this.imageGroups;
 		if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) {
 			return;
 		}
-		if (fromIndex >= this.images.length || toIndex >= this.images.length) {
+		if (fromIndex >= groups.length || toIndex >= groups.length) {
 			return;
 		}
+		const nextGroups = [...groups];
+		const [moved] = nextGroups.splice(fromIndex, 1);
+		nextGroups.splice(toIndex, 0, moved);
 		const previous = [...this.images];
-		const next = [...this.images];
-		const [moved] = next.splice(fromIndex, 1);
-		next.splice(toIndex, 0, moved);
+		const next = nextGroups.flatMap((group) => group.versions);
 		this.images = next;
 		try {
 			await reorderImages({ imageIds: next.map((image) => image.id) });
 		} catch (err) {
 			this.images = previous;
 			toast.error(getErrorMessage(err, 'Failed to reorder images'));
-		}
-	}
-
-	async imgRemove(id: string) {
-		try {
-			await deleteImage({ imageId: id });
-			this.images = this.images.filter((image) => image.id !== id);
-		} catch (err) {
-			toast.error(getErrorMessage(err, 'Failed to delete image'));
 		}
 	}
 }

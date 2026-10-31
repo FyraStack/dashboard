@@ -1,5 +1,5 @@
 import type { Fetcher } from '@cloudflare/workers-types';
-import { Address6 } from 'ip-address';
+import { Address4, Address6 } from 'ip-address';
 import ky, { HTTPError } from 'ky';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
@@ -115,6 +115,55 @@ const UNSCHEDULABLE_HA_STATES = new Set(['maintenance', 'fence', 'gone']);
 
 interface CloudInitVendorConfigParams {
 	enableSshPasswordAuth?: boolean;
+	ipv4Gateway?: string;
+	ipv6ExtraRoutes?: string[];
+	ipv6Gateway?: string;
+}
+
+function cloudInitVendorConfigParams(params: VmCreateParams): CloudInitVendorConfigParams {
+	const network = params.networkConfig;
+	return {
+		enableSshPasswordAuth: Boolean(params.password),
+		ipv4Gateway: network?.ipv4?.gateway || undefined,
+		ipv6Gateway: network?.ipv6 ? config.vmNetwork.ipv6DefaultGateway : undefined,
+		ipv6ExtraRoutes: network?.nat64Prefix ? [network.nat64Prefix] : []
+	};
+}
+
+// Name forced by `set-name` in the network config.
+const CLOUD_INIT_INTERFACE = 'eth0';
+
+/**
+ * cloud-init drops `on-link`/`scope` when converting v2 network config for
+ * non-netplan renderers (ENI on Alpine, NM/sysconfig on RHEL-likes), and the
+ * ENI renderer emits `ip route add ... via <gw>` without `dev`. With a /32
+ * address and a link-local IPv6 gateway, both default routes silently fail.
+ * Re-apply them with an explicit device on every boot; `replace` makes this a
+ * no-op where the renderer already got it right.
+ */
+function cloudInitRouteBootcmd(params: CloudInitVendorConfigParams) {
+	const dev = CLOUD_INIT_INTERFACE;
+	const commands: string[] = [];
+
+	if (params.ipv4Gateway && Address4.isValid(params.ipv4Gateway)) {
+		const gw = params.ipv4Gateway;
+		commands.push(
+			`ip route replace ${gw}/32 dev ${dev} scope link || true`,
+			`ip route replace default via ${gw} dev ${dev} onlink || true`
+		);
+	}
+
+	if (params.ipv6Gateway && Address6.isValid(params.ipv6Gateway)) {
+		const gw = params.ipv6Gateway;
+		commands.push(`ip -6 route replace default via ${gw} dev ${dev} onlink || true`);
+		for (const route of params.ipv6ExtraRoutes ?? []) {
+			if (Address6.isValid(route)) {
+				commands.push(`ip -6 route replace ${route} via ${gw} dev ${dev} onlink || true`);
+			}
+		}
+	}
+
+	return commands;
 }
 
 function generateMacAddress() {
@@ -134,8 +183,10 @@ function firstIpv6AddressInPrefix(prefix: string) {
 }
 
 function cloudInitVendorConfig(params: CloudInitVendorConfigParams) {
+	const routeBootcmd = cloudInitRouteBootcmd(params);
 	const yamlContents = `#cloud-config\n${stringifyYaml({
 		ssh_deletekeys: false,
+		...(routeBootcmd.length > 0 ? { bootcmd: routeBootcmd } : {}),
 		write_files: [
 			{
 				path: '/etc/sysctl.d/99-ipv6-forwarding.conf',
@@ -151,9 +202,9 @@ function cloudInitVendorConfig(params: CloudInitVendorConfigParams) {
 				: [])
 		],
 		runcmd: [
-			'sysctl --system',
+			'sh -c "sysctl -p /etc/sysctl.d/99-ipv6-forwarding.conf || sysctl -w net.ipv6.conf.all.forwarding=1"',
 			...((params.enableSshPasswordAuth ?? false)
-				? ['systemctl restart ssh', 'systemctl restart sshd']
+				? ['sh -c "rc-service sshd restart || systemctl restart sshd || systemctl restart ssh"']
 				: [])
 		],
 		ssh_pwauth: params.enableSshPasswordAuth ?? false
@@ -180,16 +231,19 @@ function cloudInitNetworkConfig(params: VmCreateParams, macAddress: string) {
 		? firstIpv6AddressInPrefix(params.networkConfig.ipv6Prefix)
 		: null;
 	const addresses = [
-		...(params.networkConfig?.ipv4 ? [`${params.networkConfig.ipv4.address}/32`] : []),
-		...(params.networkConfig?.ipv6 ? [`${params.networkConfig.ipv6.address}/128`] : []),
+		...(params.networkConfig?.ipv4
+			? [`${params.networkConfig.ipv4.address}/${params.networkConfig.ipv4.prefixLength}`]
+			: []),
+		...(params.networkConfig?.ipv6
+			? [`${params.networkConfig.ipv6.address}/${params.networkConfig.ipv6.prefixLength}`]
+			: []),
 		...(delegatedPrefixAddress ? [delegatedPrefixAddress] : [])
 	];
 	const routes = [
-		...(params.networkConfig?.ipv4
-			? [
-					{ to: `${params.networkConfig.ipv4.gateway}/32`, scope: 'link' },
-					{ to: '0.0.0.0/0', via: params.networkConfig.ipv4.gateway, 'on-link': true }
-				]
+		// No gateway-less `scope: link` route here: cloud-init's ENI renderer (Alpine)
+		// crashes on routes without `via`. The bootcmd in vendor data adds it instead.
+		...(params.networkConfig?.ipv4?.gateway
+			? [{ to: '0.0.0.0/0', via: params.networkConfig.ipv4.gateway, 'on-link': true }]
 			: []),
 		...(params.networkConfig?.ipv6
 			? [
@@ -213,7 +267,7 @@ function cloudInitNetworkConfig(params: VmCreateParams, macAddress: string) {
 		ethernets: {
 			public0: {
 				match: { macaddress: macAddress.toLowerCase() },
-				'set-name': 'eth0',
+				'set-name': CLOUD_INIT_INTERFACE,
 				dhcp4: false,
 				dhcp6: false,
 				addresses,
@@ -755,7 +809,7 @@ export class ProxmoxBackend implements VmBackend {
 			),
 			this.uploadSnippet(
 				cloudInitVendorConfigFilename,
-				cloudInitVendorConfig({ enableSshPasswordAuth: Boolean(params.password) })
+				cloudInitVendorConfig(cloudInitVendorConfigParams(params))
 			)
 		]);
 

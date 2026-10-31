@@ -181,7 +181,12 @@
 								</div>
 							</div>
 						</td>
-						<td class="px-5 py-3 text-sm text-muted-foreground">{img.version}</td>
+						<td class="px-5 py-3 text-sm text-muted-foreground">
+							{img.version}
+							{#if img.variant}
+								<Badge variant="secondary" class="ml-1 text-[10px]">{img.variant}</Badge>
+							{/if}
+						</td>
 						<td class="px-5 py-3">
 							<Badge variant="secondary" class="text-[10px]">{img.imageType || 'import'}</Badge>
 						</td>
@@ -381,6 +386,20 @@
 				<div class="flex flex-col gap-2">
 					<Label>Version</Label><Input bind:value={admin.imgVersion} placeholder="42" />
 				</div>
+			</div>
+
+			<div class="flex flex-col gap-2">
+				<Label
+					>Variant
+					<span class="font-normal text-muted-foreground"
+						>(optional, e.g. systemd / openrc)</span
+					></Label
+				>
+				<Input bind:value={admin.imgVariant} placeholder="Leave empty for the default build" />
+				<p class="text-xs text-muted-foreground">
+					Images with the same name are grouped into one card. Variants and versions are picked from
+					that card when creating a server.
+				</p>
 			</div>
 
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">

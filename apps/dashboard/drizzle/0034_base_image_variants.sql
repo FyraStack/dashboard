@@ -1,0 +1,3 @@
+DROP VIEW "analytics"."base_images";--> statement-breakpoint
+ALTER TABLE "base_images" ADD COLUMN "variant" text DEFAULT '' NOT NULL;--> statement-breakpoint
+CREATE VIEW "analytics"."base_images" AS (select "id", "file_path", "name", "version", "variant", "description", "short_name", "icon", "color", "is_official", "logo_svg", "accent_color", "image_type", "secure_boot", "isa", "sort_order" from "base_images");

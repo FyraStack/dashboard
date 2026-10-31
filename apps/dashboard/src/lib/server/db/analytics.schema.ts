@@ -280,6 +280,7 @@ export const analyticsBaseImages = analyticsSchema.view('base_images').as((qb) =
 			filePath: baseImages.filePath,
 			name: baseImages.name,
 			version: baseImages.version,
+			variant: baseImages.variant,
 			description: baseImages.description,
 			shortName: baseImages.shortName,
 			icon: baseImages.icon,

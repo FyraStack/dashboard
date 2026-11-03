@@ -150,11 +150,11 @@
 
 	async function enableNewAuthenticator() {
 		const { data, error } = await authClient.twoFactor.enable({ password, issuer: 'Fyra Stack' });
-		if (error || !data) {
+		if (error || data?.method !== 'totp') {
 			confirmError = error?.message ?? 'Failed to start authenticator setup.';
 			return;
 		}
-		showSetup(data.totpURI, data.backupCodes ?? []);
+		showSetup(data.totpURI, data.backupCodes);
 	}
 
 	function showSetup(uri: string, codes: string[]) {

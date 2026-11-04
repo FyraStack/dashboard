@@ -114,11 +114,6 @@ export interface ImageGroup {
 }
 
 export function compareVersionsDesc(a: string, b: string): number {
-	const na = Number.parseFloat(a);
-	const nb = Number.parseFloat(b);
-	if (!(Number.isNaN(na) || Number.isNaN(nb)) && na !== nb) {
-		return nb - na;
-	}
 	return b.localeCompare(a, undefined, { numeric: true });
 }
 

@@ -67,6 +67,7 @@ export const listImages = query(async () => {
 		filePath: row.filePath,
 		name: row.name,
 		version: row.version,
+		variant: row.variant,
 		description: row.description,
 		icon: row.icon,
 		color: row.color,
@@ -82,6 +83,7 @@ export const listImages = query(async () => {
 const createParams = type({
 	name: 'string',
 	version: 'string',
+	variant: 'string?',
 	description: 'string',
 	icon: 'string?',
 	color: 'string?',
@@ -119,6 +121,7 @@ export const createImage = command(createParams, async (params) => {
 			sortOrder: (lastImage?.sortOrder ?? -1) + 1,
 			name: params.name,
 			version: params.version,
+			variant: params.variant?.trim() ?? '',
 			description: params.description,
 			icon: params.icon,
 			color: params.color ?? 'bg-gray-600',
@@ -139,6 +142,7 @@ const updateParams = type({
 	imageId: 'string',
 	name: 'string?',
 	version: 'string?',
+	variant: 'string?',
 	description: 'string?',
 	icon: 'string?',
 	color: 'string?',
@@ -169,6 +173,9 @@ export const updateImage = command(updateParams, async (params) => {
 	const updates: Record<string, unknown> = Object.fromEntries(
 		Object.entries(fields).filter(([, v]) => v !== undefined)
 	);
+	if (typeof updates.variant === 'string') {
+		updates.variant = updates.variant.trim();
+	}
 	if (updates.filePath) {
 		const selectedImage = await getUploadedImage(String(updates.filePath));
 		if (!selectedImage) {

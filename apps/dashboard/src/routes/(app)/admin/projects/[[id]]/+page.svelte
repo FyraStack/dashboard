@@ -277,7 +277,9 @@
 	);
 	const createVmImageLabel = $derived.by(() => {
 		const image = admin.images.find((item) => item.id === createVmImageId);
-		return image ? `${image.name} ${image.version}`.trim() : 'No image';
+		return image
+			? [image.name, image.version, image.variant].filter(Boolean).join(' ')
+			: 'No image';
 	});
 
 	function openCreateVm(project: AdminProject) {
@@ -1270,7 +1272,9 @@
 									class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
 									onSelect={() => (createVmImageId = image.id)}
 								>
-									<span class="truncate">{image.name} {image.version}</span>
+									<span class="truncate"
+										>{[image.name, image.version, image.variant].filter(Boolean).join(' ')}</span
+									>
 									{#if createVmImageId === image.id}
 										<Check class="ml-auto h-3 w-3 shrink-0 text-emerald-400" />
 									{/if}

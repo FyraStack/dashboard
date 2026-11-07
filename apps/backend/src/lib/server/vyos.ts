@@ -1,6 +1,6 @@
 import ky, { type KyInstance } from 'ky';
 import { getRuntimeEnv } from '#lib/server/env.js';
-import { createVpcFetch, insecureDirectFetch } from '#lib/server/vpc.js';
+import { createVpcFetch } from '#lib/server/vpc.js';
 
 interface VyosApiResponse<T = unknown> {
 	data: T;
@@ -66,7 +66,6 @@ function getVyosConfig() {
 	return {
 		apiUrl: env.VYOS_API_URL.replace(TRAILING_SLASHES, ''),
 		apiKey: env.VYOS_API_KEY,
-		verifySsl: env.VYOS_VERIFY_SSL !== 'false',
 		routersInFailoverOrder
 	};
 }
@@ -87,8 +86,6 @@ export class VyosClient {
 
 		this.apiKey = config.apiKey;
 
-		const directFetch = config.verifySsl ? globalThis.fetch : insecureDirectFetch;
-
 		this.api = ky.create({
 			prefix: `${config.apiUrl}`,
 			headers: {
@@ -97,7 +94,7 @@ export class VyosClient {
 			timeout: 30_000,
 			// Handle non-2xx ourselves so the router/proxy error body is readable.
 			throwHttpErrors: false,
-			fetch: createVpcFetch(config.routersInFailoverOrder, directFetch)
+			fetch: createVpcFetch(config.routersInFailoverOrder)
 		});
 	}
 

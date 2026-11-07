@@ -4,7 +4,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 import { config } from '#lib/server/config.js';
 import { instrument } from '#lib/server/observability.js';
-import { createVpcFetch, insecureDirectFetch } from '#lib/server/vpc.js';
+import { createVpcFetch } from '#lib/server/vpc.js';
 import type {
 	BackendImage,
 	BackendImageImportParams,
@@ -104,7 +104,6 @@ interface ProxmoxBackendOptions {
 	snippetsEndpointPassword?: string;
 	snippetsEndpointUrl?: string;
 	snippetsEndpointUsername?: string;
-	snippetsEndpointVerifySsl?: boolean;
 	snippetsStorage?: string;
 	snippetsVpc?: Fetcher;
 	vmCpuType?: string;
@@ -507,12 +506,7 @@ export class ProxmoxBackend implements VmBackend {
 			);
 		}
 
-		const directFetch =
-			this.options.snippetsEndpointVerifySsl === false ? insecureDirectFetch : globalThis.fetch;
-		const snippetFetch = createVpcFetch(
-			this.options.snippetsVpc ? [this.options.snippetsVpc] : [],
-			directFetch
-		);
+		const snippetFetch = createVpcFetch(this.options.snippetsVpc ? [this.options.snippetsVpc] : []);
 
 		try {
 			await ky.put(`${endpointUrl}/${encodeURIComponent(filename)}`, {
@@ -551,12 +545,7 @@ export class ProxmoxBackend implements VmBackend {
 			);
 		}
 
-		const directFetch =
-			this.options.snippetsEndpointVerifySsl === false ? insecureDirectFetch : globalThis.fetch;
-		const snippetFetch = createVpcFetch(
-			this.options.snippetsVpc ? [this.options.snippetsVpc] : [],
-			directFetch
-		);
+		const snippetFetch = createVpcFetch(this.options.snippetsVpc ? [this.options.snippetsVpc] : []);
 
 		try {
 			return await ky

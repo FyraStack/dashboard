@@ -135,8 +135,8 @@ cluster ready.
 
 pve web ui: https://127.0.0.1:8006 (pve2: 8007, pve3: 8008), user "root", password "fyradev"
 
-dashboard .env:
-  PROXMOX_API_URL="https://127.0.0.1:8006"
+apps/backend/.env:
+  PROXMOX_API_URL="http://127.0.0.1:18006"
   PROXMOX_TOKEN_ID="root@pam!stack"
   PROXMOX_TOKEN_SECRET="$secret"
   PROXMOX_USE_VPC="false"
@@ -146,7 +146,6 @@ dashboard .env:
   PROXMOX_SNIPPETS_ENDPOINT_USERNAME="dev"
   PROXMOX_SNIPPETS_ENDPOINT_PASSWORD="dev"
   PROXMOX_SNIPPETS_STORAGE="stack-volumes"
-  PROXMOX_SNIPPETS_ENDPOINT_VERIFY_SSL="false"
 
 reach VM test IPs from the host:
   sudo dnf install wireguard-tools

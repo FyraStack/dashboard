@@ -1,5 +1,5 @@
 import ky, { HTTPError, type KyInstance } from 'ky';
-import { createVpcFetch, insecureDirectFetch } from '#lib/server/vpc.js';
+import { createVpcFetch } from '#lib/server/vpc.js';
 import type {
 	PveAgentNetworkInterface,
 	PveClusterResource,
@@ -20,7 +20,6 @@ export interface ProxmoxClientConfig {
 	baseUrl: string;
 	tokenId: string;
 	tokenSecret: string;
-	verifySsl?: boolean;
 	vpc?: Fetcher;
 }
 
@@ -34,20 +33,16 @@ export class ProxmoxClient {
 	private readonly api: KyInstance;
 
 	constructor(config: ProxmoxClientConfig) {
-		const { baseUrl, tokenId, tokenSecret, verifySsl = true, vpc } = config;
-
-		const usingInsecureDirectFetch = !(vpc || verifySsl);
-		const directFetch = usingInsecureDirectFetch ? insecureDirectFetch : globalThis.fetch;
+		const { baseUrl, tokenId, tokenSecret, vpc } = config;
 
 		this.api = ky.create({
 			prefix: `${baseUrl.replace(TRAILING_SLASHES, '')}/api2/json`,
 			headers: {
 				Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}`,
-				Accept: 'application/json',
-				...(usingInsecureDirectFetch ? { 'Accept-Encoding': 'identity' } : {})
+				Accept: 'application/json'
 			},
 			timeout: 30_000,
-			fetch: createVpcFetch(vpc ? [vpc] : [], directFetch)
+			fetch: createVpcFetch(vpc ? [vpc] : [])
 		});
 	}
 

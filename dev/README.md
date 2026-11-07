@@ -18,7 +18,7 @@ this is needed cause the 3 proxmox nodes will make a lot of inotify instances.
 1. `dev/vyos/build-image.sh`: builds `localhost/fyrastack/vyos:stream` from the latest VyOS Stream ISO (`rolling` for rolling)
 2. `cd dev && podman compose up -d`
 3. `dev/pve/init-cluster.sh`: forms the cluster, provisions storage/token/SDN, prints the `PROXMOX_*` env block
-4. Copy `apps/backend/.env.example` to `apps/backend/.env` and set `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` (`postgres://postgres:mysecretpassword@127.0.0.1:5432/postgres`), `BETTER_AUTH_SECRET` (any string in dev) and the `PROXMOX_TOKEN_SECRET` printed by `init-cluster.sh`; everything else defaults to the dev stack
+4. Copy `apps/backend/.env.example` to `apps/backend/.env` and set `BETTER_AUTH_SECRET` (any string in dev) and the `PROXMOX_TOKEN_SECRET` printed by `init-cluster.sh`; everything else defaults to the dev stack
 5. `pnpm --filter stack-backend db:migrate`
 6. `podman exec -i fyra-postgres psql -U postgres < dev/seed-ipam.sql`
 
@@ -28,6 +28,7 @@ this is needed cause the 3 proxmox nodes will make a lot of inotify instances.
 - VM test IPs (`203.0.113.0/24`, `2001:db8:0:1::/64`, `2001:db8:100::/56`) from the host:
   `sudo wg-quick up dev/fyra-wg.conf` / `sudo wg-quick down dev/fyra-wg.conf`
 - PVE web UIs: `https://127.0.0.1:8006`-`8008` (root / fyradev)
+- the backend talks to Proxmox and VyOS over plain HTTP through `fyra-tls-proxy` (`127.0.0.1:18006` and `18443`), because workerd can't skip TLS verification for their self-signed certs
 
 ## After a reboot or stack restart
 

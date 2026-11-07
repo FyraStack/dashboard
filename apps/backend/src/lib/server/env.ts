@@ -26,7 +26,6 @@ export interface RuntimeEnv {
 	VYOS_API_KEY?: string;
 	VYOS_API_URL?: string;
 	VYOS_USE_VPC?: string;
-	VYOS_VERIFY_SSL?: string;
 	VYOS_VPC_01?: Fetcher;
 	VYOS_VPC_02?: Fetcher;
 }
@@ -45,7 +44,6 @@ export function getRuntimeEnv(): RuntimeEnv {
 		BETTER_AUTH_SECRET: required('BETTER_AUTH_SECRET', platformEnv.BETTER_AUTH_SECRET),
 		VYOS_API_URL: platformEnv.VYOS_API_URL,
 		VYOS_API_KEY: platformEnv.VYOS_API_KEY,
-		VYOS_VERIFY_SSL: platformEnv.VYOS_VERIFY_SSL,
 		VYOS_USE_VPC: platformEnv.VYOS_USE_VPC,
 		VYOS_VPC_01: platformEnv.VYOS_VPC_01,
 		VYOS_VPC_02: platformEnv.VYOS_VPC_02,

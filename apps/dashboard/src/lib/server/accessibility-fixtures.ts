@@ -1,3 +1,4 @@
+import type { CampaignTemplateCatalog, ProjectBillingPage } from 'stack-backend/types';
 import type { FeatureFlags } from '#lib/feature-flags.js';
 
 export const accessibilityFixtureEnabled = process.env.ACCESSIBILITY_FIXTURES === '1';
@@ -136,8 +137,18 @@ export const accessibilityFixtureBillingOverview = {
 			cost: 36.0
 		}
 	],
+	credits: {
+		featureId: 'credits',
+		remaining: 2500,
+		usage: 500,
+		overageUsage: 0,
+		overageRate: 0.01,
+		estimatedOverageCost: 0,
+		prepaidPrice: { amount: 10, billingUnits: 1000 },
+		nextResetAt: null
+	},
 	invoices: []
-};
+} satisfies Extract<ProjectBillingPage, { kind: 'page' }>['billing'];
 
 export const accessibilityFixtureAdminUsers = [
 	{
@@ -264,3 +275,72 @@ export const accessibilityFixtureImages = [
 		isa: 'x86'
 	}
 ];
+
+export const accessibilityFixtureCampaignCatalog: CampaignTemplateCatalog = {
+	batchSize: 25,
+	templates: [
+		{
+			key: 'billing-notice',
+			label: 'Billing notice',
+			description: 'General notice with a heading, body text, and an action button.',
+			defaultSubject: 'A notice about your Stack account',
+			fields: [
+				{
+					name: 'userName',
+					label: 'Recipient name',
+					inline: true,
+					required: false,
+					placeholder: '{{name}}',
+					defaultValue: '{{name}}'
+				},
+				{
+					name: 'heading',
+					label: 'Heading',
+					inline: true,
+					required: true,
+					placeholder: 'Heading',
+					defaultValue: 'A notice about your account'
+				},
+				{
+					name: 'preview',
+					label: 'Preview text',
+					inline: false,
+					required: true,
+					placeholder: 'Shown in inbox previews',
+					defaultValue: 'A notice about your Stack account'
+				},
+				{
+					name: 'body',
+					label: 'Body',
+					inline: true,
+					required: true,
+					placeholder: 'Body',
+					defaultValue: 'We wanted to let you know about an update to your account.'
+				},
+				{
+					name: 'actionUrl',
+					label: 'Button URL',
+					inline: false,
+					required: true,
+					placeholder: 'https://stack.wtf/billing',
+					defaultValue: 'https://stack.wtf/billing'
+				},
+				{
+					name: 'actionLabel',
+					label: 'Button label',
+					inline: true,
+					required: true,
+					placeholder: 'Button label',
+					defaultValue: 'View billing'
+				}
+			]
+		}
+	]
+};
+
+export const accessibilityFixtureCampaignEditorHtml = [
+	'<h1>[[FIELD:heading]]</h1>',
+	'<p>Hi [[FIELD:userName]],</p>',
+	'<p>[[FIELD:body]]</p>',
+	'<p><a href="https://stack.wtf/billing">[[FIELD:actionLabel]]</a></p>'
+].join('');

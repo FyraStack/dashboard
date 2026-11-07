@@ -1,8 +1,18 @@
 import { type } from 'arktype';
+import {
+	accessibilityFixtureCampaignCatalog,
+	accessibilityFixtureCampaignEditorHtml,
+	accessibilityFixtureEnabled
+} from '#lib/server/accessibility-fixtures.js';
 import { backend } from '#lib/server/backend.js';
 import { command, query } from '$app/server';
 
-export const listCampaignTemplates = query(() => backend((me) => me.admin().emails().templates()));
+export const listCampaignTemplates = query(async () => {
+	if (accessibilityFixtureEnabled) {
+		return accessibilityFixtureCampaignCatalog;
+	}
+	return await backend((me) => me.admin().emails().templates());
+});
 
 const csvRow = type({ '[string]': 'string' });
 
@@ -11,9 +21,12 @@ const editorParams = type({
 	fields: csvRow
 });
 
-export const renderCampaignEditor = command(editorParams, (input) =>
-	backend((me) => me.admin().emails().renderEditor(input))
-);
+export const renderCampaignEditor = command(editorParams, async (input) => {
+	if (accessibilityFixtureEnabled) {
+		return { html: accessibilityFixtureCampaignEditorHtml };
+	}
+	return await backend((me) => me.admin().emails().renderEditor(input));
+});
 
 const previewParams = type({
 	template: 'string',

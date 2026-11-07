@@ -1,359 +1,65 @@
-import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { and, eq } from 'drizzle-orm';
-import { type ProjectRole, projectRoles } from '#lib/auth/organization-permissions.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureProjectDetails,
 	accessibilityFixtureProjects
 } from '#lib/server/accessibility-fixtures.js';
-import { initAuth } from '#lib/server/auth.js';
-import { requireProjectAccess } from '#lib/server/auth-context.js';
-import {
-	ensureLocalProjectBillingCustomer,
-	ensureProjectCustomer,
-	updateProjectCustomer
-} from '#lib/server/billing/autumn.js';
-import { member, organization } from '#lib/server/db/auth.schema.js';
-import { initDrizzle } from '#lib/server/db/index.js';
-import { withIdempotency } from '#lib/server/idempotency.js';
-import { captureServerEvent } from '#lib/server/posthog.js';
-import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
-import { command, getRequestEvent, query } from '$app/server';
+import { backend } from '#lib/server/backend.js';
+import { command, query } from '$app/server';
 
-type ListResult = {
-	id: string;
-	projectName: string;
-	ownerUserId: string;
-	creationDate: number;
-	role: ProjectRole;
-}[];
-
-interface ProjectListCacheEntry {
-	expiresAt: number;
-	projects?: ListResult;
-	promise?: Promise<ListResult>;
-}
-
-interface MemberInfo {
-	email: string;
-	name: string;
-	permissions: ProjectRole;
-	userId: string;
-}
-interface GetResult {
-	creationDate: number;
-	id: string;
-	members: MemberInfo[];
-	ownerEmail: string;
-	ownerName: string;
-	ownerUserId: string;
-	projectName: string;
-}
-
-const PROJECT_LIST_CACHE_TTL_MS = 5000;
-const projectListCache = new Map<string, ProjectListCacheEntry>();
-
-function toProjectName(name: string) {
-	return name.trim() || 'Untitled Project';
-}
-
-function toSlug(name: string) {
-	const slug = name
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-|-$/g, '')
-		.slice(0, 42);
-
-	return `${slug || 'project'}-${Date.now().toString(36)}`;
-}
-
-function toProjectRole(role: string): ProjectRole {
-	return projectRoles.includes(role as ProjectRole) ? (role as ProjectRole) : 'read';
-}
-
-function cloneProjects(projects: ListResult): ListResult {
-	return projects.map((project) => ({ ...project }));
-}
-
-function clearProjectListCache(userId?: string) {
-	if (userId) {
-		projectListCache.delete(userId);
-		return;
-	}
-
-	projectListCache.clear();
-}
-
-async function loadProjectsForUser(userId: string): Promise<ListResult> {
-	const db = initDrizzle();
-	const memberships = await db.query.member.findMany({
-		where: eq(member.userId, userId),
-		with: { organization: { with: { members: true } } }
-	});
-
-	return memberships.flatMap((membership) => {
-		const org = membership.organization;
-		if (!org || org.deletedAt !== null) {
-			return [];
-		}
-		const owner = org.members.find((item: { role: string }) => item.role === 'owner');
-		return [
-			{
-				id: org.id,
-				projectName: org.name,
-				ownerUserId: owner?.userId ?? userId,
-				creationDate: org.createdAt.getTime(),
-				role: toProjectRole(membership.role)
-			}
-		];
-	}) satisfies ListResult;
-}
-
-async function getCachedProjectsForUser(userId: string): Promise<ListResult> {
-	const now = Date.now();
-	const cached = projectListCache.get(userId);
-
-	if (cached?.projects && now < cached.expiresAt) {
-		return cloneProjects(cached.projects);
-	}
-
-	if (cached?.promise) {
-		return cloneProjects(await cached.promise);
-	}
-
-	const promise = loadProjectsForUser(userId)
-		.then((projects) => {
-			projectListCache.set(userId, {
-				projects: cloneProjects(projects),
-				expiresAt: Date.now() + PROJECT_LIST_CACHE_TTL_MS
-			});
-			return projects;
-		})
-		.catch((err) => {
-			projectListCache.delete(userId);
-			throw err;
-		});
-
-	projectListCache.set(userId, {
-		...(cached?.projects ? { projects: cached.projects } : {}),
-		expiresAt: cached?.expiresAt ?? 0,
-		promise
-	});
-
-	return cloneProjects(await promise);
-}
-
-export const listProjects = query(() => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) {
-		error(401, 'Authentication required');
-	}
+export const listProjects = query(async () => {
 	if (accessibilityFixtureEnabled) {
 		return accessibilityFixtureProjects;
 	}
 
-	return getCachedProjectsForUser(event.locals.user.id);
+	return await backend((me) => me.projects().list());
 });
 
 const getParams = type({ projectId: 'string' });
-export const getProject = query(getParams, async (params): Promise<GetResult> => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) {
-		error(401, 'Authentication required');
-	}
-	if (accessibilityFixtureEnabled && params.projectId === accessibilityFixtureProjectDetails.id) {
+export const getProject = query(getParams, async ({ projectId }) => {
+	if (accessibilityFixtureEnabled && projectId === accessibilityFixtureProjectDetails.id) {
 		return accessibilityFixtureProjectDetails;
 	}
 
-	const db = initDrizzle();
-	await requireProjectAccess(db, event.locals.user.id, params.projectId);
-
-	const org = await db.query.organization.findFirst({
-		where: eq(organization.id, params.projectId),
-		with: { members: { with: { user: true } } }
-	});
-
-	if (!org) {
-		error(404, 'Project not found');
-	}
-
-	const owner =
-		org.members.find((item: { role: string }) => item.role === 'owner') ?? org.members[0];
-	const ownerUser = owner?.user;
-
-	return {
-		id: org.id,
-		projectName: org.name,
-		ownerUserId: owner?.userId ?? '',
-		ownerName: ownerUser?.name ?? 'Unknown',
-		ownerEmail: ownerUser?.email ?? '',
-		creationDate: org.createdAt.getTime(),
-		members: org.members
-			.filter((item: { role: string }) => item.role !== 'owner')
-			.map((item) => ({
-				userId: item.userId,
-				name: item.user?.name ?? 'Unknown',
-				email: item.user?.email ?? '',
-				permissions: toProjectRole(item.role)
-			}))
-	};
+	return await backend((me) => me.project(projectId).get());
 });
 
 const createParams = type({ name: 'string', idempotencyKey: '0 < string <= 128' });
-export const createProject = command(createParams, (params) => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const userId = event.locals.user.id;
-	const name = toProjectName(params.name);
-	return withIdempotency(
-		initDrizzle(),
-		{ key: params.idempotencyKey, operation: 'projects.createProject', args: { name, userId } },
-		async () => {
-			const auth = initAuth();
-			const org = await auth.api.createOrganization({
-				headers: event.request.headers,
-				body: {
-					name,
-					slug: toSlug(name)
-				}
-			});
-
-			await ensureLocalProjectBillingCustomer(org.id);
-			ensureProjectCustomer(org.id).catch((err) => {
-				console.warn(`Failed to sync Autumn customer for project ${org.id}`, err);
-			});
-			clearProjectListCache(userId);
-			captureServerEvent('project_created', {}, { projectId: org.id });
-
-			return { id: org.id };
-		}
-	);
-});
+export const createProject = command(createParams, ({ idempotencyKey, name }) =>
+	backend((me) => me.projects().create({ idempotencyKey, name }))
+);
 
 const deleteParams = type({ projectId: 'string' });
-export const deleteProject = command(deleteParams, async (params) => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'owner');
-
-	await softDeleteOrganizationResources(db, params.projectId);
-	clearProjectListCache();
-	captureServerEvent('project_deleted', {}, { projectId: params.projectId });
-});
+export const deleteProject = command(deleteParams, ({ projectId }) =>
+	backend((me) => me.project(projectId).delete())
+);
 
 const updateParams = type({ projectId: 'string', name: 'string' });
-export const updateProject = command(updateParams, async (params) => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'admin');
-
-	await db
-		.update(organization)
-		.set({ name: toProjectName(params.name) })
-		.where(eq(organization.id, params.projectId));
-
-	updateProjectCustomer(params.projectId).catch((err) => {
-		console.warn(`Failed to sync Autumn customer update for project ${params.projectId}`, err);
-	});
-	clearProjectListCache();
-	captureServerEvent('project_renamed', {}, { projectId: params.projectId });
-});
+export const updateProject = command(updateParams, ({ name, projectId }) =>
+	backend((me) => me.project(projectId).update({ name }))
+);
 
 const addMemberParams = type({
 	projectId: 'string',
 	email: 'string',
 	permissions: "'admin' | 'read_write' | 'read'"
 });
-export const addMember = command(addMemberParams, async (params) => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'admin');
-
-	const auth = initAuth();
-	await auth.api.createInvitation({
-		headers: event.request.headers,
-		body: {
-			email: params.email.trim(),
-			role: params.permissions,
-			organizationId: params.projectId,
-			resend: true
-		}
-	});
-	captureServerEvent(
-		'project_member_invited',
-		{ permissions: params.permissions },
-		{ projectId: params.projectId }
-	);
-});
+export const addMember = command(addMemberParams, ({ email, permissions, projectId }) =>
+	backend((me) => me.project(projectId).addMember({ email, permissions }))
+);
 
 const updateMemberRoleParams = type({
 	projectId: 'string',
 	userId: 'string',
 	permissions: "'admin' | 'read_write' | 'read'"
 });
-export const updateMemberRole = command(updateMemberRoleParams, async (params) => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'admin');
-
-	await db
-		.update(member)
-		.set({ role: params.permissions })
-		.where(and(eq(member.organizationId, params.projectId), eq(member.userId, params.userId)));
-	clearProjectListCache();
-	captureServerEvent(
-		'project_member_role_updated',
-		{ member_user_id: params.userId, permissions: params.permissions },
-		{ projectId: params.projectId }
-	);
-});
+export const updateMemberRole = command(
+	updateMemberRoleParams,
+	({ permissions, projectId, userId }) =>
+		backend((me) => me.project(projectId).updateMemberRole({ permissions, userId }))
+);
 
 const removeMemberParams = type({ projectId: 'string', userId: 'string' });
-export const removeMember = command(removeMemberParams, async (params) => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'admin');
-
-	const target = await db.query.member.findFirst({
-		where: and(eq(member.organizationId, params.projectId), eq(member.userId, params.userId))
-	});
-	if (!target) {
-		return;
-	}
-	if (target.role === 'owner') {
-		error(400, 'Project owner cannot be removed');
-	}
-
-	await db.delete(member).where(eq(member.id, target.id));
-	clearProjectListCache();
-	captureServerEvent(
-		'project_member_removed',
-		{ member_user_id: params.userId, previous_role: target.role },
-		{ projectId: params.projectId }
-	);
-});
+export const removeMember = command(removeMemberParams, ({ projectId, userId }) =>
+	backend((me) => me.project(projectId).removeMember({ userId }))
+);

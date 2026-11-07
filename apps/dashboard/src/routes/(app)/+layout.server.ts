@@ -3,11 +3,10 @@ import { listProjects } from '#lib/remote/projects.remote.js';
 import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureFeatureFlags,
-	accessibilityFixtureProjects
+	accessibilityFixtureProjects,
+	accessibilityFixtureUser
 } from '#lib/server/accessibility-fixtures.js';
-import { hasAdminRole } from '#lib/server/auth-context.js';
-import { getFeatureFlags } from '#lib/server/feature-flags.js';
-import { instrument } from '#lib/server/observability.js';
+import { backend } from '#lib/server/backend.js';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ locals, depends }) => {
@@ -18,15 +17,19 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
 		throw redirect(303, '/login');
 	}
 
-	const [projects, featureFlags] = accessibilityFixtureEnabled
-		? [accessibilityFixtureProjects, accessibilityFixtureFeatureFlags]
-		: await instrument('layout.app.load.dependencies', () =>
-				Promise.all([listProjects(), getFeatureFlags()])
-			);
+	const [projects, { featureFlags, isAdmin }] = accessibilityFixtureEnabled
+		? [
+				accessibilityFixtureProjects,
+				{
+					featureFlags: accessibilityFixtureFeatureFlags,
+					isAdmin: accessibilityFixtureUser.isAdmin
+				}
+			]
+		: await Promise.all([listProjects(), backend((me) => me.account().appLayout())]);
 
 	return {
 		user: locals.user,
-		isAdmin: hasAdminRole(locals.user.role) || locals.user.isAdmin || false,
+		isAdmin,
 		projects,
 		activeProjectId: locals.activeProjectId ?? null,
 		featureFlags

@@ -4,7 +4,22 @@ import { inScope } from '#lib/server/context.js';
 import { runBillingMeter, runIpamReconcile } from '#lib/server/jobs.js';
 import { Caller } from './rpc/caller.js';
 
+export type { Account } from './rpc/account.js';
+export type { AdminBilling } from './rpc/admin/billing.js';
+export type { AdminEmails } from './rpc/admin/emails.js';
+export type { AdminImages } from './rpc/admin/images.js';
+export type { AdminIpam } from './rpc/admin/ipam.js';
+export type { AdminProjects } from './rpc/admin/projects.js';
+export type { AdminUsers } from './rpc/admin/users.js';
+export type { AdminVmTypes } from './rpc/admin/vm-types.js';
+export type { AdminVms } from './rpc/admin/vms.js';
+export type { Admin } from './rpc/admin.js';
 export type { Caller } from './rpc/caller.js';
+export type { Project } from './rpc/project.js';
+export type { Projects } from './rpc/projects.js';
+export type { TwoFactorReset } from './rpc/two-factor-reset.js';
+export type { Vm } from './rpc/vm.js';
+export type { Volume } from './rpc/volume.js';
 
 const authBasePath = '/api/auth';
 

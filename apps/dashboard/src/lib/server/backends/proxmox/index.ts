@@ -166,6 +166,87 @@ function cloudInitRouteBootcmd(params: CloudInitVendorConfigParams) {
 	return commands;
 }
 
+// SMBIOS type 1 (System Information) shown to the guest via dmidecode,
+// /sys/class/dmi/id/*, and `hostnamectl` (Hardware Vendor / Hardware Model).
+// https://pve.proxmox.com/pve-docs/qm.1.html (smbios1)
+// Product is the VM's tier (vm_types.name), so it's rewritten on resize.
+const SMBIOS_BRAND = 'Fyra Stack';
+
+interface Smbios1 {
+	fields: Record<string, string>;
+	uuid?: string;
+}
+
+function smbios1Branding(stableId: string, tierName: string): Record<string, string> {
+	return {
+		manufacturer: SMBIOS_BRAND,
+		product: tierName,
+		family: SMBIOS_BRAND,
+		serial: stableId.toLowerCase()
+	};
+}
+
+function encodeBase64Utf8(value: string) {
+	return btoa(String.fromCharCode(...new TextEncoder().encode(value)));
+}
+
+function decodeBase64Utf8(value: string) {
+	return new TextDecoder().decode(Uint8Array.from(atob(value), (char) => char.charCodeAt(0)));
+}
+
+function parseSmbios1(raw: string | undefined): Smbios1 {
+	const entries = (raw ?? '')
+		.split(',')
+		.filter(Boolean)
+		.map((part) => {
+			const eq = part.indexOf('=');
+			return eq === -1 ? [part, ''] : [part.slice(0, eq), part.slice(eq + 1)];
+		});
+	const base64 = entries.some(([key, value]) => key === 'base64' && value === '1');
+	const result: Smbios1 = { fields: {} };
+	for (const [key, value] of entries) {
+		if (key === 'base64') {
+			continue;
+		}
+		if (key === 'uuid') {
+			result.uuid = value;
+		} else {
+			result.fields[key] = base64 ? decodeBase64Utf8(value) : value;
+		}
+	}
+	return result;
+}
+
+function formatSmbios1({ fields, uuid }: Smbios1) {
+	const encoded = Object.entries(fields).map(([key, value]) => `${key}=${encodeBase64Utf8(value)}`);
+	return ['base64=1', ...encoded, ...(uuid ? [`uuid=${uuid}`] : [])].join(',');
+}
+
+function smbios1Config(stableId: string, tierName: string) {
+	// PVE only auto-generates the SMBIOS UUID when smbios1 is omitted, so supply one ourselves.
+	return formatSmbios1({
+		fields: smbios1Branding(stableId, tierName),
+		uuid: crypto.randomUUID()
+	});
+}
+
+/** Returns the updated smbios1 string, or null if the branding already matches. */
+function rebrandSmbios1(raw: string | undefined, stableId: string, tierName: string) {
+	const current = parseSmbios1(raw);
+	const branding = smbios1Branding(stableId, tierName);
+	if (
+		current.uuid &&
+		Object.entries(branding).every(([key, value]) => current.fields[key] === value)
+	) {
+		return null;
+	}
+	return formatSmbios1({
+		fields: { ...current.fields, ...branding },
+		// Keep the existing UUID: guests (and licensing/activation) key off it.
+		uuid: current.uuid ?? crypto.randomUUID()
+	});
+}
+
 function generateMacAddress() {
 	const bytes = crypto.getRandomValues(new Uint8Array(6));
 	bytes[0] = (bytes[0] & 0xfe) | 0x02;
@@ -827,6 +908,7 @@ export class ProxmoxBackend implements VmBackend {
 			machine: 'q35',
 			efidisk0: `${pvePool}:0,efitype=4m,pre-enrolled-keys=${(params.secureBoot ?? true) ? 1 : 0}`,
 			tpmstate0: `${pvePool}:0,version=v2.0`,
+			smbios1: smbios1Config(params.id, params.tierName),
 			scsihw: 'virtio-scsi-single',
 			...(params.imageSource
 				? {}
@@ -1134,6 +1216,10 @@ export class ProxmoxBackend implements VmBackend {
 			}
 			if (params.memoryMb !== qemuConfig.memory) {
 				updates.memory = params.memoryMb;
+			}
+			const smbios1 = rebrandSmbios1(qemuConfig.smbios1, id, params.tierName);
+			if (smbios1) {
+				updates.smbios1 = smbios1;
 			}
 			if (Object.keys(updates).length > 0) {
 				await this.client.updateQemuConfig(node, vmid, updates);

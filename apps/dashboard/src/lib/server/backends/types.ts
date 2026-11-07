@@ -86,6 +86,7 @@ export interface VmCreateParams {
 	registerBackground?: (work: Promise<unknown>, label?: string) => void;
 	secureBoot?: boolean;
 	sshKeys?: string[];
+	tierName: string;
 	userId: string;
 }
 
@@ -106,6 +107,7 @@ export interface VmResizeParams {
 	cores: number;
 	diskGb: number;
 	memoryMb: number;
+	tierName: string;
 }
 
 export class VmNotFoundError extends Error {

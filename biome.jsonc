@@ -5,6 +5,7 @@
 		"includes": [
 			"!!apps/dashboard/static",
 			"!!apps/dashboard/drizzle",
+			"!!apps/backend/drizzle",
 			"!!apps/backend/worker-configuration.d.ts",
 			"!apps/dashboard/src/lib/components/ui",
 			"!!**/.factory",
@@ -66,8 +67,9 @@
 		{
 			"includes": [
 				"apps/dashboard/src/lib/ptr.ts",
-				"apps/dashboard/src/lib/server/ipam.ts",
-				"apps/dashboard/src/lib/server/backends/proxmox/index.ts"
+				"apps/backend/src/lib/ptr.ts",
+				"apps/backend/src/lib/server/ipam.ts",
+				"apps/backend/src/lib/server/backends/proxmox/index.ts"
 			],
 			"linter": {
 				"rules": {

@@ -120,18 +120,6 @@ importers:
         specifier: 'catalog:'
         version: 4.156.1(@cloudflare/workers-types@5.20261002.1)(@types/node@26.1.1)
 
-  apps/cron:
-    devDependencies:
-      '@cloudflare/workers-types':
-        specifier: ^5.20261002.1
-        version: 5.20261002.1
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      wrangler:
-        specifier: 'catalog:'
-        version: 4.156.1(@cloudflare/workers-types@5.20261002.1)
-
   apps/dashboard:
     dependencies:
       '@better-auth/core':
@@ -7219,19 +7207,6 @@ snapshots:
 
   mimic-response@3.1.0: {}
 
-  miniflare@5.20261101.0-beta:
-    dependencies:
-      '@cspotcode/source-map-support': 0.8.1
-      sharp: 0.35.5
-      undici: 7.30.1
-      workerd: 1.20261101.1
-      ws: 8.21.0
-      youch: 4.1.0-beta.10
-    transitivePeerDependencies:
-      - '@types/node'
-      - bufferutil
-      - utf-8-validate
-
   miniflare@5.20261101.0-beta(@types/node@26.1.1):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
@@ -7748,38 +7723,6 @@ snapshots:
       svelte: 5.56.6
       tailwind-merge: 3.6.0
 
-  sharp@0.35.5:
-    dependencies:
-      '@img/colour': 1.1.0
-      detect-libc: 2.1.2
-      semver: 7.8.5
-    optionalDependencies:
-      '@img/sharp-darwin-arm64': 0.35.5
-      '@img/sharp-darwin-x64': 0.35.5
-      '@img/sharp-freebsd-wasm32': 0.35.5
-      '@img/sharp-libvips-darwin-arm64': 1.3.4
-      '@img/sharp-libvips-darwin-x64': 1.3.4
-      '@img/sharp-libvips-linux-arm': 1.3.4
-      '@img/sharp-libvips-linux-arm64': 1.3.4
-      '@img/sharp-libvips-linux-ppc64': 1.3.4
-      '@img/sharp-libvips-linux-riscv64': 1.3.4
-      '@img/sharp-libvips-linux-s390x': 1.3.4
-      '@img/sharp-libvips-linux-x64': 1.3.4
-      '@img/sharp-libvips-linuxmusl-arm64': 1.3.4
-      '@img/sharp-libvips-linuxmusl-x64': 1.3.4
-      '@img/sharp-linux-arm': 0.35.5
-      '@img/sharp-linux-arm64': 0.35.5
-      '@img/sharp-linux-ppc64': 0.35.5
-      '@img/sharp-linux-riscv64': 0.35.5
-      '@img/sharp-linux-s390x': 0.35.5
-      '@img/sharp-linux-x64': 0.35.5
-      '@img/sharp-linuxmusl-arm64': 0.35.5
-      '@img/sharp-linuxmusl-x64': 0.35.5
-      '@img/sharp-webcontainers-wasm32': 0.35.5
-      '@img/sharp-win32-arm64': 0.35.5
-      '@img/sharp-win32-ia32': 0.35.5
-      '@img/sharp-win32-x64': 0.35.5
-
   sharp@0.35.5(@types/node@26.1.1):
     dependencies:
       '@img/colour': 1.1.0
@@ -8196,24 +8139,6 @@ snapshots:
       '@cloudflare/workerd-linux-64': 1.20261101.1
       '@cloudflare/workerd-linux-arm64': 1.20261101.1
       '@cloudflare/workerd-windows-64': 1.20261101.1
-
-  wrangler@4.156.1(@cloudflare/workers-types@5.20261002.1):
-    dependencies:
-      '@cloudflare/kv-asset-handler': 0.5.0
-      '@cloudflare/unenv-preset': 2.16.2(unenv@2.0.0-rc.24)(workerd@1.20261101.1)
-      blake3-wasm: 2.1.5
-      esbuild: 0.28.2
-      miniflare: 5.20261101.0-beta
-      path-to-regexp: 6.3.0
-      unenv: 2.0.0-rc.24
-      workerd: 1.20261101.1
-    optionalDependencies:
-      '@cloudflare/workers-types': 5.20261002.1
-      fsevents: 2.3.3
-    transitivePeerDependencies:
-      - '@types/node'
-      - bufferutil
-      - utf-8-validate
 
   wrangler@4.156.1(@cloudflare/workers-types@5.20261002.1)(@types/node@26.1.1):
     dependencies:

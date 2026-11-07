@@ -85,6 +85,6 @@
 		"typescript": "^6.0.3",
 		"unplugin-icons": "^23.0.1",
 		"vite": "^8.1.5",
-		"wrangler": "^4.146.0"
+		"wrangler": "catalog:"
 	}
 }

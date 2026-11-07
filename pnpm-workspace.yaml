@@ -1,6 +1,9 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+catalog:
+  '@cloudflare/vite-plugin': 1.67.0
+  wrangler: 4.156.1
 overrides:
   better-call: 1.3.7
   'cookie@<0.7.0': ^0.7.0

@@ -1,0 +1,61 @@
+{
+	"name": "stack-backend",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
+	},
+	"exports": {
+		".": {
+			"types": "./src/index.ts"
+		}
+	},
+	"scripts": {
+		"auth:schema": "pnpm dlx @better-auth/cli@1.4.22 generate --config auth.config.ts --output src/lib/server/db/auth.schema.ts --yes",
+		"build": "vite build",
+		"cf:deploy": "vite build && wrangler deploy",
+		"cf:deploy:preview": "CLOUDFLARE_ENV=preview vite build && wrangler deploy",
+		"cf:typegen": "wrangler types --include-runtime=false --env-file .env.example --strict-vars=false",
+		"check": "tsc --noEmit",
+		"db:generate": "drizzle-kit generate",
+		"db:migrate": "drizzle-kit migrate",
+		"db:push": "drizzle-kit push",
+		"db:studio": "drizzle-kit studio",
+		"dev": "vite dev",
+		"email:dev": "bse dev -d src/lib/emails -c src/lib/emails/theme.css"
+	},
+	"dependencies": {
+		"@better-auth/core": "^1.6.24",
+		"@better-auth/passkey": "^1.6.24",
+		"@better-auth/telemetry": "^1.6.24",
+		"@better-auth/utils": "^0.4.2",
+		"@better-svelte-email/components": "^2.1.1",
+		"@better-svelte-email/server": "^2.1.1",
+		"autumn-js": "1.2.33",
+		"better-auth": "^1.6.24",
+		"drizzle-orm": "^0.45.2",
+		"ip-address": "^10.2.0",
+		"ky": "^2.0.2",
+		"pg": "^8.22.0",
+		"posthog-node": "^5.52.4",
+		"svelte": "^5.56.6",
+		"ulid": "^3.0.2",
+		"yaml": "^2.9.0"
+	},
+	"devDependencies": {
+		"@better-auth/cli": "^1.4.22",
+		"@better-svelte-email/cli": "^2.1.1",
+		"@cloudflare/vite-plugin": "catalog:",
+		"@cloudflare/workers-types": "^5.20261002.1",
+		"@sveltejs/vite-plugin-svelte": "^7.2.0",
+		"@types/node": "^26.1.1",
+		"@types/pg": "^8.20.0",
+		"drizzle-kit": "^0.31.10",
+		"typescript": "^6.0.3",
+		"undici": "^8.9.0",
+		"vite": "^8.1.5",
+		"wrangler": "catalog:"
+	}
+}

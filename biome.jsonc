@@ -5,6 +5,7 @@
 		"includes": [
 			"!!apps/dashboard/static",
 			"!!apps/dashboard/drizzle",
+			"!!apps/backend/worker-configuration.d.ts",
 			"!apps/dashboard/src/lib/components/ui",
 			"!!**/.factory",
 			"!!**/*.svg"

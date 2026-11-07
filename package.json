@@ -4,6 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
+		"backend": "pnpm --filter stack-backend",
 		"build": "pnpm -r build",
 		"cf:deploy": "pnpm -r build && pnpm --filter stack-dashboard run cf:deploy && pnpm --filter stack-dashboard-cron run cf:deploy",
 		"cf:deploy:preview": "pnpm --filter stack-dashboard run cf:deploy:preview && pnpm --filter stack-dashboard-cron run cf:deploy:preview",

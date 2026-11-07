@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Session, User } from 'better-auth';
+import { APIError } from 'better-auth/api';
 import type { Pool } from 'pg';
 import { closeRequestDb, type Database } from '#lib/server/db/index.js';
 import { encodeHttpError, HttpError, isHttpError } from '#lib/server/http.js';
@@ -110,6 +111,10 @@ async function attachSession(scope: Scope, current: Context) {
 function toTransportError(cause: unknown, current: Context): Error {
 	if (isHttpError(cause)) {
 		return encodeHttpError(cause);
+	}
+
+	if (cause instanceof APIError && cause.statusCode < 500) {
+		return encodeHttpError(new HttpError(cause.statusCode, cause.body?.message ?? cause.message));
 	}
 
 	console.error('Unhandled backend error', cause);

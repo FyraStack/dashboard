@@ -6,12 +6,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
-	import {
-		CAMPAIGN_BATCH_SIZE,
-		campaignTemplates,
-		extractPlaceholders,
-		fieldToken
-	} from '#lib/emails/campaign-registry.js';
+	import { extractPlaceholders, fieldToken } from '#lib/emails/campaign.js';
 	import { idempotencyScope } from '#lib/idempotency.js';
 	import type { AdminUser } from '#lib/remote/admin-users.remote.js';
 	import {
@@ -19,7 +14,7 @@
 		renderCampaignEditor,
 		sendCampaignEmails
 	} from '#lib/remote/email-campaign.remote.js';
-	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
+	import { AdminState } from '#lib/state/admin.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
 	import { page } from '$app/state';
 	import Check from '~icons/lucide/check';
@@ -30,16 +25,21 @@
 	import Eye from '~icons/nucleo/eye';
 	import Send from '~icons/nucleo/send';
 	import Users from '~icons/nucleo/users';
+	import type { PageData } from './$types';
 
-	let { data }: { data: AdminPageData } = $props();
+	let { data }: { data: PageData } = $props();
 	const admin = new AdminState(untrack(() => data));
 	$effect(() => {
 		admin.sync(data);
 	});
 
-	let selectedTemplateKey = $state(campaignTemplates[0].key);
-	let subject = $state(campaignTemplates[0].defaultSubject);
-	let fieldValues = $state<Record<string, string>>(defaultFieldValues(campaignTemplates[0].key));
+	const campaignTemplates = $derived(data.campaignCatalog.templates);
+	const batchSize = $derived(data.campaignCatalog.batchSize);
+
+	const initialTemplate = untrack(() => data.campaignCatalog.templates[0]);
+	let selectedTemplateKey = $state(initialTemplate.key);
+	let subject = $state(initialTemplate.defaultSubject);
+	let fieldValues = $state<Record<string, string>>(defaultFieldValues(initialTemplate.key));
 	const template = $derived(
 		campaignTemplates.find((entry) => entry.key === selectedTemplateKey) ?? campaignTemplates[0]
 	);
@@ -395,12 +395,12 @@
 		const fields = $state.snapshot(fieldValues);
 		const campaign = idempotencyScope();
 		try {
-			for (let i = 0; i < rows.length; i += CAMPAIGN_BATCH_SIZE) {
+			for (let i = 0; i < rows.length; i += batchSize) {
 				const batch = {
 					template: selectedTemplateKey,
 					subject,
 					fields,
-					rows: rows.slice(i, i + CAMPAIGN_BATCH_SIZE),
+					rows: rows.slice(i, i + batchSize),
 					emailColumn: 'email'
 				};
 				// biome-ignore lint/performance/noAwaitInLoops: batches go out one at a time to stay under the email provider's rate limit and report progress

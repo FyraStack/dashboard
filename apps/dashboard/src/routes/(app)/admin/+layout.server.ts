@@ -8,22 +8,17 @@ import {
 	accessibilityFixtureEnabled,
 	accessibilityFixtureFeatureFlags
 } from '#lib/server/accessibility-fixtures.js';
-import { requireAdmin } from '#lib/server/auth-context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
-import { getFeatureFlags } from '#lib/server/feature-flags.js';
-import { getRequestEvent } from '$app/server';
+import { backend } from '#lib/server/backend.js';
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = async ({ depends }) => {
+export const load: LayoutServerLoad = async ({ depends, locals }) => {
 	depends('app:feature-flags');
 	depends('app:admin-users');
 	depends('app:ipam-prefixes');
 	depends('app:admin-vms');
 	depends('app:admin-projects');
-	const event = getRequestEvent();
-	const userId = event?.locals.user?.id;
 
-	if (!userId) {
+	if (!locals.user?.id) {
 		return {
 			vmTypes: [],
 			images: [],
@@ -54,13 +49,11 @@ export const load: LayoutServerLoad = async ({ depends }) => {
 		};
 	}
 
-	await requireAdmin(initDrizzle(), userId);
-
-	const [vmTypes, images, featureFlags, adminUsers, ipamPrefixes, adminVms, adminProjects] =
+	const [{ featureFlags }, vmTypes, images, adminUsers, ipamPrefixes, adminVms, adminProjects] =
 		await Promise.all([
+			backend((me) => me.admin().layout()),
 			listVmTypes(),
 			listImages(),
-			getFeatureFlags(),
 			listAdminUsers(),
 			listIpamPrefixes(),
 			listAllAdminVms(),

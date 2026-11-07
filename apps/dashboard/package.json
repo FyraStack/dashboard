@@ -8,7 +8,7 @@
 		"#lib/*": "./src/lib/*"
 	},
 	"scripts": {
-		"auth:schema": "pnpm dlx @better-auth/cli@1.4.22 generate --config auth.config.ts --output src/lib/server/db/auth.schema.ts --yes",
+		"auth:schema": "auth generate --config auth.config.ts --output src/lib/server/db/auth.schema.ts --yes",
 		"build": "vite build",
 		"cf:deploy": "wrangler deploy --env=\"\"",
 		"cf:deploy:preview": "pnpm run build && wrangler deploy --env preview",
@@ -28,10 +28,10 @@
 		"test:accessibility:ci": "playwright install --with-deps chrome && playwright test"
 	},
 	"dependencies": {
-		"@better-auth/core": "^1.6.24",
-		"@better-auth/passkey": "^1.6.24",
-		"@better-auth/telemetry": "^1.6.24",
-		"@better-auth/utils": "^0.4.2",
+		"@better-auth/core": "^1.7.16",
+		"@better-auth/passkey": "^1.7.16",
+		"@better-auth/telemetry": "^1.7.16",
+		"@better-auth/utils": "^0.5.1",
 		"@better-svelte-email/components": "^2.1.1",
 		"@better-svelte-email/server": "^2.1.1",
 		"@plausible-analytics/tracker": "^0.4.5",
@@ -49,7 +49,6 @@
 	},
 	"devDependencies": {
 		"@axe-core/playwright": "^4.11.0",
-		"@better-auth/cli": "^1.4.22",
 		"@better-svelte-email/cli": "^2.1.1",
 		"@cloudflare/workers-types": "^5.20261002.1",
 		"@fontsource-variable/geist": "^5.2.9",
@@ -66,8 +65,9 @@
 		"@types/pg": "^8.20.0",
 		"@types/qrcode": "^1.5.6",
 		"@typescript/native-preview": "7.0.0-dev.20260707.2",
-		"better-auth": "^1.6.24",
-		"bits-ui": "^2.18.1",
+		"auth": "^1.7.16",
+		"better-auth": "^1.7.16",
+		"bits-ui": "^2.20.2",
 		"clsx": "^2.1.1",
 		"drizzle-kit": "^0.31.10",
 		"drizzle-orm": "^0.45.2",

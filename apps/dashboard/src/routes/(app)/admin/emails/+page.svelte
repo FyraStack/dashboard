@@ -2,6 +2,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { autofillAttributes } from '#lib/components/ui/input/autofill.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
@@ -447,6 +448,7 @@
 				<span class="shrink-0 text-xs font-medium text-muted-foreground">Subject</span>
 				<input
 					bind:value={subject}
+					{...autofillAttributes()}
 					placeholder="Subject line"
 					disabled={sending}
 					aria-label="Subject"

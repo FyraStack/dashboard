@@ -3,6 +3,7 @@
 	import Icon from '#lib/components/icon.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { autofillAttributes } from '#lib/components/ui/input/autofill.js';
 	import {
 		type ImageType,
 		imageTypeColors,
@@ -122,6 +123,7 @@
 			<div class="mt-3 flex items-center gap-2">
 				<input
 					bind:value={rebuildImageConfirm}
+					{...autofillAttributes()}
 					placeholder={selectedServer.id}
 					class="h-8 w-56 border border-border bg-muted px-3 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
 				/>
@@ -154,6 +156,7 @@
 			/>
 			<input
 				bind:value={imgSearch}
+				{...autofillAttributes()}
 				placeholder="Search images..."
 				class="h-7 w-44 border border-border bg-muted pr-2 pl-7 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
 			/>

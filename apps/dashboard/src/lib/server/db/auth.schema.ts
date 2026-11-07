@@ -1,14 +1,5 @@
 import { relations } from 'drizzle-orm';
-import {
-	bigint,
-	boolean,
-	index,
-	integer,
-	pgTable,
-	text,
-	timestamp,
-	uniqueIndex
-} from 'drizzle-orm/pg-core';
+import { bigint, boolean, index, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 export const user = pgTable('user', {
 	id: text('id').primaryKey(),
@@ -133,21 +124,17 @@ export const passkey = pgTable(
 	]
 );
 
-export const organization = pgTable(
-	'organization',
-	{
-		id: text('id').primaryKey(),
-		name: text('name').notNull(),
-		slug: text('slug').notNull().unique(),
-		logo: text('logo'),
-		createdAt: timestamp('created_at').notNull(),
-		metadata: text('metadata'),
-		billingExempt: boolean('billing_exempt').default(false).notNull(),
-		disabled: boolean('disabled').default(false).notNull(),
-		deletedAt: bigint('deleted_at', { mode: 'number' })
-	},
-	(table) => [uniqueIndex('organization_slug_uidx').on(table.slug)]
-);
+export const organization = pgTable('organization', {
+	id: text('id').primaryKey(),
+	name: text('name').notNull(),
+	slug: text('slug').notNull().unique(),
+	logo: text('logo'),
+	createdAt: timestamp('created_at').notNull(),
+	metadata: text('metadata'),
+	billingExempt: boolean('billing_exempt').default(false).notNull(),
+	disabled: boolean('disabled').default(false).notNull(),
+	deletedAt: bigint('deleted_at', { mode: 'number' })
+});
 
 export const member = pgTable(
 	'member',

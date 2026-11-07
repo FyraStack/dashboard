@@ -1,12 +1,15 @@
 <script lang="ts">
 	import type { HTMLInputAttributes, HTMLInputTypeAttribute } from 'svelte/elements';
 	import { cn, type WithElementRef } from '#lib/utils.js';
+	import { autofillAttributes } from './autofill.js';
 
 	type InputType = Exclude<HTMLInputTypeAttribute, 'file'>;
 
 	type Props = WithElementRef<
-		Omit<HTMLInputAttributes, 'type'> &
-			({ type: 'file'; files?: FileList } | { type?: InputType; files?: undefined })
+		Omit<HTMLInputAttributes, 'type'> & {
+			/** Let password managers fill this field even without a credential `autocomplete` token. */
+			allowAutofill?: boolean;
+		} & ({ type: 'file'; files?: FileList } | { type?: InputType; files?: undefined })
 	>;
 
 	let {
@@ -16,8 +19,12 @@
 		files = $bindable(),
 		class: className,
 		'data-slot': dataSlot = 'input',
+		autocomplete,
+		allowAutofill = false,
 		...restProps
 	}: Props = $props();
+
+	const autofill = $derived(autofillAttributes(autocomplete, { allow: allowAutofill }));
 </script>
 
 {#if type === 'file'}
@@ -31,6 +38,7 @@
 		type="file"
 		bind:files
 		bind:value
+		{autocomplete}
 		{...restProps}
 	/>
 {:else}
@@ -43,6 +51,7 @@
 		)}
 		{type}
 		bind:value
+		{...autofill}
 		{...restProps}
 	/>
 {/if}

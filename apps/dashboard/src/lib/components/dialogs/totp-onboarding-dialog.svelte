@@ -91,11 +91,11 @@
 			verifyError = error.message ?? 'Failed to enable TOTP';
 			return;
 		}
-		if (data) {
-			totpUri = data.totpURI ?? '';
-			const url = new URL(data.totpURI ?? '');
+		if (data?.method === 'totp') {
+			totpUri = data.totpURI;
+			const url = new URL(data.totpURI);
 			secretKey = url.searchParams.get('secret') ?? '';
-			backupCodes = data.backupCodes ?? [];
+			({ backupCodes } = data);
 			step = 'verify';
 		}
 	}
@@ -147,6 +147,7 @@
 						bind:value={setupPassword}
 						type="password"
 						placeholder="********"
+						autocomplete="current-password"
 						onkeydown={(e) => e.key === 'Enter' && enableTotp()}
 					/>
 					{#if verifyError}

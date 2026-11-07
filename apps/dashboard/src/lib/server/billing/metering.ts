@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, lt, ne, or } from 'drizzle-orm';
 import { organization } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import {
@@ -738,6 +738,17 @@ async function ensureEventTarget(
 	return 'ready';
 }
 
+function isDuplicateIdempotencyKey(err: unknown) {
+	return (
+		autumnStatus(err) === 409 &&
+		typeof err === 'object' &&
+		err !== null &&
+		'body' in err &&
+		typeof err.body === 'string' &&
+		err.body.includes('duplicate_idempotency_key')
+	);
+}
+
 async function trackUsageEvent(event: BillingUsageEvent) {
 	if (!isBillingConfigured()) {
 		await markUsageEventSynced(event.id);
@@ -773,6 +784,10 @@ async function trackUsageEvent(event: BillingUsageEvent) {
 		if (autumnStatus(err) === 404) {
 			await markUsageEventAbandoned(event.id, formatAutumnError(err));
 			return 'abandoned' as const;
+		}
+		if (isDuplicateIdempotencyKey(err)) {
+			await markUsageEventSynced(event.id);
+			return 'synced' as const;
 		}
 		await markUsageEventFailed(event.id, formatAutumnError(err));
 		return 'failed' as const;
@@ -870,17 +885,14 @@ async function abandonStaleFailedEvents(now: number) {
 	return stale.length;
 }
 
-export async function syncPendingUsage(limit = 50) {
+export async function syncPendingUsage(limit = 400) {
 	const db = initDrizzle();
 	const expired = await abandonStaleFailedEvents(Date.now());
 	const events = await db
 		.select()
 		.from(billingUsageEvents)
 		.where(inArray(billingUsageEvents.syncStatus, ['pending', 'failed']))
-		.orderBy(
-			sql`case when ${billingUsageEvents.syncStatus} = 'pending' then 0 else 1 end`,
-			asc(billingUsageEvents.createdAt)
-		)
+		.orderBy(asc(billingUsageEvents.createdAt))
 		.limit(limit);
 
 	const { synced, failed, abandoned } = await syncUsageEvents(events);
@@ -899,10 +911,7 @@ export async function syncProjectUsage(projectId: string, limit = 50) {
 				inArray(billingUsageEvents.syncStatus, ['pending', 'failed'])
 			)
 		)
-		.orderBy(
-			sql`case when ${billingUsageEvents.syncStatus} = 'pending' then 0 else 1 end`,
-			asc(billingUsageEvents.createdAt)
-		)
+		.orderBy(asc(billingUsageEvents.createdAt))
 		.limit(limit);
 
 	const { synced, failed, abandoned } = await syncUsageEvents(events);

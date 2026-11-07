@@ -1,14 +1,20 @@
 <script lang="ts">
 	import { cn, type WithElementRef, type WithoutChildren } from '#lib/utils.js';
 	import type { HTMLTextareaAttributes } from 'svelte/elements';
+	import { autofillAttributes } from '../input/autofill.js';
 
 	let {
 		ref = $bindable(null),
 		value = $bindable(),
 		class: className,
 		'data-slot': dataSlot = 'textarea',
+		autocomplete,
+		allowAutofill = false,
 		...restProps
-	}: WithoutChildren<WithElementRef<HTMLTextareaAttributes>> = $props();
+	}: WithoutChildren<WithElementRef<HTMLTextareaAttributes>> & {
+		/** Let password managers fill this field even without a credential `autocomplete` token. */
+		allowAutofill?: boolean;
+	} = $props();
 </script>
 
 <textarea
@@ -19,4 +25,5 @@
 		className
 	)}
 	bind:value
+	{...autofillAttributes(autocomplete, { allow: allowAutofill })}
 	{...restProps}></textarea>

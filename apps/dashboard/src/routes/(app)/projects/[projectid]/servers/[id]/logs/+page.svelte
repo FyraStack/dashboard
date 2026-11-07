@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { autofillAttributes } from '#lib/components/ui/input/autofill.js';
 	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 	import X from '~icons/lucide/x';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
@@ -115,6 +116,7 @@
 			/><input
 				aria-label="Search logs"
 				bind:value={logSearch}
+				{...autofillAttributes()}
 				placeholder="Search..."
 				class="h-6 w-36 border border-border bg-muted pr-2 pl-6 text-[11px] text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
 			/>

@@ -1,16 +1,18 @@
-// simple healthcheck endpoint
-// simply pings the PVE backend and attempts to list nodes
-//
-// the latency to this endpoint measures the time it takes for a round-trip to the PVE backend over VPC
-
+import { env } from 'cloudflare:workers';
 import { error } from '@sveltejs/kit';
-import { getBackend } from '#lib/server/backends/index.js';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async () => {
+async function backendHealthy() {
 	try {
-		await getBackend('proxmox').ping();
+		const result = await env.BACKEND.health();
+		return result.ok;
 	} catch {
+		return false;
+	}
+}
+
+export const GET: RequestHandler = async () => {
+	if (!(await backendHealthy())) {
 		error(503, 'PVE backend unavailable');
 	}
 

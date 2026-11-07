@@ -1,4 +1,4 @@
-import { waitUntil } from 'cloudflare:workers';
+import { env } from 'cloudflare:workers';
 import { handleErrorWithSentry, initCloudflareSentryHandle, sentryHandle } from '@sentry/sveltekit';
 import { type RequestEvent, redirect } from '@sveltejs/kit';
 import { type Handle, type HandleServerError, sequence } from '@sveltejs/kit/hooks';
@@ -7,12 +7,9 @@ import {
 	accessibilityFixtureSession,
 	accessibilityFixtureUser
 } from '#lib/server/accessibility-fixtures.js';
-import { getCachedAuthSession, hasAuthSessionCookie } from '#lib/server/auth-lite.js';
-import { closeRequestDb } from '#lib/server/db/index.js';
-import { instrument, timingLog } from '#lib/server/observability.js';
-import { captureServerException } from '#lib/server/posthog.js';
+import { backend } from '#lib/server/backend.js';
 import { handlePostHogProxy } from '#lib/server/posthog-proxy.js';
-import { building, dev } from '$app/env';
+import { dev } from '$app/env';
 import { PUBLIC_SENTRY_DSN } from '$app/env/public';
 
 const publicRoutes = [
@@ -28,6 +25,14 @@ const publicRoutes = [
 	'/_app/remote/'
 ];
 const authPages = ['/login', '/register', '/signup', '/forgot-password'];
+const authBasePath = '/api/auth';
+const remoteFunctionPath = '/_app/remote/';
+const sessionCookieNames = new Set([
+	'better-auth.session_token',
+	'__Secure-better-auth.session_token',
+	'better-auth-session_token',
+	'__Secure-better-auth-session_token'
+]);
 
 function isPublicRequest(event: RequestEvent) {
 	return (
@@ -35,141 +40,66 @@ function isPublicRequest(event: RequestEvent) {
 	);
 }
 
-const moduleLoadedAt = performance.now();
-let isFirstRequestOnIsolate = true;
-let authPrewarmScheduled = false;
-
-function scheduleAuthPrewarm(requestAttrs: Record<string, string | number | boolean | undefined>) {
-	if (authPrewarmScheduled) {
-		return;
-	}
-	authPrewarmScheduled = true;
-
-	waitUntil(
-		instrument(
-			'auth.prewarm',
-			async () => {
-				const [{ initAuth }] = await Promise.all([
-					import('#lib/server/auth.js'),
-					import('better-auth/svelte-kit')
-				]);
-				initAuth();
-			},
-			requestAttrs
-		).catch((error) => {
-			console.warn('Auth prewarm failed', error);
-		})
-	);
+function isAuthPage(pathname: string) {
+	return authPages.some((route) => pathname.startsWith(route));
 }
 
-async function runFullAuth(
-	event: Parameters<Handle>[0]['event'],
-	resolve: Parameters<Handle>[0]['resolve'],
-	requestAttrs: Record<string, string | number | boolean | undefined>
-) {
-	const [{ initAuth }, { svelteKitHandler }] = await instrument(
-		'auth.full.import',
-		() => Promise.all([import('#lib/server/auth.js'), import('better-auth/svelte-kit')]),
-		requestAttrs
-	);
+function isAuthEndpoint(pathname: string) {
+	return pathname === authBasePath || pathname.startsWith(`${authBasePath}/`);
+}
 
-	const auth = await instrument('auth.init', async () => initAuth(), requestAttrs);
-	const session = await instrument(
-		'auth.getSession',
-		() => auth.api.getSession({ headers: event.request.headers }),
-		requestAttrs
-	);
+function hasSessionCookie(request: Request) {
+	const cookie = request.headers.get('cookie');
+	if (!cookie) {
+		return false;
+	}
 
-	if (session) {
-		event.locals.session = session.session;
-		event.locals.user = session.user;
-		event.locals.activeProjectId = session.session.activeOrganizationId ?? null;
+	return cookie.split(';').some((part) => {
+		const [name] = part.trimStart().split('=', 1);
+		return sessionCookieNames.has(name);
+	});
+}
+
+async function proxyAuthRequest(request: Request) {
+	const response = await env.BACKEND.fetch(request);
+	return new Response(response.body, response);
+}
+
+const handleAuth: Handle = async ({ event, resolve }) => {
+	const { pathname } = event.url;
+
+	if (accessibilityFixtureEnabled && !isAuthPage(pathname)) {
+		event.locals.session = accessibilityFixtureSession;
+		event.locals.user = accessibilityFixtureUser;
+		event.locals.activeProjectId = accessibilityFixtureSession.activeOrganizationId;
+		return resolve(event);
+	}
+
+	if (isAuthEndpoint(pathname)) {
+		return proxyAuthRequest(event.request);
 	}
 
 	const isPublic = isPublicRequest(event);
-
-	if (!(session || isPublic)) {
-		throw redirect(303, '/login');
+	if (pathname.startsWith(remoteFunctionPath) || (isPublic && !hasSessionCookie(event.request))) {
+		return resolve(event);
 	}
 
-	if (session && authPages.some((route) => event.url.pathname.startsWith(route))) {
-		throw redirect(303, '/');
+	const current = await backend((me) => me.session());
+	if (current) {
+		event.locals.session = current.session;
+		event.locals.user = current.user;
+		event.locals.activeProjectId = current.session.activeOrganizationId ?? null;
 	}
 
-	return await instrument(
-		'sveltekit.handler',
-		() => svelteKitHandler({ event, resolve, auth, building }),
-		requestAttrs
-	);
-}
-
-const handleBetterAuth: Handle = async ({ event, resolve }) => {
-	const coldStart = isFirstRequestOnIsolate;
-	isFirstRequestOnIsolate = false;
-	const requestCf = (event.request as Request & { cf?: { colo?: string } }).cf;
-	const requestAttrs = {
-		'http.request.method': event.request.method,
-		'url.pathname': event.url.pathname,
-		'cf.colo': requestCf?.colo,
-		'cf.placement': event.request.headers.get('cf-placement') ?? undefined,
-		'cf.ray': event.request.headers.get('cf-ray') ?? undefined,
-		'worker.cold_start': coldStart,
-		'worker.module_age_ms': Math.round(performance.now() - moduleLoadedAt)
-	};
-
-	timingLog('request.handle.enter', requestAttrs);
-
-	try {
-		if (
-			accessibilityFixtureEnabled &&
-			!authPages.some((route) => event.url.pathname.startsWith(route))
-		) {
-			event.locals.session = accessibilityFixtureSession;
-			event.locals.user = accessibilityFixtureUser;
-			event.locals.activeProjectId = accessibilityFixtureSession.activeOrganizationId;
-			return await instrument('sveltekit.resolve', () => resolve(event), requestAttrs);
-		}
-
-		return await instrument(
-			'request.handle',
-			async () => {
-				const isAuthEndpoint =
-					event.url.pathname === '/api/auth' || event.url.pathname.startsWith('/api/auth/');
-				if (event.url.pathname.startsWith('/api/internal/')) {
-					timingLog('request.auth.bypassInternal', requestAttrs);
-					return await instrument('sveltekit.resolve', () => resolve(event), requestAttrs);
-				}
-
-				const isPublic = isPublicRequest(event);
-				if (!isAuthEndpoint && isPublic && !hasAuthSessionCookie(event.request)) {
-					timingLog('request.auth.publicNoSession', requestAttrs);
-					return await instrument('sveltekit.resolve', () => resolve(event), requestAttrs);
-				}
-
-				const cached = isAuthEndpoint ? null : await getCachedAuthSession(event.request);
-
-				if (!cached) {
-					return await runFullAuth(event, resolve, requestAttrs);
-				}
-
-				event.locals.session = cached.session;
-				event.locals.user = cached.user;
-				event.locals.activeProjectId = cached.session.activeOrganizationId ?? null;
-
-				if (authPages.some((route) => event.url.pathname.startsWith(route))) {
-					throw redirect(303, '/');
-				}
-
-				return await instrument('sveltekit.resolve', () => resolve(event), requestAttrs);
-			},
-			requestAttrs
-		);
-	} finally {
-		scheduleAuthPrewarm(requestAttrs);
-		timingLog('request.closeRequestDb.schedule', requestAttrs);
-		closeRequestDb(event);
-		timingLog('request.handle.exit', requestAttrs);
+	if (!(current || isPublic)) {
+		redirect(303, '/login');
 	}
+
+	if (current && isAuthPage(pathname)) {
+		redirect(303, '/');
+	}
+
+	return resolve(event);
 };
 
 let sentryRequestHandle: Handle | undefined;
@@ -194,17 +124,15 @@ export const handle: Handle = sequence(
 	handleSentryInit,
 	sentryHandle({ injectFetchProxyScript: false }),
 	handlePostHogProxy,
-	handleBetterAuth
+	handleAuth
 );
 
 const logServerError: HandleServerError = ({ kind, error, event }) => {
-	// Kit 3 also passes expected (app, framework and validation) errors here
 	if (kind !== 'unknown') {
 		return;
 	}
 
 	console.error('Unhandled server error', { pathname: event.url.pathname, error });
-	captureServerException(error, event);
 };
 
 export const handleError = handleErrorWithSentry(logServerError);

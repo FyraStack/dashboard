@@ -1,3 +1,4 @@
+export type { AppSession, AppUser } from './lib/server/context.js';
 export type * from './lib/server/handlers/account-layout.js';
 export type * from './lib/server/handlers/account-login.js';
 export type * from './lib/server/handlers/admin-billing.js';

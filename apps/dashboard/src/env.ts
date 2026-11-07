@@ -1,6 +1,5 @@
 import { defineEnvVars } from '@sveltejs/kit/env';
 
-// Server config and bindings come from `cloudflare:workers` (see #lib/server/env.ts); only these are read via $app/env.
 const optional = (input: string | undefined) => input;
 
 export const variables = defineEnvVars({

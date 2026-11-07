@@ -270,6 +270,9 @@ importers:
       shadcn-svelte:
         specifier: ^1.4.2
         version: 1.4.2(svelte@5.56.6)
+      stack-backend:
+        specifier: workspace:*
+        version: link:../backend
       svelte:
         specifier: ^5.56.6
         version: 5.56.6

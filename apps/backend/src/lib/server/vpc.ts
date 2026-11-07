@@ -1,4 +1,3 @@
-import type { Fetcher } from '@cloudflare/workers-types';
 import ky from 'ky';
 import { instrument } from '#lib/server/observability.js';
 

@@ -1,5 +1,4 @@
 import { waitUntil } from 'cloudflare:workers';
-import type { KVNamespace } from '@cloudflare/workers-types';
 import {
 	defaultFeatureFlags,
 	developmentFeatureFlags,

@@ -1,5 +1,4 @@
 import { env as platformEnv } from 'cloudflare:workers';
-import type { Fetcher } from '@cloudflare/workers-types';
 
 export interface BackendEnv {
 	PROXMOX_API_URL?: string;

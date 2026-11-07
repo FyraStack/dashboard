@@ -1,5 +1,4 @@
 import { env as platformEnv } from 'cloudflare:workers';
-import type { Fetcher, KVNamespace, SendEmail } from '@cloudflare/workers-types';
 
 export interface RuntimeEnv {
 	AUTUMN_CREDITS_FEATURE_ID?: string;

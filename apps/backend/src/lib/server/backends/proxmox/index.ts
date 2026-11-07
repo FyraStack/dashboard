@@ -1,4 +1,3 @@
-import type { Fetcher } from '@cloudflare/workers-types';
 import { Address4, Address6 } from 'ip-address';
 import ky, { HTTPError } from 'ky';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';

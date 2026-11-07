@@ -1,4 +1,3 @@
-import type { Fetcher } from '@cloudflare/workers-types';
 import ky, { HTTPError, type KyInstance } from 'ky';
 import { createVpcFetch, insecureDirectFetch } from '#lib/server/vpc.js';
 import type {

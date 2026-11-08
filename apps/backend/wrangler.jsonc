@@ -45,6 +45,11 @@
 			"name": "stack-vm-deletion",
 			"binding": "VM_DELETION",
 			"class_name": "VmDeletion"
+		},
+		{
+			"name": "stack-vm-provisioning",
+			"binding": "VM_PROVISIONING",
+			"class_name": "VmProvisioning"
 		}
 	],
 	"kv_namespaces": [
@@ -143,6 +148,11 @@
 					"name": "stack-vm-deletion-preview",
 					"binding": "VM_DELETION",
 					"class_name": "VmDeletion"
+				},
+				{
+					"name": "stack-vm-provisioning-preview",
+					"binding": "VM_PROVISIONING",
+					"class_name": "VmProvisioning"
 				}
 			],
 			"kv_namespaces": [

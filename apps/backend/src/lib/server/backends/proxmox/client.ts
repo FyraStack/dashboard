@@ -4,6 +4,8 @@ import type {
 	PveAgentNetworkInterface,
 	PveClusterResource,
 	PveCreateQemuParams,
+	PveFirewallIpsetEntry,
+	PveFirewallRule,
 	PveHaResource,
 	PveNode,
 	PveQemuConfig,
@@ -248,6 +250,26 @@ export class ProxmoxClient {
 			});
 			throw error;
 		}
+	}
+
+	async listQemuFirewallIpsetEntries(
+		node: string,
+		vmid: number,
+		name: string
+	): Promise<PveFirewallIpsetEntry[]> {
+		const res = await this.api
+			.get(
+				`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/ipset/${encodeURIComponent(name)}`
+			)
+			.json<PveResponse<PveFirewallIpsetEntry[]>>();
+		return res.data;
+	}
+
+	async listQemuFirewallRules(node: string, vmid: number): Promise<PveFirewallRule[]> {
+		const res = await this.api
+			.get(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/rules`)
+			.json<PveResponse<PveFirewallRule[]>>();
+		return res.data;
 	}
 
 	async addQemuFirewallIpsetEntry(

@@ -20,6 +20,7 @@ export async function queueVmDeletion(db: Database, row: DeletableVm): Promise<v
 		console.warn(`Failed to close billing meter for VM ${row.id} before deletion`, err);
 	});
 	await db.update(vms).set({ status: 'deleting', statusError: null }).where(eq(vms.id, row.id));
+	await stopProvisioning(row.id);
 	await env.VM_DELETION.create({
 		id: `${row.id}-${Date.now()}`,
 		params: {
@@ -29,6 +30,23 @@ export async function queueVmDeletion(db: Database, row: DeletableVm): Promise<v
 			proxmoxId: row.proxmoxId
 		}
 	});
+}
+
+async function stopProvisioning(vmId: string) {
+	try {
+		const provisioning = await env.VM_PROVISIONING.get(vmId);
+		const { status } = await provisioning.status();
+		if (
+			status === 'queued' ||
+			status === 'running' ||
+			status === 'waiting' ||
+			status === 'paused'
+		) {
+			await provisioning.terminate();
+		}
+	} catch (err) {
+		console.warn(`Failed to stop provisioning workflow for VM ${vmId}`, err);
+	}
 }
 
 export const DELETED_VM_RETENTION_DAYS = 90;

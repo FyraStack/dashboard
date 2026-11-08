@@ -23,11 +23,7 @@ import { instrument, timingLog } from '#lib/server/observability.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { queueVmDeletion } from '#lib/server/vm-deletion.js';
 import { findLiveVm } from '#lib/server/vm-identity.js';
-import {
-	isProvisioningStalled,
-	provisionVm,
-	resumeStalledProvisioning
-} from '#lib/server/vm-provisioning.js';
+import { provisionVm } from '#lib/server/vm-provisioning.js';
 import { findPlanDowngrades } from '#lib/vm-plans.js';
 
 interface VmRow extends Record<string, unknown> {
@@ -541,13 +537,6 @@ export async function listVmStatuses(params: ListVmStatusesInput) {
 	});
 
 	persistLiveState(db, persistable);
-	const now = Date.now();
-	for (const row of rows) {
-		if (!isProvisioningStalled(row, now)) {
-			continue;
-		}
-		runInBackground(resumeStalledProvisioning(db, row), `resume provisioning for VM ${row.id}`);
-	}
 
 	timingLog('remote.vms.listVmStatuses.exit', {
 		'project.id': params.projectId,

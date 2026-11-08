@@ -171,6 +171,16 @@ export interface PveHaResource {
 	type?: string;
 }
 
+export interface PveFirewallRule {
+	action?: string;
+	pos: number;
+	type: string;
+}
+
+export interface PveFirewallIpsetEntry {
+	cidr: string;
+}
+
 export interface PveStorageContent {
 	content: string;
 	ctime?: number;

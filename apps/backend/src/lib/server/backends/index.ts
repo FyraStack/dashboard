@@ -1,7 +1,7 @@
 import { timingLog } from '#lib/server/observability.js';
 import { getBackendEnv } from './env.ts';
-import { ProxmoxBackend } from './proxmox/index.ts';
 import { ProxmoxClient } from './proxmox/client.ts';
+import { ProxmoxBackend } from './proxmox/index.ts';
 import type { VmBackend } from './types.ts';
 
 export type {

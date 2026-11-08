@@ -28,7 +28,12 @@ import {
 	capHoursFor,
 	sliceCapUsage
 } from './caps.ts';
-import { billedQuantity, hoursBetween, requireVmFeatureId, usageIdempotencyKey } from './features.ts';
+import {
+	billedQuantity,
+	hoursBetween,
+	requireVmFeatureId,
+	usageIdempotencyKey
+} from './features.ts';
 
 type BillingResourceType = (typeof billingResourceTypeEnum.enumValues)[number];
 type VmStatus = (typeof vmStatusEnum.enumValues)[number];

@@ -1,20 +1,13 @@
-import { error, redirect } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
+import type { ProjectBillingPage } from 'stack-backend/types';
 import {
 	accessibilityFixtureBillingOverview,
 	accessibilityFixtureEnabled
 } from '#lib/server/accessibility-fixtures.js';
-import { getProjectMemberRole, requireProjectAccess } from '#lib/server/auth-context.js';
-import { runInBackground } from '#lib/server/background.js';
-import { attachDefaultProjectPlan } from '#lib/server/billing/autumn.js';
-import { getProjectBillingOverview, refreshProjectBilling } from '#lib/server/billing/overview.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import { backend } from '#lib/server/backend.js';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals, params, parent, url }) => {
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
+export const load: PageServerLoad = async ({ params, parent, url }) => {
 	await parent();
 
 	if (accessibilityFixtureEnabled) {
@@ -25,33 +18,20 @@ export const load: PageServerLoad = async ({ locals, params, parent, url }) => {
 		};
 	}
 
-	const db = initDrizzle();
-	await requireProjectAccess(db, locals.user.id, params.projectid, 'admin');
-	const role = await getProjectMemberRole(db, locals.user.id, params.projectid);
+	const page = await backend<ProjectBillingPage>((me) =>
+		me.project(params.projectid).billingPage({
+			billingSetupComplete: url.searchParams.get('billing_setup') === 'complete',
+			billingPromo: url.searchParams.get('billing_promo') ?? undefined
+		})
+	);
 
-	if (url.searchParams.get('billing_setup') === 'complete') {
-		if (role !== 'owner') {
-			error(403, 'Project owner permission required');
-		}
-
-		const paymentUrl = await attachDefaultProjectPlan(
-			params.projectid,
-			`${url.origin}/projects/${params.projectid}/billing`,
-			url.searchParams.get('billing_promo') ?? undefined
-		);
-		if (paymentUrl) {
-			redirect(303, paymentUrl);
-		}
-
-		await refreshProjectBilling(params.projectid);
-		redirect(303, `/projects/${params.projectid}/billing`);
+	if (page.kind === 'redirect') {
+		redirect(303, page.location);
 	}
 
-	runInBackground(refreshProjectBilling(params.projectid), 'refreshProjectBilling');
-
 	return {
-		projectId: params.projectid,
-		canManageBilling: role === 'owner',
-		billing: await getProjectBillingOverview(params.projectid)
+		projectId: page.projectId,
+		canManageBilling: page.canManageBilling,
+		billing: page.billing
 	};
 };

@@ -1,31 +1,17 @@
 import { redirect } from '@sveltejs/kit';
-import { initDrizzle } from '#lib/server/db/index.js';
-import { getRuntimeEnv } from '#lib/server/env.js';
-import { requiresTotpReset, resolvePendingTwoFactorUser } from '#lib/server/totp-reset.js';
-import { maskEmail } from '#lib/totp-reset-flow.js';
+import { backend } from '#lib/server/backend.js';
 import type { PageServerLoad } from './$types';
 
 const pendingPasskeyHintCookie = 'pending_passkey_2fa_hint';
 
-export const load: PageServerLoad = async (event) => {
-	const { cookies, url } = event;
+export const load: PageServerLoad = async ({ cookies, url }) => {
 	if (cookies.get(pendingPasskeyHintCookie) === 'passkey') {
 		throw redirect(303, `/login/two-factor/passkey${url.search}`);
 	}
 
 	const redirectTo = url.searchParams.get('redirectTo') ?? '/';
 
-	const db = initDrizzle();
-	const pendingUser = await resolvePendingTwoFactorUser(
-		event,
-		db,
-		getRuntimeEnv().BETTER_AUTH_SECRET
-	);
-	const resetRequired = pendingUser ? await requiresTotpReset(db, pendingUser.id) : false;
+	const { resetRequired, resetEmail } = await backend((me) => me.twoFactorReset().page());
 
-	return {
-		redirectTo,
-		resetRequired,
-		resetEmail: resetRequired && pendingUser ? maskEmail(pendingUser.email) : null
-	};
+	return { redirectTo, resetRequired, resetEmail };
 };

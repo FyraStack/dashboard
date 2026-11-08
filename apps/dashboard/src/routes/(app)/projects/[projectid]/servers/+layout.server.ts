@@ -1,23 +1,18 @@
 import { error } from '@sveltejs/kit';
 import { listVms } from '#lib/remote/vms.remote.js';
-import { instrument } from '#lib/server/observability.js';
 import type { LayoutServerLoad } from './$types';
 import { toServerInfo } from './lib/server-summary';
 
 export const load: LayoutServerLoad = async ({ params, parent, depends }) => {
 	depends('project:vms');
-	const { projects } = await instrument('layout.servers.parent', () => parent(), {
-		'project.id': params.projectid
-	});
+	const { projects } = await parent();
 	const project = projects.find((item) => item.id === params.projectid);
 
 	if (!project) {
 		error(404, 'Project not found');
 	}
 
-	const vms = await instrument('layout.servers.listVms', () => listVms({ projectId: project.id }), {
-		'project.id': project.id
-	});
+	const vms = await listVms({ projectId: project.id });
 	const servers = vms
 		.filter((vm) => vm.active)
 		.map((vm) => ({ ...toServerInfo(vm), vmTypeId: vm.vmTypeId, vmType: vm.vmType }))

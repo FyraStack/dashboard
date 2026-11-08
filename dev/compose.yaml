@@ -41,6 +41,19 @@ services:
     networks:
       - pve
 
+  tls-proxy:
+    image: docker.io/library/nginx:alpine
+    container_name: fyra-tls-proxy
+    depends_on: [pve1, vyos]
+    ports:
+      - "127.0.0.1:18006:8006"
+      - "127.0.0.1:18443:8443"
+    volumes:
+      - ./tls-proxy.conf:/etc/nginx/conf.d/default.conf:ro,z
+    networks:
+      - pve
+      - vyos
+
   gateway:
     image: docker.io/library/alpine:3
     container_name: fyra-gw

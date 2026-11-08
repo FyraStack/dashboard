@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import { sentrySvelteKit } from '@sentry/sveltekit/vite';
 import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
@@ -6,22 +7,23 @@ import { FileSystemIconLoader } from 'unplugin-icons/loaders';
 import Icons from 'unplugin-icons/vite';
 import { defineConfig, loadEnv } from 'vite';
 
-export default defineConfig(({ mode }) => {
-	const env = loadEnv(mode, process.cwd(), '');
-	const hyperdriveLocalConnectionString =
-		env.CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE;
+function shareDevRegistryWithBackend() {
+	const wranglerEntry = createRequire(import.meta.url).resolve('wrangler');
+	const miniflare = createRequire(wranglerEntry)('miniflare') as {
+		getDefaultDevRegistryPath: () => string;
+	};
+	process.env.CLOUDFLARE_DEV_REGISTRY_PATH = miniflare.getDefaultDevRegistryPath();
+}
 
-	if (
-		hyperdriveLocalConnectionString &&
-		!process.env.CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE
-	) {
-		process.env.CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE =
-			hyperdriveLocalConnectionString;
+export default defineConfig(({ command, mode }) => {
+	const env = loadEnv(mode, process.cwd(), '');
+	if (command === 'serve') {
+		shareDevRegistryWithBackend();
 	}
 
 	return {
 		server: {
-			host: '127.0.0.1'
+			host: 'localhost'
 		},
 		plugins: [
 			tailwindcss(),

@@ -1,110 +1,17 @@
-import { error } from '@sveltejs/kit';
 import { type } from 'arktype';
-import { and, eq } from 'drizzle-orm';
-import { initDrizzle } from '#lib/server/db/index.js';
-import { apiTokens } from '#lib/server/db/schema.js';
-import { withIdempotency } from '#lib/server/idempotency.js';
-import { captureServerEvent } from '#lib/server/posthog.js';
-import { command, getRequestEvent, query } from '$app/server';
+import { backend } from '#lib/server/backend.js';
+import { command, query } from '$app/server';
 
-export const listApiTokens = query(async () => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	const tokens = await db.query.apiTokens.findMany({
-		where: eq(apiTokens.userId, event.locals.user.id)
-	});
-
-	return tokens.map((t) => ({
-		id: t.id,
-		name: t.name,
-		createdAt: t.createdAt,
-		lastUsedAt: null
-	}));
-});
-
-function generateToken(): string {
-	const bytes = new Uint8Array(32);
-	crypto.getRandomValues(bytes);
-	return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function hashToken(token: string): Promise<string> {
-	const encoder = new TextEncoder();
-	const data = encoder.encode(token);
-	const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-	const hashArray = Array.from(new Uint8Array(hashBuffer));
-	return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
+export const listApiTokens = query(() => backend((me) => me.account().listApiTokens()));
 
 const createParams = type({ name: 'string', idempotencyKey: '0 < string <= 128' });
 
-export const createApiToken = command(createParams, async (params) => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	const userId = event.locals.user.id;
-	const plainToken = generateToken();
-	const tokenHash = await hashToken(plainToken);
-	let insertedNow = false;
-
-	const { id } = await withIdempotency(
-		db,
-		{
-			key: params.idempotencyKey,
-			operation: 'apiTokens.createApiToken',
-			args: { name: params.name, userId }
-		},
-		async () => {
-			const [inserted] = await db
-				.insert(apiTokens)
-				.values({ userId, name: params.name, tokenHash, createdAt: Date.now() })
-				.returning();
-			insertedNow = true;
-			captureServerEvent('api_token_created', { token_id: inserted.id });
-			return { id: inserted.id };
-		}
-	);
-
-	if (!insertedNow) {
-		const [rotated] = await db
-			.update(apiTokens)
-			.set({ tokenHash })
-			.where(and(eq(apiTokens.id, id), eq(apiTokens.userId, userId)))
-			.returning({ id: apiTokens.id });
-		if (!rotated) {
-			error(409, 'This token was revoked. Create a new one.');
-		}
-	}
-
-	return { id, token: plainToken };
-});
+export const createApiToken = command(createParams, ({ idempotencyKey, name }) =>
+	backend((me) => me.account().createApiToken({ idempotencyKey, name }))
+);
 
 const revokeParams = type({ tokenId: 'string' });
 
-export const revokeApiToken = command(revokeParams, async (params) => {
-	const event = getRequestEvent();
-	if (!event?.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	const token = await db.query.apiTokens.findFirst({
-		where: and(eq(apiTokens.id, params.tokenId), eq(apiTokens.userId, event.locals.user.id))
-	});
-
-	if (!token) {
-		error(404, 'API token not found');
-	}
-
-	await db
-		.delete(apiTokens)
-		.where(and(eq(apiTokens.id, params.tokenId), eq(apiTokens.userId, event.locals.user.id)));
-	captureServerEvent('api_token_revoked', { token_id: params.tokenId });
-});
+export const revokeApiToken = command(revokeParams, ({ tokenId }) =>
+	backend((me) => me.account().revokeApiToken({ tokenId }))
+);

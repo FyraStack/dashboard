@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { type ProjectRole, projectRoles } from '#lib/auth/organization-permissions.js';
 import { initAuth } from '#lib/server/auth.js';
 import { requireProjectAccess } from '#lib/server/auth-context.js';
+import { runInBackground } from '#lib/server/background.js';
 import {
 	ensureLocalProjectBillingCustomer,
 	ensureProjectCustomer,
@@ -181,9 +182,7 @@ export function createProject(input: CreateProjectInput): Promise<{ id: string }
 			});
 
 			await ensureLocalProjectBillingCustomer(org.id);
-			ensureProjectCustomer(org.id).catch((err) => {
-				console.warn(`Failed to sync Autumn customer for project ${org.id}`, err);
-			});
+			runInBackground(ensureProjectCustomer(org.id), `sync autumn customer for project ${org.id}`);
 			captureServerEvent('project_created', {}, { projectId: org.id });
 
 			return { id: org.id };
@@ -218,9 +217,10 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
 		.set({ name: toProjectName(input.name) })
 		.where(eq(organization.id, input.projectId));
 
-	updateProjectCustomer(input.projectId).catch((err) => {
-		console.warn(`Failed to sync Autumn customer update for project ${input.projectId}`, err);
-	});
+	runInBackground(
+		updateProjectCustomer(input.projectId),
+		`sync autumn customer update for project ${input.projectId}`
+	);
 	captureServerEvent('project_renamed', {}, { projectId: input.projectId });
 }
 

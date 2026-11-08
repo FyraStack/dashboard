@@ -1,16 +1,17 @@
-import { getProjectMemberRole } from '#lib/server/auth-context.js';
+import { getProjectMemberRole, requireProjectAccess } from '#lib/server/auth-context.js';
 import { runInBackground } from '#lib/server/background.js';
 import { attachDefaultProjectPlan } from '#lib/server/billing/autumn.js';
 import { getProjectBillingReadiness, refreshProjectBilling } from '#lib/server/billing/overview.js';
 import { context } from '#lib/server/context.js';
 import { initDrizzle } from '#lib/server/db/index.js';
+import { safeReturnPath } from '#lib/server/handlers/billing.js';
 import { error } from '#lib/server/http.js';
 import { getIpamAvailability } from '#lib/server/ipam.js';
 
 export interface CompleteCreateServerBillingSetupInput {
 	projectId: string;
 	promoCode?: string;
-	returnUrl: string;
+	returnPath: string;
 }
 
 export async function completeCreateServerBillingSetup(
@@ -22,14 +23,15 @@ export async function completeCreateServerBillingSetup(
 	}
 
 	const db = initDrizzle();
-	const role = await getProjectMemberRole(db, event.locals.user.id, input.projectId);
-	if (role !== 'owner') {
-		error(403, 'Project owner permission required');
-	}
+	await requireProjectAccess(db, event.locals.user.id, input.projectId, 'owner');
 
+	const returnPath = safeReturnPath(
+		input.returnPath,
+		`/projects/${input.projectId}/servers/create`
+	);
 	const paymentUrl = await attachDefaultProjectPlan(
 		input.projectId,
-		input.returnUrl,
+		`${event.url.origin}${returnPath}`,
 		input.promoCode
 	);
 	if (paymentUrl) {
@@ -51,6 +53,7 @@ export async function loadCreateServerPage(input: LoadCreateServerPageInput) {
 	}
 
 	const db = initDrizzle();
+	await requireProjectAccess(db, event.locals.user.id, input.projectId);
 
 	runInBackground(refreshProjectBilling(input.projectId), 'refreshProjectBilling');
 	const [billing, ipamAvailability, role] = await Promise.all([

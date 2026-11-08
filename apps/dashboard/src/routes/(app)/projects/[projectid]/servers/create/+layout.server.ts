@@ -20,7 +20,7 @@ export const load: LayoutServerLoad = async ({ params, parent, depends, url }) =
 		const { paymentUrl } = await backend(
 			async (me) =>
 				await me.project(params.projectid).completeCreateServerBillingSetup({
-					returnUrl: `${url.origin}${cleanPath}`,
+					returnPath: cleanPath,
 					promoCode: url.searchParams.get('billing_promo') ?? undefined
 				})
 		);

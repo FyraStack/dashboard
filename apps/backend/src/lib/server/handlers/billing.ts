@@ -32,7 +32,7 @@ export interface SetupProjectBillingPaymentInput {
 
 const MAX_CREDITS_PER_PURCHASE = 1_000_000;
 
-function safeReturnPath(value: string | undefined, fallback: string) {
+export function safeReturnPath(value: string | undefined, fallback: string) {
 	if (!value?.startsWith('/') || value.startsWith('//')) {
 		return fallback;
 	}

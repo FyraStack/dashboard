@@ -11,9 +11,11 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
 	import { idempotent } from '#lib/idempotency.js';
+	import { setAnnouncementsEnabled } from '#lib/remote/announcements.remote.js';
 	import { createApiToken, listApiTokens, revokeApiToken } from '#lib/remote/api-tokens.remote.js';
 	import { getPendingEmailChange, requestEmailChange } from '#lib/remote/email-change.remote.js';
 	import { hasPassword } from '#lib/remote/password-change.remote.js';
@@ -43,6 +45,7 @@
 	import Key from '~icons/nucleo/key';
 	import Lock from '~icons/nucleo/lock';
 	import LogOut from '~icons/nucleo/logout';
+	import Megaphone from '~icons/nucleo/megaphone';
 	import Monitor from '~icons/nucleo/monitor';
 	import Moon from '~icons/nucleo/moon';
 	import ShieldCheck from '~icons/nucleo/shield-check';
@@ -71,6 +74,7 @@
 
 	interface Props {
 		activeTab?: UserSettingsTab;
+		announcementsEnabled: boolean;
 		open?: boolean;
 		profileName?: string;
 		user: { name?: string | null; email?: string | null };
@@ -80,8 +84,25 @@
 		open = $bindable(false),
 		activeTab = $bindable<UserSettingsTab>('profile'),
 		profileName = $bindable(''),
-		user
+		user,
+		announcementsEnabled: initialAnnouncementsEnabled
 	}: Props = $props();
+
+	let announcementsEnabled = $state(untrack(() => initialAnnouncementsEnabled));
+	let announcementsSaving = $state(false);
+
+	async function toggleAnnouncements(enabled: boolean) {
+		announcementsEnabled = enabled;
+		announcementsSaving = true;
+		try {
+			await setAnnouncementsEnabled({ enabled });
+		} catch (err) {
+			announcementsEnabled = !enabled;
+			toast.error(getErrorMessage(err, 'Failed to update announcements setting'));
+		} finally {
+			announcementsSaving = false;
+		}
+	}
 
 	let profileSaving = $state(false);
 	let profileSaved = $state(false);
@@ -662,6 +683,22 @@
 										Save Profile
 									{/if}
 								</Button>
+							</div>
+						</div>
+						<div class="mt-4 rounded-xs border border-border/60 p-4">
+							<div class="mb-3 flex items-center gap-2 border-b border-border/50 pb-2">
+								<Megaphone class="size-4 text-red-400" />
+								<p class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+									Announcements
+								</p>
+							</div>
+							<div class="flex items-center justify-between gap-4">
+								<Label for="settings-announcements">Show "What's new" announcements</Label>
+								<Switch
+									id="settings-announcements"
+									bind:checked={() => announcementsEnabled, toggleAnnouncements}
+									disabled={announcementsSaving}
+								/>
 							</div>
 						</div>
 					</Tabs.Content>

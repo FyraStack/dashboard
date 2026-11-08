@@ -5,7 +5,9 @@ import {
 	type AnnouncementImageLookupInput,
 	getAnnouncementImage,
 	type MarkAnnouncementsReadInput,
-	markAnnouncementsRead
+	markAnnouncementsRead,
+	type SetAnnouncementsEnabledInput,
+	setAnnouncementsEnabled
 } from '#lib/server/handlers/announcements.js';
 import {
 	type CreateApiTokenInput,
@@ -107,6 +109,10 @@ export class Account extends RpcTarget {
 
 	markAnnouncementsRead(input: MarkAnnouncementsReadInput) {
 		return inScope(this.#scope, () => markAnnouncementsRead(input));
+	}
+
+	setAnnouncementsEnabled(input: SetAnnouncementsEnabledInput) {
+		return inScope(this.#scope, () => setAnnouncementsEnabled(input));
 	}
 
 	announcementImage(input: AnnouncementImageLookupInput) {

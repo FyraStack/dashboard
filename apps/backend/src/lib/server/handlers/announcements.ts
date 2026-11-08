@@ -2,7 +2,7 @@ import { and, count, desc, eq, gte, inArray, isNotNull, notExists, sql } from 'd
 import { requireAdmin } from '#lib/server/auth-context.js';
 import { context } from '#lib/server/context.js';
 import { initDrizzle } from '#lib/server/db/index.js';
-import { announcementReads, announcements } from '#lib/server/db/schema.js';
+import { announcementReads, announcements, userPreferences } from '#lib/server/db/schema.js';
 import { error } from '#lib/server/http.js';
 
 const MAX_UNREAD_SHOWN = 10;
@@ -42,6 +42,10 @@ export interface DeleteAnnouncementInput {
 
 export interface MarkAnnouncementsReadInput {
 	announcementIds: string[];
+}
+
+export interface SetAnnouncementsEnabledInput {
+	enabled: boolean;
 }
 
 export interface AnnouncementImageLookupInput {
@@ -122,9 +126,19 @@ function isWebUrl(value: string) {
 	}
 }
 
-export async function listUnreadAnnouncements() {
+export async function loadUserAnnouncements() {
 	const user = requireUser();
 	const db = initDrizzle();
+
+	const [preferences] = await db
+		.select({ announcementsEnabled: userPreferences.announcementsEnabled })
+		.from(userPreferences)
+		.where(eq(userPreferences.userId, user.id))
+		.limit(1);
+	const announcementsEnabled = preferences?.announcementsEnabled ?? true;
+	if (!announcementsEnabled) {
+		return { announcementsEnabled, unreadAnnouncements: [] };
+	}
 
 	const alreadyRead = db
 		.select({ announcementId: announcementReads.announcementId })
@@ -136,7 +150,7 @@ export async function listUnreadAnnouncements() {
 			)
 		);
 
-	return await db
+	const unreadAnnouncements = await db
 		.select({
 			id: announcements.id,
 			title: announcements.title,
@@ -156,6 +170,8 @@ export async function listUnreadAnnouncements() {
 		)
 		.orderBy(desc(announcements.publishedAt))
 		.limit(MAX_UNREAD_SHOWN);
+
+	return { announcementsEnabled, unreadAnnouncements };
 }
 
 export async function markAnnouncementsRead({ announcementIds }: MarkAnnouncementsReadInput) {
@@ -178,6 +194,19 @@ export async function markAnnouncementsRead({ announcementIds }: MarkAnnouncemen
 		.insert(announcementReads)
 		.values(published.map(({ id }) => ({ announcementId: id, userId: user.id, readAt })))
 		.onConflictDoNothing();
+}
+
+export async function setAnnouncementsEnabled({ enabled }: SetAnnouncementsEnabledInput) {
+	const user = requireUser();
+	const updatedAt = Date.now();
+
+	await initDrizzle()
+		.insert(userPreferences)
+		.values({ userId: user.id, announcementsEnabled: enabled, updatedAt })
+		.onConflictDoUpdate({
+			target: userPreferences.userId,
+			set: { announcementsEnabled: enabled, updatedAt }
+		});
 }
 
 export async function listAdminAnnouncements() {

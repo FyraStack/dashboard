@@ -491,3 +491,13 @@ export const announcementReads = pgTable(
 		index('announcement_reads_announcement_id_index').on(table.announcementId)
 	]
 );
+
+// User Preferences
+
+export const userPreferences = pgTable('user_preferences', {
+	userId: text('user_id')
+		.primaryKey()
+		.references(() => user.id, { onDelete: 'cascade' }),
+	announcementsEnabled: boolean('announcements_enabled').notNull().default(true),
+	updatedAt: bigint('updated_at', { mode: 'number' }).notNull()
+});

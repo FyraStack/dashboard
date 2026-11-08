@@ -677,6 +677,7 @@
 		bind:activeTab={userSettings.tab}
 		bind:profileName
 		user={data.user}
+		announcementsEnabled={data.announcementsEnabled}
 	/>
 
 	<ConfirmDialog />

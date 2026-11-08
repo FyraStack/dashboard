@@ -36,3 +36,7 @@ export const deleteAnnouncement = command(type({ announcementId: 'string' }), (i
 export const markAnnouncementsRead = command(type({ announcementIds: 'string[] <= 50' }), (input) =>
 	backend((me) => me.account().markAnnouncementsRead(input))
 );
+
+export const setAnnouncementsEnabled = command(type({ enabled: 'boolean' }), (input) =>
+	backend((me) => me.account().setAnnouncementsEnabled(input))
+);

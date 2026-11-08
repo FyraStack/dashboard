@@ -1,9 +1,11 @@
 import { WorkerEntrypoint } from 'cloudflare:workers';
-import { withSentry } from '@sentry/cloudflare';
+import { instrumentWorkflowWithSentry, withSentry } from '@sentry/cloudflare';
 import { getBackend } from '#lib/server/backends/index.js';
 import { inScope } from '#lib/server/context.js';
 import { runBillingMeter, runIpamReconcile } from '#lib/server/jobs.js';
 import { rememberSentryClient, sentryOptions } from '#lib/server/sentry.js';
+import { VmDeletionWorkflow } from '#lib/server/vm-deletion.js';
+import { VmProvisioningWorkflow } from '#lib/server/vm-provisioning.js';
 import { Caller } from './rpc/caller.js';
 
 export type { Account } from './rpc/account.js';
@@ -80,5 +82,15 @@ class Api extends WorkerEntrypoint<Env> {
 }
 
 export default withSentry(sentryOptions, Api);
+
+export class VmDeletion extends instrumentWorkflowWithSentry(
+	(env: Env) => sentryOptions(env) ?? {},
+	VmDeletionWorkflow
+) {}
+
+export class VmProvisioning extends instrumentWorkflowWithSentry(
+	(env: Env) => sentryOptions(env) ?? {},
+	VmProvisioningWorkflow
+) {}
 
 export type { Api };

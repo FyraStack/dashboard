@@ -1,11 +1,6 @@
-import type { InferSelectModel } from 'drizzle-orm';
-import { and, eq, inArray } from 'drizzle-orm';
-import {
-	getBackend,
-	type VmCreateParams,
-	type VmCreateResult
-} from '#lib/server/backends/index.js';
-import { runInBackground } from '#lib/server/background.js';
+import { env, WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
+import { and, eq } from 'drizzle-orm';
+import { getBackend, type VmCreateParams } from '#lib/server/backends/index.js';
 import {
 	deleteProjectServerEntity,
 	ensureProjectServerEntity,
@@ -13,16 +8,16 @@ import {
 } from '#lib/server/billing/autumn.js';
 import { createBillingMeter } from '#lib/server/billing/metering.js';
 import { config } from '#lib/server/config.js';
-import { context } from '#lib/server/context.js';
-import { closeRequestDb, type Database, initDrizzle } from '#lib/server/db/index.js';
+import { inSystemScope } from '#lib/server/context.js';
+import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { baseImages, vms, vmTypes } from '#lib/server/db/schema.js';
 import { error } from '#lib/server/http.js';
 import {
 	allocateVmNetworking,
-	createVyosDelegatedRoute,
 	ensureVmDelegatedRoute,
 	generateMacAddress,
-	releaseVmNetworking
+	releaseVmNetworking,
+	vmAllocations
 } from '#lib/server/ipam.js';
 import { applyDefaultPtrRecords } from '#lib/server/ptr-records.js';
 import { allocateProxmoxVmid } from '#lib/server/vm-identity.js';
@@ -39,95 +34,38 @@ export interface ProvisionVmInput {
 	vmTypeId: string;
 }
 
-const PROVISION_STALL_AFTER_MS = 60_000;
-const PROVISION_TIMEOUT_MS = 15 * 60_000;
-const RESUME_ATTEMPT_TTL_MS = 60_000;
-const resumeAttemptsStartedAt = new Map<string, number>();
+interface ProvisioningVm {
+	backend: 'proxmox';
+	createTaskId: string;
+	diskGb: number;
+	firewallIpSet: string[];
+	id: string;
+	imageSource: string | null;
+	proxmoxId: number;
+	proxmoxNode: string;
+}
 
-type VmRecord = InferSelectModel<typeof vms>;
-export type StalledProvisioningVm = Pick<
-	VmRecord,
-	'id' | 'proxmoxId' | 'proxmoxNode' | 'backend' | 'status' | 'createdAt'
-> & { vmTypeStorageAmount: number | null };
+const DISK_IMPORT_TIMEOUT_MS = 20 * 60_000;
 
 function errorMessage(err: unknown) {
 	return err instanceof Error ? err.message : String(err);
 }
 
-export function isProvisioningStalled(row: StalledProvisioningVm, now = Date.now()) {
-	return (
-		row.status === 'provisioning' &&
-		row.proxmoxId !== null &&
-		now - row.createdAt > PROVISION_STALL_AFTER_MS
-	);
-}
-
-export async function resumeStalledProvisioning(db: Database, row: StalledProvisioningVm) {
-	const now = Date.now();
-	const inFlightSince = resumeAttemptsStartedAt.get(row.id);
-	if (inFlightSince !== undefined && now - inFlightSince < RESUME_ATTEMPT_TTL_MS) {
-		return;
-	}
-	resumeAttemptsStartedAt.set(row.id, now);
-	try {
-		if (Date.now() - row.createdAt > PROVISION_TIMEOUT_MS) {
-			await markVmProvisionFailed(row.id, 'Provisioning did not finish in time');
-			return;
-		}
-		const provisioned = await getBackend(row.backend).finishProvisioning(
-			row.id,
-			row.proxmoxId ?? undefined,
-			{ diskGb: row.vmTypeStorageAmount ?? 0 },
-			{ proxmoxNode: row.proxmoxNode ?? undefined }
-		);
-		if (!provisioned) {
-			return;
-		}
-		await ensureVmDelegatedRoute(db, row.id);
-		await markVmProvisionReady(row.id);
-	} catch (err) {
-		console.warn(`Failed to resume provisioning for VM ${row.id}`, err);
-	} finally {
-		resumeAttemptsStartedAt.delete(row.id);
-	}
-}
-
-async function updateActiveVmStatus(
+async function settleProvisioningVm(
 	vmId: string,
 	values: { status: 'ready' } | { status: 'error'; statusError: string }
-) {
+): Promise<boolean> {
 	const columns =
 		values.status === 'ready'
 			? { ...values, lastKnownStatus: 'running', lastKnownUptime: 0, lastKnownAt: Date.now() }
 			: values;
-	const settledEvent = context();
-	const ownsPool = !settledEvent.locals.db;
-	const settledDb = initDrizzle();
-	const overwritable =
-		values.status === 'ready'
-			? ['provisioning' as const]
-			: ['provisioning' as const, 'ready' as const];
-	try {
-		await settledDb
-			.update(vms)
-			.set(columns)
-			.where(and(eq(vms.id, vmId), eq(vms.active, true), inArray(vms.status, overwritable)));
-		console.log(`VM ${vmId} provision ${values.status === 'ready' ? 'succeeded' : 'failed'}`);
-	} catch (updateErr) {
-		console.error(`VM ${vmId} status update failed:`, updateErr);
-	} finally {
-		if (ownsPool) {
-			closeRequestDb(settledEvent);
-		}
-	}
-}
-
-function markVmProvisionReady(vmId: string) {
-	return updateActiveVmStatus(vmId, { status: 'ready' });
-}
-
-function markVmProvisionFailed(vmId: string, statusError: string) {
-	return updateActiveVmStatus(vmId, { status: 'error', statusError });
+	const updated = await initDrizzle()
+		.update(vms)
+		.set(columns)
+		.where(and(eq(vms.id, vmId), eq(vms.active, true), eq(vms.status, 'provisioning')))
+		.returning({ id: vms.id });
+	console.log(`VM ${vmId} provision ${values.status === 'ready' ? 'succeeded' : 'failed'}`);
+	return updated.length > 0;
 }
 
 type NetworkingAllocations = Awaited<ReturnType<typeof allocateVmNetworking>>;
@@ -186,14 +124,9 @@ function buildVmNetworkConfig(
 
 async function cleanUpFailedProvision(
 	db: Database,
-	params: {
-		vmId: string;
-		projectId: string;
-		proxmoxId: number | null;
-		delegatedRoute: Promise<unknown>;
-	}
+	params: { vmId: string; projectId: string; proxmoxId: number | null }
 ) {
-	const { vmId, projectId, proxmoxId, delegatedRoute } = params;
+	const { vmId, projectId, proxmoxId } = params;
 	if (proxmoxId !== null) {
 		await getBackend('proxmox')
 			.deleteVm(vmId, proxmoxId)
@@ -201,7 +134,6 @@ async function cleanUpFailedProvision(
 				console.warn(`Failed to clean up Proxmox VM ${vmId} after provisioning error`, deleteErr);
 			});
 	}
-	await delegatedRoute.catch(() => undefined);
 	await releaseVmNetworking(db, vmId).catch(() => undefined);
 	await deleteProjectServerEntity(projectId, vmId).catch(() => undefined);
 	await db
@@ -251,10 +183,7 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 
 	const vmId = inserted.id;
 	const macAddress = generateMacAddress();
-	let networkingAllocations: Awaited<ReturnType<typeof allocateVmNetworking>> = [];
-	let delegatedRoute: Promise<unknown> = Promise.resolve();
 	let proxmoxId: number | null = null;
-	let result: VmCreateResult;
 	try {
 		if (!input.billingExempt) {
 			await ensureProjectServerEntity({
@@ -263,21 +192,16 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 				name: input.name
 			});
 		}
-		networkingAllocations = await allocateVmNetworking(db, {
+		const networkingAllocations = await allocateVmNetworking(db, {
 			vmId,
 			macAddress,
 			mode: input.networkingMode ?? 'both'
 		});
 		const networkConfig = buildVmNetworkConfig(networkingAllocations);
-		delegatedRoute = createVyosDelegatedRoute(networkingAllocations, vmId).catch(async (err) => {
-			await markVmProvisionFailed(vmId, `Failed to create IPv6 route: ${errorMessage(err)}`);
-			throw err;
-		});
-		runInBackground(delegatedRoute, `create delegated IPv6 route for VM ${vmId}`);
 		const backend = getBackend('proxmox');
 		proxmoxId = await allocateProxmoxVmid(db, backend);
 		await db.update(vms).set({ proxmoxId }).where(eq(vms.id, vmId));
-		result = await backend.createVm({
+		const created = await backend.createVm({
 			id: vmId,
 			name: input.name,
 			proxmoxId,
@@ -292,55 +216,42 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 			networkConfig,
 			sshKeys: input.sshPublicKeys ?? [],
 			password: input.password,
-			onProvisionSettled: async ({ ok, error: err }) => {
-				if (!ok) {
-					await markVmProvisionFailed(vmId, err ?? 'Unknown error');
-					return;
-				}
-				try {
-					await delegatedRoute;
-				} catch {
-					return;
-				}
-				await markVmProvisionReady(vmId);
-			},
-			registerBackground: runInBackground,
 			userId: input.userId,
 			projectId: input.projectId
 		});
 
-		if (!result.macAddress) {
-			error(502, 'Proxmox did not return a MAC address');
-		}
-	} catch (err) {
-		await cleanUpFailedProvision(db, {
-			vmId,
-			projectId: input.projectId,
-			proxmoxId,
-			delegatedRoute
+		const ipv4Allocation = networkingAllocations.find((allocation) => allocation.family === 'ipv4');
+		const ipv6Allocation = networkingAllocations.find(
+			(allocation) => allocation.family === 'ipv6' && allocation.address
+		);
+		await db
+			.update(vms)
+			.set({
+				proxmoxId: created.proxmoxId,
+				proxmoxNode: created.proxmoxNode,
+				lastKnownIpv4: ipv4Allocation?.address ?? null,
+				lastKnownIpv6: ipv6Allocation?.address ?? null
+			})
+			.where(eq(vms.id, vmId));
+
+		await env.VM_PROVISIONING.create({
+			id: vmId,
+			params: {
+				backend: 'proxmox',
+				createTaskId: created.taskId,
+				diskGb: vmType.storageAmount,
+				firewallIpSet: networkConfig.firewallIpSet ?? [],
+				id: vmId,
+				imageSource: baseImage?.filePath ?? null,
+				proxmoxId: created.proxmoxId,
+				proxmoxNode: created.proxmoxNode
+			}
 		});
+	} catch (err) {
+		await cleanUpFailedProvision(db, { vmId, projectId: input.projectId, proxmoxId });
 		throw err;
 	}
 
-	const ipv4Allocation = networkingAllocations.find((allocation) => allocation.family === 'ipv4');
-	const ipv6Allocation = networkingAllocations.find(
-		(allocation) => allocation.family === 'ipv6' && allocation.address
-	);
-
-	await db
-		.update(vms)
-		.set({
-			proxmoxId: result.proxmoxId ?? proxmoxId,
-			proxmoxNode: result.proxmoxNode ?? null,
-			lastKnownIpv4: ipv4Allocation?.address ?? null,
-			lastKnownIpv6: ipv6Allocation?.address ?? null
-		})
-		.where(eq(vms.id, vmId));
-
-	runInBackground(
-		applyDefaultPtrRecords(db, networkingAllocations),
-		`apply default PTR records for VM ${vmId}`
-	);
 	if (featureId) {
 		await createBillingMeter({
 			projectId: input.projectId,
@@ -352,5 +263,78 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 		});
 	}
 
-	return { id: inserted.id, taskId: result.taskId };
+	return { id: vmId };
+}
+
+export class VmProvisioningWorkflow extends WorkflowEntrypoint<Env, ProvisioningVm> {
+	async run(event: WorkflowEvent<ProvisioningVm>, step: WorkflowStep) {
+		const vm = event.payload;
+		const backend = () => getBackend(vm.backend);
+
+		try {
+			const importTaskId = await step.do(
+				'configure vm',
+				{
+					retries: { limit: 3, delay: '10 seconds', backoff: 'exponential' },
+					timeout: '5 minutes'
+				},
+				() =>
+					inSystemScope(() =>
+						backend().configureVm({
+							createTaskId: vm.createTaskId,
+							firewallIpSet: vm.firewallIpSet,
+							imageSource: vm.imageSource,
+							proxmoxId: vm.proxmoxId,
+							proxmoxNode: vm.proxmoxNode
+						})
+					)
+			);
+			if (importTaskId) {
+				await step.do(
+					'wait for disk import',
+					{
+						retries: { limit: 3, delay: '30 seconds', backoff: 'constant' },
+						timeout: '30 minutes'
+					},
+					() =>
+						inSystemScope(() =>
+							backend().waitForTask(vm.proxmoxNode, importTaskId, DISK_IMPORT_TIMEOUT_MS)
+						)
+				);
+			}
+			await step.do(
+				'start vm',
+				{
+					retries: { limit: 5, delay: '15 seconds', backoff: 'exponential' },
+					timeout: '15 minutes'
+				},
+				() =>
+					inSystemScope(() =>
+						backend().finishProvisioning(vm.id, vm.proxmoxId, { diskGb: vm.diskGb })
+					)
+			);
+			await step.do('create delegated route', () =>
+				inSystemScope(() => ensureVmDelegatedRoute(initDrizzle(), vm.id))
+			);
+		} catch (err) {
+			const statusError = errorMessage(err);
+			await step.do('mark provisioning failed', () =>
+				inSystemScope(() => settleProvisioningVm(vm.id, { status: 'error', statusError }))
+			);
+			throw err;
+		}
+
+		const ready = await step.do('mark vm ready', () =>
+			inSystemScope(() => settleProvisioningVm(vm.id, { status: 'ready' }))
+		);
+		if (!ready) {
+			return;
+		}
+		await step.do('apply default ptr records', () =>
+			inSystemScope(async () => {
+				const db = initDrizzle();
+				await applyDefaultPtrRecords(db, await vmAllocations(db, vm.id));
+			})
+		);
+	}
 }

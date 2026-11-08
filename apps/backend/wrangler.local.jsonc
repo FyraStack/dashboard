@@ -23,6 +23,18 @@
 			"id": "25228ed6f77e49fb8041aed12879327d"
 		}
 	],
+	"workflows": [
+		{
+			"name": "stack-vm-deletion",
+			"binding": "VM_DELETION",
+			"class_name": "VmDeletion"
+		},
+		{
+			"name": "stack-vm-provisioning",
+			"binding": "VM_PROVISIONING",
+			"class_name": "VmProvisioning"
+		}
+	],
 	"kv_namespaces": [
 		{
 			"binding": "FEATURE_FLAGS",

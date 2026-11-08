@@ -4,6 +4,9 @@ import type {
 	PveAgentNetworkInterface,
 	PveClusterResource,
 	PveCreateQemuParams,
+	PveFirewallIpsetEntry,
+	PveFirewallRule,
+	PveHaResource,
 	PveNode,
 	PveQemuConfig,
 	PveQemuRrdData,
@@ -203,12 +206,13 @@ export class ProxmoxClient {
 			.json<PveResponse<null>>();
 	}
 
-	async resizeDisk(node: string, vmid: number, disk: string, size: string): Promise<void> {
-		await this.api
+	async resizeDisk(node: string, vmid: number, disk: string, size: string): Promise<string | null> {
+		const res = await this.api
 			.put(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/resize`, {
 				body: this.toForm({ disk, size })
 			})
-			.json<PveResponse<null>>();
+			.json<PveResponse<string | null>>();
+		return res.data;
 	}
 
 	async updateQemuFirewallOptions(
@@ -247,6 +251,26 @@ export class ProxmoxClient {
 			});
 			throw error;
 		}
+	}
+
+	async listQemuFirewallIpsetEntries(
+		node: string,
+		vmid: number,
+		name: string
+	): Promise<PveFirewallIpsetEntry[]> {
+		const res = await this.api
+			.get(
+				`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/ipset/${encodeURIComponent(name)}`
+			)
+			.json<PveResponse<PveFirewallIpsetEntry[]>>();
+		return res.data;
+	}
+
+	async listQemuFirewallRules(node: string, vmid: number): Promise<PveFirewallRule[]> {
+		const res = await this.api
+			.get(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/firewall/rules`)
+			.json<PveResponse<PveFirewallRule[]>>();
+		return res.data;
 	}
 
 	async addQemuFirewallIpsetEntry(
@@ -465,6 +489,17 @@ export class ProxmoxClient {
 	}
 
 	// Cluster
+
+	async listHaResources(): Promise<PveHaResource[]> {
+		const res = await this.api.get('cluster/ha/resources').json<PveResponse<PveHaResource[]>>();
+		return res.data;
+	}
+
+	async setHaResourceState(sid: string, state: 'started' | 'stopped' | 'disabled'): Promise<void> {
+		await this.api.put(`cluster/ha/resources/${sid}`, {
+			body: this.toForm({ state })
+		});
+	}
 
 	async getClusterResources(type?: 'vm' | 'storage' | 'node'): Promise<PveClusterResource[]> {
 		const searchParams: Record<string, string> = {};

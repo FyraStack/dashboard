@@ -79,11 +79,9 @@ export interface VmCreateParams {
 	memoryMb: number;
 	name: string;
 	networkConfig?: VmNetworkConfig;
-	onProvisionSettled?: (result: { ok: boolean; error?: string }) => void | Promise<void>;
 	password?: string;
 	projectId: string;
 	proxmoxId: number;
-	registerBackground?: (work: Promise<unknown>, label?: string) => void;
 	secureBoot?: boolean;
 	sshKeys?: string[];
 	tierName: string;
@@ -92,10 +90,18 @@ export interface VmCreateParams {
 
 export interface VmCreateResult {
 	id: string;
-	macAddress?: string;
-	proxmoxId?: number;
-	proxmoxNode?: string;
-	taskId?: string;
+	macAddress: string;
+	proxmoxId: number;
+	proxmoxNode: string;
+	taskId: string;
+}
+
+export interface VmConfigureParams {
+	createTaskId: string;
+	firewallIpSet: string[];
+	imageSource: string | null;
+	proxmoxId: number;
+	proxmoxNode: string;
 }
 
 export interface VmLookupOptions {
@@ -125,14 +131,10 @@ export class VmResizeError extends Error {
 }
 
 export interface VmBackend {
+	configureVm: (params: VmConfigureParams) => Promise<string | null>;
 	createVm: (params: VmCreateParams) => Promise<VmCreateResult>;
 	deleteVm: (id: string, proxmoxId?: number) => Promise<void>;
-	finishProvisioning: (
-		id: string,
-		proxmoxId: number | undefined,
-		params: { diskGb: number },
-		options?: Pick<VmLookupOptions, 'proxmoxNode'>
-	) => Promise<boolean>;
+	finishProvisioning: (id: string, proxmoxId: number, params: { diskGb: number }) => Promise<void>;
 	getTaskStatus: (
 		node: string,
 		upid: string
@@ -162,4 +164,5 @@ export interface VmBackend {
 	startVm: (id: string, proxmoxId?: number) => Promise<void>;
 	stopVm: (id: string, proxmoxId?: number) => Promise<void>;
 	updateVmHostname: (id: string, hostname: string, proxmoxId?: number) => Promise<void>;
+	waitForTask: (node: string, upid: string, timeoutMs: number) => Promise<void>;
 }

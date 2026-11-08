@@ -1,14 +1,11 @@
-import { and, eq, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
-import { getBackend } from '#lib/server/backends/index.js';
+import { and, eq, inArray, isNotNull, lt, ne } from 'drizzle-orm';
 import {
 	cancelProjectBilling,
-	deleteLocalProjectBillingCustomer,
-	deleteProjectServerEntity
+	deleteLocalProjectBillingCustomer
 } from '#lib/server/billing/autumn.js';
 import {
 	abandonProjectUsageEvents,
 	closeProjectMeters,
-	meterResourceThrough,
 	syncProjectUsage
 } from '#lib/server/billing/metering.js';
 import { invitation, organization } from '#lib/server/db/auth.schema.js';
@@ -21,8 +18,7 @@ import {
 	vms,
 	volumes
 } from '#lib/server/db/schema.js';
-import { error } from '#lib/server/http.js';
-import { releaseVmNetworking } from '#lib/server/ipam.js';
+import { queueVmDeletion } from '#lib/server/vm-deletion.js';
 
 export const DELETED_PROJECT_RETENTION_DAYS = 90;
 
@@ -30,54 +26,21 @@ export async function softDeleteOrganizationResources(
 	db: ReturnType<typeof initDrizzle>,
 	organizationId: string
 ) {
-	const projectVms = await db.query.vms.findMany({
-		where: eq(vms.ownerProjectId, organizationId),
-		columns: {
-			id: true,
-			name: true,
-			proxmoxId: true,
-			active: true,
-			backend: true
-		}
+	const undeletedVms = await db.query.vms.findMany({
+		where: and(
+			eq(vms.ownerProjectId, organizationId),
+			eq(vms.active, true),
+			ne(vms.status, 'deleting')
+		),
+		columns: { id: true, backend: true, ownerProjectId: true, proxmoxId: true }
 	});
-
-	for (const vm of projectVms.filter((item) => item.active)) {
-		try {
-			// biome-ignore lint/performance/noAwaitInLoops: Proxmox deletes run one at a time and the first failure must abort the project delete
-			await getBackend(vm.backend).deleteVm(vm.id, vm.proxmoxId ?? undefined);
-		} catch (err) {
-			console.warn(`Failed to deprovision VM ${vm.id} during project delete`, err);
-			error(502, `Failed to deprovision VM "${vm.name}" in Proxmox`);
-		}
-	}
-
-	for (const vm of projectVms.filter((item) => item.active)) {
-		// biome-ignore lint/performance/noAwaitInLoops: each VM's final usage is metered and synced to Autumn one at a time
-		const metered = await meterResourceThrough('vm', vm.id).catch((err) => {
-			console.warn(`Failed to meter VM ${vm.id} during project delete`, err);
-			return null;
-		});
-		if (!metered || metered.events.length === 0 || metered.syncStatus === 'synced') {
-			await deleteProjectServerEntity(organizationId, vm.id).catch((err) => {
-				console.warn(`Failed to delete Autumn entity for VM ${vm.id}`, err);
-			});
-		}
+	for (const vm of undeletedVms) {
+		// biome-ignore lint/performance/noAwaitInLoops: each VM's final usage is metered one at a time so project usage caps are applied in order
+		await queueVmDeletion(db, vm);
 	}
 	await syncProjectUsage(organizationId);
 
-	for (const vm of projectVms) {
-		// biome-ignore lint/performance/noAwaitInLoops: releasing networking writes VyOS and Bunny config, which must not race between VMs
-		await releaseVmNetworking(db, vm.id).catch((err) => {
-			console.warn(`Failed to release networking for VM ${vm.id} during project delete`, err);
-		});
-	}
-
 	const now = Date.now();
-	await db
-		.update(vms)
-		.set({ active: false, deletedAt: now })
-		.where(and(eq(vms.ownerProjectId, organizationId), isNull(vms.deletedAt)));
-
 	await closeProjectMeters(organizationId, now);
 
 	const billingCancelled = await cancelProjectBilling(organizationId).catch((err) => {

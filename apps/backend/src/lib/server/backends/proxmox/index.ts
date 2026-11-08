@@ -10,6 +10,7 @@ import type {
 	BackendImageImportParams,
 	BackendImageImportTarget,
 	VmBackend,
+	VmConfigureParams,
 	VmCreateParams,
 	VmCreateResult,
 	VmInfo,
@@ -35,6 +36,10 @@ interface ResolvedVm {
 
 const STABLE_ID_TAG_PREFIX = 'vmid-';
 
+function haResourceId(vmid: number) {
+	return `vm:${vmid}`;
+}
+
 function stableIdTag(id: string) {
 	return `${STABLE_ID_TAG_PREFIX}${id.toLowerCase()}`;
 }
@@ -59,6 +64,13 @@ const CLUSTER_RESOURCES_TTL_MS = 2000;
 const VM_STATUS_TTL_MS = 1000;
 const RUNNING_CONFIRMATION_TIMEOUT_MS = 30_000;
 const RUNNING_CONFIRMATION_INTERVAL_MS = 1000;
+const VM_STOP_TIMEOUT_MS = 60_000;
+const HA_STOP_TIMEOUT_MS = 120_000;
+const VM_STATE_POLL_INTERVAL_MS = 1000;
+const DISK_READY_TIMEOUT_MS = 10 * 60_000;
+const DISK_READY_POLL_INTERVAL_MS = 5000;
+const IPSET_NAME = 'ipfilter-net0';
+const HOST_PREFIX_LENGTH = /\/(32|128)$/;
 const clusterResourcesCache = new Map<string, CacheEntry<PveClusterResource[]>>();
 const vmStatusCache = new Map<
 	string,
@@ -301,10 +313,6 @@ function withSshHostKeysPreserved(vendorConfig: string) {
 	return `#cloud-config\n${stringifyYaml({ ...vendorData, ssh_deletekeys: false })}`;
 }
 
-function uniqueFirewallIpSetEntries(params: VmCreateParams) {
-	return [...new Set(params.networkConfig?.firewallIpSet ?? [])];
-}
-
 function cloudInitNetworkConfig(params: VmCreateParams, macAddress: string) {
 	const delegatedPrefixAddress = params.networkConfig?.ipv6Prefix
 		? firstIpv6AddressInPrefix(params.networkConfig.ipv6Prefix)
@@ -474,29 +482,45 @@ export class ProxmoxBackend implements VmBackend {
 		clearProxmoxReadCaches();
 	}
 
-	async finishProvisioning(
-		id: string,
-		proxmoxId: number | undefined,
-		params: { diskGb: number },
-		_options: Pick<VmLookupOptions, 'proxmoxNode'> = {}
-	): Promise<boolean> {
+	async finishProvisioning(id: string, proxmoxId: number, params: { diskGb: number }) {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
-		const qemuConfig = await this.client.getQemuConfig(node, vmid);
-		const currentDiskGb = parseDiskSizeGb(qemuConfig.virtio0);
-		if (qemuConfig.lock || currentDiskGb === null) {
-			return false;
-		}
-
+		const currentDiskGb = await this.awaitBootDiskGb(node, vmid);
 		if (params.diskGb > currentDiskGb) {
-			await this.client.resizeDisk(node, vmid, 'virtio0', `${params.diskGb}G`);
+			await this.resizeBootDisk(node, vmid, params.diskGb);
 		}
 		const current = await this.client.getQemuVm(node, vmid);
 		if (current.status !== 'running') {
 			await this.startAndAwaitRunning(node, vmid);
 		}
 		clearProxmoxReadCaches();
-		return true;
+	}
+
+	private async awaitBootDiskGb(node: string, vmid: number): Promise<number> {
+		const deadline = Date.now() + DISK_READY_TIMEOUT_MS;
+		while (Date.now() < deadline) {
+			// biome-ignore lint/performance/noAwaitInLoops: polling Proxmox until the disk import releases the config lock is inherently sequential
+			const qemuConfig = await this.client.getQemuConfig(node, vmid);
+			const diskGb = parseDiskSizeGb(qemuConfig.virtio0);
+			if (!qemuConfig.lock && diskGb !== null) {
+				return diskGb;
+			}
+			await new Promise((r) => setTimeout(r, DISK_READY_POLL_INTERVAL_MS));
+		}
+		throw new Error(
+			`VM ${vmid} on ${node} boot disk was not ready within ${DISK_READY_TIMEOUT_MS}ms`
+		);
+	}
+
+	private async resizeBootDisk(node: string, vmid: number, diskGb: number) {
+		const upid = await this.client.resizeDisk(node, vmid, 'virtio0', `${diskGb}G`);
+		if (upid) {
+			await this.client.waitForTask(node, upid);
+		}
+	}
+
+	async waitForTask(node: string, upid: string, timeoutMs: number): Promise<void> {
+		await this.client.waitForTask(node, upid, { timeoutMs });
 	}
 
 	private getCachedQemuVm(node: string, vmid: number) {
@@ -882,8 +906,6 @@ export class ProxmoxBackend implements VmBackend {
 			)
 		]);
 
-		const firewallIpSetEntries = uniqueFirewallIpSetEntries(params);
-
 		const createUpid = await this.client.createQemuVm(node.node, {
 			vmid,
 			name: params.name,
@@ -913,9 +935,29 @@ export class ProxmoxBackend implements VmBackend {
 			tags: `${stableIdTag(params.id)};projectid-${params.projectId};userid-${params.userId}`,
 			'ha-managed': 1
 		});
-		await this.client.waitForTask(node.node, createUpid);
+		clearProxmoxReadCaches();
+		return {
+			id: params.id,
+			proxmoxId: vmid,
+			proxmoxNode: node.node,
+			macAddress,
+			taskId: createUpid
+		};
+	}
 
-		await this.client.updateQemuFirewallOptions(node.node, vmid, {
+	async configureVm(params: VmConfigureParams): Promise<string | null> {
+		const { proxmoxNode: node, proxmoxId: vmid } = params;
+		await this.client.waitForTask(node, params.createTaskId);
+		await this.configureFirewall(node, vmid, [...new Set(params.firewallIpSet)]);
+		const importTaskId = params.imageSource
+			? await this.startBootDiskImport(node, vmid, params.imageSource)
+			: null;
+		clearProxmoxReadCaches();
+		return importTaskId;
+	}
+
+	private async configureFirewall(node: string, vmid: number, ipSet: string[]) {
+		await this.client.updateQemuFirewallOptions(node, vmid, {
 			enable: 1,
 			policy_in: 'ACCEPT',
 			policy_out: 'ACCEPT',
@@ -924,63 +966,47 @@ export class ProxmoxBackend implements VmBackend {
 			ndp: 1,
 			dhcp: 0
 		});
-		if (this.options.firewallSecurityGroup) {
-			await this.client.addQemuFirewallSecurityGroupRule(
-				node.node,
-				vmid,
-				this.options.firewallSecurityGroup
-			);
-		}
-		if (firewallIpSetEntries.length > 0) {
-			const ipsetName = 'ipfilter-net0';
-			await this.client.createQemuFirewallIpset(node.node, vmid, ipsetName);
-			await Promise.all(
-				firewallIpSetEntries.map((cidr) =>
-					this.client.addQemuFirewallIpsetEntry(node.node, vmid, ipsetName, cidr, 'stack-ipam')
-				)
-			);
-		}
 
-		if (params.imageSource) {
-			const importUpid = await this.client.updateQemuConfigAsync(node.node, vmid, {
-				virtio0: `${pvePool}:0,import-from=${params.imageSource},cache=writeback,discard=on,iothread=1`
-			});
-
-			const provisioning = this.client
-				.waitForTask(node.node, importUpid)
-				.then(async () => {
-					if (params.diskGb > 0) {
-						await this.client.resizeDisk(node.node, vmid, 'virtio0', `${params.diskGb}G`);
-					}
-					await this.startAndAwaitRunning(node.node, vmid);
-					await params.onProvisionSettled?.({ ok: true });
-				})
-				.catch(async (err) => {
-					console.error(`VM ${params.id} image import failed:`, err);
-					await params.onProvisionSettled?.({
-						ok: false,
-						error: err instanceof Error ? err.message : String(err)
-					});
-				});
-
-			if (params.registerBackground) {
-				params.registerBackground(provisioning, `vm-provision-${params.id}`);
-			} else {
-				await provisioning;
+		const securityGroup = this.options.firewallSecurityGroup;
+		if (securityGroup) {
+			const rules = await this.client.listQemuFirewallRules(node, vmid);
+			if (!rules.some((rule) => rule.type === 'group' && rule.action === securityGroup)) {
+				await this.client.addQemuFirewallSecurityGroupRule(node, vmid, securityGroup);
 			}
-		} else {
-			await this.startAndAwaitRunning(node.node, vmid);
-			await params.onProvisionSettled?.({ ok: true });
 		}
 
-		clearProxmoxReadCaches();
-		return {
-			id: params.id,
-			proxmoxId: vmid,
-			proxmoxNode: node.node,
-			macAddress,
-			taskId: String(vmid)
-		};
+		if (ipSet.length === 0) {
+			return;
+		}
+		await this.client.createQemuFirewallIpset(node, vmid, IPSET_NAME);
+		const existing = new Set(
+			(await this.client.listQemuFirewallIpsetEntries(node, vmid, IPSET_NAME)).map(
+				(entry) => entry.cidr
+			)
+		);
+		const missing = ipSet.filter(
+			(cidr) => !(existing.has(cidr) || existing.has(cidr.replace(HOST_PREFIX_LENGTH, '')))
+		);
+		await Promise.all(
+			missing.map((cidr) =>
+				this.client.addQemuFirewallIpsetEntry(node, vmid, IPSET_NAME, cidr, 'stack-ipam')
+			)
+		);
+	}
+
+	private async startBootDiskImport(
+		node: string,
+		vmid: number,
+		imageSource: string
+	): Promise<string | null> {
+		const qemuConfig = await this.client.getQemuConfig(node, vmid);
+		if (qemuConfig.lock || qemuConfig.virtio0) {
+			return null;
+		}
+		const pvePool = config.proxmox.vmDiskStorage;
+		return await this.client.updateQemuConfigAsync(node, vmid, {
+			virtio0: `${pvePool}:0,import-from=${imageSource},cache=writeback,discard=on,iothread=1`
+		});
 	}
 
 	async updateVmHostname(id: string, hostname: string, proxmoxId?: number): Promise<void> {
@@ -1026,6 +1052,7 @@ export class ProxmoxBackend implements VmBackend {
 		const { node, vmid } = resolved;
 
 		try {
+			await this.disableHaAndAwaitStop(node, vmid);
 			await this.ensureVmStopped(node, vmid);
 		} catch (err) {
 			if (err instanceof HTTPError && err.response.status === 404) {
@@ -1108,16 +1135,81 @@ export class ProxmoxBackend implements VmBackend {
 			}
 		}
 
-		const deadline = Date.now() + 60_000;
+		await this.awaitVmStatus(node, vmid, 'stopped', VM_STOP_TIMEOUT_MS);
+	}
+
+	private async awaitVmStatus(
+		node: string,
+		vmid: number,
+		target: 'running' | 'stopped',
+		timeoutMs: number
+	): Promise<void> {
+		const deadline = Date.now() + timeoutMs;
 		while (Date.now() < deadline) {
-			// biome-ignore lint/performance/noAwaitInLoops: polling Proxmox until the VM reports stopped is inherently sequential
+			// biome-ignore lint/performance/noAwaitInLoops: polling Proxmox until the VM reports the target status is inherently sequential
 			const current = await this.client.getQemuVm(node, vmid);
-			if (current.status === 'stopped') {
+			if (current.status === target) {
 				return;
 			}
-			await new Promise((r) => setTimeout(r, 1000));
+			await new Promise((r) => setTimeout(r, VM_STATE_POLL_INTERVAL_MS));
 		}
-		throw new Error(`VM ${vmid} on node ${node} did not reach stopped state within 60s`);
+		throw new Error(
+			`VM ${vmid} on node ${node} did not reach ${target} state within ${timeoutMs}ms`
+		);
+	}
+
+	private async disableHa(vmid: number): Promise<boolean> {
+		const sid = haResourceId(vmid);
+		const resources = await this.client.listHaResources();
+		const resource = resources.find((candidate) => candidate.sid === sid);
+		if (!resource || resource.state === 'disabled') {
+			return false;
+		}
+		await this.client.setHaResourceState(sid, 'disabled');
+		return true;
+	}
+
+	private async disableHaAndAwaitStop(node: string, vmid: number): Promise<void> {
+		if (!(await this.disableHa(vmid))) {
+			return;
+		}
+		await this.awaitVmStatus(node, vmid, 'stopped', HA_STOP_TIMEOUT_MS).catch((err) => {
+			console.warn(`VM ${vmid} on ${node} did not stop after disabling HA, forcing stop`, err);
+		});
+	}
+
+	private async withHaRecovery(
+		node: string,
+		vmid: number,
+		target: 'running' | 'stopped',
+		action: () => Promise<void>
+	): Promise<void> {
+		try {
+			await action();
+			return;
+		} catch (err) {
+			const current = await this.client.getQemuVm(node, vmid);
+			if (current.status === target) {
+				return;
+			}
+			if (!(await this.disableHa(vmid))) {
+				throw err;
+			}
+			console.warn(
+				`VM ${vmid} on ${node} failed to reach ${target}, recovering via HA disable`,
+				err
+			);
+		}
+
+		await this.awaitVmStatus(node, vmid, 'stopped', HA_STOP_TIMEOUT_MS);
+		if (target === 'running') {
+			const startUpid = await this.client.startVm(node, vmid);
+			await this.client.waitForTask(node, startUpid);
+		}
+		await this.client.setHaResourceState(
+			haResourceId(vmid),
+			target === 'running' ? 'started' : 'stopped'
+		);
 	}
 
 	private async forceStopVm(node: string, vmid: number): Promise<string> {
@@ -1155,29 +1247,33 @@ export class ProxmoxBackend implements VmBackend {
 	async startVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
-		const upid = await this.client.startVm(node, vmid);
-		await this.client.waitForTask(node, upid);
+		await this.withHaRecovery(node, vmid, 'running', async () => {
+			await this.client.waitForTask(node, await this.client.startVm(node, vmid));
+		});
 	}
 
 	async stopVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
-		const upid = await this.client.shutdownVm(node, vmid);
-		await this.client.waitForTask(node, upid);
+		await this.withHaRecovery(node, vmid, 'stopped', async () => {
+			await this.client.waitForTask(node, await this.client.shutdownVm(node, vmid));
+		});
 	}
 
 	async killVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
-		const upid = await this.forceStopVm(node, vmid);
-		await this.client.waitForTask(node, upid);
+		await this.withHaRecovery(node, vmid, 'stopped', async () => {
+			await this.client.waitForTask(node, await this.forceStopVm(node, vmid));
+		});
 	}
 
 	async rebootVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
-		const upid = await this.client.rebootVm(node, vmid);
-		await this.client.waitForTask(node, upid);
+		await this.withHaRecovery(node, vmid, 'running', async () => {
+			await this.client.waitForTask(node, await this.client.rebootVm(node, vmid));
+		});
 	}
 
 	async resizeVm(id: string, params: VmResizeParams, proxmoxId?: number): Promise<void> {
@@ -1195,7 +1291,7 @@ export class ProxmoxBackend implements VmBackend {
 				);
 			}
 			if (params.diskGb > currentDiskGb) {
-				await this.client.resizeDisk(node, vmid, 'virtio0', `${params.diskGb}G`);
+				await this.resizeBootDisk(node, vmid, params.diskGb);
 			}
 
 			const updates: Record<string, unknown> = {};

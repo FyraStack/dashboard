@@ -820,7 +820,7 @@ async function deleteVyosDelegatedRoute(allocations: PendingAllocation[]) {
 	await client.deleteDelegatedRoute(ipv6PrefixAllocation.prefix);
 }
 
-async function vmAllocations(db: QueryableDb, vmId: string): Promise<PendingAllocation[]> {
+export async function vmAllocations(db: QueryableDb, vmId: string): Promise<PendingAllocation[]> {
 	const allocations = await db.query.ipamAllocations.findMany({
 		where: eq(ipamAllocations.associatedVmId, vmId),
 		with: {

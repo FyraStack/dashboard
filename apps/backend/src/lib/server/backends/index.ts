@@ -9,6 +9,7 @@ export type {
 	BackendImageImportParams,
 	BackendImageImportTarget,
 	VmBackend,
+	VmConfigureParams,
 	VmCreateParams,
 	VmCreateResult,
 	VmInfo,

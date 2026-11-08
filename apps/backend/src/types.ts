@@ -6,6 +6,7 @@ export type * from './lib/server/handlers/admin-layout.ts';
 export type * from './lib/server/handlers/admin-projects.ts';
 export type * from './lib/server/handlers/admin-users.ts';
 export type * from './lib/server/handlers/admin-vms.ts';
+export type * from './lib/server/handlers/announcements.ts';
 export type * from './lib/server/handlers/api-tokens.ts';
 export type * from './lib/server/handlers/billing.ts';
 export type * from './lib/server/handlers/compute-create-server.ts';

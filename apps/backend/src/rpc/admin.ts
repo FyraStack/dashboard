@@ -5,6 +5,7 @@ import {
 	type UpdateFeatureFlagInput,
 	updateFeatureFlag
 } from '#lib/server/handlers/feature-flags.js';
+import { AdminAnnouncements } from './admin/announcements.ts';
 import { AdminBilling } from './admin/billing.ts';
 import { AdminEmails } from './admin/emails.ts';
 import { AdminImages } from './admin/images.ts';
@@ -60,5 +61,9 @@ export class Admin extends RpcTarget {
 
 	emails() {
 		return new AdminEmails(this.#scope);
+	}
+
+	announcements() {
+		return new AdminAnnouncements(this.#scope);
 	}
 }

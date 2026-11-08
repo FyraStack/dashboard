@@ -6,13 +6,13 @@ import { listImages } from '#lib/server/handlers/images.js';
 import { loadAcceptInvitationPage } from '#lib/server/handlers/project-invitations.js';
 import { listVmTypes } from '#lib/server/handlers/vm-types.js';
 import { error } from '#lib/server/http.js';
-import { Account } from './account.js';
-import { Admin } from './admin.js';
-import { Project } from './project.js';
-import { Projects } from './projects.js';
-import { TwoFactorReset } from './two-factor-reset.js';
-import { Vm } from './vm.js';
-import { Volume } from './volume.js';
+import { Account } from './account.ts';
+import { Admin } from './admin.ts';
+import { Project } from './project.ts';
+import { Projects } from './projects.ts';
+import { TwoFactorReset } from './two-factor-reset.ts';
+import { Vm } from './vm.ts';
+import { Volume } from './volume.ts';
 
 export class Caller extends RpcTarget {
 	readonly #scope: Scope;

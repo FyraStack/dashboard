@@ -1,6 +1,6 @@
 import { styleText } from 'node:util';
 import { expect } from '@playwright/test';
-import { localURL, pages, test } from './accessibility';
+import { localURL, pages, test } from './accessibility.ts';
 
 function formatImpact(impact: string | null | undefined) {
 	if (!impact) {

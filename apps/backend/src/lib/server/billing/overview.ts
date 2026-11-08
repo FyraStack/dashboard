@@ -7,7 +7,7 @@ import {
 	getProjectCreditsBalance,
 	getProjectInvoices,
 	invalidateProjectBillingState
-} from './autumn';
+} from './autumn.ts';
 
 function statusLabel(status: Awaited<ReturnType<typeof getProjectBillingState>>['status']) {
 	if (status === 'active') {

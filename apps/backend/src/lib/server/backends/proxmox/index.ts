@@ -19,10 +19,10 @@ import type {
 	VmMetricsTimeframe,
 	VmResizeParams,
 	VmStatus
-} from '../types';
-import { VmNotFoundError, VmResizeError } from '../types';
-import type { ProxmoxClient } from './client';
-import type { PveClusterResource } from './types';
+} from '../types.ts';
+import { VmNotFoundError, VmResizeError } from '../types.ts';
+import type { ProxmoxClient } from './client.ts';
+import type { PveClusterResource } from './types.ts';
 
 const TAG_SEPARATORS = /[;,]/;
 const TRAILING_SLASHES = /\/+$/;

@@ -50,7 +50,7 @@
 		"rules": {
 			"correctness": {
 				"noUnresolvedImports": "off",
-				"useImportExtensions": "off"
+				"useImportExtensions": "error"
 			},
 			"nursery": {
 				"noFloatingPromises": "error"

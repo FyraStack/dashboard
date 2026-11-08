@@ -12,7 +12,7 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { ac, organizationRoles } from './src/lib/auth/organization-permissions';
+import { ac, organizationRoles } from './src/lib/auth/organization-permissions.ts';
 
 // Drizzle doesn't open a connection until the first query, so this is
 // safe for CLI-only usage where no queries are ever executed.

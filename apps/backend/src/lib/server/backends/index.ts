@@ -1,8 +1,8 @@
 import { timingLog } from '#lib/server/observability.js';
-import { getBackendEnv } from './env';
-import { ProxmoxBackend } from './proxmox';
-import { ProxmoxClient } from './proxmox/client';
-import type { VmBackend } from './types';
+import { getBackendEnv } from './env.ts';
+import { ProxmoxBackend } from './proxmox/index.ts';
+import { ProxmoxClient } from './proxmox/client.ts';
+import type { VmBackend } from './types.ts';
 
 export type {
 	BackendImage,
@@ -17,7 +17,7 @@ export type {
 	VmMetricsTimeframe,
 	VmResizeParams,
 	VmStatus
-} from './types';
+} from './types.ts';
 
 let cached: { key: string; backend: VmBackend } | null = null;
 

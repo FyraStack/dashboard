@@ -1,4 +1,4 @@
-import { hoursBetween } from './features';
+import { hoursBetween } from './features.ts';
 
 export interface CapPeriod {
 	end: number;

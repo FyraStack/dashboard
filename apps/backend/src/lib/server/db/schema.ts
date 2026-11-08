@@ -15,7 +15,7 @@ import {
 	uniqueIndex
 } from 'drizzle-orm/pg-core';
 import { ulid } from '#lib/server/id.js';
-import { organization } from './auth.schema';
+import { organization } from './auth.schema.ts';
 
 const ulidPk = () => text('id').primaryKey().$defaultFn(ulid);
 const ulidFk = (name: string) => text(name);

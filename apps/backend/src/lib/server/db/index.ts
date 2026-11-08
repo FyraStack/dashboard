@@ -4,8 +4,8 @@ import { Pool } from 'pg';
 import { type Context, context } from '#lib/server/context.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import { instrument, summarizeStatement, timingLog } from '#lib/server/observability.js';
-import * as authSchema from './auth.schema';
-import * as appSchema from './schema';
+import * as authSchema from './auth.schema.ts';
+import * as appSchema from './schema.ts';
 
 const schema = { ...appSchema, ...authSchema };
 

@@ -206,12 +206,13 @@ export class ProxmoxClient {
 			.json<PveResponse<null>>();
 	}
 
-	async resizeDisk(node: string, vmid: number, disk: string, size: string): Promise<void> {
-		await this.api
+	async resizeDisk(node: string, vmid: number, disk: string, size: string): Promise<string | null> {
+		const res = await this.api
 			.put(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/resize`, {
 				body: this.toForm({ disk, size })
 			})
-			.json<PveResponse<null>>();
+			.json<PveResponse<string | null>>();
+		return res.data;
 	}
 
 	async updateQemuFirewallOptions(

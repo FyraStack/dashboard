@@ -20,7 +20,6 @@ export async function queueVmDeletion(db: Database, row: DeletableVm): Promise<v
 		console.warn(`Failed to close billing meter for VM ${row.id} before deletion`, err);
 	});
 	await db.update(vms).set({ status: 'deleting', statusError: null }).where(eq(vms.id, row.id));
-	await stopProvisioning(row.id);
 	await env.VM_DELETION.create({
 		id: `${row.id}-${Date.now()}`,
 		params: {
@@ -111,6 +110,8 @@ async function releaseDeletedVmResources(row: DeletableVm): Promise<void> {
 export class VmDeletionWorkflow extends WorkflowEntrypoint<Env, DeletableVm> {
 	async run(event: WorkflowEvent<DeletableVm>, step: WorkflowStep) {
 		const row = event.payload;
+
+		await step.do('stop provisioning', () => stopProvisioning(row.id));
 
 		try {
 			await step.do(

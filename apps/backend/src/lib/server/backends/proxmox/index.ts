@@ -487,7 +487,7 @@ export class ProxmoxBackend implements VmBackend {
 		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
 		const currentDiskGb = await this.awaitBootDiskGb(node, vmid);
 		if (params.diskGb > currentDiskGb) {
-			await this.client.resizeDisk(node, vmid, 'virtio0', `${params.diskGb}G`);
+			await this.resizeBootDisk(node, vmid, params.diskGb);
 		}
 		const current = await this.client.getQemuVm(node, vmid);
 		if (current.status !== 'running') {
@@ -510,6 +510,13 @@ export class ProxmoxBackend implements VmBackend {
 		throw new Error(
 			`VM ${vmid} on ${node} boot disk was not ready within ${DISK_READY_TIMEOUT_MS}ms`
 		);
+	}
+
+	private async resizeBootDisk(node: string, vmid: number, diskGb: number) {
+		const upid = await this.client.resizeDisk(node, vmid, 'virtio0', `${diskGb}G`);
+		if (upid) {
+			await this.client.waitForTask(node, upid);
+		}
 	}
 
 	async waitForTask(node: string, upid: string, timeoutMs: number): Promise<void> {
@@ -1284,7 +1291,7 @@ export class ProxmoxBackend implements VmBackend {
 				);
 			}
 			if (params.diskGb > currentDiskGb) {
-				await this.client.resizeDisk(node, vmid, 'virtio0', `${params.diskGb}G`);
+				await this.resizeBootDisk(node, vmid, params.diskGb);
 			}
 
 			const updates: Record<string, unknown> = {};

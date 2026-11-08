@@ -6,7 +6,7 @@ import {
 	sendProjectPastDueEmail,
 	sendProjectSuspendedEmail
 } from '#lib/server/email-notifications.js';
-import { getProjectBillingState, isBillingConfigured } from './autumn';
+import { getProjectBillingState, isBillingConfigured } from './autumn.ts';
 
 const GRACE_PERIOD_DAYS = 1000;
 const GRACE_PERIOD_MS = GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000;

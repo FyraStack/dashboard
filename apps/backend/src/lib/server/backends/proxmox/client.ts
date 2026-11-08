@@ -17,7 +17,7 @@ import type {
 	PveStorageContent,
 	PveTaskLogLine,
 	PveTaskStatus
-} from './types';
+} from './types.ts';
 
 export interface ProxmoxClientConfig {
 	baseUrl: string;

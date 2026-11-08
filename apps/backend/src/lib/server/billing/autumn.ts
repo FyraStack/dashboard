@@ -5,7 +5,7 @@ import { initDrizzle } from '#lib/server/db/index.js';
 import { projectBillingCustomers } from '#lib/server/db/schema.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import { error } from '#lib/server/http.js';
-import type { CapPeriod } from './caps';
+import type { CapPeriod } from './caps.ts';
 
 export function isBillingConfigured() {
 	const env = getRuntimeEnv();

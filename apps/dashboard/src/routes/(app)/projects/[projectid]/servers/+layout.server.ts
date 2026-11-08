@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { listVms } from '#lib/remote/vms.remote.js';
 import type { LayoutServerLoad } from './$types';
-import { toServerInfo } from './lib/server-summary';
+import { toServerInfo } from './lib/server-summary.ts';
 
 export const load: LayoutServerLoad = async ({ params, parent, depends }) => {
 	depends('project:vms');

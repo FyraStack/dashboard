@@ -1,5 +1,5 @@
 import { pgSchema } from 'drizzle-orm/pg-core';
-import { member, organization, user } from './auth.schema';
+import { member, organization, user } from './auth.schema.ts';
 import {
 	apiTokens,
 	baseImages,
@@ -14,7 +14,7 @@ import {
 	vms,
 	vmTypes,
 	volumes
-} from './schema';
+} from './schema.ts';
 
 export const analyticsSchema = pgSchema('analytics');
 

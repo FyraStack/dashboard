@@ -1,6 +1,6 @@
 {
 	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-	"extends": ["ultracite/biome/core", "ultracite/biome/svelte"],
+	"extends": ["ultracite/biome/core", "ultracite/biome/type-aware", "ultracite/biome/svelte"],
 	"files": {
 		"includes": [
 			"!!apps/dashboard/static",
@@ -48,6 +48,13 @@
 	},
 	"linter": {
 		"rules": {
+			"correctness": {
+				"noUnresolvedImports": "off",
+				"useImportExtensions": "error"
+			},
+			"nursery": {
+				"noFloatingPromises": "error"
+			},
 			"performance": {
 				"noNamespaceImport": "off"
 			}

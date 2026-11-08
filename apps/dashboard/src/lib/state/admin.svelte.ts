@@ -702,7 +702,7 @@ export class AdminState {
 		await this.loadPveImages();
 	}
 
-	imgImportOpen() {
+	async imgImportOpen() {
 		this.importUrl = '';
 		this.importFilename = '';
 		this.importChecksumAlgorithm = '';
@@ -713,7 +713,7 @@ export class AdminState {
 		this.importStorage = config.admin.defaultImageImportStorage;
 		this.importTasks = [];
 		this.importDialogOpen = true;
-		this.loadPveImages();
+		await this.loadPveImages();
 	}
 
 	imgImportClose() {
@@ -837,7 +837,7 @@ export class AdminState {
 		this.imgDetailsExpanded = false;
 	}
 
-	imgOpenCreate(filePath = '') {
+	async imgOpenCreate(filePath = '') {
 		this.imgGroupName = null;
 		this.imgResetShared();
 		this.imgDetailsExpanded = true;
@@ -846,14 +846,14 @@ export class AdminState {
 		this.imgSaving = false;
 		this.imgDialogOpen = true;
 		if (this.pveImages.length === 0) {
-			this.loadPveImages();
+			await this.loadPveImages();
 		}
 	}
 
-	imgOpenManage(groupName: string) {
+	async imgOpenManage(groupName: string) {
 		const group = this.imageGroups.find((g) => g.name === groupName);
 		if (!group) {
-			this.imgOpenCreate();
+			await this.imgOpenCreate();
 			return;
 		}
 		this.imgLoadGroup(group);
@@ -862,7 +862,7 @@ export class AdminState {
 		this.imgSaving = false;
 		this.imgDialogOpen = true;
 		if (this.pveImages.length === 0) {
-			this.loadPveImages();
+			await this.loadPveImages();
 		}
 	}
 

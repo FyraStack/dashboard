@@ -53,7 +53,7 @@ async function loadFeatureFlagsFromKv(kv: KVNamespace): Promise<FeatureFlags> {
 	});
 }
 
-function scheduleFeatureFlagRefresh(kv: KVNamespace): Promise<FeatureFlags> {
+function refreshFeatureFlags(kv: KVNamespace): Promise<FeatureFlags> {
 	if (!flagsRefresh) {
 		flagsRefresh = loadFeatureFlagsFromKv(kv)
 			.catch((err) => {
@@ -64,8 +64,6 @@ function scheduleFeatureFlagRefresh(kv: KVNamespace): Promise<FeatureFlags> {
 				flagsRefresh = null;
 			});
 	}
-
-	waitUntil(flagsRefresh.then(() => undefined));
 
 	return flagsRefresh;
 }
@@ -93,13 +91,13 @@ export async function getFeatureFlags(options?: { fresh?: boolean }): Promise<Fe
 	}
 
 	if (flagsCache && now < flagsCache.staleUntil) {
-		scheduleFeatureFlagRefresh(kv);
+		waitUntil(refreshFeatureFlags(kv));
 		timingLog('featureFlags.cache.stale');
 		return flagsCache.flags;
 	}
 
 	timingLog(flagsCache ? 'featureFlags.cache.expiredRead' : 'featureFlags.cache.coldRead');
-	return await scheduleFeatureFlagRefresh(kv);
+	return await refreshFeatureFlags(kv);
 }
 
 export async function setFeatureFlag(

@@ -5,14 +5,14 @@ import {
 	type UpdateFeatureFlagInput,
 	updateFeatureFlag
 } from '#lib/server/handlers/feature-flags.js';
-import { AdminBilling } from './admin/billing.js';
-import { AdminEmails } from './admin/emails.js';
-import { AdminImages } from './admin/images.js';
-import { AdminIpam } from './admin/ipam.js';
-import { AdminProjects } from './admin/projects.js';
-import { AdminUsers } from './admin/users.js';
-import { AdminVmTypes } from './admin/vm-types.js';
-import { AdminVms } from './admin/vms.js';
+import { AdminBilling } from './admin/billing.ts';
+import { AdminEmails } from './admin/emails.ts';
+import { AdminImages } from './admin/images.ts';
+import { AdminIpam } from './admin/ipam.ts';
+import { AdminProjects } from './admin/projects.ts';
+import { AdminUsers } from './admin/users.ts';
+import { AdminVmTypes } from './admin/vm-types.ts';
+import { AdminVms } from './admin/vms.ts';
 
 export class Admin extends RpcTarget {
 	readonly #scope: Scope;

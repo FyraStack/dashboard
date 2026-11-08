@@ -29,6 +29,7 @@
 		"@sentry/sveltekit": "11.8.0",
 		"arktype": "^2.2.3",
 		"posthog-js": "1.434.2",
+		"posthog-node": "^5.52.4",
 		"qrcode": "^1.5.4",
 		"ulid": "^3.0.2"
 	},

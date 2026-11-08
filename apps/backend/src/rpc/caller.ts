@@ -1,5 +1,5 @@
 import { RpcTarget } from 'cloudflare:workers';
-import { context, inScope, type Scope } from '#lib/server/context.js';
+import { context, inScope, releaseScope, type Scope } from '#lib/server/context.js';
 import { listImages } from '#lib/server/handlers/images.js';
 import { loadAcceptInvitationPage } from '#lib/server/handlers/project-invitations.js';
 import { listVmTypes } from '#lib/server/handlers/vm-types.js';
@@ -19,10 +19,19 @@ export class Caller extends RpcTarget {
 		this.#scope = scope;
 	}
 
+	release() {
+		releaseScope(this.#scope);
+	}
+
+	[Symbol.dispose]() {
+		this.release();
+	}
+
 	session() {
 		return inScope(this.#scope, () => {
-			const { session, user } = context().locals;
-			return session && user ? { session, user } : null;
+			const { locals, setCookie } = context();
+			const { session, user } = locals;
+			return { current: session && user ? { session, user } : null, setCookie };
 		});
 	}
 

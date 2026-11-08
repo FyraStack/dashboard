@@ -3,7 +3,7 @@ import { type Cookies, error } from '@sveltejs/kit';
 import type { Api } from 'stack-backend';
 import { getRequestEvent } from '$app/server';
 
-export type Me = ReturnType<Service<Api>['as']>;
+export type Me = Awaited<ReturnType<Service<Api>['as']>>;
 
 type CookieOptions = NonNullable<Parameters<Cookies['set']>[2]>;
 
@@ -67,10 +67,15 @@ function decodeHttpError(cause: unknown): { status: number; message: string } | 
 	return null;
 }
 
+function requestCaller(): Promise<Me> {
+	const { locals, request } = getRequestEvent();
+	locals.backend ??= Promise.resolve(env.BACKEND.as(forwardedHeaders(request), request.url));
+	return locals.backend;
+}
+
 export async function backend<T>(call: (me: Me) => T | Promise<T>): Promise<Awaited<T>> {
-	const me = env.BACKEND.as(forwardedHeaders(getRequestEvent().request));
 	try {
-		return await call(me);
+		return await call(await requestCaller());
 	} catch (cause) {
 		const httpError = decodeHttpError(cause);
 		if (httpError) {

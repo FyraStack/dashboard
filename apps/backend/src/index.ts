@@ -1,7 +1,9 @@
 import { WorkerEntrypoint } from 'cloudflare:workers';
+import { withSentry } from '@sentry/cloudflare';
 import { getBackend } from '#lib/server/backends/index.js';
 import { inScope } from '#lib/server/context.js';
 import { runBillingMeter, runIpamReconcile } from '#lib/server/jobs.js';
+import { rememberSentryClient, sentryOptions } from '#lib/server/sentry.js';
 import { Caller } from './rpc/caller.js';
 
 export type { Account } from './rpc/account.js';
@@ -46,13 +48,13 @@ async function runJob(label: string, job: () => Promise<unknown>) {
 	}
 }
 
-export default class Api extends WorkerEntrypoint<Env> {
+class Api extends WorkerEntrypoint<Env> {
 	fetch(request: Request) {
 		if (!isAuthPath(new URL(request.url).pathname)) {
 			return new Response('Not found', { status: 404 });
 		}
 
-		return inScope({ headers: request.headers, skipSession: true }, async () => {
+		return inScope({ headers: request.headers, url: request.url, skipSession: true }, async () => {
 			const { initAuth } = await import('#lib/server/auth.js');
 			return initAuth().handler(request);
 		});
@@ -71,9 +73,12 @@ export default class Api extends WorkerEntrypoint<Env> {
 		return inScope({ headers: {}, system: true }, pingProxmox);
 	}
 
-	as(headers: Record<string, string>) {
-		return new Caller({ headers });
+	as(headers: Record<string, string>, url: string) {
+		rememberSentryClient();
+		return new Caller({ headers, url, retained: true });
 	}
 }
+
+export default withSentry(sentryOptions, Api);
 
 export type { Api };

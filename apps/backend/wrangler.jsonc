@@ -31,6 +31,7 @@
 		"PROXMOX_SNIPPETS_STORAGE": "cephfs",
 		"POSTHOG_KEY": "phc_xpPsXXeqca5GUtozk5DvUdTFMwAjYN7z4SDYLHSqwHpX",
 		"POSTHOG_HOST": "https://us.posthog.com",
+		"SENTRY_DSN": "https://509fc8298796e65c16acbef704256178@o271654.ingest.us.sentry.io/4512122021412864",
 		"BILLING_DISABLED": "false"
 	},
 	"hyperdrive": [
@@ -121,6 +122,7 @@
 				"PROXMOX_SNIPPETS_STORAGE": "cephfs",
 				"POSTHOG_KEY": "phc_xpPsXXeqca5GUtozk5DvUdTFMwAjYN7z4SDYLHSqwHpX",
 				"POSTHOG_HOST": "https://us.posthog.com",
+				"SENTRY_DSN": "https://509fc8298796e65c16acbef704256178@o271654.ingest.us.sentry.io/4512122021412864",
 				"BILLING_DISABLED": "false"
 			},
 			"hyperdrive": [

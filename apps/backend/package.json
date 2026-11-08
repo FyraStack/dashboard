@@ -36,6 +36,7 @@
 		"@better-auth/utils": "^0.5.1",
 		"@better-svelte-email/components": "^2.1.1",
 		"@better-svelte-email/server": "^2.1.1",
+		"@sentry/cloudflare": "11.8.0",
 		"autumn-js": "1.2.33",
 		"better-auth": "^1.7.16",
 		"drizzle-orm": "^0.45.2",

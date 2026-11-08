@@ -9,6 +9,7 @@ declare global {
 	namespace App {
 		interface Locals {
 			activeProjectId?: string | null;
+			backend?: Promise<Awaited<ReturnType<Service<Api>['as']>>>;
 			session?: AppSession;
 			user?: AppUser;
 		}

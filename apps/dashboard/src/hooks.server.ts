@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:workers';
+import { env, waitUntil } from 'cloudflare:workers';
 import { handleErrorWithSentry, initCloudflareSentryHandle, sentryHandle } from '@sentry/sveltekit';
 import { type RequestEvent, redirect } from '@sveltejs/kit';
 import { type Handle, type HandleServerError, sequence } from '@sveltejs/kit/hooks';
@@ -7,7 +7,8 @@ import {
 	accessibilityFixtureSession,
 	accessibilityFixtureUser
 } from '#lib/server/accessibility-fixtures.js';
-import { backend } from '#lib/server/backend.js';
+import { applySetCookies, backend } from '#lib/server/backend.js';
+import { captureServerException } from '#lib/server/posthog.js';
 import { handlePostHogProxy } from '#lib/server/posthog-proxy.js';
 import { dev } from '$app/env';
 import { PUBLIC_SENTRY_DSN } from '$app/env/public';
@@ -84,7 +85,8 @@ const handleAuth: Handle = async ({ event, resolve }) => {
 		return resolve(event);
 	}
 
-	const current = await backend((me) => me.session());
+	const { current, setCookie } = await backend((me) => me.session());
+	applySetCookies(setCookie);
 	if (current) {
 		event.locals.session = current.session;
 		event.locals.user = current.user;
@@ -100,6 +102,37 @@ const handleAuth: Handle = async ({ event, resolve }) => {
 	}
 
 	return resolve(event);
+};
+
+async function releaseBackend(event: RequestEvent) {
+	try {
+		const me = await event.locals.backend;
+		await me?.release();
+	} catch (cause) {
+		console.warn('Failed to release backend caller', cause);
+	}
+}
+
+function releaseAfterBody(response: Response, event: RequestEvent): Response {
+	if (!response.body) {
+		waitUntil(releaseBackend(event));
+		return response;
+	}
+
+	const { readable, writable } = new TransformStream();
+	waitUntil(response.body.pipeTo(writable).finally(() => releaseBackend(event)));
+	return new Response(readable, response);
+}
+
+const handleBackendRelease: Handle = async ({ event, resolve }) => {
+	let response: Response;
+	try {
+		response = await resolve(event);
+	} catch (cause) {
+		waitUntil(releaseBackend(event));
+		throw cause;
+	}
+	return releaseAfterBody(response, event);
 };
 
 let sentryRequestHandle: Handle | undefined;
@@ -124,6 +157,7 @@ export const handle: Handle = sequence(
 	handleSentryInit,
 	sentryHandle({ injectFetchProxyScript: false }),
 	handlePostHogProxy,
+	handleBackendRelease,
 	handleAuth
 );
 
@@ -133,6 +167,7 @@ const logServerError: HandleServerError = ({ kind, error, event }) => {
 	}
 
 	console.error('Unhandled server error', { pathname: event.url.pathname, error });
+	captureServerException(error, event);
 };
 
 export const handleError = handleErrorWithSentry(logServerError);

@@ -51,6 +51,9 @@ importers:
       '@better-svelte-email/server':
         specifier: ^2.1.1
         version: 2.1.1(svelte@5.56.6)
+      '@sentry/cloudflare':
+        specifier: 11.8.0
+        version: 11.8.0(@cloudflare/workers-types@5.20261002.1)(vite@8.1.5(@types/node@26.1.1)(yaml@2.9.1))(wrangler@4.156.1(@cloudflare/workers-types@5.20261002.1)(@types/node@26.1.1))
       autumn-js:
         specifier: 1.2.33
         version: 1.2.33(better-auth@1.7.16(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20261002.1)(@types/pg@8.20.0)(pg@8.22.0))(pg@8.22.0)(svelte@5.56.6))
@@ -139,6 +142,9 @@ importers:
       posthog-js:
         specifier: 1.434.2
         version: 1.434.2
+      posthog-node:
+        specifier: ^5.52.4
+        version: 5.52.4
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
@@ -5524,6 +5530,19 @@ snapshots:
       oxc-parser: 0.152.0
       sentry: 0.45.0
       supports-color: 8.1.1
+
+  '@sentry/cloudflare@11.8.0(@cloudflare/workers-types@5.20261002.1)(vite@8.1.5(@types/node@26.1.1)(yaml@2.9.1))(wrangler@4.156.1(@cloudflare/workers-types@5.20261002.1)(@types/node@26.1.1))':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@sentry/conventions': 0.27.0
+      '@sentry/core': 11.8.0
+      '@sentry/opentelemetry': 11.8.0(@opentelemetry/api@1.9.1)
+      '@sentry/server-utils': 11.8.0
+      magic-string: 0.30.21
+    optionalDependencies:
+      '@cloudflare/workers-types': 5.20261002.1
+      vite: 8.1.5(@types/node@26.1.1)(yaml@2.9.1)
+      wrangler: 4.156.1(@cloudflare/workers-types@5.20261002.1)(@types/node@26.1.1)
 
   '@sentry/cloudflare@11.8.0(@cloudflare/workers-types@5.20261002.1)(vite@8.1.5(@types/node@26.1.1))(wrangler@4.156.1(@cloudflare/workers-types@5.20261002.1)(@types/node@26.1.1))':
     dependencies:

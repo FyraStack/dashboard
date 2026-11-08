@@ -43,6 +43,7 @@ export interface PveQemuConfig {
 	ostype?: string;
 	scsi0?: string;
 	scsihw?: string;
+	smbios1?: string;
 	sockets?: number;
 	sshkeys?: string;
 	virtio0?: string;
@@ -136,6 +137,7 @@ export interface PveCreateQemuParams {
 	scsi0?: string;
 	scsihw?: string;
 	serial0?: string;
+	smbios1?: string;
 	sockets?: number;
 	sshkeys?: string;
 	start?: 0 | 1;

@@ -825,7 +825,12 @@ export async function resizeVm(params: ResizeVmInput) {
 	try {
 		await backend.resizeVm(
 			row.id,
-			{ cores: target.cores, memoryMb: target.ramCapacity, diskGb: target.storageAmount },
+			{
+				cores: target.cores,
+				memoryMb: target.ramCapacity,
+				diskGb: target.storageAmount,
+				tierName: target.name
+			},
 			row.proxmoxId ?? undefined
 		);
 	} catch (err) {

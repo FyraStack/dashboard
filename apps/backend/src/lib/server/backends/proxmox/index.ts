@@ -35,6 +35,10 @@ interface ResolvedVm {
 
 const STABLE_ID_TAG_PREFIX = 'vmid-';
 
+function haResourceId(vmid: number) {
+	return `vm:${vmid}`;
+}
+
 function stableIdTag(id: string) {
 	return `${STABLE_ID_TAG_PREFIX}${id.toLowerCase()}`;
 }
@@ -59,6 +63,9 @@ const CLUSTER_RESOURCES_TTL_MS = 2000;
 const VM_STATUS_TTL_MS = 1000;
 const RUNNING_CONFIRMATION_TIMEOUT_MS = 30_000;
 const RUNNING_CONFIRMATION_INTERVAL_MS = 1000;
+const VM_STOP_TIMEOUT_MS = 60_000;
+const HA_STOP_TIMEOUT_MS = 120_000;
+const VM_STATE_POLL_INTERVAL_MS = 1000;
 const clusterResourcesCache = new Map<string, CacheEntry<PveClusterResource[]>>();
 const vmStatusCache = new Map<
 	string,
@@ -1026,6 +1033,7 @@ export class ProxmoxBackend implements VmBackend {
 		const { node, vmid } = resolved;
 
 		try {
+			await this.disableHaAndAwaitStop(node, vmid);
 			await this.ensureVmStopped(node, vmid);
 		} catch (err) {
 			if (err instanceof HTTPError && err.response.status === 404) {
@@ -1108,16 +1116,81 @@ export class ProxmoxBackend implements VmBackend {
 			}
 		}
 
-		const deadline = Date.now() + 60_000;
+		await this.awaitVmStatus(node, vmid, 'stopped', VM_STOP_TIMEOUT_MS);
+	}
+
+	private async awaitVmStatus(
+		node: string,
+		vmid: number,
+		target: 'running' | 'stopped',
+		timeoutMs: number
+	): Promise<void> {
+		const deadline = Date.now() + timeoutMs;
 		while (Date.now() < deadline) {
-			// biome-ignore lint/performance/noAwaitInLoops: polling Proxmox until the VM reports stopped is inherently sequential
+			// biome-ignore lint/performance/noAwaitInLoops: polling Proxmox until the VM reports the target status is inherently sequential
 			const current = await this.client.getQemuVm(node, vmid);
-			if (current.status === 'stopped') {
+			if (current.status === target) {
 				return;
 			}
-			await new Promise((r) => setTimeout(r, 1000));
+			await new Promise((r) => setTimeout(r, VM_STATE_POLL_INTERVAL_MS));
 		}
-		throw new Error(`VM ${vmid} on node ${node} did not reach stopped state within 60s`);
+		throw new Error(
+			`VM ${vmid} on node ${node} did not reach ${target} state within ${timeoutMs}ms`
+		);
+	}
+
+	private async disableHa(vmid: number): Promise<boolean> {
+		const sid = haResourceId(vmid);
+		const resources = await this.client.listHaResources();
+		const resource = resources.find((candidate) => candidate.sid === sid);
+		if (!resource || resource.state === 'disabled') {
+			return false;
+		}
+		await this.client.setHaResourceState(sid, 'disabled');
+		return true;
+	}
+
+	private async disableHaAndAwaitStop(node: string, vmid: number): Promise<void> {
+		if (!(await this.disableHa(vmid))) {
+			return;
+		}
+		await this.awaitVmStatus(node, vmid, 'stopped', HA_STOP_TIMEOUT_MS).catch((err) => {
+			console.warn(`VM ${vmid} on ${node} did not stop after disabling HA, forcing stop`, err);
+		});
+	}
+
+	private async withHaRecovery(
+		node: string,
+		vmid: number,
+		target: 'running' | 'stopped',
+		action: () => Promise<void>
+	): Promise<void> {
+		try {
+			await action();
+			return;
+		} catch (err) {
+			const current = await this.client.getQemuVm(node, vmid);
+			if (current.status === target) {
+				return;
+			}
+			if (!(await this.disableHa(vmid))) {
+				throw err;
+			}
+			console.warn(
+				`VM ${vmid} on ${node} failed to reach ${target}, recovering via HA disable`,
+				err
+			);
+		}
+
+		await this.awaitVmStatus(node, vmid, 'stopped', HA_STOP_TIMEOUT_MS);
+		if (target === 'running') {
+			const startUpid = await this.client.startVm(node, vmid);
+			await this.client.waitForTask(node, startUpid);
+		}
+		await this.client.setHaResourceState(
+			haResourceId(vmid),
+			target === 'running' ? 'started' : 'stopped'
+		);
 	}
 
 	private async forceStopVm(node: string, vmid: number): Promise<string> {
@@ -1155,29 +1228,33 @@ export class ProxmoxBackend implements VmBackend {
 	async startVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
-		const upid = await this.client.startVm(node, vmid);
-		await this.client.waitForTask(node, upid);
+		await this.withHaRecovery(node, vmid, 'running', async () => {
+			await this.client.waitForTask(node, await this.client.startVm(node, vmid));
+		});
 	}
 
 	async stopVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
-		const upid = await this.client.shutdownVm(node, vmid);
-		await this.client.waitForTask(node, upid);
+		await this.withHaRecovery(node, vmid, 'stopped', async () => {
+			await this.client.waitForTask(node, await this.client.shutdownVm(node, vmid));
+		});
 	}
 
 	async killVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
-		const upid = await this.forceStopVm(node, vmid);
-		await this.client.waitForTask(node, upid);
+		await this.withHaRecovery(node, vmid, 'stopped', async () => {
+			await this.client.waitForTask(node, await this.forceStopVm(node, vmid));
+		});
 	}
 
 	async rebootVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
-		const upid = await this.client.rebootVm(node, vmid);
-		await this.client.waitForTask(node, upid);
+		await this.withHaRecovery(node, vmid, 'running', async () => {
+			await this.client.waitForTask(node, await this.client.rebootVm(node, vmid));
+		});
 	}
 
 	async resizeVm(id: string, params: VmResizeParams, proxmoxId?: number): Promise<void> {

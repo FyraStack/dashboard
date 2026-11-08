@@ -179,3 +179,12 @@ export async function inScope<T>(scope: Scope, fn: () => T | Promise<T>): Promis
 		}
 	}
 }
+
+export async function inSystemScope<T>(fn: () => T | Promise<T>): Promise<T> {
+	const scope: Scope = { headers: {}, system: true };
+	try {
+		return await storage.run(contextFor(scope), fn);
+	} finally {
+		releaseScope(scope);
+	}
+}

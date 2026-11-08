@@ -165,6 +165,12 @@ export interface PveClusterResource {
 	vmid?: number;
 }
 
+export interface PveHaResource {
+	sid: string;
+	state?: 'started' | 'stopped' | 'enabled' | 'disabled' | 'ignored';
+	type?: string;
+}
+
 export interface PveStorageContent {
 	content: string;
 	ctime?: number;

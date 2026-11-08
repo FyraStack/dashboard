@@ -40,6 +40,13 @@
 			"id": "25228ed6f77e49fb8041aed12879327d"
 		}
 	],
+	"workflows": [
+		{
+			"name": "stack-vm-deletion",
+			"binding": "VM_DELETION",
+			"class_name": "VmDeletion"
+		}
+	],
 	"kv_namespaces": [
 		{
 			"binding": "FEATURE_FLAGS",
@@ -129,6 +136,13 @@
 				{
 					"binding": "HYPERDRIVE",
 					"id": "25228ed6f77e49fb8041aed12879327d"
+				}
+			],
+			"workflows": [
+				{
+					"name": "stack-vm-deletion-preview",
+					"binding": "VM_DELETION",
+					"class_name": "VmDeletion"
 				}
 			],
 			"kv_namespaces": [

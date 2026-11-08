@@ -4,6 +4,7 @@ import type {
 	PveAgentNetworkInterface,
 	PveClusterResource,
 	PveCreateQemuParams,
+	PveHaResource,
 	PveNode,
 	PveQemuConfig,
 	PveQemuRrdData,
@@ -465,6 +466,17 @@ export class ProxmoxClient {
 	}
 
 	// Cluster
+
+	async listHaResources(): Promise<PveHaResource[]> {
+		const res = await this.api.get('cluster/ha/resources').json<PveResponse<PveHaResource[]>>();
+		return res.data;
+	}
+
+	async setHaResourceState(sid: string, state: 'started' | 'stopped' | 'disabled'): Promise<void> {
+		await this.api.put(`cluster/ha/resources/${sid}`, {
+			body: this.toForm({ state })
+		});
+	}
 
 	async getClusterResources(type?: 'vm' | 'storage' | 'node'): Promise<PveClusterResource[]> {
 		const searchParams: Record<string, string> = {};

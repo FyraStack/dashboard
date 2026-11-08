@@ -23,7 +23,7 @@ export default defineConfig(({ command, mode }) => {
 
 	return {
 		server: {
-			host: '127.0.0.1'
+			host: 'localhost'
 		},
 		plugins: [
 			tailwindcss(),

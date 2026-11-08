@@ -52,7 +52,7 @@ From the repo root:
 ```sh
 CI=true \
 ACCESSIBILITY_FIXTURES=1 \
-pnpm --filter stack-dashboard run dev --host 127.0.0.1 --port 5173
+pnpm --filter stack-dashboard run dev --host localhost --port 5173
 ```
 
 ## Caveats

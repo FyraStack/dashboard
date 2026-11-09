@@ -7,12 +7,15 @@
 	import UserSettingsDialog from '#lib/components/dialogs/user-settings-dialog.svelte';
 	import * as Avatar from '#lib/components/ui/avatar/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Command from '#lib/components/ui/command/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import { Toaster } from '#lib/components/ui/sonner/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import type { FeatureFlags } from '#lib/feature-flags.js';
+	import { markAnnouncementsRead } from '#lib/remote/announcements.remote.js';
 	import { listVms } from '#lib/remote/vms.remote.js';
 	import {
 		clearUserSettingsHref,
@@ -26,6 +29,9 @@
 	import ArrowRight from '~icons/lucide/arrow-right';
 	import Check from '~icons/lucide/check';
 	import ChevronDown from '~icons/lucide/chevron-down';
+	import ChevronLeft from '~icons/lucide/chevron-left';
+	import ChevronRight from '~icons/lucide/chevron-right';
+	import ExternalLink from '~icons/lucide/external-link';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Menu from '~icons/lucide/menu';
 	import Warehouse from '~icons/nucleo/box';
@@ -34,6 +40,7 @@
 	import FolderOpen from '~icons/nucleo/folder-open';
 	import HardDrive from '~icons/nucleo/hard-drive';
 	import Key from '~icons/nucleo/key';
+	import Megaphone from '~icons/nucleo/megaphone';
 	import Search from '~icons/nucleo/search';
 	import Server from '~icons/nucleo/server';
 	import Settings from '~icons/nucleo/settings';
@@ -391,6 +398,39 @@
 	const showVolumes = $derived(!!featureFlags.volumes);
 	const showFirewall = $derived(!!featureFlags.firewall);
 	const showImages = $derived(!!featureFlags.images);
+
+	const announcements = untrack(() => data.unreadAnnouncements);
+	let announcementsOpen = $state(announcements.length > 0);
+	let announcementIndex = $state(0);
+	const currentAnnouncement = $derived(announcements[announcementIndex]);
+	const announcementsMarkedRead = new Set<string>();
+	const announcementDateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'long' });
+
+	$effect(() => {
+		if (!(announcementsOpen && currentAnnouncement)) {
+			return;
+		}
+		const { id } = currentAnnouncement;
+		if (announcementsMarkedRead.has(id)) {
+			return;
+		}
+		announcementsMarkedRead.add(id);
+		markAnnouncementsRead({ announcementIds: [id] }).catch(() => {
+			announcementsMarkedRead.delete(id);
+		});
+	});
+
+	function showAnnouncement(index: number) {
+		announcementIndex = Math.min(Math.max(index, 0), announcements.length - 1);
+	}
+
+	function handleAnnouncementKeydown(event: KeyboardEvent) {
+		if (event.key === 'ArrowLeft') {
+			showAnnouncement(announcementIndex - 1);
+		} else if (event.key === 'ArrowRight') {
+			showAnnouncement(announcementIndex + 1);
+		}
+	}
 </script>
 
 <Toaster position="top-center" />
@@ -637,9 +677,105 @@
 		bind:activeTab={userSettings.tab}
 		bind:profileName
 		user={data.user}
+		announcementsEnabled={data.announcementsEnabled}
 	/>
 
 	<ConfirmDialog />
+
+	{#if currentAnnouncement}
+		<Dialog.Root bind:open={announcementsOpen}>
+			<Dialog.Content
+				class="gap-5 border-border bg-background sm:max-w-lg"
+				onkeydown={handleAnnouncementKeydown}
+			>
+				<Dialog.Header class="gap-2">
+					<div class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+						<Megaphone class="size-3.5" />
+						<span>What's new</span>
+						{#if announcements.length > 1}
+							<span class="tabular-nums">· {announcementIndex + 1} of {announcements.length}</span>
+						{/if}
+					</div>
+					<Dialog.Title class="pr-6 text-base leading-snug text-balance">
+						{currentAnnouncement.title}
+					</Dialog.Title>
+					<Dialog.Description class="text-xs">
+						<time datetime={new Date(currentAnnouncement.publishedAt).toISOString()}>
+							{announcementDateFormat.format(currentAnnouncement.publishedAt)}
+						</time>
+					</Dialog.Description>
+				</Dialog.Header>
+				{#if currentAnnouncement.imageVersion !== null}
+					<img
+						src="{resolve(
+							`announcements/${currentAnnouncement.id}/image`
+						)}?v={currentAnnouncement.imageVersion}"
+						alt=""
+						class="aspect-[2/1] w-full rounded-lg bg-muted object-cover ring-1 ring-foreground/10"
+					/>
+				{/if}
+				<div
+					class="max-h-[50vh] overflow-y-auto text-sm leading-relaxed text-pretty whitespace-pre-line text-foreground/90"
+				>
+					{currentAnnouncement.body}
+				</div>
+				{#if currentAnnouncement.linkUrl}
+					<a
+						href={currentAnnouncement.linkUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+						class="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-red-400 underline-offset-4 hover:underline"
+					>
+						{currentAnnouncement.linkLabel || 'Learn more'}
+						<ExternalLink class="size-3.5" />
+					</a>
+				{/if}
+				<div class="flex items-center justify-between gap-3">
+					{#if announcements.length > 1}
+						<div class="flex items-center">
+							{#each announcements as announcement, index (announcement.id)}
+								<button
+									type="button"
+									class="flex size-5 items-center justify-center"
+									aria-label="Show announcement {index + 1}: {announcement.title}"
+									aria-current={index === announcementIndex}
+									onclick={() => showAnnouncement(index)}
+								>
+									<span
+										class="block h-1.5 rounded-full transition-all {index === announcementIndex
+											? 'w-4 bg-foreground'
+											: 'w-1.5 bg-muted-foreground/40'}"
+									></span>
+								</button>
+							{/each}
+						</div>
+					{:else}
+						<span></span>
+					{/if}
+					<div class="flex items-center gap-2">
+						{#if announcementIndex > 0}
+							<Button
+								variant="outline"
+								size="sm"
+								onclick={() => showAnnouncement(announcementIndex - 1)}
+							>
+								<ChevronLeft />
+								Previous
+							</Button>
+						{/if}
+						{#if announcementIndex < announcements.length - 1}
+							<Button size="sm" onclick={() => showAnnouncement(announcementIndex + 1)}>
+								Next
+								<ChevronRight />
+							</Button>
+						{:else}
+							<Button size="sm" onclick={() => (announcementsOpen = false)}>Done</Button>
+						{/if}
+					</div>
+				</div>
+			</Dialog.Content>
+		</Dialog.Root>
+	{/if}
 
 	<Command.Dialog
 		bind:open={commandOpen}

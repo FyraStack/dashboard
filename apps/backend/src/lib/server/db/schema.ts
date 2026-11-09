@@ -15,7 +15,7 @@ import {
 	uniqueIndex
 } from 'drizzle-orm/pg-core';
 import { ulid } from '#lib/server/id.js';
-import { organization } from './auth.schema.ts';
+import { organization, user } from './auth.schema.ts';
 
 const ulidPk = () => text('id').primaryKey().$defaultFn(ulid);
 const ulidFk = (name: string) => text(name);
@@ -453,4 +453,51 @@ export const baseImages = pgTable('base_images', {
 	secureBoot: boolean('secure_boot').notNull().default(true),
 	isa: vmIsaEnum('isa').notNull(),
 	sortOrder: integer('sort_order').notNull().default(0)
+});
+
+// Announcements
+
+export const announcements = pgTable(
+	'announcements',
+	{
+		id: ulidPk(),
+		title: text('title').notNull(),
+		body: text('body').notNull(),
+		linkUrl: text('link_url'),
+		linkLabel: text('link_label'),
+		imageData: text('image_data'),
+		imageType: text('image_type'),
+		publishedAt: bigint('published_at', { mode: 'number' }),
+		createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+		updatedAt: bigint('updated_at', { mode: 'number' }).notNull()
+	},
+	(table) => [index('announcements_published_at_index').on(table.publishedAt)]
+);
+
+export const announcementReads = pgTable(
+	'announcement_reads',
+	{
+		id: ulidPk(),
+		announcementId: text('announcement_id')
+			.notNull()
+			.references(() => announcements.id, { onDelete: 'cascade' }),
+		userId: text('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		readAt: bigint('read_at', { mode: 'number' }).notNull()
+	},
+	(table) => [
+		uniqueIndex('announcement_reads_user_announcement_uidx').on(table.userId, table.announcementId),
+		index('announcement_reads_announcement_id_index').on(table.announcementId)
+	]
+);
+
+// User Preferences
+
+export const userPreferences = pgTable('user_preferences', {
+	userId: text('user_id')
+		.primaryKey()
+		.references(() => user.id, { onDelete: 'cascade' }),
+	announcementsEnabled: boolean('announcements_enabled').notNull().default(true),
+	updatedAt: bigint('updated_at', { mode: 'number' }).notNull()
 });

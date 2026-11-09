@@ -2,6 +2,14 @@ import { RpcTarget } from 'cloudflare:workers';
 import { inScope, type Scope } from '#lib/server/context.js';
 import { loadAppLayoutAccount } from '#lib/server/handlers/account-layout.js';
 import {
+	type AnnouncementImageLookupInput,
+	getAnnouncementImage,
+	type MarkAnnouncementsReadInput,
+	markAnnouncementsRead,
+	type SetAnnouncementsEnabledInput,
+	setAnnouncementsEnabled
+} from '#lib/server/handlers/announcements.js';
+import {
 	type CreateApiTokenInput,
 	createApiToken,
 	listApiTokens,
@@ -97,6 +105,18 @@ export class Account extends RpcTarget {
 
 	changePasswordWithPasskey(input: ConfirmPasswordChangeWithPasskeyInput) {
 		return inScope(this.#scope, () => confirmPasswordChangeWithPasskey(input));
+	}
+
+	markAnnouncementsRead(input: MarkAnnouncementsReadInput) {
+		return inScope(this.#scope, () => markAnnouncementsRead(input));
+	}
+
+	setAnnouncementsEnabled(input: SetAnnouncementsEnabledInput) {
+		return inScope(this.#scope, () => setAnnouncementsEnabled(input));
+	}
+
+	announcementImage(input: AnnouncementImageLookupInput) {
+		return inScope(this.#scope, () => getAnnouncementImage(input));
 	}
 
 	appLayout() {

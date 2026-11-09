@@ -246,6 +246,20 @@
       "when": 1793747466380,
       "tag": "0034_drop_redundant_org_slug_index",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1794180516564,
+      "tag": "0035_announcements",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794181972850,
+      "tag": "0036_user_preferences",
+      "breakpoints": true
     }
   ]
 }

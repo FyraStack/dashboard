@@ -10,6 +10,7 @@
 	import Flag from '~icons/nucleo/flag';
 	import FolderOpen from '~icons/nucleo/folder-open';
 	import Mail from '~icons/nucleo/mail';
+	import Megaphone from '~icons/nucleo/megaphone';
 	import Network from '~icons/nucleo/network';
 	import Server from '~icons/nucleo/server';
 	import UserCog from '~icons/nucleo/user-cog';
@@ -67,6 +68,12 @@
 			href: resolve('admin/emails'),
 			label: 'Emails',
 			icon: Mail,
+			count: null
+		},
+		{
+			href: resolve('admin/announcements'),
+			label: 'Announcements',
+			icon: Megaphone,
 			count: null
 		}
 	]);

@@ -9,6 +9,7 @@ import { VmProvisioningWorkflow } from '#lib/server/vm-provisioning.js';
 import { Caller } from './rpc/caller.ts';
 
 export type { Account } from './rpc/account.ts';
+export type { AdminAnnouncements } from './rpc/admin/announcements.ts';
 export type { AdminBilling } from './rpc/admin/billing.ts';
 export type { AdminEmails } from './rpc/admin/emails.ts';
 export type { AdminImages } from './rpc/admin/images.ts';

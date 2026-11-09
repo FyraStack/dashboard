@@ -17,21 +17,26 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
 		throw redirect(303, '/login');
 	}
 
-	const [projects, { featureFlags, isAdmin }] = accessibilityFixtureEnabled
-		? [
-				accessibilityFixtureProjects,
-				{
-					featureFlags: accessibilityFixtureFeatureFlags,
-					isAdmin: accessibilityFixtureUser.isAdmin
-				}
-			]
-		: await Promise.all([listProjects(), backend((me) => me.account().appLayout())]);
+	const [projects, { featureFlags, isAdmin, announcementsEnabled, unreadAnnouncements }] =
+		accessibilityFixtureEnabled
+			? [
+					accessibilityFixtureProjects,
+					{
+						featureFlags: accessibilityFixtureFeatureFlags,
+						isAdmin: accessibilityFixtureUser.isAdmin,
+						announcementsEnabled: true,
+						unreadAnnouncements: []
+					}
+				]
+			: await Promise.all([listProjects(), backend((me) => me.account().appLayout())]);
 
 	return {
 		user: locals.user,
 		isAdmin,
 		projects,
 		activeProjectId: locals.activeProjectId ?? null,
-		featureFlags
+		featureFlags,
+		announcementsEnabled,
+		unreadAnnouncements
 	};
 };

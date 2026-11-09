@@ -2,6 +2,7 @@ import { getProjectMemberRole, requireProjectAccess } from '#lib/server/auth-con
 import { runInBackground } from '#lib/server/background.js';
 import { attachDefaultProjectPlan } from '#lib/server/billing/autumn.js';
 import { getProjectBillingReadiness, refreshProjectBilling } from '#lib/server/billing/overview.js';
+import { consumeBillingSetupToken } from '#lib/server/billing/setup-token.js';
 import { context } from '#lib/server/context.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { safeReturnPath } from '#lib/server/handlers/billing.js';
@@ -9,8 +10,8 @@ import { error } from '#lib/server/http.js';
 import { getIpamAvailability } from '#lib/server/ipam.js';
 
 export interface CompleteCreateServerBillingSetupInput {
+	billingSetupToken: string;
 	projectId: string;
-	promoCode?: string;
 	returnPath: string;
 }
 
@@ -25,6 +26,16 @@ export async function completeCreateServerBillingSetup(
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, input.projectId, 'owner');
 
+	const grant = await consumeBillingSetupToken(
+		db,
+		input.projectId,
+		event.locals.user.id,
+		input.billingSetupToken
+	);
+	if (!grant) {
+		return { paymentUrl: null };
+	}
+
 	const returnPath = safeReturnPath(
 		input.returnPath,
 		`/projects/${input.projectId}/servers/create`
@@ -32,7 +43,7 @@ export async function completeCreateServerBillingSetup(
 	const paymentUrl = await attachDefaultProjectPlan(
 		input.projectId,
 		`${event.url.origin}${returnPath}`,
-		input.promoCode
+		grant.promoCode
 	);
 	if (paymentUrl) {
 		return { paymentUrl };

@@ -135,6 +135,25 @@ const handleBackendRelease: Handle = async ({ event, resolve }) => {
 	return releaseAfterBody(response, event);
 };
 
+const passwordResetPath = '/reset-password';
+const passwordResetTokenCookie = 'password_reset_token';
+const passwordResetTokenMaxAge = 60 * 60;
+
+const handlePasswordResetToken: Handle = ({ event, resolve }) => {
+	const token = event.url.searchParams.get('token');
+	if (event.url.pathname !== passwordResetPath || !token) {
+		return resolve(event);
+	}
+
+	event.cookies.set(passwordResetTokenCookie, token, {
+		path: passwordResetPath,
+		httpOnly: true,
+		sameSite: 'lax',
+		maxAge: passwordResetTokenMaxAge
+	});
+	redirect(303, passwordResetPath);
+};
+
 let sentryRequestHandle: Handle | undefined;
 
 const handleSentryInit: Handle = (input) => {
@@ -154,6 +173,7 @@ const handleSentryInit: Handle = (input) => {
 };
 
 export const handle: Handle = sequence(
+	handlePasswordResetToken,
 	handleSentryInit,
 	sentryHandle({ injectFetchProxyScript: false }),
 	handlePostHogProxy,

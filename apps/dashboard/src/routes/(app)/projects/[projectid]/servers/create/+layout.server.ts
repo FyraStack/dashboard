@@ -15,13 +15,14 @@ export const load: LayoutServerLoad = async ({ params, parent, depends, url }) =
 		error(404, 'Project not found');
 	}
 
-	if (url.searchParams.get('billing_setup') === 'complete') {
+	const billingSetupToken = url.searchParams.get('billing_setup');
+	if (billingSetupToken) {
 		const cleanPath = `/projects/${params.projectid}/servers/create`;
 		const { paymentUrl } = await backend(
 			async (me) =>
 				await me.project(params.projectid).completeCreateServerBillingSetup({
-					returnPath: cleanPath,
-					promoCode: url.searchParams.get('billing_promo') ?? undefined
+					billingSetupToken,
+					returnPath: cleanPath
 				})
 		);
 		redirect(303, paymentUrl ?? cleanPath);

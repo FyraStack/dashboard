@@ -28,6 +28,16 @@ export interface ProxmoxClientConfig {
 
 const TRAILING_SLASHES = /\/+$/;
 const WARNING_LOG_LINE = /^WARN/;
+const SECRET_PARAM_KEY = /password|secret|token/i;
+
+function redactSecrets(payload: Record<string, unknown>) {
+	return Object.fromEntries(
+		Object.entries(payload).map(([key, value]) => [
+			key,
+			SECRET_PARAM_KEY.test(key) ? '[redacted]' : value
+		])
+	);
+}
 
 const isTaskWarning = (exitstatus?: string): exitstatus is string =>
 	!!exitstatus && exitstatus.startsWith('WARNINGS:');
@@ -84,7 +94,7 @@ export class ProxmoxClient {
 			method: error.request.method,
 			status: error.response.status,
 			statusText: error.response.statusText,
-			payload,
+			payload: payload && redactSecrets(payload),
 			body
 		});
 	}

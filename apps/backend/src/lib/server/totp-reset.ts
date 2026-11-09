@@ -250,47 +250,61 @@ export async function verifyTotpResetCode(db: Db, userId: string, code: string) 
 		error(400, 'Enter the verification code from your email.');
 	}
 
-	const identifier = totpResetCodeIdentifier(userId);
-	const [row] = await db
-		.select({ id: verification.id, value: verification.value })
-		.from(verification)
-		.where(and(eq(verification.identifier, identifier), gt(verification.expiresAt, new Date())))
-		.limit(1);
-
-	const record = row ? parseTotpResetCodeRecord(row.value) : null;
-	if (!(row && record)) {
-		error(400, 'Invalid or expired verification code.');
-	}
-
-	if (totpResetAttemptsExhausted(record)) {
-		await db.delete(verification).where(eq(verification.id, row.id));
-		error(400, 'Too many incorrect attempts. Request a new verification code.');
-	}
-
 	const submittedHash = await hashTotpResetCode(userId, normalizedCode);
-	if (submittedHash !== record.hash) {
+	const outcome = await db.transaction(async (tx) => {
+		const [row] = await tx
+			.select({ id: verification.id, value: verification.value })
+			.from(verification)
+			.where(
+				and(
+					eq(verification.identifier, totpResetCodeIdentifier(userId)),
+					gt(verification.expiresAt, new Date())
+				)
+			)
+			.limit(1)
+			.for('update');
+
+		const record = row ? parseTotpResetCodeRecord(row.value) : null;
+		if (!(row && record)) {
+			return 'invalid';
+		}
+
+		if (totpResetAttemptsExhausted(record)) {
+			await tx.delete(verification).where(eq(verification.id, row.id));
+			return 'exhausted';
+		}
+
+		if (submittedHash === record.hash) {
+			await tx.delete(verification).where(eq(verification.id, row.id));
+			const grantIdentifier = totpResetGrantIdentifier(userId);
+			await tx.delete(verification).where(eq(verification.identifier, grantIdentifier));
+			await tx.insert(verification).values({
+				id: ulid(),
+				identifier: grantIdentifier,
+				value: 'verified',
+				expiresAt: new Date(Date.now() + TOTP_RESET_GRANT_TTL_MS)
+			});
+			return 'verified';
+		}
+
 		const failed = { hash: record.hash, attempts: record.attempts + 1 };
 		if (totpResetAttemptsExhausted(failed)) {
-			await db.delete(verification).where(eq(verification.id, row.id));
-			error(400, 'Too many incorrect attempts. Request a new verification code.');
+			await tx.delete(verification).where(eq(verification.id, row.id));
+			return 'exhausted';
 		}
-		await db
+		await tx
 			.update(verification)
 			.set({ value: encodeTotpResetCodeRecord(failed) })
 			.where(eq(verification.id, row.id));
+		return 'invalid';
+	});
+
+	if (outcome === 'exhausted') {
+		error(400, 'Too many incorrect attempts. Request a new verification code.');
+	}
+	if (outcome === 'invalid') {
 		error(400, 'Invalid or expired verification code.');
 	}
-
-	await db.delete(verification).where(eq(verification.id, row.id));
-
-	const grantIdentifier = totpResetGrantIdentifier(userId);
-	await db.delete(verification).where(eq(verification.identifier, grantIdentifier));
-	await db.insert(verification).values({
-		id: ulid(),
-		identifier: grantIdentifier,
-		value: 'verified',
-		expiresAt: new Date(Date.now() + TOTP_RESET_GRANT_TTL_MS)
-	});
 }
 
 export async function requireTotpResetGrant(db: Db, userId: string) {

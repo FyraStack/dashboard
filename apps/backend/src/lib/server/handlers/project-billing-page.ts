@@ -2,13 +2,13 @@ import { getProjectMemberRole, requireProjectAccess } from '#lib/server/auth-con
 import { runInBackground } from '#lib/server/background.js';
 import { attachDefaultProjectPlan } from '#lib/server/billing/autumn.js';
 import { getProjectBillingOverview, refreshProjectBilling } from '#lib/server/billing/overview.js';
+import { consumeBillingSetupToken } from '#lib/server/billing/setup-token.js';
 import { context } from '#lib/server/context.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { error } from '#lib/server/http.js';
 
 export interface LoadProjectBillingPageInput {
-	billingPromo?: string;
-	billingSetupComplete: boolean;
+	billingSetupToken?: string;
 	projectId: string;
 }
 
@@ -33,22 +33,33 @@ export async function loadProjectBillingPage(
 	await requireProjectAccess(db, locals.user.id, input.projectId, 'admin');
 	const role = await getProjectMemberRole(db, locals.user.id, input.projectId);
 
-	if (input.billingSetupComplete) {
+	if (input.billingSetupToken) {
+		const billingPath = `/projects/${input.projectId}/billing`;
 		if (role !== 'owner') {
 			error(403, 'Project owner permission required');
 		}
 
+		const grant = await consumeBillingSetupToken(
+			db,
+			input.projectId,
+			locals.user.id,
+			input.billingSetupToken
+		);
+		if (!grant) {
+			return { kind: 'redirect', location: billingPath };
+		}
+
 		const paymentUrl = await attachDefaultProjectPlan(
 			input.projectId,
-			`${url.origin}/projects/${input.projectId}/billing`,
-			input.billingPromo
+			`${url.origin}${billingPath}`,
+			grant.promoCode
 		);
 		if (paymentUrl) {
 			return { kind: 'redirect', location: paymentUrl };
 		}
 
 		await refreshProjectBilling(input.projectId);
-		return { kind: 'redirect', location: `/projects/${input.projectId}/billing` };
+		return { kind: 'redirect', location: billingPath };
 	}
 
 	runInBackground(refreshProjectBilling(input.projectId), 'refreshProjectBilling');

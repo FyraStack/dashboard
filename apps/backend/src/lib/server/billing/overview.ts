@@ -1,56 +1,31 @@
 import { and, eq, sum } from 'drizzle-orm';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { billingMeters, billingUsageEvents, vmTypes } from '#lib/server/db/schema.js';
-import {
-	ensureProjectCustomer,
-	getProjectBillingState,
-	getProjectCreditsBalance,
-	getProjectInvoices,
-	invalidateProjectBillingState
-} from './autumn.ts';
+import { capHoursFor, periodAtFor, unmeteredBillableHours } from './caps.ts';
+import { getProjectCreditsBalance, getProjectInvoices } from './credits.ts';
+import { lookupProjectBillingPeriod } from './period.ts';
+import { getProjectBillingStatus, isBillingUsable } from './state.ts';
+import { billedQuantity, estimatedCost } from './usage.ts';
 
-function statusLabel(status: Awaited<ReturnType<typeof getProjectBillingState>>['status']) {
-	if (status === 'active') {
-		return 'Ready';
+async function billingPeriodAnchor(projectId: string) {
+	try {
+		const lookup = await lookupProjectBillingPeriod(projectId);
+		return lookup.customer === 'found' ? lookup.anchor : null;
+	} catch (err) {
+		console.warn(`Failed to look up the billing period for project ${projectId}`, err);
+		return null;
 	}
-	if (status === 'past_due') {
-		return 'Past due';
-	}
-	if (status === 'failed') {
-		return 'Needs attention';
-	}
-	if (status === 'payment_required') {
-		return 'Payment method required';
-	}
-	if (status === 'provider_unavailable') {
-		return 'Billing temporarily unavailable';
-	}
-	return 'Not set up';
-}
-
-export async function refreshProjectBilling(projectId: string) {
-	await ensureProjectCustomer(projectId).catch((err) => {
-		console.warn(`Failed to refresh Autumn customer for project ${projectId}`, err);
-	});
-	invalidateProjectBillingState(projectId);
-}
-
-function billingSetupRequired(
-	status: Awaited<ReturnType<typeof getProjectBillingState>>['status']
-) {
-	return status !== 'active' && status !== 'provider_unavailable';
 }
 
 export async function getProjectBillingReadiness(projectId: string) {
-	const state = await getProjectBillingState(projectId);
-	return { status: state.status, setupRequired: billingSetupRequired(state.status) };
+	return { setupRequired: !isBillingUsable(await getProjectBillingStatus(projectId)) };
 }
 
 export async function getProjectBillingOverview(projectId: string) {
 	const db = initDrizzle();
 	const now = Date.now();
-	const [billingState, credits, invoices] = await Promise.all([
-		getProjectBillingState(projectId),
+	const [billingStatus, credits, invoices] = await Promise.all([
+		getProjectBillingStatus(projectId),
 		getProjectCreditsBalance(projectId),
 		getProjectInvoices(projectId)
 	]);
@@ -60,7 +35,10 @@ export async function getProjectBillingOverview(projectId: string) {
 			resourceId: billingMeters.resourceId,
 			featureId: billingMeters.featureId,
 			units: billingMeters.units,
-			lastMeteredAt: billingMeters.lastMeteredAt
+			lastMeteredAt: billingMeters.lastMeteredAt,
+			capPeriodStart: billingMeters.capPeriodStart,
+			capPeriodEnd: billingMeters.capPeriodEnd,
+			hoursThisPeriod: billingMeters.hoursThisPeriod
 		})
 		.from(billingMeters)
 		.where(
@@ -80,24 +58,42 @@ export async function getProjectBillingOverview(projectId: string) {
 		.groupBy(billingUsageEvents.featureId);
 
 	const vmTypeRows = await db
-		.select({ featureId: vmTypes.autumnFeatureId, name: vmTypes.name, rate: vmTypes.rate })
+		.select({
+			featureId: vmTypes.autumnFeatureId,
+			name: vmTypes.name,
+			rate: vmTypes.rate,
+			cap: vmTypes.cap
+		})
 		.from(vmTypes);
 
 	const recordedByFeature = new Map(
 		recordedRows.map((row) => [row.featureId, Number(row.hours ?? 0)])
 	);
-	const vmTypeByFeature = new Map<string, { name: string; rate: string }>();
+	const vmTypeByFeature = new Map<string, { name: string; rate: string; capHours: number }>();
 	for (const row of vmTypeRows) {
 		if (row.featureId) {
-			vmTypeByFeature.set(row.featureId, { name: row.name, rate: row.rate });
+			vmTypeByFeature.set(row.featureId, {
+				name: row.name,
+				rate: row.rate,
+				capHours: capHoursFor(row.rate, row.cap)
+			});
 		}
 	}
+
+	const hasCappedMeter = activeMeters.some((meter) =>
+		Number.isFinite(vmTypeByFeature.get(meter.featureId)?.capHours ?? Number.POSITIVE_INFINITY)
+	);
+	const periodAt = periodAtFor(hasCappedMeter ? await billingPeriodAnchor(projectId) : null);
 
 	const groups = new Map<string, { count: number; liveHours: number }>();
 	for (const meter of activeMeters) {
 		const group = groups.get(meter.featureId) ?? { count: 0, liveHours: 0 };
 		group.count += 1;
-		group.liveHours += Math.max(0, (now - meter.lastMeteredAt) / 3_600_000) * Number(meter.units);
+		const capHours = vmTypeByFeature.get(meter.featureId)?.capHours ?? Number.POSITIVE_INFINITY;
+		group.liveHours += billedQuantity(
+			meter.units,
+			unmeteredBillableHours(meter, { now, capHours, periodAt })
+		);
 		groups.set(meter.featureId, group);
 	}
 	for (const featureId of recordedByFeature.keys()) {
@@ -116,18 +112,12 @@ export async function getProjectBillingOverview(projectId: string) {
 			resourceType: 'vm' as const,
 			count: group.count,
 			hours: Number(hours.toFixed(2)),
-			cost: rate === null ? null : Number((hours * rate).toFixed(2))
+			cost: rate === null ? null : estimatedCost(hours, rate)
 		};
 	});
 
 	return {
-		customer: billingState.customer,
-		status: billingState.status,
-		statusLabel: statusLabel(billingState.status),
-		planLabel: 'Project billing',
-		setupRequired: billingSetupRequired(billingState.status),
-		syncError: billingState.syncError,
-		lastUpdatedAt: now,
+		setupRequired: !isBillingUsable(billingStatus),
 		activeResourceCount: activeMeters.length,
 		activeResources,
 		credits,

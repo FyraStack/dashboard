@@ -1,7 +1,7 @@
 import { getProjectMemberRole, requireProjectAccess } from '#lib/server/auth-context.js';
 import { runInBackground } from '#lib/server/background.js';
-import { attachDefaultProjectPlan } from '#lib/server/billing/autumn.js';
-import { getProjectBillingReadiness, refreshProjectBilling } from '#lib/server/billing/overview.js';
+import { attachDefaultProjectPlan, refreshProjectBilling } from '#lib/server/billing/customers.js';
+import { getProjectBillingReadiness } from '#lib/server/billing/overview.js';
 import { consumeBillingSetupToken } from '#lib/server/billing/setup-token.js';
 import { context } from '#lib/server/context.js';
 import { initDrizzle } from '#lib/server/db/index.js';

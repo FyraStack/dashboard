@@ -1,7 +1,7 @@
 import { env, WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { and, eq, inArray, isNotNull, lt } from 'drizzle-orm';
 import { getBackend } from '#lib/server/backends/index.js';
-import { deleteProjectServerEntity } from '#lib/server/billing/autumn.js';
+import { deleteProjectServerEntity } from '#lib/server/billing/entities.js';
 import { hasUnsyncedUsageEvents, meterResourceThrough } from '#lib/server/billing/metering.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { ipAssignments, paymentPeriods, vms, volumes } from '#lib/server/db/schema.js';

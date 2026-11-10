@@ -1,11 +1,11 @@
 import { env, WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { and, eq } from 'drizzle-orm';
 import { getBackend, type VmCreateParams } from '#lib/server/backends/index.js';
+import { isBillingConfigured } from '#lib/server/billing/autumn.js';
 import {
 	deleteProjectServerEntity,
-	ensureProjectServerEntity,
-	isBillingConfigured
-} from '#lib/server/billing/autumn.js';
+	ensureProjectServerEntity
+} from '#lib/server/billing/entities.js';
 import { createBillingMeter } from '#lib/server/billing/metering.js';
 import { config } from '#lib/server/config.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';

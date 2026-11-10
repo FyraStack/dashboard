@@ -3,7 +3,7 @@ import { type PermissionLevel, type ProjectRole, projectRoles } from 'stack-shar
 import { initAuth } from '#lib/server/auth.js';
 import { requireProjectAccess, requireUser } from '#lib/server/auth-context.js';
 import { runInBackground } from '#lib/server/background.js';
-import { updateProjectCustomer } from '#lib/server/billing/autumn.js';
+import { updateProjectCustomer } from '#lib/server/billing/customers.js';
 import { context } from '#lib/server/context.js';
 import { member, organization } from '#lib/server/db/auth.schema.js';
 import { error } from '#lib/server/http.js';

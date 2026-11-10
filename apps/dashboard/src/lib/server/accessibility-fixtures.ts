@@ -119,13 +119,7 @@ export const accessibilityFixtureServers = [
 ];
 
 export const accessibilityFixtureBillingOverview = {
-	customer: null,
-	status: 'active' as const,
-	statusLabel: 'Ready',
-	planLabel: 'Project billing',
 	setupRequired: false,
-	syncError: null,
-	lastUpdatedAt: now.getTime(),
 	activeResourceCount: 1,
 	activeResources: [
 		{
@@ -138,14 +132,9 @@ export const accessibilityFixtureBillingOverview = {
 		}
 	],
 	credits: {
-		featureId: 'credits',
 		remaining: 2500,
-		usage: 500,
-		overageUsage: 0,
-		overageRate: 0.01,
 		estimatedOverageCost: 0,
-		prepaidPrice: { amount: 10, billingUnits: 1000 },
-		nextResetAt: null
+		prepaidPrice: { amount: 10, billingUnits: 1000 }
 	},
 	invoices: []
 } satisfies Extract<ProjectBillingPage, { kind: 'page' }>['billing'];

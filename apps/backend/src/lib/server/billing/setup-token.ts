@@ -1,11 +1,12 @@
-import { ulid } from 'ulid';
-import { verification } from '#lib/server/db/auth.schema.js';
+import { sha256Hex } from 'stack-shared/hash';
 import type { Database } from '#lib/server/db/index.js';
-import { consumeVerification } from '#lib/server/verification-codes.js';
+import {
+	consumeVerification,
+	storeVerification,
+	verificationIdentifiers
+} from '#lib/server/verification-codes.js';
 
 const BILLING_SETUP_TOKEN_TTL_MS = 60 * 60 * 1000;
-
-export const BILLING_SETUP_QUERY_PARAM = 'billing_setup';
 
 interface BillingSetupGrant {
 	promoCode?: string;
@@ -13,9 +14,7 @@ interface BillingSetupGrant {
 }
 
 async function billingSetupIdentifier(projectId: string, token: string) {
-	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
-	const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0'));
-	return `billing-setup:${projectId}:${hash.join('')}`;
+	return verificationIdentifiers.billingSetup(projectId, await sha256Hex(token));
 }
 
 export async function createBillingSetupToken(
@@ -24,11 +23,10 @@ export async function createBillingSetupToken(
 	grant: BillingSetupGrant
 ) {
 	const token = crypto.randomUUID();
-	await db.insert(verification).values({
-		id: ulid(),
+	await storeVerification(db, {
 		identifier: await billingSetupIdentifier(projectId, token),
 		value: JSON.stringify(grant),
-		expiresAt: new Date(Date.now() + BILLING_SETUP_TOKEN_TTL_MS)
+		ttlMs: BILLING_SETUP_TOKEN_TTL_MS
 	});
 	return token;
 }

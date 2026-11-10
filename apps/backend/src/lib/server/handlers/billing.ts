@@ -1,26 +1,19 @@
-import { requireProjectAccess } from '#lib/server/auth-context.js';
-import { runInBackground } from '#lib/server/background.js';
+import { billingSetupTokenParam } from 'stack-shared/billing';
+import { projectBillingPath } from 'stack-shared/routes';
+import { requireProjectAccess, requireUser } from '#lib/server/auth-context.js';
+import { purchaseProjectCredits } from '#lib/server/billing/credits.js';
 import {
 	openProjectBillingPortal,
-	purchaseProjectCredits,
 	setupProjectPayment,
 	validateProjectDiscountCode
-} from '#lib/server/billing/autumn.js';
-import { getProjectBillingOverview, refreshProjectBilling } from '#lib/server/billing/overview.js';
-import {
-	BILLING_SETUP_QUERY_PARAM,
-	createBillingSetupToken
-} from '#lib/server/billing/setup-token.js';
+} from '#lib/server/billing/customers.js';
+import { createBillingSetupToken } from '#lib/server/billing/setup-token.js';
 import { context } from '#lib/server/context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
 import { error } from '#lib/server/http.js';
 import { withIdempotency } from '#lib/server/idempotency.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { safeReturnPath } from '#lib/server/urls.js';
 
-export interface GetProjectBillingInput {
-	projectId: string;
-}
 export interface OpenBillingPortalInput {
 	projectId: string;
 }
@@ -37,31 +30,14 @@ export interface SetupProjectBillingPaymentInput {
 
 const MAX_CREDITS_PER_PURCHASE = 1_000_000;
 
-export async function getProjectBilling(input: GetProjectBillingInput) {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, locals.user.id, input.projectId, 'admin');
-	runInBackground(refreshProjectBilling(input.projectId), 'refreshProjectBilling');
-
-	return getProjectBillingOverview(input.projectId);
-}
-
 export async function openBillingPortal(input: OpenBillingPortalInput) {
-	const { locals, url: requestUrl } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, locals.user.id, input.projectId, 'owner');
+	const { db, user } = requireUser();
+	const { url: requestUrl } = context();
+	await requireProjectAccess(db, user.id, input.projectId, 'owner');
 
 	const url = await openProjectBillingPortal(
 		input.projectId,
-		`${requestUrl.origin}/projects/${input.projectId}/billing`
+		`${requestUrl.origin}${projectBillingPath(input.projectId)}`
 	);
 	captureServerEvent('billing_portal_opened', {}, { projectId: input.projectId });
 
@@ -69,10 +45,7 @@ export async function openBillingPortal(input: OpenBillingPortalInput) {
 }
 
 export async function purchaseCredits(input: PurchaseCreditsInput) {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
+	const { db, user } = requireUser();
 	if (input.credits > MAX_CREDITS_PER_PURCHASE) {
 		error(
 			400,
@@ -80,9 +53,7 @@ export async function purchaseCredits(input: PurchaseCreditsInput) {
 		);
 	}
 
-	const userId = locals.user.id;
-	const db = initDrizzle();
-	await requireProjectAccess(db, userId, input.projectId, 'owner');
+	await requireProjectAccess(db, user.id, input.projectId, 'owner');
 
 	const { idempotencyKey, ...operationArgs } = input;
 	const url = await withIdempotency(
@@ -90,7 +61,7 @@ export async function purchaseCredits(input: PurchaseCreditsInput) {
 		{
 			key: idempotencyKey,
 			operation: 'billing.purchaseCredits',
-			args: { ...operationArgs, userId }
+			args: { ...operationArgs, userId: user.id }
 		},
 		async () => {
 			const paymentUrl = await purchaseProjectCredits(
@@ -111,26 +82,22 @@ export async function purchaseCredits(input: PurchaseCreditsInput) {
 }
 
 export async function setupProjectBillingPayment(input: SetupProjectBillingPaymentInput) {
-	const { locals, url: requestUrl } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, locals.user.id, input.projectId, 'owner');
+	const { db, user } = requireUser();
+	const { url: requestUrl } = context();
+	await requireProjectAccess(db, user.id, input.projectId, 'owner');
 
 	const discountCode = input.discountCode?.trim();
 	if (discountCode) {
 		await validateProjectDiscountCode(input.projectId, discountCode);
 	}
 
-	const returnPath = safeReturnPath(input.returnTo, `/projects/${input.projectId}/billing`);
+	const returnPath = safeReturnPath(input.returnTo, projectBillingPath(input.projectId));
 	const token = await createBillingSetupToken(db, input.projectId, {
-		userId: locals.user.id,
+		userId: user.id,
 		...(discountCode ? { promoCode: discountCode } : {})
 	});
 	const successUrl = new URL(returnPath, requestUrl.origin);
-	successUrl.searchParams.set(BILLING_SETUP_QUERY_PARAM, token);
+	successUrl.searchParams.set(billingSetupTokenParam, token);
 	const url = await setupProjectPayment(input.projectId, successUrl.toString());
 	captureServerEvent(
 		'billing_setup_started',

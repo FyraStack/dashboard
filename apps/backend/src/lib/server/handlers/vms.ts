@@ -9,11 +9,8 @@ import {
 } from '#lib/server/backends/index.js';
 import { VmResizeError } from '#lib/server/backends/types.js';
 import { runInBackground } from '#lib/server/background.js';
-import {
-	isBillingConfigured,
-	isProjectBillingExempt,
-	requireProjectBillingActive
-} from '#lib/server/billing/autumn.js';
+import { isBillingConfigured } from '#lib/server/billing/autumn.js';
+import { requireProjectBillingActive } from '#lib/server/billing/state.js';
 import { context } from '#lib/server/context.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { ipamAllocations, sshKeys, vms, vmTypes } from '#lib/server/db/schema.js';
@@ -565,10 +562,7 @@ export async function createVm(params: CreateVmInput) {
 
 	const db = initDrizzle();
 	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'read_write');
-	const billingExempt = await isProjectBillingExempt(params.projectId);
-	if (!billingExempt) {
-		await requireProjectBillingActive(params.projectId);
-	}
+	const { billingExempt } = await requireProjectBillingActive(params.projectId);
 
 	const sshKeyIds = params.sshKeyIds ?? [];
 	const keys =
@@ -788,10 +782,7 @@ export async function resizeVm(params: ResizeVmInput) {
 	}
 	if (row.ownerProjectId) {
 		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
-		const billingExempt = await isProjectBillingExempt(row.ownerProjectId);
-		if (!billingExempt) {
-			await requireProjectBillingActive(row.ownerProjectId);
-		}
+		await requireProjectBillingActive(row.ownerProjectId);
 	}
 
 	const target = await db.query.vmTypes.findFirst({ where: eq(vmTypes.id, params.vmTypeId) });

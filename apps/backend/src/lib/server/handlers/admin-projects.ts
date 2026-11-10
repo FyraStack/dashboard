@@ -6,7 +6,7 @@ import {
 	consumeAdminVerification
 } from '#lib/server/admin-verification.js';
 import { requireAdminUser } from '#lib/server/auth-context.js';
-import { isProjectBillingExempt, requireProjectBillingActive } from '#lib/server/billing/autumn.js';
+import { requireProjectBillingActive } from '#lib/server/billing/state.js';
 import { makeCountMap } from '#lib/server/count-map.js';
 import { member, organization, user } from '#lib/server/db/auth.schema.js';
 import type { Database } from '#lib/server/db/index.js';
@@ -223,10 +223,7 @@ export async function createAdminVm(params: CreateAdminVmInput) {
 		error(400, 'This project is disabled');
 	}
 
-	const billingExempt = await isProjectBillingExempt(params.projectId);
-	if (!billingExempt) {
-		await requireProjectBillingActive(params.projectId);
-	}
+	const { billingExempt } = await requireProjectBillingActive(params.projectId);
 
 	const [owner] = await db
 		.select({ userId: member.userId })

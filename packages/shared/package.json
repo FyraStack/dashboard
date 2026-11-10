@@ -1,0 +1,12 @@
+{
+	"name": "stack-shared",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./*": "./src/*.ts"
+	},
+	"dependencies": {
+		"better-auth": "^1.7.16"
+	}
+}

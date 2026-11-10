@@ -4,7 +4,6 @@
 	"private": true,
 	"type": "module",
 	"imports": {
-		"#lib": "./src/lib/index.js",
 		"#lib/*": "./src/lib/*"
 	},
 	"exports": {
@@ -44,6 +43,7 @@
 		"ky": "^2.0.2",
 		"pg": "^8.22.0",
 		"posthog-node": "^5.52.4",
+		"stack-shared": "workspace:*",
 		"svelte": "^5.56.6",
 		"ulid": "^3.0.2",
 		"yaml": "^2.9.0"

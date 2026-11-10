@@ -7,6 +7,7 @@ import { deleteSessionCookie, expireCookie } from 'better-auth/cookies';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
 import { and, count, eq, gt } from 'drizzle-orm';
 import { ac, organizationRoles } from '#lib/auth/organization-permissions.js';
+import EmailChangeConfirmationEmail from '#lib/emails/email-change-confirmation.svelte';
 import OrganizationInvitationEmail from '#lib/emails/organization-invitation.svelte';
 import ResetPasswordEmail from '#lib/emails/reset-password.svelte';
 import VerifyEmail from '#lib/emails/verify-email.svelte';
@@ -126,7 +127,16 @@ function buildAuth() {
 		session: { cookieCache: { enabled: true, maxAge: 300 } },
 		user: {
 			changeEmail: {
-				enabled: true
+				enabled: true,
+				sendChangeEmailConfirmation: ({ user, newEmail, url }) =>
+					sendAuthEmail(
+						sendRenderedEmail({
+							component: EmailChangeConfirmationEmail,
+							props: { userName: user.name, newEmail, confirmationUrl: url },
+							subject: 'Confirm your Stack email change',
+							to: user.email
+						})
+					)
 			},
 			additionalFields: {
 				isAdmin: {
@@ -188,11 +198,14 @@ function buildAuth() {
 				...additionalFields,
 				id
 			}),
-			sendResetPassword: ({ user, url }) =>
+			sendResetPassword: ({ user, token }) =>
 				sendAuthEmail(
 					sendRenderedEmail({
 						component: ResetPasswordEmail,
-						props: { userName: user.name, resetUrl: url },
+						props: {
+							userName: user.name,
+							resetUrl: `${baseURL}/reset-password?token=${encodeURIComponent(token)}`
+						},
 						subject: 'Reset your Stack password',
 						to: user.email
 					})

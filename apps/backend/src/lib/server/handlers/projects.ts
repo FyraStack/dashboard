@@ -1,5 +1,9 @@
-import { and, eq } from 'drizzle-orm';
-import { type ProjectRole, projectRoles } from '#lib/auth/organization-permissions.js';
+import { and, eq, ne } from 'drizzle-orm';
+import {
+	type PermissionLevel,
+	type ProjectRole,
+	projectRoles
+} from '#lib/auth/organization-permissions.js';
 import { initAuth } from '#lib/server/auth.js';
 import { requireProjectAccess } from '#lib/server/auth-context.js';
 import { runInBackground } from '#lib/server/background.js';
@@ -60,6 +64,8 @@ export interface AddMemberInput {
 	permissions: 'admin' | 'read_write' | 'read';
 	projectId: string;
 }
+const assignableMemberRoles: readonly PermissionLevel[] = ['admin', 'read_write', 'read'];
+
 export interface UpdateMemberRoleInput {
 	permissions: 'admin' | 'read_write' | 'read';
 	projectId: string;
@@ -259,10 +265,24 @@ export async function updateMemberRole(input: UpdateMemberRoleInput): Promise<vo
 	const db = initDrizzle();
 	await requireProjectAccess(db, locals.user.id, input.projectId, 'admin');
 
-	await db
+	if (!assignableMemberRoles.includes(input.permissions)) {
+		error(400, 'Invalid project role');
+	}
+
+	const [updated] = await db
 		.update(member)
 		.set({ role: input.permissions })
-		.where(and(eq(member.organizationId, input.projectId), eq(member.userId, input.userId)));
+		.where(
+			and(
+				eq(member.organizationId, input.projectId),
+				eq(member.userId, input.userId),
+				ne(member.role, 'owner')
+			)
+		)
+		.returning({ id: member.id });
+	if (!updated) {
+		error(400, "That member's role can't be changed");
+	}
 	captureServerEvent(
 		'project_member_role_updated',
 		{ member_user_id: input.userId, permissions: input.permissions },
@@ -289,7 +309,7 @@ export async function removeMember(input: RemoveMemberInput): Promise<void> {
 		error(400, 'Project owner cannot be removed');
 	}
 
-	await db.delete(member).where(eq(member.id, target.id));
+	await db.delete(member).where(and(eq(member.id, target.id), ne(member.role, 'owner')));
 	captureServerEvent(
 		'project_member_removed',
 		{ member_user_id: input.userId, previous_role: target.role },

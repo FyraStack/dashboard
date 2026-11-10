@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, isNull, lt, ne, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, lt, ne, notInArray, or } from 'drizzle-orm';
 import { organization } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import {
@@ -533,8 +533,7 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 			meter: billingMeters,
 			rate: vmTypes.rate,
 			cap: vmTypes.cap,
-			currentFeatureId: vmTypes.autumnFeatureId,
-			vmStatus: vms.status
+			currentFeatureId: vmTypes.autumnFeatureId
 		})
 		.from(billingMeters)
 		.leftJoin(vms, eq(vms.id, billingMeters.resourceId))
@@ -543,6 +542,7 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 			and(
 				eq(billingMeters.resourceType, 'vm'),
 				eq(billingMeters.active, true),
+				or(isNull(vms.status), notInArray(vms.status, unbillableVmStatuses)),
 				or(
 					lt(billingMeters.lastMeteredAt, now),
 					and(
@@ -559,12 +559,7 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 	const lookupFor = (projectId: string) => {
 		let lookup = lookups.get(projectId);
 		if (!lookup) {
-			lookup = lookupProjectBillingPeriod(projectId).then((result) => {
-				if (result.customer === 'missing') {
-					logUnbillableProject(projectId);
-				}
-				return result;
-			});
+			lookup = lookupBillingPeriodCreatingMissingCustomer(projectId);
 			lookups.set(projectId, lookup);
 		}
 		return lookup;
@@ -575,40 +570,56 @@ export async function meterActiveResources(now = Date.now(), limit = 100) {
 	};
 
 	let events = 0;
-	const skipped = { errored: 0, unbillable: 0 };
-	await runBounded(
-		meters,
-		METER_CONCURRENCY,
-		async ({ meter, rate, cap, currentFeatureId, vmStatus }) => {
-			if (vmIsUnbillable(vmStatus)) {
-				skipped.errored += 1;
-				return;
-			}
-
-			const lookup = await lookupFor(meter.projectId);
-			if (lookup.customer === 'missing') {
-				skipped.unbillable += 1;
-				return;
-			}
-
-			if (currentFeatureId && currentFeatureId !== meter.featureId) {
-				const inserted = await rotateMeterFeature(meter, now, currentFeatureId, anchorFor);
-				events += inserted.length;
-				return;
-			}
-
-			const capHours = capHoursFor(rate, cap);
-			const anchor = Number.isFinite(capHours) ? await anchorFor(meter.projectId) : null;
-			const inserted = await recordMeterUsage(meter, now, capHours, makePeriodAt(anchor));
-			events += inserted.length;
+	const skipped = { unbillable: 0 };
+	await runBounded(meters, METER_CONCURRENCY, async ({ meter, rate, cap, currentFeatureId }) => {
+		const lookup = await lookupFor(meter.projectId);
+		if (lookup.customer === 'missing') {
+			skipped.unbillable += 1;
+			return;
 		}
-	);
+
+		if (currentFeatureId && currentFeatureId !== meter.featureId) {
+			const inserted = await rotateMeterFeature(meter, now, currentFeatureId, anchorFor);
+			events += inserted.length;
+			return;
+		}
+
+		const capHours = capHoursFor(rate, cap);
+		const anchor = Number.isFinite(capHours) ? await anchorFor(meter.projectId) : null;
+		const inserted = await recordMeterUsage(meter, now, capHours, makePeriodAt(anchor));
+		events += inserted.length;
+	});
 
 	return { meters: meters.length, events, skipped };
 }
 
+const unbillableVmStatuses: VmStatus[] = ['error', 'deleting'];
+
 function vmIsUnbillable(status: VmStatus | null | undefined) {
-	return status === 'error' || status === 'deleting';
+	return status ? unbillableVmStatuses.includes(status) : false;
+}
+
+async function lookupBillingPeriodCreatingMissingCustomer(
+	projectId: string
+): Promise<ProjectBillingPeriodLookup> {
+	const lookup = await lookupProjectBillingPeriod(projectId);
+	if (lookup.customer === 'found') {
+		return lookup;
+	}
+
+	try {
+		await ensureProjectCustomer(projectId);
+	} catch (err) {
+		console.error(`Creating missing billing customer for project ${projectId} failed`, err);
+		logUnbillableProject(projectId);
+		return lookup;
+	}
+
+	const retried = await lookupProjectBillingPeriod(projectId);
+	if (retried.customer === 'missing') {
+		logUnbillableProject(projectId);
+	}
+	return retried;
 }
 
 type ProjectTargetStatus = 'ok' | 'failed' | 'gone';

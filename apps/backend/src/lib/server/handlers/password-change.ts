@@ -1,13 +1,20 @@
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import PasswordChangeCodeEmail from '#lib/emails/password-change-code.svelte';
 import { initAuth } from '#lib/server/auth.js';
 import { context } from '#lib/server/context.js';
 import { account, verification } from '#lib/server/db/auth.schema.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { error } from '#lib/server/http.js';
 import { ulid } from '#lib/server/id.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import {
+	consumeVerification,
+	restoreVerification,
+	withStepUpAttemptLimit
+} from '#lib/server/step-up.js';
+
+type VerificationRow = typeof verification.$inferSelect;
 
 const CODE_LENGTH = 6;
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -88,6 +95,21 @@ async function changePassword(currentPassword: string, newPassword: string): Pro
 	return changed.headers.getSetCookie();
 }
 
+async function changePasswordOrRestoreProof(
+	db: Database,
+	proof: VerificationRow,
+	params: { currentPassword: string; newPassword: string }
+) {
+	try {
+		return (await hasPassword())
+			? await changePassword(params.currentPassword, params.newPassword)
+			: await changePasswordOauth(params.newPassword);
+	} catch (err) {
+		await restoreVerification(db, proof);
+		throw err;
+	}
+}
+
 export async function sendPasswordChangeCode() {
 	const { user } = context().locals;
 	if (!user) {
@@ -138,28 +160,16 @@ export async function confirmPasswordChangeWithEmail(params: ConfirmPasswordChan
 	}
 
 	const db = initDrizzle();
-	const identifier = passwordChangeIdentifier(user.id);
 	const value = await hashCode(user.id, code);
-	const [record] = await db
-		.select({ id: verification.id })
-		.from(verification)
-		.where(
-			and(
-				eq(verification.identifier, identifier),
-				eq(verification.value, value),
-				gt(verification.expiresAt, new Date())
-			)
-		)
-		.limit(1);
+	const proof = await withStepUpAttemptLimit(db, user.id, async () => {
+		const consumed = await consumeVerification(db, passwordChangeIdentifier(user.id), value);
+		if (!consumed) {
+			error(400, 'Invalid or expired verification code.');
+		}
+		return consumed;
+	});
 
-	if (!record) {
-		error(400, 'Invalid or expired verification code.');
-	}
-
-	const setCookie = (await hasPassword())
-		? await changePassword(params.currentPassword, params.newPassword)
-		: await changePasswordOauth(params.newPassword);
-	await db.delete(verification).where(eq(verification.id, record.id));
+	const setCookie = await changePasswordOrRestoreProof(db, proof, params);
 	captureServerEvent('password_changed', { verification_method: 'email' });
 
 	return { setCookie };
@@ -177,11 +187,13 @@ export async function confirmPasswordChangeWithTotp(params: ConfirmPasswordChang
 	}
 
 	const auth = initAuth();
-	const verified = await auth.api.verifyTOTP({
-		headers: request.headers,
-		body: { code, trustDevice: false },
-		returnHeaders: true
-	});
+	const verified = await withStepUpAttemptLimit(initDrizzle(), locals.user.id, () =>
+		auth.api.verifyTOTP({
+			headers: request.headers,
+			body: { code, trustDevice: false },
+			returnHeaders: true
+		})
+	);
 
 	const passwordCookies = (await hasPassword())
 		? await changePassword(params.currentPassword, params.newPassword)
@@ -200,21 +212,12 @@ export async function confirmPasswordChangeWithPasskey(
 	}
 
 	const db = initDrizzle();
-	const identifier = passwordChangePasskeyIdentifier(user.id);
-	const [record] = await db
-		.select({ id: verification.id })
-		.from(verification)
-		.where(and(eq(verification.identifier, identifier), gt(verification.expiresAt, new Date())))
-		.limit(1);
-
-	if (!record) {
+	const proof = await consumeVerification(db, passwordChangePasskeyIdentifier(user.id));
+	if (!proof) {
 		error(400, 'Verify with your passkey before changing your password.');
 	}
 
-	const setCookie = (await hasPassword())
-		? await changePassword(params.currentPassword, params.newPassword)
-		: await changePasswordOauth(params.newPassword);
-	await db.delete(verification).where(eq(verification.id, record.id));
+	const setCookie = await changePasswordOrRestoreProof(db, proof, params);
 	captureServerEvent('password_changed', { verification_method: 'passkey' });
 
 	return { setCookie };

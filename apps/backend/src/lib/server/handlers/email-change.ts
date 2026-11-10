@@ -1,7 +1,7 @@
 import { and, eq, gt } from 'drizzle-orm';
 import { initAuth } from '#lib/server/auth.js';
 import { context } from '#lib/server/context.js';
-import { user, verification } from '#lib/server/db/auth.schema.js';
+import { verification } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { error } from '#lib/server/http.js';
 import { ulid } from '#lib/server/id.js';
@@ -55,16 +55,6 @@ export async function requestEmailChange(params: RequestEmailChangeInput) {
 	}
 
 	const db = initDrizzle();
-	const [existingUser] = await db
-		.select({ id: user.id })
-		.from(user)
-		.where(eq(user.email, newEmail))
-		.limit(1);
-
-	if (existingUser) {
-		error(400, 'That email address is already in use.');
-	}
-
 	const auth = initAuth();
 	await auth.api.changeEmail({
 		headers: request.headers,

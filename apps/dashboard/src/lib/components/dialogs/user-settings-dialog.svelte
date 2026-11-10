@@ -661,7 +661,8 @@
 									/>
 									{#if profileEmailChangePending}
 										<p class="text-xs text-muted-foreground">
-											Check {pendingProfileEmail} to verify this email change.
+											Approve the change from the link sent to {currentProfileEmail}, then verify
+											{pendingProfileEmail}.
 										</p>
 									{/if}
 								</div>
@@ -678,7 +679,7 @@
 										Saving...
 									{:else if profileSaved}
 										<Check class="h-3 w-3" />
-										{profileEmailChangePending ? 'Verification sent' : 'Saved'}
+										{profileEmailChangePending ? 'Confirmation sent' : 'Saved'}
 									{:else}
 										Save Profile
 									{/if}

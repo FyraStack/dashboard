@@ -7,6 +7,7 @@ import { sendSecurityAlertEmail } from '#lib/server/email-notifications.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import { error } from '#lib/server/http.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { withStepUpAttemptLimit } from '#lib/server/step-up.js';
 import {
 	beginTotpReset,
 	clearTotpResetGrant,
@@ -55,11 +56,13 @@ export async function disableTwoFactorWithVerification(
 			error(400, 'Enter the verification code from your authenticator app.');
 		}
 
-		const verified = await auth.api.verifyTOTP({
-			headers: request.headers,
-			body: { code, trustDevice: false },
-			returnHeaders: true
-		});
+		const verified = await withStepUpAttemptLimit(initDrizzle(), user.id, () =>
+			auth.api.verifyTOTP({
+				headers: request.headers,
+				body: { code, trustDevice: false },
+				returnHeaders: true
+			})
+		);
 		setCookie.push(...verified.headers.getSetCookie());
 	} else if (params.method === 'backupCode') {
 		const code = params.code.trim();
@@ -67,11 +70,13 @@ export async function disableTwoFactorWithVerification(
 			error(400, 'Enter a backup code.');
 		}
 
-		const verified = await auth.api.verifyBackupCode({
-			headers: request.headers,
-			body: { code, disableSession: true, trustDevice: false },
-			returnHeaders: true
-		});
+		const verified = await withStepUpAttemptLimit(initDrizzle(), user.id, () =>
+			auth.api.verifyBackupCode({
+				headers: request.headers,
+				body: { code, disableSession: true, trustDevice: false },
+				returnHeaders: true
+			})
+		);
 		setCookie.push(...verified.headers.getSetCookie());
 	} else {
 		error(400, 'Choose a valid verification method.');
@@ -151,8 +156,10 @@ export async function confirmTotpResetChoice(params: ConfirmTotpResetChoiceInput
 
 	const auth = initAuth();
 	const authContext = await auth.$context;
-	await removeTotpWithVerifiedPassword(db, user.id, params.password, (hash, password) =>
-		authContext.password.verify({ hash, password })
+	await withStepUpAttemptLimit(db, user.id, () =>
+		removeTotpWithVerifiedPassword(db, user.id, params.password, (hash, password) =>
+			authContext.password.verify({ hash, password })
+		)
 	);
 	await clearTotpResetGrant(db, user.id);
 	await sendSecurityAlertEmail({

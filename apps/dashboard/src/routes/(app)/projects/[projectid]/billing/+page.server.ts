@@ -20,8 +20,7 @@ export const load: PageServerLoad = async ({ params, parent, url }) => {
 
 	const page = await backend<ProjectBillingPage>((me) =>
 		me.project(params.projectid).billingPage({
-			billingSetupComplete: url.searchParams.get('billing_setup') === 'complete',
-			billingPromo: url.searchParams.get('billing_promo') ?? undefined
+			billingSetupToken: url.searchParams.get('billing_setup') ?? undefined
 		})
 	);
 

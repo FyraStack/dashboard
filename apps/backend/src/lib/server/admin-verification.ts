@@ -1,10 +1,11 @@
-import { and, eq, gt } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { initAuth } from '#lib/server/auth.js';
 import { context } from '#lib/server/context.js';
 import { passkey, twoFactor, verification } from '#lib/server/db/auth.schema.js';
 import type { initDrizzle } from '#lib/server/db/index.js';
 import { error } from '#lib/server/http.js';
 import { ulid } from '#lib/server/id.js';
+import { consumeVerification, withStepUpAttemptLimit } from '#lib/server/step-up.js';
 
 export const ADMIN_VERIFICATION_CODE_LENGTH = 6;
 export const ADMIN_VERIFICATION_CODE_TTL_MS = 10 * 60 * 1000;
@@ -110,21 +111,10 @@ export async function beginAdminVerification(
 }
 
 async function consumePasskeyVerification(db: Db, adminUserId: string, targetId: string) {
-	const [record] = await db
-		.select({ id: verification.id })
-		.from(verification)
-		.where(
-			and(
-				eq(verification.identifier, passkeyIdentifier(adminUserId, targetId)),
-				gt(verification.expiresAt, new Date())
-			)
-		)
-		.limit(1);
-
-	if (!record) {
+	const consumed = await consumeVerification(db, passkeyIdentifier(adminUserId, targetId));
+	if (!consumed) {
 		error(400, 'Verify with your passkey before performing this action.');
 	}
-	await db.delete(verification).where(eq(verification.id, record.id));
 }
 
 async function consumeEmailVerification(
@@ -138,24 +128,13 @@ async function consumeEmailVerification(
 		error(400, 'Enter the verification code from your email.');
 	}
 
-	const identifier = emailIdentifier(adminUserId, targetId);
 	const value = await hashVerificationCode(adminUserId, targetId, normalizedCode);
-	const [record] = await db
-		.select({ id: verification.id })
-		.from(verification)
-		.where(
-			and(
-				eq(verification.identifier, identifier),
-				eq(verification.value, value),
-				gt(verification.expiresAt, new Date())
-			)
-		)
-		.limit(1);
-
-	if (!record) {
-		error(400, 'Invalid or expired verification code.');
-	}
-	await db.delete(verification).where(eq(verification.id, record.id));
+	await withStepUpAttemptLimit(db, adminUserId, async () => {
+		const consumed = await consumeVerification(db, emailIdentifier(adminUserId, targetId), value);
+		if (!consumed) {
+			error(400, 'Invalid or expired verification code.');
+		}
+	});
 }
 
 export async function consumeAdminVerification(
@@ -182,10 +161,12 @@ export async function consumeAdminVerification(
 		}
 
 		const auth = initAuth();
-		await auth.api.verifyTOTP({
-			headers: context().request.headers,
-			body: { code: normalizedCode, trustDevice: false }
-		});
+		await withStepUpAttemptLimit(db, adminUserId, () =>
+			auth.api.verifyTOTP({
+				headers: context().request.headers,
+				body: { code: normalizedCode, trustDevice: false }
+			})
+		);
 		return;
 	}
 

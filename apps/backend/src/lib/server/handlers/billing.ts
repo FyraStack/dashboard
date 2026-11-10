@@ -7,6 +7,10 @@ import {
 	validateProjectDiscountCode
 } from '#lib/server/billing/autumn.js';
 import { getProjectBillingOverview, refreshProjectBilling } from '#lib/server/billing/overview.js';
+import {
+	BILLING_SETUP_QUERY_PARAM,
+	createBillingSetupToken
+} from '#lib/server/billing/setup-token.js';
 import { context } from '#lib/server/context.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { error } from '#lib/server/http.js';
@@ -128,10 +132,13 @@ export async function setupProjectBillingPayment(input: SetupProjectBillingPayme
 	}
 
 	const returnPath = safeReturnPath(input.returnTo, `/projects/${input.projectId}/billing`);
-	const separator = returnPath.includes('?') ? '&' : '?';
-	const promoParam = discountCode ? `&billing_promo=${encodeURIComponent(discountCode)}` : '';
-	const successUrl = `${requestUrl.origin}${returnPath}${separator}billing_setup=complete${promoParam}`;
-	const url = await setupProjectPayment(input.projectId, successUrl);
+	const token = await createBillingSetupToken(db, input.projectId, {
+		userId: locals.user.id,
+		...(discountCode ? { promoCode: discountCode } : {})
+	});
+	const successUrl = new URL(returnPath, requestUrl.origin);
+	successUrl.searchParams.set(BILLING_SETUP_QUERY_PARAM, token);
+	const url = await setupProjectPayment(input.projectId, successUrl.toString());
 	captureServerEvent(
 		'billing_setup_started',
 		{ has_discount_code: Boolean(discountCode) },

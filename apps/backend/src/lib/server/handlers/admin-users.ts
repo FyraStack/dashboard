@@ -296,6 +296,9 @@ export async function setUserDisabled(params: SetUserDisabledInput) {
 		.update(user)
 		.set({ banned: params.disabled, banReason: params.disabled ? null : target.banReason })
 		.where(eq(user.id, params.userId));
+	if (params.disabled) {
+		await db.delete(session).where(eq(session.userId, params.userId));
+	}
 
 	captureServerEvent('admin_user_disabled_changed', {
 		target_user_id: params.userId,

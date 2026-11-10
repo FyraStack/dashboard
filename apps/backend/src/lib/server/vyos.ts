@@ -1,5 +1,6 @@
 import ky, { type KyInstance } from 'ky';
 import { getRuntimeEnv } from '#lib/server/env.js';
+import { ServiceError, type ServiceErrorOptions } from '#lib/server/service-error.js';
 import { createVpcFetch } from '#lib/server/vpc.js';
 
 interface VyosApiResponse<T = unknown> {
@@ -7,8 +8,6 @@ interface VyosApiResponse<T = unknown> {
 	error: unknown;
 	success: boolean;
 }
-
-type VyosCommandResponse = VyosApiResponse;
 
 interface VyosStaticIpv6Route {
 	blackhole?: Record<string, never>;
@@ -19,13 +18,7 @@ interface VyosStaticIpv6Routes {
 	route6?: Record<string, VyosStaticIpv6Route>;
 }
 
-export interface VyosStaticNeighborParams {
-	description: string;
-	ipaddress: string;
-	macAddress: string;
-}
-
-export interface VyosStaticRouteParams {
+interface VyosStaticRouteParams {
 	description?: string;
 	destination: string;
 	gateway: string;
@@ -33,24 +26,10 @@ export interface VyosStaticRouteParams {
 
 const TRAILING_SLASHES = /\/+$/;
 
-function stringifyErrorDetails(details: unknown): string {
-	try {
-		return JSON.stringify(details);
-	} catch {
-		return 'Unable to stringify details';
-	}
-}
-
-export class VyosError extends Error {
-	readonly status: number;
-	readonly details: unknown;
-
-	constructor(message: string, options: ErrorOptions & { status: number; details: unknown }) {
-		const { status, details } = options;
-		super(`${message} - ${status} - ${stringifyErrorDetails(details)}`, options);
+class VyosError extends ServiceError {
+	constructor(message: string, options: ServiceErrorOptions) {
+		super(message, options);
 		this.name = 'VyosError';
-		this.status = status;
-		this.details = details;
 	}
 }
 
@@ -60,13 +39,10 @@ function getVyosConfig() {
 		return null;
 	}
 
-	const routersInFailoverOrder =
-		env.VYOS_USE_VPC === 'false' ? [] : [env.VYOS_VPC_01, env.VYOS_VPC_02];
-
 	return {
 		apiUrl: env.VYOS_API_URL.replace(TRAILING_SLASHES, ''),
 		apiKey: env.VYOS_API_KEY,
-		routersInFailoverOrder
+		fetch: createVpcFetch([env.VYOS_VPC_01, env.VYOS_VPC_02], env.VYOS_USE_VPC)
 	};
 }
 
@@ -81,7 +57,7 @@ export class VyosClient {
 	constructor() {
 		const config = getVyosConfig();
 		if (!config) {
-			throw new VyosError("Couldn't get VyOS config", { status: 500, details: '' });
+			throw new Error("Couldn't get VyOS config");
 		}
 
 		this.apiKey = config.apiKey;
@@ -94,7 +70,7 @@ export class VyosClient {
 			timeout: 30_000,
 			// Handle non-2xx ourselves so the router/proxy error body is readable.
 			throwHttpErrors: false,
-			fetch: createVpcFetch(config.routersInFailoverOrder)
+			fetch: config.fetch
 		});
 	}
 
@@ -139,7 +115,7 @@ export class VyosClient {
 		return route?.['next-hop'] !== undefined && gateway in route['next-hop'];
 	}
 
-	async getStaticIpv6Routes(): Promise<VyosStaticIpv6Routes> {
+	private async getStaticIpv6Routes(): Promise<VyosStaticIpv6Routes> {
 		let response: VyosApiResponse<VyosStaticIpv6Routes | null>;
 		try {
 			response = await this.post<VyosStaticIpv6Routes | null>('retrieve', {
@@ -160,7 +136,7 @@ export class VyosClient {
 		await this.post('config-file', { op: 'save' });
 	}
 
-	async createDelegatedRoute(params: VyosStaticRouteParams): Promise<VyosCommandResponse | null> {
+	async createDelegatedRoute(params: VyosStaticRouteParams): Promise<VyosApiResponse | null> {
 		const existingRoutes = await this.getStaticIpv6Routes();
 		const existingRoute = existingRoutes.route6?.[params.destination];
 
@@ -180,7 +156,7 @@ export class VyosClient {
 		return response;
 	}
 
-	async deleteDelegatedRoute(destination: string): Promise<VyosCommandResponse | null> {
+	async deleteDelegatedRoute(destination: string): Promise<VyosApiResponse | null> {
 		const existingRoutes = await this.getStaticIpv6Routes();
 		if (!existingRoutes.route6?.[destination]) {
 			return null;
@@ -193,7 +169,7 @@ export class VyosClient {
 
 	private async deleteDelegatedRouteWithoutSavingConfig(
 		destination: string
-	): Promise<VyosCommandResponse | null> {
+	): Promise<VyosApiResponse | null> {
 		return await this.post('configure', {
 			op: 'delete',
 			path: ['protocols', 'static', 'route6', destination]

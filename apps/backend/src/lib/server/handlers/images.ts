@@ -1,8 +1,7 @@
 import { asc, desc, eq } from 'drizzle-orm';
-import { requireAdmin } from '#lib/server/auth-context.js';
-import { getBackend } from '#lib/server/backends/index.js';
-import { context } from '#lib/server/context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import { type ChecksumAlgorithm, checksumAlgorithms, type defaultIsa } from 'stack-shared/compute';
+import { requireAdminUser, requireUser } from '#lib/server/auth-context.js';
+import { proxmox } from '#lib/server/backends/index.js';
 import { baseImages } from '#lib/server/db/schema.js';
 import { error } from '#lib/server/http.js';
 
@@ -11,7 +10,7 @@ const SVG_EVENT_HANDLER_PATTERN = /\son[a-z]+\s*=/;
 const SVG_REMOTE_HREF_PATTERN = /\s(?:href|xlink:href)\s*=\s*["']https?:/i;
 const HTTP_URL_PATTERN = /^https?:\/\//i;
 
-const checksumAlgorithms = ['md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512'] as const;
+const DEFAULT_IMPORT_STORAGE = 'local';
 
 function validateAccentColor(value: string) {
 	if (!HEX_COLOR_PATTERN.test(value)) {
@@ -38,18 +37,12 @@ function validateLogoSvg(value: string | undefined, isOfficial: boolean) {
 }
 
 async function getUploadedImage(volid: string) {
-	const backend = getBackend('proxmox');
-	const images = await backend.listImages();
+	const images = await proxmox().listImages();
 	return images.find((image) => image.volid === volid) ?? null;
 }
 
 export async function listImages() {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
+	const { db } = requireUser();
 	const rows = await db.query.baseImages.findMany({
 		orderBy: [asc(baseImages.sortOrder), asc(baseImages.id)]
 	});
@@ -76,7 +69,7 @@ export interface CreateImageInput {
 	description: string;
 	filePath: string;
 	icon?: string;
-	isa: 'x86';
+	isa: typeof defaultIsa;
 	isOfficial?: boolean;
 	logoSvg?: string;
 	name: string;
@@ -85,13 +78,7 @@ export interface CreateImageInput {
 }
 
 export async function createImage(params: CreateImageInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireAdmin(db, event.locals.user.id);
+	const { db } = await requireAdminUser();
 	const isOfficial = params.isOfficial ?? false;
 	const selectedImage = await getUploadedImage(params.filePath);
 	if (!selectedImage) {
@@ -134,7 +121,7 @@ export interface UpdateImageInput {
 	filePath?: string;
 	icon?: string;
 	imageId: string;
-	isa?: 'x86';
+	isa?: typeof defaultIsa;
 	isOfficial?: boolean;
 	logoSvg?: string;
 	name?: string;
@@ -143,13 +130,7 @@ export interface UpdateImageInput {
 }
 
 export async function updateImage(params: UpdateImageInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireAdmin(db, event.locals.user.id);
+	const { db } = await requireAdminUser();
 
 	const existing = await db.query.baseImages.findFirst({
 		where: eq(baseImages.id, params.imageId)
@@ -191,13 +172,7 @@ export interface ReorderImagesInput {
 }
 
 export async function reorderImages(params: ReorderImagesInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireAdmin(db, event.locals.user.id);
+	const { db } = await requireAdminUser();
 
 	const rows = await db.query.baseImages.findMany({ columns: { id: true } });
 	const existingIds = new Set(rows.map((row) => row.id));
@@ -222,13 +197,7 @@ export interface DeleteImageInput {
 }
 
 export async function deleteImage(params: DeleteImageInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireAdmin(db, event.locals.user.id);
+	const { db } = await requireAdminUser();
 
 	const existing = await db.query.baseImages.findFirst({
 		where: eq(baseImages.id, params.imageId)
@@ -241,32 +210,20 @@ export async function deleteImage(params: DeleteImageInput) {
 }
 
 export async function listProxmoxImages() {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
+	await requireAdminUser();
 
-	await requireAdmin(initDrizzle(), event.locals.user.id);
-
-	const backend = getBackend('proxmox');
-	return backend.listImages();
+	return proxmox().listImages();
 }
 
 export async function listProxmoxImageImportTargets() {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
+	await requireAdminUser();
 
-	await requireAdmin(initDrizzle(), event.locals.user.id);
-
-	const backend = getBackend('proxmox');
-	return backend.listImageImportTargets();
+	return proxmox().listImageImportTargets();
 }
 
 export interface ImportProxmoxImageFromUrlInput {
 	checksum?: string;
-	checksumAlgorithm?: 'md5' | 'sha1' | 'sha224' | 'sha256' | 'sha384' | 'sha512';
+	checksumAlgorithm?: ChecksumAlgorithm;
 	filename: string;
 	storage?: string;
 	url: string;
@@ -274,11 +231,7 @@ export interface ImportProxmoxImageFromUrlInput {
 }
 
 export async function importProxmoxImageFromUrl(params: ImportProxmoxImageFromUrlInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-	await requireAdmin(initDrizzle(), event.locals.user.id);
+	await requireAdminUser();
 
 	if (!HTTP_URL_PATTERN.test(params.url)) {
 		error(400, 'Image URL must start with http:// or https://');
@@ -290,8 +243,8 @@ export async function importProxmoxImageFromUrl(params: ImportProxmoxImageFromUr
 		error(400, 'Unsupported checksum algorithm');
 	}
 
-	const backend = getBackend('proxmox');
-	const storage = params.storage?.trim() || 'local';
+	const backend = proxmox();
+	const storage = params.storage?.trim() || DEFAULT_IMPORT_STORAGE;
 	const targets = (await backend.listImageImportTargets()).filter(
 		(target) => target.storage === storage
 	);
@@ -324,12 +277,7 @@ export interface GetProxmoxTaskStatusInput {
 }
 
 export async function getProxmoxTaskStatus(params: GetProxmoxTaskStatusInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-	await requireAdmin(initDrizzle(), event.locals.user.id);
+	await requireAdminUser();
 
-	const backend = getBackend('proxmox');
-	return backend.getTaskStatus(params.node, params.upid);
+	return proxmox().getTaskStatus(params.node, params.upid);
 }

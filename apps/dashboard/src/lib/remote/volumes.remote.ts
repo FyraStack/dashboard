@@ -9,8 +9,7 @@ export const listVolumes = query(type({ projectId: 'string' }), ({ projectId }) 
 const createParams = type({
 	projectId: 'string',
 	name: 'string',
-	size: 'number',
-	backend: 'string?'
+	size: 'number'
 });
 export const createVolume = command(createParams, ({ projectId, ...input }) =>
 	backend((me) => me.project(projectId).createVolume(input))

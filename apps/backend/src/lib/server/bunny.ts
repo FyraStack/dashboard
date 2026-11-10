@@ -1,9 +1,11 @@
 import ky, { type KyInstance } from 'ky';
 import { getRuntimeEnv } from '#lib/server/env.js';
+import { ServiceError, type ServiceErrorOptions } from '#lib/server/service-error.js';
 
-export const bunnyDnsRecordTypePtr = 10;
+const DNS_RECORD_TYPE_PTR = 10;
+const PTR_RECORD_TTL_SECONDS = 300;
 
-export interface BunnyDnsZone {
+interface BunnyDnsZone {
 	Domain: string;
 	Id: number;
 }
@@ -14,31 +16,17 @@ interface BunnyDnsZoneList {
 	Items: BunnyDnsZone[];
 }
 
-export interface BunnyDnsRecord {
+interface BunnyDnsRecord {
 	Id: number;
 	Name: string;
 	Type: number;
 	Value: string;
 }
 
-function stringifyErrorDetails(details: unknown): string {
-	try {
-		return JSON.stringify(details);
-	} catch {
-		return 'Unable to stringify details';
-	}
-}
-
-export class BunnyError extends Error {
-	readonly status: number;
-	readonly details: unknown;
-
-	constructor(message: string, options: ErrorOptions & { status: number; details: unknown }) {
-		const { status, details } = options;
-		super(`${message} - ${status} - ${stringifyErrorDetails(details)}`, options);
+export class BunnyError extends ServiceError {
+	constructor(message: string, options: ServiceErrorOptions) {
+		super(message, options);
 		this.name = 'BunnyError';
-		this.status = status;
-		this.details = details;
 	}
 }
 
@@ -55,13 +43,17 @@ export function isBunnyConfigured() {
 	return getBunnyConfig() !== null;
 }
 
+function ptrRecordBody(name: string, value: string) {
+	return { Type: DNS_RECORD_TYPE_PTR, Name: name, Value: value, Ttl: PTR_RECORD_TTL_SECONDS };
+}
+
 export class BunnyClient {
 	private readonly api: KyInstance;
 
 	constructor() {
 		const config = getBunnyConfig();
 		if (!config) {
-			throw new BunnyError('Bunny.net API key is not configured', { status: 500, details: '' });
+			throw new Error('Bunny.net API key is not configured');
 		}
 
 		this.api = ky.create({
@@ -130,13 +122,13 @@ export class BunnyClient {
 
 	createPtrRecord(zoneId: number, name: string, value: string): Promise<BunnyDnsRecord> {
 		return this.request<BunnyDnsRecord>('put', `dnszone/${zoneId}/records`, {
-			json: { Type: bunnyDnsRecordTypePtr, Name: name, Value: value, Ttl: 300 }
+			json: ptrRecordBody(name, value)
 		});
 	}
 
 	async updatePtrRecord(zoneId: number, recordId: number, name: string, value: string) {
 		await this.request('post', `dnszone/${zoneId}/records/${recordId}`, {
-			json: { Type: bunnyDnsRecordTypePtr, Name: name, Value: value, Ttl: 300 }
+			json: ptrRecordBody(name, value)
 		});
 	}
 

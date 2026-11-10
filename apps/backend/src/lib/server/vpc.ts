@@ -18,8 +18,14 @@ async function toUrlAndInit(
 	return [input instanceof URL ? input.toString() : input, init];
 }
 
-export function createVpcFetch(services: Array<Fetcher | undefined>): VpcFetch {
-	const orderedServices = services.filter((service): service is Fetcher => Boolean(service));
+export function createVpcFetch(
+	services: Array<Fetcher | undefined>,
+	useVpcFlag?: string
+): VpcFetch {
+	const orderedServices =
+		useVpcFlag === 'false'
+			? []
+			: services.filter((service): service is Fetcher => Boolean(service));
 	if (orderedServices.length === 0) {
 		return (input, init) => fetch(input, init);
 	}

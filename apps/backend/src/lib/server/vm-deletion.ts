@@ -1,15 +1,15 @@
 import { env, WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import { and, eq, inArray, isNotNull, lt } from 'drizzle-orm';
-import { getBackend } from '#lib/server/backends/index.js';
+import { proxmox } from '#lib/server/backends/index.js';
 import { deleteProjectServerEntity } from '#lib/server/billing/entities.js';
 import { hasUnsyncedUsageEvents, meterResourceThrough } from '#lib/server/billing/metering.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { ipAssignments, paymentPeriods, vms, volumes } from '#lib/server/db/schema.js';
+import { errorMessage } from '#lib/server/errors.js';
 import { releaseVmNetworking } from '#lib/server/ipam.js';
 import { inSystemScope } from '#lib/server/scope.js';
 
 interface DeletableVm {
-	backend: 'proxmox';
 	id: string;
 	ownerProjectId: string | null;
 	proxmoxId: number | null;
@@ -23,7 +23,6 @@ export async function queueVmDeletion(db: Database, row: DeletableVm): Promise<v
 	await env.VM_DELETION.create({
 		id: `${row.id}-${Date.now()}`,
 		params: {
-			backend: row.backend,
 			id: row.id,
 			ownerProjectId: row.ownerProjectId,
 			proxmoxId: row.proxmoxId
@@ -48,11 +47,21 @@ async function stopProvisioning(vmId: string) {
 	}
 }
 
-export const DELETED_VM_RETENTION_DAYS = 90;
+export const DELETED_RETENTION_MS = 90 * 86_400_000;
+
+export async function deleteVmRows(db: Database, vmIds: string[]) {
+	await db
+		.update(volumes)
+		.set({ associatedVmId: null })
+		.where(inArray(volumes.associatedVmId, vmIds));
+	await db.delete(ipAssignments).where(inArray(ipAssignments.associatedVmId, vmIds));
+	await db.delete(paymentPeriods).where(inArray(paymentPeriods.vmId, vmIds));
+	await db.delete(vms).where(inArray(vms.id, vmIds));
+}
 
 export async function purgeExpiredDeletedVms(now = Date.now(), limit = 50) {
 	const db = initDrizzle();
-	const cutoff = now - DELETED_VM_RETENTION_DAYS * 86_400_000;
+	const cutoff = now - DELETED_RETENTION_MS;
 
 	const expired = await db
 		.select({ id: vms.id })
@@ -64,13 +73,7 @@ export async function purgeExpiredDeletedVms(now = Date.now(), limit = 50) {
 		return { purged: 0 };
 	}
 
-	await db
-		.update(volumes)
-		.set({ associatedVmId: null })
-		.where(inArray(volumes.associatedVmId, vmIds));
-	await db.delete(ipAssignments).where(inArray(ipAssignments.associatedVmId, vmIds));
-	await db.delete(paymentPeriods).where(inArray(paymentPeriods.vmId, vmIds));
-	await db.delete(vms).where(inArray(vms.id, vmIds));
+	await deleteVmRows(db, vmIds);
 
 	return { purged: vmIds.length };
 }
@@ -120,11 +123,10 @@ export class VmDeletionWorkflow extends WorkflowEntrypoint<Env, DeletableVm> {
 					retries: { limit: 5, delay: '30 seconds', backoff: 'exponential' },
 					timeout: '15 minutes'
 				},
-				() =>
-					inSystemScope(() => getBackend(row.backend).deleteVm(row.id, row.proxmoxId ?? undefined))
+				() => inSystemScope(() => proxmox().deleteVm(row.id, row.proxmoxId ?? undefined))
 			);
 		} catch (err) {
-			const statusError = err instanceof Error ? err.message : 'Failed to deprovision VM';
+			const statusError = errorMessage(err);
 			await step.do('mark deletion failed', () =>
 				inSystemScope(() => markVmDeletionFailed(row.id, statusError))
 			);

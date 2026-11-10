@@ -10,14 +10,11 @@ import {
 	type GetVmMetricsHistoryInput,
 	getVm,
 	getVmMetricsHistory,
-	killVm,
+	powerVm,
 	type RenameVmInput,
 	type ResizeVmInput,
-	rebootVm,
 	renameVm,
-	resizeVm,
-	startVm,
-	stopVm
+	resizeVm
 } from '#lib/server/handlers/vms.js';
 import { inScope } from '#lib/server/scope.js';
 
@@ -48,19 +45,19 @@ export class Vm extends RpcTarget {
 	}
 
 	start() {
-		return inScope(this.#scope, () => startVm({ vmId: this.#id }));
+		return inScope(this.#scope, () => powerVm({ action: 'startVm', vmId: this.#id }));
 	}
 
 	stop() {
-		return inScope(this.#scope, () => stopVm({ vmId: this.#id }));
+		return inScope(this.#scope, () => powerVm({ action: 'stopVm', vmId: this.#id }));
 	}
 
 	kill() {
-		return inScope(this.#scope, () => killVm({ vmId: this.#id }));
+		return inScope(this.#scope, () => powerVm({ action: 'killVm', vmId: this.#id }));
 	}
 
 	reboot() {
-		return inScope(this.#scope, () => rebootVm({ vmId: this.#id }));
+		return inScope(this.#scope, () => powerVm({ action: 'rebootVm', vmId: this.#id }));
 	}
 
 	resize(input: Omit<ResizeVmInput, 'vmId'>) {

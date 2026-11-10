@@ -12,15 +12,11 @@ import { invitation, organization } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import {
 	billingUsageEvents,
-	ipAssignments,
-	paymentPeriods,
 	projectBillingCustomers,
 	vms,
 	volumes
 } from '#lib/server/db/schema.js';
-import { queueVmDeletion } from '#lib/server/vm-deletion.js';
-
-export const DELETED_PROJECT_RETENTION_DAYS = 90;
+import { DELETED_RETENTION_MS, deleteVmRows, queueVmDeletion } from '#lib/server/vm-deletion.js';
 
 export async function softDeleteOrganizationResources(
 	db: ReturnType<typeof initDrizzle>,
@@ -32,7 +28,7 @@ export async function softDeleteOrganizationResources(
 			eq(vms.active, true),
 			ne(vms.status, 'deleting')
 		),
-		columns: { id: true, backend: true, ownerProjectId: true, proxmoxId: true }
+		columns: { id: true, ownerProjectId: true, proxmoxId: true }
 	});
 	for (const vm of undeletedVms) {
 		// biome-ignore lint/performance/noAwaitInLoops: each VM's final usage is metered one at a time so project usage caps are applied in order
@@ -57,7 +53,7 @@ export async function softDeleteOrganizationResources(
 
 export async function purgeExpiredDeletedOrganizations(now = Date.now(), limit = 25) {
 	const db = initDrizzle();
-	const cutoff = now - DELETED_PROJECT_RETENTION_DAYS * 86_400_000;
+	const cutoff = now - DELETED_RETENTION_MS;
 	const expired = await db
 		.select({ id: organization.id })
 		.from(organization)
@@ -84,13 +80,7 @@ export async function purgeExpiredDeletedOrganizations(now = Date.now(), limit =
 		const projectVms = await db.select({ id: vms.id }).from(vms).where(eq(vms.ownerProjectId, id));
 		const vmIds = projectVms.map((vm) => vm.id);
 		if (vmIds.length > 0) {
-			await db
-				.update(volumes)
-				.set({ associatedVmId: null })
-				.where(inArray(volumes.associatedVmId, vmIds));
-			await db.delete(ipAssignments).where(inArray(ipAssignments.associatedVmId, vmIds));
-			await db.delete(paymentPeriods).where(inArray(paymentPeriods.vmId, vmIds));
-			await db.delete(vms).where(inArray(vms.id, vmIds));
+			await deleteVmRows(db, vmIds);
 		}
 		await db.delete(volumes).where(eq(volumes.ownerProjectId, id));
 		await db.delete(projectBillingCustomers).where(eq(projectBillingCustomers.projectId, id));

@@ -1,33 +1,50 @@
 import { env, WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
-import { and, eq } from 'drizzle-orm';
-import { getBackend, type VmCreateParams } from '#lib/server/backends/index.js';
+import { and, eq, sql } from 'drizzle-orm';
+import type { NetworkingMode } from 'stack-shared/compute';
+import { proxmox, type VmCreateParams } from '#lib/server/backends/index.js';
 import { isBillingConfigured } from '#lib/server/billing/autumn.js';
 import {
 	deleteProjectServerEntity,
 	ensureProjectServerEntity
 } from '#lib/server/billing/entities.js';
 import { createBillingMeter } from '#lib/server/billing/metering.js';
-import { config } from '#lib/server/config.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
-import { baseImages, vms, vmTypes } from '#lib/server/db/schema.js';
+import { baseImages, sshKeys, vms, vmTypes } from '#lib/server/db/schema.js';
 import { errorMessage } from '#lib/server/errors.js';
 import { error } from '#lib/server/http.js';
 import {
 	allocateVmNetworking,
 	ensureVmDelegatedRoute,
+	findIpv4Allocation,
+	findIpv6PrefixAllocation,
+	findIpv6TransitAllocation,
 	generateMacAddress,
 	releaseVmNetworking,
 	vmAllocations
 } from '#lib/server/ipam.js';
 import { applyDefaultPtrRecords } from '#lib/server/ptr-records.js';
 import { inSystemScope } from '#lib/server/scope.js';
-import { allocateProxmoxVmid } from '#lib/server/vm-identity.js';
 
-export interface ProvisionVmInput {
+async function nextSequenceValue(db: Database): Promise<number> {
+	const result = await db.execute(sql`select nextval('proxmox_vmid_seq') as "vmid"`);
+	return Number((result.rows[0] as { vmid: string | number }).vmid);
+}
+
+async function allocateProxmoxVmid(db: Database): Promise<number> {
+	const usedIds = await proxmox().listUsedProxmoxIds();
+	let candidate = await nextSequenceValue(db);
+	while (usedIds.has(candidate)) {
+		// biome-ignore lint/performance/noAwaitInLoops: each sequence value is only drawn after the previous candidate was found taken
+		candidate = await nextSequenceValue(db);
+	}
+	return candidate;
+}
+
+interface ProvisionVmInput {
 	billingExempt: boolean;
 	imageId?: string;
 	name: string;
-	networkingMode?: 'both' | 'ipv6';
+	networkingMode?: NetworkingMode;
 	password?: string;
 	projectId: string;
 	sshPublicKeys?: string[];
@@ -35,8 +52,17 @@ export interface ProvisionVmInput {
 	vmTypeId: string;
 }
 
+export interface RequestedVm {
+	imageId?: string;
+	name: string;
+	networkingMode?: NetworkingMode;
+	password?: string;
+	projectId: string;
+	sshKeyIds?: string[];
+	vmTypeId: string;
+}
+
 interface ProvisioningVm {
-	backend: 'proxmox';
 	createTaskId: string;
 	diskGb: number;
 	firewallIpSet: string[];
@@ -70,15 +96,9 @@ type NetworkingAllocations = Awaited<ReturnType<typeof allocateVmNetworking>>;
 function buildVmNetworkConfig(
 	networkingAllocations: NetworkingAllocations
 ): NonNullable<VmCreateParams['networkConfig']> {
-	const ipv4NetworkAllocation = networkingAllocations.find(
-		(allocation) => allocation.family === 'ipv4' && allocation.address
-	);
-	const ipv6TransitNetworkAllocation = networkingAllocations.find(
-		(allocation) => allocation.family === 'ipv6' && allocation.address
-	);
-	const ipv6PrefixNetworkAllocation = networkingAllocations.find(
-		(allocation) => allocation.family === 'ipv6' && allocation.prefix
-	);
+	const ipv4NetworkAllocation = findIpv4Allocation(networkingAllocations);
+	const ipv6TransitNetworkAllocation = findIpv6TransitAllocation(networkingAllocations);
+	const ipv6PrefixNetworkAllocation = findIpv6PrefixAllocation(networkingAllocations);
 	const firewallIpSet = [
 		...(ipv4NetworkAllocation?.address ? [`${ipv4NetworkAllocation.address}/32`] : []),
 		...(ipv6TransitNetworkAllocation?.address
@@ -108,13 +128,6 @@ function buildVmNetworkConfig(
 			: {}),
 		...(ipv6PrefixNetworkAllocation?.prefix
 			? { ipv6Prefix: ipv6PrefixNetworkAllocation.prefix }
-			: {}),
-		...(!ipv4NetworkAllocation &&
-		(ipv6TransitNetworkAllocation?.address || ipv6PrefixNetworkAllocation?.prefix)
-			? {
-					nat64Prefix: config.vmNetwork.nat64Prefix,
-					nat64Dns64Server: config.vmNetwork.nat64Dns64Server
-				}
 			: {})
 	};
 }
@@ -124,22 +137,18 @@ async function cleanUpFailedProvision(
 	params: { vmId: string; projectId: string; proxmoxId: number | null }
 ) {
 	const { vmId, projectId, proxmoxId } = params;
+	const logFailure = (step: string) => (cleanupErr: unknown) => {
+		console.warn(`Failed to ${step} for VM ${vmId} after provisioning error`, cleanupErr);
+	};
 	if (proxmoxId !== null) {
-		await getBackend('proxmox')
-			.deleteVm(vmId, proxmoxId)
-			.catch((deleteErr) => {
-				console.warn(`Failed to clean up Proxmox VM ${vmId} after provisioning error`, deleteErr);
-			});
+		await proxmox().deleteVm(vmId, proxmoxId).catch(logFailure('clean up Proxmox VM'));
 	}
-	await releaseVmNetworking(db, vmId).catch(() => undefined);
-	await deleteProjectServerEntity(projectId, vmId).catch(() => undefined);
-	await db
-		.delete(vms)
-		.where(eq(vms.id, vmId))
-		.catch(() => undefined);
+	await releaseVmNetworking(db, vmId).catch(logFailure('release networking'));
+	await deleteProjectServerEntity(projectId, vmId).catch(logFailure('delete billing entity'));
+	await db.delete(vms).where(eq(vms.id, vmId)).catch(logFailure('delete VM row'));
 }
 
-export async function provisionVm(db: Database, input: ProvisionVmInput) {
+async function provisionVm(db: Database, input: ProvisionVmInput) {
 	const [vmType, baseImage] = await Promise.all([
 		db.query.vmTypes.findFirst({
 			where: eq(vmTypes.id, input.vmTypeId)
@@ -195,10 +204,9 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 			mode: input.networkingMode ?? 'both'
 		});
 		const networkConfig = buildVmNetworkConfig(networkingAllocations);
-		const backend = getBackend('proxmox');
-		proxmoxId = await allocateProxmoxVmid(db, backend);
+		proxmoxId = await allocateProxmoxVmid(db);
 		await db.update(vms).set({ proxmoxId }).where(eq(vms.id, vmId));
-		const created = await backend.createVm({
+		const created = await proxmox().createVm({
 			id: vmId,
 			name: input.name,
 			proxmoxId,
@@ -207,7 +215,6 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 			memoryMb: vmType.ramCapacity,
 			diskGb: vmType.storageAmount,
 			tierName: vmType.name,
-			imageId: input.imageId,
 			imageSource: baseImage?.filePath,
 			secureBoot: baseImage?.secureBoot ?? true,
 			networkConfig,
@@ -217,10 +224,8 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 			projectId: input.projectId
 		});
 
-		const ipv4Allocation = networkingAllocations.find((allocation) => allocation.family === 'ipv4');
-		const ipv6Allocation = networkingAllocations.find(
-			(allocation) => allocation.family === 'ipv6' && allocation.address
-		);
+		const ipv4Allocation = findIpv4Allocation(networkingAllocations);
+		const ipv6Allocation = findIpv6TransitAllocation(networkingAllocations);
 		await db
 			.update(vms)
 			.set({
@@ -234,7 +239,6 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 		await env.VM_PROVISIONING.create({
 			id: vmId,
 			params: {
-				backend: 'proxmox',
 				createTaskId: created.taskId,
 				diskGb: vmType.storageAmount,
 				firewallIpSet: networkConfig.firewallIpSet ?? [],
@@ -263,10 +267,42 @@ export async function provisionVm(db: Database, input: ProvisionVmInput) {
 	return { id: vmId };
 }
 
+async function resolveSshPublicKeys(
+	db: Database,
+	keyOwnerId: string | undefined,
+	sshKeyIds: string[]
+) {
+	if (sshKeyIds.length === 0 || !keyOwnerId) {
+		return [];
+	}
+
+	const keys = await db.query.sshKeys.findMany({ where: eq(sshKeys.userId, keyOwnerId) });
+	return keys.filter((key) => sshKeyIds.includes(key.id)).map((key) => key.publicKey);
+}
+
+export async function provisionRequestedVm(
+	db: Database,
+	request: RequestedVm,
+	options: { billingExempt: boolean; keyOwnerId: string | undefined; userId: string }
+) {
+	const sshPublicKeys = await resolveSshPublicKeys(db, options.keyOwnerId, request.sshKeyIds ?? []);
+	const created = await provisionVm(db, {
+		projectId: request.projectId,
+		vmTypeId: request.vmTypeId,
+		name: request.name,
+		userId: options.userId,
+		billingExempt: options.billingExempt,
+		networkingMode: request.networkingMode,
+		imageId: request.imageId,
+		sshPublicKeys,
+		password: request.password
+	});
+	return { created, sshKeyCount: sshPublicKeys.length };
+}
+
 export class VmProvisioningWorkflow extends WorkflowEntrypoint<Env, ProvisioningVm> {
 	async run(event: WorkflowEvent<ProvisioningVm>, step: WorkflowStep) {
 		const vm = event.payload;
-		const backend = () => getBackend(vm.backend);
 
 		try {
 			const importTaskId = await step.do(
@@ -277,7 +313,7 @@ export class VmProvisioningWorkflow extends WorkflowEntrypoint<Env, Provisioning
 				},
 				() =>
 					inSystemScope(() =>
-						backend().configureVm({
+						proxmox().configureVm({
 							createTaskId: vm.createTaskId,
 							firewallIpSet: vm.firewallIpSet,
 							imageSource: vm.imageSource,
@@ -295,7 +331,7 @@ export class VmProvisioningWorkflow extends WorkflowEntrypoint<Env, Provisioning
 					},
 					() =>
 						inSystemScope(() =>
-							backend().waitForTask(vm.proxmoxNode, importTaskId, DISK_IMPORT_TIMEOUT_MS)
+							proxmox().waitForTask(vm.proxmoxNode, importTaskId, DISK_IMPORT_TIMEOUT_MS)
 						)
 				);
 			}
@@ -307,7 +343,7 @@ export class VmProvisioningWorkflow extends WorkflowEntrypoint<Env, Provisioning
 				},
 				() =>
 					inSystemScope(() =>
-						backend().finishProvisioning(vm.id, vm.proxmoxId, { diskGb: vm.diskGb })
+						proxmox().finishProvisioning(vm.id, vm.proxmoxId, { diskGb: vm.diskGb })
 					)
 			);
 			await step.do('create delegated route', () =>

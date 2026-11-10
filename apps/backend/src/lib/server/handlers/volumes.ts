@@ -1,7 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { requireProjectAccess } from '#lib/server/auth-context.js';
-import { context } from '#lib/server/context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import { requireProjectAccess, requireUser } from '#lib/server/auth-context.js';
 import { vms, volumes } from '#lib/server/db/schema.js';
 import { error } from '#lib/server/http.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
@@ -11,13 +9,8 @@ export interface ListVolumesInput {
 }
 
 export async function listVolumes(params: ListVolumesInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, event.locals.user.id, params.projectId);
+	const { db, user } = requireUser();
+	await requireProjectAccess(db, user.id, params.projectId);
 
 	return db.query.volumes.findMany({
 		where: eq(volumes.ownerProjectId, params.projectId),
@@ -26,20 +19,14 @@ export async function listVolumes(params: ListVolumesInput) {
 }
 
 export interface CreateVolumeInput {
-	backend?: string;
 	name: string;
 	projectId: string;
 	size: number;
 }
 
 export async function createVolume(params: CreateVolumeInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'read_write');
+	const { db, user } = requireUser();
+	await requireProjectAccess(db, user.id, params.projectId, 'read_write');
 
 	const [inserted] = await db
 		.insert(volumes)
@@ -52,7 +39,7 @@ export async function createVolume(params: CreateVolumeInput) {
 		.returning();
 	captureServerEvent(
 		'volume_created',
-		{ volume_id: inserted.id, size: params.size, backend: params.backend },
+		{ volume_id: inserted.id, size: params.size },
 		{ projectId: params.projectId }
 	);
 
@@ -64,12 +51,7 @@ export interface DeleteVolumeInput {
 }
 
 export async function deleteVolume(params: DeleteVolumeInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
+	const { db, user } = requireUser();
 	const vol = await db.query.volumes.findFirst({
 		where: eq(volumes.id, params.volumeId)
 	});
@@ -77,7 +59,7 @@ export async function deleteVolume(params: DeleteVolumeInput) {
 	if (!vol) {
 		error(404, 'Volume not found');
 	}
-	await requireProjectAccess(db, event.locals.user.id, vol.ownerProjectId, 'admin');
+	await requireProjectAccess(db, user.id, vol.ownerProjectId, 'admin');
 
 	if (vol.associatedVmId) {
 		error(409, 'Detach the volume from its VM before deleting');
@@ -97,12 +79,7 @@ export interface AttachVolumeInput {
 }
 
 export async function attachVolume(params: AttachVolumeInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
+	const { db, user } = requireUser();
 	const vol = await db.query.volumes.findFirst({
 		where: eq(volumes.id, params.volumeId)
 	});
@@ -110,7 +87,7 @@ export async function attachVolume(params: AttachVolumeInput) {
 		error(404, 'Volume not found');
 	}
 
-	await requireProjectAccess(db, event.locals.user.id, vol.ownerProjectId, 'read_write');
+	await requireProjectAccess(db, user.id, vol.ownerProjectId, 'read_write');
 
 	if (vol.associatedVmId) {
 		error(409, 'Volume is already attached to a VM');
@@ -140,12 +117,7 @@ export interface DetachVolumeInput {
 }
 
 export async function detachVolume(params: DetachVolumeInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
+	const { db, user } = requireUser();
 	const vol = await db.query.volumes.findFirst({
 		where: eq(volumes.id, params.volumeId)
 	});
@@ -153,7 +125,7 @@ export async function detachVolume(params: DetachVolumeInput) {
 		error(404, 'Volume not found');
 	}
 
-	await requireProjectAccess(db, event.locals.user.id, vol.ownerProjectId, 'read_write');
+	await requireProjectAccess(db, user.id, vol.ownerProjectId, 'read_write');
 
 	await db.update(volumes).set({ associatedVmId: null }).where(eq(volumes.id, params.volumeId));
 	captureServerEvent(

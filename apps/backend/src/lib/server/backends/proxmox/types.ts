@@ -14,21 +14,6 @@ export interface PveNode {
 	uptime: number;
 }
 
-export interface PveQemuVm {
-	cpus?: number;
-	diskread?: number;
-	diskwrite?: number;
-	maxdisk?: number;
-	maxmem?: number;
-	name?: string;
-	netin?: number;
-	netout?: number;
-	pid?: number;
-	status: 'running' | 'stopped' | 'paused';
-	uptime?: number;
-	vmid: number;
-}
-
 export interface PveQemuConfig {
 	boot?: string;
 	cicustom?: string;
@@ -91,17 +76,6 @@ export interface PveStorage {
 	total?: number;
 	type: string;
 	used?: number;
-}
-
-export interface PveTask {
-	endtime?: number;
-	exitstatus?: string;
-	node: string;
-	starttime: number;
-	status?: string;
-	type: string;
-	upid: string;
-	user: string;
 }
 
 export interface PveTaskLogLine {

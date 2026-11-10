@@ -1,12 +1,9 @@
 import { RpcTarget } from 'cloudflare:workers';
 import type { Scope } from '#lib/server/context.js';
 import {
-	type AdminVmPowerInput,
+	type AdminVmInput,
 	adminDeleteVm,
-	adminKillVm,
-	adminRebootVm,
-	adminStartVm,
-	adminStopVm,
+	adminPowerVm,
 	listAllAdminVms
 } from '#lib/server/handlers/admin-vms.js';
 import { inScope } from '#lib/server/scope.js';
@@ -23,23 +20,23 @@ export class AdminVms extends RpcTarget {
 		return inScope(this.#scope, () => listAllAdminVms());
 	}
 
-	start(input: AdminVmPowerInput) {
-		return inScope(this.#scope, () => adminStartVm(input));
+	start(input: AdminVmInput) {
+		return inScope(this.#scope, () => adminPowerVm({ ...input, action: 'startVm' }));
 	}
 
-	stop(input: AdminVmPowerInput) {
-		return inScope(this.#scope, () => adminStopVm(input));
+	stop(input: AdminVmInput) {
+		return inScope(this.#scope, () => adminPowerVm({ ...input, action: 'stopVm' }));
 	}
 
-	kill(input: AdminVmPowerInput) {
-		return inScope(this.#scope, () => adminKillVm(input));
+	kill(input: AdminVmInput) {
+		return inScope(this.#scope, () => adminPowerVm({ ...input, action: 'killVm' }));
 	}
 
-	reboot(input: AdminVmPowerInput) {
-		return inScope(this.#scope, () => adminRebootVm(input));
+	reboot(input: AdminVmInput) {
+		return inScope(this.#scope, () => adminPowerVm({ ...input, action: 'rebootVm' }));
 	}
 
-	delete(input: AdminVmPowerInput) {
+	delete(input: AdminVmInput) {
 		return inScope(this.#scope, () => adminDeleteVm(input));
 	}
 }

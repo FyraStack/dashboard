@@ -36,7 +36,6 @@
 	"devDependencies": {
 		"@axe-core/playwright": "^4.11.0",
 		"@cloudflare/workers-types": "^5.20261002.1",
-		"@fontsource-variable/geist": "^5.2.9",
 		"@fontsource-variable/inter": "^5.2.8",
 		"@iconify-json/lucide": "^1.2.117",
 		"@icons-pack/svelte-simple-icons": "^7.2.0",
@@ -56,6 +55,7 @@
 		"postcss": "^8.5.19",
 		"shadcn-svelte": "^1.4.2",
 		"stack-backend": "workspace:*",
+		"stack-shared": "workspace:*",
 		"svelte": "^5.56.6",
 		"svelte-check": "^4.7.5",
 		"svelte-sonner": "^1.1.1",

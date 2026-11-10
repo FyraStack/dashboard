@@ -1,41 +1,17 @@
-import AdminUserDeletionCodeEmail from '#lib/emails/admin-user-deletion-code.svelte';
-import BillingNoticeEmail from '#lib/emails/billing-notice.svelte';
-import BillingReminderEmail from '#lib/emails/billing-reminder.svelte';
+import { applyPlaceholders, fieldToken } from 'stack-shared/email-campaign';
 import {
-	applyPlaceholders,
 	CAMPAIGN_BATCH_SIZE,
 	type CampaignTemplate,
-	campaignTemplates,
-	fieldToken
+	type CampaignTemplateEntry,
+	campaignTemplates
 } from '#lib/emails/campaign-registry.js';
-import EmptyEmail from '#lib/emails/empty.svelte';
-import OrganizationInvitationEmail from '#lib/emails/organization-invitation.svelte';
-import PasswordChangeCodeEmail from '#lib/emails/password-change-code.svelte';
-import ResetPasswordEmail from '#lib/emails/reset-password.svelte';
-import SecurityAlertEmail from '#lib/emails/security-alert.svelte';
-import ServiceDisruptionEmail from '#lib/emails/service-disruption.svelte';
-import VerifyEmailEmail from '#lib/emails/verify-email.svelte';
-import { requireAdmin } from '#lib/server/auth-context.js';
-import { context } from '#lib/server/context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import { requireAdminUser } from '#lib/server/auth-context.js';
 import { emailToPlainText, renderEmail, sendEmail } from '#lib/server/email.js';
+import { errorMessage } from '#lib/server/errors.js';
 import { error } from '#lib/server/http.js';
 import { withIdempotency } from '#lib/server/idempotency.js';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const templateComponents: Record<string, unknown> = {
-	'admin-user-deletion-code': AdminUserDeletionCodeEmail,
-	'billing-notice': BillingNoticeEmail,
-	'billing-reminder': BillingReminderEmail,
-	empty: EmptyEmail,
-	'organization-invitation': OrganizationInvitationEmail,
-	'password-change-code': PasswordChangeCodeEmail,
-	'reset-password': ResetPasswordEmail,
-	'security-alert': SecurityAlertEmail,
-	'service-disruption': ServiceDisruptionEmail,
-	'verify-email': VerifyEmailEmail
-};
 
 export type CampaignRow = Record<string, string>;
 
@@ -65,36 +41,22 @@ export interface CampaignTemplateCatalog {
 	templates: CampaignTemplate[];
 }
 
-async function requireCurrentAdmin() {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireAdmin(db, locals.user.id);
-
-	return { db, userId: locals.user.id };
-}
-
 function resolveTemplate(key: string) {
-	const meta = campaignTemplates.find((template) => template.key === key);
-	const component = templateComponents[key];
-	if (!(meta && component)) {
+	const template = campaignTemplates.find((entry) => entry.key === key);
+	if (!template) {
 		error(400, 'Unknown email template');
 	}
-	return { meta, component };
+	return template;
 }
 
 async function renderCampaignHtml(
-	meta: CampaignTemplate,
-	component: unknown,
+	{ component, fields: templateFields }: CampaignTemplateEntry,
 	fields: Record<string, string>,
 	row: Record<string, string>
 ) {
 	const props: Record<string, unknown> = {};
 	const inlineValues: Record<string, string> = {};
-	for (const field of meta.fields) {
+	for (const field of templateFields) {
 		const value = applyPlaceholders(fields[field.name] ?? '', row).trim();
 		if (value === '') {
 			if (field.required) {
@@ -119,16 +81,19 @@ async function renderCampaignHtml(
 }
 
 export async function listCampaignTemplates(): Promise<CampaignTemplateCatalog> {
-	await requireCurrentAdmin();
-	return { batchSize: CAMPAIGN_BATCH_SIZE, templates: campaignTemplates };
+	await requireAdminUser();
+	return {
+		batchSize: CAMPAIGN_BATCH_SIZE,
+		templates: campaignTemplates.map(({ component: _component, ...template }) => template)
+	};
 }
 
 export async function renderCampaignEditor(params: RenderCampaignEditorInput) {
-	await requireCurrentAdmin();
-	const { meta, component } = resolveTemplate(params.template);
+	await requireAdminUser();
+	const { component, fields } = resolveTemplate(params.template);
 
 	const props: Record<string, unknown> = {};
-	for (const field of meta.fields) {
+	for (const field of fields) {
 		if (field.inline) {
 			props[field.name] = fieldToken(field.name);
 			continue;
@@ -146,21 +111,21 @@ export async function renderCampaignEditor(params: RenderCampaignEditorInput) {
 }
 
 export async function previewCampaignEmail(params: PreviewCampaignEmailInput) {
-	await requireCurrentAdmin();
-	const { meta, component } = resolveTemplate(params.template);
+	await requireAdminUser();
+	const template = resolveTemplate(params.template);
 
 	try {
 		const subject = applyPlaceholders(params.subject, params.row).trim();
-		const html = await renderCampaignHtml(meta, component, params.fields, params.row);
+		const html = await renderCampaignHtml(template, params.fields, params.row);
 		return { subject, html };
 	} catch (err) {
-		error(400, err instanceof Error ? err.message : 'Failed to render preview');
+		error(400, errorMessage(err));
 	}
 }
 
 export async function sendCampaignEmails(params: SendCampaignEmailsInput) {
-	const { db, userId } = await requireCurrentAdmin();
-	const { meta, component } = resolveTemplate(params.template);
+	const { db, user } = await requireAdminUser();
+	const template = resolveTemplate(params.template);
 	if (params.rows.length === 0) {
 		error(400, 'No recipients provided');
 	}
@@ -179,7 +144,7 @@ export async function sendCampaignEmails(params: SendCampaignEmailsInput) {
 				fields: JSON.stringify(params.fields),
 				rows: JSON.stringify(params.rows),
 				emailColumn: params.emailColumn,
-				userId
+				userId: user.id
 			}
 		},
 		async () => {
@@ -197,14 +162,14 @@ export async function sendCampaignEmails(params: SendCampaignEmailsInput) {
 						throw new Error('Subject is empty for this recipient');
 					}
 					// biome-ignore lint/performance/noAwaitInLoops: campaign sends go out one at a time to stay under the email provider's rate limit
-					const html = await renderCampaignHtml(meta, component, params.fields, row);
+					const html = await renderCampaignHtml(template, params.fields, row);
 					const text = await emailToPlainText(html);
 					await sendEmail({ subject, to, html, text });
 					sent += 1;
 				} catch (err) {
 					failures.push({
 						recipient: to === '' ? '(missing email)' : to,
-						reason: err instanceof Error ? err.message : 'Send failed'
+						reason: errorMessage(err)
 					});
 				}
 			}

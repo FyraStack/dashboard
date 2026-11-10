@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
+import { projectBillingPath } from 'stack-shared/routes';
 import BillingNoticeEmail from '#lib/emails/billing-notice.svelte';
-import BillingReminderEmail from '#lib/emails/billing-reminder.svelte';
 import SecurityAlertEmail from '#lib/emails/security-alert.svelte';
 import { member, user } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
@@ -16,19 +16,6 @@ interface SecurityAlertEmailParams {
 	to: string;
 	userName?: string | null;
 }
-
-interface BillingReminderEmailParams {
-	amount: string;
-	dueDate: string;
-	invoiceUrl: string;
-	planName?: string | null;
-	to: string;
-	userName?: string | null;
-}
-
-type ProjectBillingReminderEmailParams = Omit<BillingReminderEmailParams, 'to' | 'userName'> & {
-	projectId: string;
-};
 
 function formatEmailTimestamp(date = new Date()) {
 	return `${new Intl.DateTimeFormat('en', {
@@ -55,51 +42,6 @@ export function sendSecurityAlertEmail({
 	});
 }
 
-export function sendBillingReminderEmail({
-	to,
-	userName,
-	amount,
-	dueDate,
-	invoiceUrl,
-	planName = null
-}: BillingReminderEmailParams) {
-	return sendRenderedEmail({
-		component: BillingReminderEmail,
-		props: { userName, amount, dueDate, invoiceUrl, planName },
-		subject: `Stack invoice ready: ${amount}`,
-		to
-	});
-}
-
-export async function sendProjectBillingReminderEmail({
-	projectId,
-	amount,
-	dueDate,
-	invoiceUrl,
-	planName = null
-}: ProjectBillingReminderEmailParams) {
-	const db = initDrizzle();
-	const [owner] = await db
-		.select({ email: user.email, name: user.name })
-		.from(member)
-		.innerJoin(user, eq(user.id, member.userId))
-		.where(and(eq(member.organizationId, projectId), eq(member.role, 'owner')))
-		.limit(1);
-
-	if (!owner) {
-		throw new Error(`Project "${projectId}" does not have a billing owner.`);
-	}
-
-	return sendBillingReminderEmail({
-		to: owner.email,
-		userName: owner.name,
-		amount,
-		dueDate,
-		invoiceUrl,
-		planName
-	});
-}
-
 async function getProjectOwnerRecipient(projectId: string) {
 	const db = initDrizzle();
 	const [owner] = await db
@@ -113,12 +55,13 @@ async function getProjectOwnerRecipient(projectId: string) {
 }
 
 function projectBillingUrl(projectId: string) {
-	const origin = getRuntimeEnv().ORIGIN ?? '';
-
-	return `${origin}/projects/${projectId}/billing`;
+	return `${getRuntimeEnv().ORIGIN}${projectBillingPath(projectId)}`;
 }
 
-export async function sendProjectPastDueEmail(projectId: string, graceDays: number) {
+async function sendProjectBillingNotice(
+	projectId: string,
+	notice: { body: string; heading: string; preview: string; subject: string }
+) {
 	const owner = await getProjectOwnerRecipient(projectId);
 	if (!owner) {
 		return null;
@@ -128,38 +71,33 @@ export async function sendProjectPastDueEmail(projectId: string, graceDays: numb
 		component: BillingNoticeEmail,
 		props: {
 			userName: owner.name,
-			heading: 'Payment overdue',
-			preview: 'Your Stack project has an overdue balance',
-			body: `Your project has an overdue balance. Update your payment method within ${graceDays} days to avoid your servers being suspended.`,
+			heading: notice.heading,
+			preview: notice.preview,
+			body: notice.body,
 			actionUrl: projectBillingUrl(projectId),
 			actionLabel: 'Update billing'
 		},
-		subject: 'Action required: overdue balance on your Stack project',
+		subject: notice.subject,
 		to: owner.email
 	});
 
 	return owner.email;
 }
 
-export async function sendProjectSuspendedEmail(projectId: string) {
-	const owner = await getProjectOwnerRecipient(projectId);
-	if (!owner) {
-		return null;
-	}
-
-	await sendRenderedEmail({
-		component: BillingNoticeEmail,
-		props: {
-			userName: owner.name,
-			heading: 'Servers suspended',
-			preview: 'Your Stack servers have been suspended',
-			body: 'Your servers have been suspended because of an overdue balance. Update your payment method to restore access, then start your servers again.',
-			actionUrl: projectBillingUrl(projectId),
-			actionLabel: 'Update billing'
-		},
-		subject: 'Your Stack servers have been suspended',
-		to: owner.email
+export function sendProjectPastDueEmail(projectId: string, graceDays: number) {
+	return sendProjectBillingNotice(projectId, {
+		heading: 'Payment overdue',
+		preview: 'Your Stack project has an overdue balance',
+		body: `Your project has an overdue balance. Update your payment method within ${graceDays} days to avoid your servers being suspended.`,
+		subject: 'Action required: overdue balance on your Stack project'
 	});
+}
 
-	return owner.email;
+export function sendProjectSuspendedEmail(projectId: string) {
+	return sendProjectBillingNotice(projectId, {
+		heading: 'Servers suspended',
+		preview: 'Your Stack servers have been suspended',
+		body: 'Your servers have been suspended because of an overdue balance. Update your payment method to restore access, then start your servers again.',
+		subject: 'Your Stack servers have been suspended'
+	});
 }

@@ -1,14 +1,6 @@
 <script lang="ts">
-	import {
-		Body,
-		Container,
-		Head,
-		Html,
-		Preview,
-		Section,
-		Text
-	} from '@better-svelte-email/components';
-	import EmailHeader from './email-header.svelte';
+	import { Text } from '@better-svelte-email/components';
+	import EmailLayout from './components/email-layout.svelte';
 
 	interface Props {
 		body: string;
@@ -26,21 +18,10 @@
 	);
 </script>
 
-<Html>
-	<Head />
-	<Body class="bg-gray-950 font-sans">
-		{#if preview}
-			<Preview {preview} />
-		{/if}
-		<Container class="mx-auto my-8 max-w-xl [border-radius:0] border border-gray-800 bg-gray-900">
-			<EmailHeader label={label ?? 'Message'} />
-			<Section class="p-8">
-				{#each paragraphs as paragraph, index (index)}
-					<Text class="m-0 {index > 0 ? 'mt-4' : ''} text-sm leading-5 text-gray-400">
-						{paragraph}
-					</Text>
-				{/each}
-			</Section>
-		</Container>
-	</Body>
-</Html>
+<EmailLayout label={label ?? 'Message'} {preview}>
+	{#each paragraphs as paragraph, index (index)}
+		<Text class="m-0 {index > 0 ? 'mt-4' : ''} text-sm leading-5 text-gray-400">
+			{paragraph}
+		</Text>
+	{/each}
+</EmailLayout>

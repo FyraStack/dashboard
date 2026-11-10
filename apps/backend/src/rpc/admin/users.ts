@@ -1,5 +1,5 @@
 import { RpcTarget } from 'cloudflare:workers';
-import { inScope, type Scope } from '#lib/server/context.js';
+import type { Scope } from '#lib/server/context.js';
 import {
 	type BeginDeleteUserInput,
 	beginDeleteUser,
@@ -11,14 +11,13 @@ import {
 	type SetUserAdminInput,
 	type SetUserBillingExemptInput,
 	type SetUserDisabledInput,
-	type SetUserRoleInput,
 	type SetUserTwoFactorInput,
 	setUserAdmin,
 	setUserBillingExempt,
 	setUserDisabled,
-	setUserRole,
 	setUserTwoFactor
 } from '#lib/server/handlers/admin-users.js';
+import { inScope } from '#lib/server/scope.js';
 
 export class AdminUsers extends RpcTarget {
 	readonly #scope: Scope;
@@ -46,10 +45,6 @@ export class AdminUsers extends RpcTarget {
 
 	setTwoFactor(input: SetUserTwoFactorInput) {
 		return inScope(this.#scope, () => setUserTwoFactor(input));
-	}
-
-	setRole(input: SetUserRoleInput) {
-		return inScope(this.#scope, () => setUserRole(input));
 	}
 
 	beginDelete(input: BeginDeleteUserInput) {

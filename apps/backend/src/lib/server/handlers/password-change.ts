@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { ulid } from 'ulid';
 import PasswordChangeCodeEmail from '#lib/emails/password-change-code.svelte';
 import { initAuth } from '#lib/server/auth.js';
 import { context } from '#lib/server/context.js';
@@ -6,7 +7,6 @@ import { account, verification } from '#lib/server/db/auth.schema.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { error } from '#lib/server/http.js';
-import { ulid } from '#lib/server/id.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import {
 	consumeVerification,

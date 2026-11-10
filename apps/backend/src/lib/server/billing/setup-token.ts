@@ -1,6 +1,6 @@
+import { ulid } from 'ulid';
 import { verification } from '#lib/server/db/auth.schema.js';
 import type { Database } from '#lib/server/db/index.js';
-import { ulid } from '#lib/server/id.js';
 import { consumeVerification } from '#lib/server/step-up.js';
 
 const BILLING_SETUP_TOKEN_TTL_MS = 60 * 60 * 1000;

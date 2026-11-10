@@ -1,5 +1,5 @@
 import { RpcTarget } from 'cloudflare:workers';
-import { inScope, type Scope } from '#lib/server/context.js';
+import type { Scope } from '#lib/server/context.js';
 import {
 	type AnnouncementInput,
 	createAnnouncement,
@@ -9,6 +9,7 @@ import {
 	type UpdateAnnouncementInput,
 	updateAnnouncement
 } from '#lib/server/handlers/announcements.js';
+import { inScope } from '#lib/server/scope.js';
 
 export class AdminAnnouncements extends RpcTarget {
 	readonly #scope: Scope;

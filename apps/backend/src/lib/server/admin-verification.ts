@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm';
+import { ulid } from 'ulid';
 import { initAuth } from '#lib/server/auth.js';
 import { context } from '#lib/server/context.js';
 import { passkey, twoFactor, verification } from '#lib/server/db/auth.schema.js';
 import type { initDrizzle } from '#lib/server/db/index.js';
 import { error } from '#lib/server/http.js';
-import { ulid } from '#lib/server/id.js';
 import { consumeVerification, withStepUpAttemptLimit } from '#lib/server/step-up.js';
 
 export const ADMIN_VERIFICATION_CODE_LENGTH = 6;

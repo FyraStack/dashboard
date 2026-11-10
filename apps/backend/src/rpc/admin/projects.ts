@@ -1,5 +1,5 @@
 import { RpcTarget } from 'cloudflare:workers';
-import { inScope, type Scope } from '#lib/server/context.js';
+import type { Scope } from '#lib/server/context.js';
 import {
 	type BeginDeleteProjectInput,
 	beginDeleteProject,
@@ -9,16 +9,15 @@ import {
 	createAdminVm,
 	type DeleteProjectWithVerificationInput,
 	deleteProjectWithVerification,
+	type GetOrganizationResourcesInput,
+	getOrganizationResources,
 	listAdminProjects,
 	type SetProjectBillingExemptInput,
 	type SetProjectDisabledInput,
 	setProjectBillingExempt,
 	setProjectDisabled
 } from '#lib/server/handlers/admin-projects.js';
-import {
-	type GetOrganizationResourcesInput,
-	getOrganizationResources
-} from '#lib/server/handlers/admin-users.js';
+import { inScope } from '#lib/server/scope.js';
 
 export class AdminProjects extends RpcTarget {
 	readonly #scope: Scope;

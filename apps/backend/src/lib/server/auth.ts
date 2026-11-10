@@ -6,18 +6,19 @@ import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { deleteSessionCookie, expireCookie } from 'better-auth/cookies';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
 import { and, count, eq, gt } from 'drizzle-orm';
-import { ac, organizationRoles } from '#lib/auth/organization-permissions.js';
+import { ac, organizationRoles } from 'stack-shared/access-control';
+import { ulid } from 'ulid';
 import EmailChangeConfirmationEmail from '#lib/emails/email-change-confirmation.svelte';
 import OrganizationInvitationEmail from '#lib/emails/organization-invitation.svelte';
 import ResetPasswordEmail from '#lib/emails/reset-password.svelte';
 import VerifyEmail from '#lib/emails/verify-email.svelte';
+import { userAdditionalFields } from '#lib/server/auth-user-fields.js';
 import { context as requestContext } from '#lib/server/context.js';
 import { member, user as userTable, verification } from '#lib/server/db/auth.schema.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { sendSecurityAlertEmail } from '#lib/server/email-notifications.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
-import { ulid } from '#lib/server/id.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 
 const PENDING_PASSKEY_COOKIE = 'pending_passkey_2fa';
@@ -138,20 +139,7 @@ function buildAuth() {
 						})
 					)
 			},
-			additionalFields: {
-				isAdmin: {
-					type: 'boolean',
-					input: false,
-					required: true,
-					defaultValue: false
-				},
-				billingExempt: {
-					type: 'boolean',
-					input: false,
-					required: true,
-					defaultValue: false
-				}
-			}
+			additionalFields: userAdditionalFields
 		},
 		databaseHooks: {
 			user: {

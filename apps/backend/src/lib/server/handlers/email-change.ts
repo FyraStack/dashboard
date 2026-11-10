@@ -1,10 +1,10 @@
 import { and, eq, gt } from 'drizzle-orm';
+import { ulid } from 'ulid';
 import { initAuth } from '#lib/server/auth.js';
 import { context } from '#lib/server/context.js';
 import { verification } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { error } from '#lib/server/http.js';
-import { ulid } from '#lib/server/id.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 
 const EMAIL_CHANGE_TTL_MS = 60 * 60 * 1000;

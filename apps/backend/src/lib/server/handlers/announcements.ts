@@ -1,22 +1,15 @@
 import { and, count, desc, eq, gte, inArray, isNotNull, notExists, sql } from 'drizzle-orm';
-import { requireAdmin } from '#lib/server/auth-context.js';
-import { context } from '#lib/server/context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import {
+	type AnnouncementImageType,
+	announcementImageTypes,
+	MAX_ANNOUNCEMENT_IMAGE_BYTES
+} from 'stack-shared/announcements';
+import { requireAdmin, requireAdminUser, requireUser } from '#lib/server/auth-context.js';
 import { announcementReads, announcements, userPreferences } from '#lib/server/db/schema.js';
 import { error } from '#lib/server/http.js';
 
 const MAX_UNREAD_SHOWN = 10;
-const MAX_IMAGE_BYTES = 1024 * 1024;
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
-
-export const announcementImageTypes = [
-	'image/png',
-	'image/jpeg',
-	'image/webp',
-	'image/gif'
-] as const;
-
-export type AnnouncementImageType = (typeof announcementImageTypes)[number];
 
 export interface AnnouncementImageInput {
 	data: string;
@@ -58,21 +51,6 @@ const imageVersion = sql<
 	Number
 );
 
-function requireUser() {
-	const { user } = context().locals;
-	if (!user) {
-		error(401, 'Authentication required');
-	}
-	return user;
-}
-
-async function requireCurrentAdmin() {
-	const user = requireUser();
-	const db = initDrizzle();
-	await requireAdmin(db, user.id);
-	return db;
-}
-
 function normalizeAnnouncement(input: AnnouncementInput) {
 	const title = input.title.trim();
 	const body = input.body.trim();
@@ -111,7 +89,7 @@ function normalizeImage(image: AnnouncementImageInput | null | undefined) {
 	if (image.data.length === 0 || image.data.length % 4 !== 0 || !BASE64_PATTERN.test(image.data)) {
 		error(400, 'Image data must be base64');
 	}
-	if (decodedBase64Bytes(image.data) > MAX_IMAGE_BYTES) {
+	if (decodedBase64Bytes(image.data) > MAX_ANNOUNCEMENT_IMAGE_BYTES) {
 		error(400, 'Image must be 1 MB or smaller');
 	}
 	return { imageData: image.data, imageType: image.type };
@@ -127,8 +105,7 @@ function isWebUrl(value: string) {
 }
 
 export async function loadUserAnnouncements() {
-	const user = requireUser();
-	const db = initDrizzle();
+	const { db, user } = requireUser();
 
 	const [preferences] = await db
 		.select({ announcementsEnabled: userPreferences.announcementsEnabled })
@@ -175,12 +152,11 @@ export async function loadUserAnnouncements() {
 }
 
 export async function markAnnouncementsRead({ announcementIds }: MarkAnnouncementsReadInput) {
-	const user = requireUser();
+	const { db, user } = requireUser();
 	if (announcementIds.length === 0) {
 		return;
 	}
 
-	const db = initDrizzle();
 	const published = await db
 		.select({ id: announcements.id })
 		.from(announcements)
@@ -197,10 +173,10 @@ export async function markAnnouncementsRead({ announcementIds }: MarkAnnouncemen
 }
 
 export async function setAnnouncementsEnabled({ enabled }: SetAnnouncementsEnabledInput) {
-	const user = requireUser();
+	const { db, user } = requireUser();
 	const updatedAt = Date.now();
 
-	await initDrizzle()
+	await db
 		.insert(userPreferences)
 		.values({ userId: user.id, announcementsEnabled: enabled, updatedAt })
 		.onConflictDoUpdate({
@@ -210,7 +186,7 @@ export async function setAnnouncementsEnabled({ enabled }: SetAnnouncementsEnabl
 }
 
 export async function listAdminAnnouncements() {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 
 	return await db
 		.select({
@@ -232,7 +208,7 @@ export async function listAdminAnnouncements() {
 }
 
 export async function createAnnouncement(input: AnnouncementInput) {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 	const now = Date.now();
 
 	const [inserted] = await db
@@ -250,7 +226,7 @@ export async function createAnnouncement(input: AnnouncementInput) {
 }
 
 export async function updateAnnouncement({ announcementId, ...input }: UpdateAnnouncementInput) {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 
 	const existing = await db.query.announcements.findFirst({
 		where: eq(announcements.id, announcementId)
@@ -272,7 +248,7 @@ export async function updateAnnouncement({ announcementId, ...input }: UpdateAnn
 }
 
 export async function deleteAnnouncement({ announcementId }: DeleteAnnouncementInput) {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 
 	const deleted = await db
 		.delete(announcements)
@@ -284,8 +260,7 @@ export async function deleteAnnouncement({ announcementId }: DeleteAnnouncementI
 }
 
 export async function getAnnouncementImage({ announcementId }: AnnouncementImageLookupInput) {
-	const user = requireUser();
-	const db = initDrizzle();
+	const { db, user } = requireUser();
 
 	const [row] = await db
 		.select({

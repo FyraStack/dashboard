@@ -18,8 +18,6 @@ import {
 
 export const analyticsSchema = pgSchema('analytics');
 
-// Organization
-
 export const analyticsOrganization = analyticsSchema.view('organization').as((qb) =>
 	qb
 		.select({
@@ -34,8 +32,6 @@ export const analyticsOrganization = analyticsSchema.view('organization').as((qb
 		.from(organization)
 );
 
-// Member
-
 export const analyticsMember = analyticsSchema.view('member').as((qb) =>
 	qb
 		.select({
@@ -47,8 +43,6 @@ export const analyticsMember = analyticsSchema.view('member').as((qb) =>
 		})
 		.from(member)
 );
-
-// User
 
 export const analyticsUser = analyticsSchema.view('user').as((qb) =>
 	qb
@@ -67,8 +61,6 @@ export const analyticsUser = analyticsSchema.view('user').as((qb) =>
 		.from(user)
 );
 
-// VM Types
-
 export const analyticsVmTypes = analyticsSchema.view('vm_types').as((qb) =>
 	qb
 		.select({
@@ -84,8 +76,6 @@ export const analyticsVmTypes = analyticsSchema.view('vm_types').as((qb) =>
 		})
 		.from(vmTypes)
 );
-
-// VMs
 
 export const analyticsVms = analyticsSchema.view('vms').as((qb) =>
 	qb
@@ -111,8 +101,6 @@ export const analyticsVms = analyticsSchema.view('vms').as((qb) =>
 		.from(vms)
 );
 
-// Volumes
-
 export const analyticsVolumes = analyticsSchema.view('volumes').as((qb) =>
 	qb
 		.select({
@@ -124,8 +112,6 @@ export const analyticsVolumes = analyticsSchema.view('volumes').as((qb) =>
 		})
 		.from(volumes)
 );
-
-// Project Billing Customers
 
 export const analyticsProjectBillingCustomers = analyticsSchema
 	.view('project_billing_customers')
@@ -144,8 +130,6 @@ export const analyticsProjectBillingCustomers = analyticsSchema
 			.from(projectBillingCustomers)
 	);
 
-// Billing Meters
-
 export const analyticsBillingMeters = analyticsSchema.view('billing_meters').as((qb) =>
 	qb
 		.select({
@@ -162,8 +146,6 @@ export const analyticsBillingMeters = analyticsSchema.view('billing_meters').as(
 		})
 		.from(billingMeters)
 );
-
-// Billing Usage Events
 
 export const analyticsBillingUsageEvents = analyticsSchema.view('billing_usage_events').as((qb) =>
 	qb
@@ -185,8 +167,6 @@ export const analyticsBillingUsageEvents = analyticsSchema.view('billing_usage_e
 		.from(billingUsageEvents)
 );
 
-// IPAM Prefixes
-
 export const analyticsIpamPrefixes = analyticsSchema.view('ipam_prefixes').as((qb) =>
 	qb
 		.select({
@@ -204,8 +184,6 @@ export const analyticsIpamPrefixes = analyticsSchema.view('ipam_prefixes').as((q
 		.from(ipamPrefixes)
 );
 
-// IPAM Allocations
-
 export const analyticsIpamAllocations = analyticsSchema.view('ipam_allocations').as((qb) =>
 	qb
 		.select({
@@ -221,8 +199,6 @@ export const analyticsIpamAllocations = analyticsSchema.view('ipam_allocations')
 		.from(ipamAllocations)
 );
 
-// IPAM Settings
-
 export const analyticsIpamSettings = analyticsSchema.view('ipam_settings').as((qb) =>
 	qb
 		.select({
@@ -232,8 +208,6 @@ export const analyticsIpamSettings = analyticsSchema.view('ipam_settings').as((q
 		})
 		.from(ipamSettings)
 );
-
-// IPAM PTR Records
 
 export const analyticsIpamPtrRecords = analyticsSchema.view('ipam_ptr_records').as((qb) =>
 	qb
@@ -247,8 +221,6 @@ export const analyticsIpamPtrRecords = analyticsSchema.view('ipam_ptr_records').
 		.from(ipamPtrRecords)
 );
 
-// SSH Keys
-
 export const analyticsSshKeys = analyticsSchema.view('ssh_keys').as((qb) =>
 	qb
 		.select({
@@ -259,8 +231,6 @@ export const analyticsSshKeys = analyticsSchema.view('ssh_keys').as((qb) =>
 		.from(sshKeys)
 );
 
-// API Tokens
-
 export const analyticsApiTokens = analyticsSchema.view('api_tokens').as((qb) =>
 	qb
 		.select({
@@ -270,8 +240,6 @@ export const analyticsApiTokens = analyticsSchema.view('api_tokens').as((qb) =>
 		})
 		.from(apiTokens)
 );
-
-// Base Images
 
 export const analyticsBaseImages = analyticsSchema.view('base_images').as((qb) =>
 	qb

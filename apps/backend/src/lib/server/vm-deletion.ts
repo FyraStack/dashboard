@@ -3,10 +3,10 @@ import { and, eq, inArray, isNotNull, lt } from 'drizzle-orm';
 import { getBackend } from '#lib/server/backends/index.js';
 import { deleteProjectServerEntity } from '#lib/server/billing/autumn.js';
 import { hasUnsyncedUsageEvents, meterResourceThrough } from '#lib/server/billing/metering.js';
-import { inSystemScope } from '#lib/server/context.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { ipAssignments, paymentPeriods, vms, volumes } from '#lib/server/db/schema.js';
 import { releaseVmNetworking } from '#lib/server/ipam.js';
+import { inSystemScope } from '#lib/server/scope.js';
 
 interface DeletableVm {
 	backend: 'proxmox';

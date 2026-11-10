@@ -5,23 +5,17 @@ import {
 	beginAdminVerification,
 	consumeAdminVerification
 } from '#lib/server/admin-verification.js';
-import { initAuth } from '#lib/server/auth.js';
-import { requireAdmin } from '#lib/server/auth-context.js';
-import { runInBackground } from '#lib/server/background.js';
-import {
-	ensureLocalProjectBillingCustomer,
-	ensureProjectCustomer,
-	isProjectBillingExempt,
-	requireProjectBillingActive
-} from '#lib/server/billing/autumn.js';
-import { context } from '#lib/server/context.js';
+import { requireAdminUser } from '#lib/server/auth-context.js';
+import { isProjectBillingExempt, requireProjectBillingActive } from '#lib/server/billing/autumn.js';
+import { makeCountMap } from '#lib/server/count-map.js';
 import { member, organization, user } from '#lib/server/db/auth.schema.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import type { Database } from '#lib/server/db/index.js';
 import { projectBillingCustomers, sshKeys, vms, volumes } from '#lib/server/db/schema.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { error } from '#lib/server/http.js';
 import { withIdempotency } from '#lib/server/idempotency.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { createOwnedProject, toProjectName } from '#lib/server/project-creation.js';
 import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
 import { provisionVm } from '#lib/server/vm-provisioning.js';
 
@@ -81,16 +75,18 @@ export interface DeleteProjectWithVerificationInput {
 	projectId: string;
 }
 
-async function requireCurrentAdmin() {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
+export interface GetOrganizationResourcesInput {
+	orgId: string;
+}
+
+async function requireLiveProject(db: Database, projectId: string) {
+	const project = await db.query.organization.findFirst({
+		where: and(eq(organization.id, projectId), isNull(organization.deletedAt))
+	});
+	if (!project) {
+		error(404, 'Project not found');
 	}
-
-	const db = initDrizzle();
-	await requireAdmin(db, locals.user.id);
-
-	return db;
+	return project;
 }
 
 function toBillingStatus(
@@ -108,19 +104,8 @@ function toBillingStatus(
 	return 'configured';
 }
 
-function makeCountMap(rows: { key: string | null; count: number }[]) {
-	const map = new Map<string, number>();
-	for (const row of rows) {
-		if (!row.key) {
-			continue;
-		}
-		map.set(row.key, row.count);
-	}
-	return map;
-}
-
 export async function listAdminProjects(): Promise<AdminProject[]> {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 
 	const [orgs, owners, memberCounts, vmCounts, volumeCounts, billingCustomers] = await Promise.all([
 		db
@@ -198,14 +183,8 @@ export async function listAdminProjects(): Promise<AdminProject[]> {
 }
 
 export async function setProjectBillingExempt(params: SetProjectBillingExemptInput) {
-	const db = await requireCurrentAdmin();
-
-	const target = await db.query.organization.findFirst({
-		where: eq(organization.id, params.projectId)
-	});
-	if (!target) {
-		error(404, 'Project not found');
-	}
+	const { db } = await requireAdminUser();
+	await requireLiveProject(db, params.projectId);
 
 	await db
 		.update(organization)
@@ -215,30 +194,15 @@ export async function setProjectBillingExempt(params: SetProjectBillingExemptInp
 	return { projectId: params.projectId, billingExempt: params.billingExempt };
 }
 
-function toSlug(name: string) {
-	const slug = name
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-|-$/g, '')
-		.slice(0, 42);
-
-	return `${slug || 'project'}-${Date.now().toString(36)}`;
-}
-
 export async function createAdminProject(params: CreateAdminProjectInput) {
-	const db = await requireCurrentAdmin();
-	const adminUser = context().locals.user;
-	if (!adminUser) {
-		error(401, 'Authentication required');
-	}
+	const { db, user: adminUser } = await requireAdminUser();
 
 	const owner = await db.query.user.findFirst({ where: eq(user.id, params.ownerUserId) });
 	if (!owner) {
 		error(404, 'User not found');
 	}
 
-	const name = params.name.trim() || 'Untitled Project';
+	const name = toProjectName(params.name);
 	return withIdempotency(
 		db,
 		{
@@ -246,45 +210,14 @@ export async function createAdminProject(params: CreateAdminProjectInput) {
 			operation: 'admin.createProject',
 			args: { name, ownerUserId: params.ownerUserId, userId: adminUser.id }
 		},
-		async () => {
-			const auth = initAuth();
-			const org = await auth.api.createOrganization({
-				body: {
-					name,
-					slug: toSlug(name),
-					userId: params.ownerUserId
-				}
-			});
-			if (!org) {
-				error(502, 'Failed to create project');
-			}
-
-			await ensureLocalProjectBillingCustomer(org.id);
-			runInBackground(
-				ensureProjectCustomer(org.id).catch((err) => {
-					console.warn(`Failed to sync Autumn customer for project ${org.id}`, err);
-				}),
-				`sync autumn customer for project ${org.id}`
-			);
-
-			return { id: org.id };
-		}
+		() => createOwnedProject(name, params.ownerUserId)
 	);
 }
 
 export async function createAdminVm(params: CreateAdminVmInput) {
-	const db = await requireCurrentAdmin();
-	const adminUser = context().locals.user;
-	if (!adminUser) {
-		error(401, 'Authentication required');
-	}
+	const { db, user: adminUser } = await requireAdminUser();
 
-	const project = await db.query.organization.findFirst({
-		where: eq(organization.id, params.projectId)
-	});
-	if (!project) {
-		error(404, 'Project not found');
-	}
+	const project = await requireLiveProject(db, params.projectId);
 	if (project.disabled) {
 		error(400, 'This project is disabled');
 	}
@@ -331,14 +264,8 @@ export async function createAdminVm(params: CreateAdminVmInput) {
 }
 
 export async function setProjectDisabled(params: SetProjectDisabledInput) {
-	const db = await requireCurrentAdmin();
-
-	const target = await db.query.organization.findFirst({
-		where: eq(organization.id, params.projectId)
-	});
-	if (!target) {
-		error(404, 'Project not found');
-	}
+	const { db } = await requireAdminUser();
+	await requireLiveProject(db, params.projectId);
 
 	await db
 		.update(organization)
@@ -355,18 +282,8 @@ export async function setProjectDisabled(params: SetProjectDisabledInput) {
 }
 
 export async function beginDeleteProject(params: BeginDeleteProjectInput) {
-	const db = await requireCurrentAdmin();
-	const adminUser = context().locals.user;
-	if (!adminUser) {
-		error(401, 'Authentication required');
-	}
-
-	const target = await db.query.organization.findFirst({
-		where: eq(organization.id, params.projectId)
-	});
-	if (!target) {
-		error(404, 'Project not found');
-	}
+	const { db, user: adminUser } = await requireAdminUser();
+	const target = await requireLiveProject(db, params.projectId);
 
 	const { method, code } = await beginAdminVerification(db, adminUser.id, params.projectId);
 
@@ -388,18 +305,8 @@ export async function beginDeleteProject(params: BeginDeleteProjectInput) {
 }
 
 export async function deleteProjectWithVerification(params: DeleteProjectWithVerificationInput) {
-	const db = await requireCurrentAdmin();
-	const adminUser = context().locals.user;
-	if (!adminUser) {
-		error(401, 'Authentication required');
-	}
-
-	const target = await db.query.organization.findFirst({
-		where: eq(organization.id, params.projectId)
-	});
-	if (!target) {
-		error(404, 'Project not found');
-	}
+	const { db, user: adminUser } = await requireAdminUser();
+	const target = await requireLiveProject(db, params.projectId);
 
 	await consumeAdminVerification(db, adminUser.id, params.projectId, params.method, params.code);
 	await softDeleteOrganizationResources(db, params.projectId);
@@ -410,4 +317,40 @@ export async function deleteProjectWithVerification(params: DeleteProjectWithVer
 	);
 
 	return { projectId: params.projectId, name: target.name };
+}
+
+export async function getOrganizationResources(params: GetOrganizationResourcesInput) {
+	const { db } = await requireAdminUser();
+
+	const target = await db.query.organization.findFirst({
+		where: eq(organization.id, params.orgId)
+	});
+	if (!target) {
+		error(404, 'Organization not found');
+	}
+
+	const [vmsData, volumesData] = await Promise.all([
+		db
+			.select({
+				id: vms.id,
+				name: vms.name,
+				status: vms.status,
+				createdAt: vms.createdAt
+			})
+			.from(vms)
+			.where(eq(vms.ownerProjectId, params.orgId))
+			.orderBy(vms.name),
+		db
+			.select({
+				id: volumes.id,
+				name: volumes.name,
+				size: volumes.size,
+				createdAt: volumes.createdAt
+			})
+			.from(volumes)
+			.where(eq(volumes.ownerProjectId, params.orgId))
+			.orderBy(volumes.name)
+	]);
+
+	return { vms: vmsData, volumes: volumesData };
 }

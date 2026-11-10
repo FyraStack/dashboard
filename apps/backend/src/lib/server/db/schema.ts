@@ -14,7 +14,8 @@ import {
 	text,
 	uniqueIndex
 } from 'drizzle-orm/pg-core';
-import { ulid } from '#lib/server/id.js';
+import type { VmLifecycleStatus } from 'stack-shared/vm-status';
+import { ulid } from 'ulid';
 import { organization, user } from './auth.schema.ts';
 
 const ulidPk = () => text('id').primaryKey().$defaultFn(ulid);
@@ -24,7 +25,16 @@ export const vmIsaEnum = pgEnum('vm_isa', ['x86', 'arm', 'risc-v']);
 
 export const vmBackendEnum = pgEnum('vm_backend', ['proxmox']);
 
-export const vmStatusEnum = pgEnum('vm_status', ['provisioning', 'ready', 'error', 'deleting']);
+function exactValues<T extends string>() {
+	return <const V extends readonly [T, ...T[]]>(
+		values: V & ([Exclude<T, V[number]>] extends [never] ? unknown : never)
+	): V => values;
+}
+
+export const vmStatusEnum = pgEnum(
+	'vm_status',
+	exactValues<VmLifecycleStatus>()(['provisioning', 'ready', 'error', 'deleting'])
+);
 
 export const billingSyncStatusEnum = pgEnum('billing_sync_status', [
 	'pending',
@@ -36,8 +46,6 @@ export const billingSyncStatusEnum = pgEnum('billing_sync_status', [
 export const billingResourceTypeEnum = pgEnum('billing_resource_type', ['vm', 'volume']);
 
 export const ipFamilyEnum = pgEnum('ip_family', ['ipv4', 'ipv6']);
-
-// VM Types
 
 export const vmTypes = pgTable('vm_types', {
 	id: ulidPk(),
@@ -55,8 +63,6 @@ export const vmTypes = pgTable('vm_types', {
 export const vmTypesRelations = relations(vmTypes, ({ many }) => ({
 	vms: many(vms)
 }));
-
-// VMs
 
 export const vms = pgTable(
 	'vms',
@@ -113,8 +119,6 @@ export const vmsRelations = relations(vms, ({ one, many }) => ({
 	ipamAllocations: many(ipamAllocations)
 }));
 
-// Volumes
-
 export const volumes = pgTable(
 	'volumes',
 	{
@@ -145,8 +149,6 @@ export const volumesRelations = relations(volumes, ({ one }) => ({
 		references: [vms.id]
 	})
 }));
-
-// Payment Periods
 
 export const paymentPeriods = pgTable(
 	'payment_periods',
@@ -245,8 +247,6 @@ export const billingUsageEvents = pgTable(
 	]
 );
 
-// IP Blocks
-
 export const ipBlocks = pgTable('ip_blocks', {
 	id: ulidPk(),
 	ipBlock: cidr('ip_block').notNull()
@@ -255,8 +255,6 @@ export const ipBlocks = pgTable('ip_blocks', {
 export const ipBlocksRelations = relations(ipBlocks, ({ many }) => ({
 	assignments: many(ipAssignments)
 }));
-
-// IP Assignments
 
 export const ipAssignments = pgTable(
 	'ip_assignments',
@@ -384,8 +382,6 @@ export const ipamPtrRecordsRelations = relations(ipamPtrRecords, ({ one }) => ({
 	})
 }));
 
-// SSH Keys
-
 export const sshKeys = pgTable(
 	'ssh_keys',
 	{
@@ -398,8 +394,6 @@ export const sshKeys = pgTable(
 	},
 	(table) => [index('ssh_keys_user_id_index').on(table.userId)]
 );
-
-// Idempotency Keys
 
 export const idempotencyStatusEnum = pgEnum('idempotency_status', ['pending', 'completed']);
 
@@ -421,8 +415,6 @@ export const idempotencyKeys = pgTable(
 	(table) => [index('idempotency_keys_expires_at_index').on(table.expiresAt)]
 );
 
-// API Tokens
-
 export const apiTokens = pgTable(
 	'api_tokens',
 	{
@@ -434,8 +426,6 @@ export const apiTokens = pgTable(
 	},
 	(table) => [index('api_tokens_user_id_index').on(table.userId)]
 );
-
-// Base Images
 
 export const baseImages = pgTable('base_images', {
 	id: ulidPk(),
@@ -454,8 +444,6 @@ export const baseImages = pgTable('base_images', {
 	isa: vmIsaEnum('isa').notNull(),
 	sortOrder: integer('sort_order').notNull().default(0)
 });
-
-// Announcements
 
 export const announcements = pgTable(
 	'announcements',
@@ -491,8 +479,6 @@ export const announcementReads = pgTable(
 		index('announcement_reads_announcement_id_index').on(table.announcementId)
 	]
 );
-
-// User Preferences
 
 export const userPreferences = pgTable('user_preferences', {
 	userId: text('user_id')

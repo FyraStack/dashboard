@@ -1,5 +1,5 @@
 import { RpcTarget } from 'cloudflare:workers';
-import { inScope, type Scope } from '#lib/server/context.js';
+import type { Scope } from '#lib/server/context.js';
 import {
 	getProjectBilling,
 	openBillingPortal,
@@ -31,6 +31,7 @@ import {
 } from '#lib/server/handlers/projects.js';
 import { type CreateVmInput, createVm, listVmStatuses, listVms } from '#lib/server/handlers/vms.js';
 import { type CreateVolumeInput, createVolume, listVolumes } from '#lib/server/handlers/volumes.js';
+import { inScope } from '#lib/server/scope.js';
 
 export class Project extends RpcTarget {
 	readonly #scope: Scope;

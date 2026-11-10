@@ -5,9 +5,9 @@ import { getProjectBillingReadiness, refreshProjectBilling } from '#lib/server/b
 import { consumeBillingSetupToken } from '#lib/server/billing/setup-token.js';
 import { context } from '#lib/server/context.js';
 import { initDrizzle } from '#lib/server/db/index.js';
-import { safeReturnPath } from '#lib/server/handlers/billing.js';
 import { error } from '#lib/server/http.js';
 import { getIpamAvailability } from '#lib/server/ipam.js';
+import { safeReturnPath } from '#lib/server/urls.js';
 
 export interface CompleteCreateServerBillingSetupInput {
 	billingSetupToken: string;

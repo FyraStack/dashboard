@@ -5,9 +5,8 @@ import {
 	type FeatureFlagKey,
 	type FeatureFlags,
 	featureFlagKeys
-} from '#lib/feature-flags.js';
+} from 'stack-shared/feature-flags';
 import { getRuntimeEnv } from '#lib/server/env.js';
-import { error } from '#lib/server/http.js';
 import { instrument, timingLog } from '#lib/server/observability.js';
 
 const FEATURE_FLAGS_KEY = 'feature-flags';
@@ -128,12 +127,4 @@ export async function setFeatureFlag(
 	cacheFlags(nextFlags);
 
 	return nextFlags;
-}
-
-export async function requireFeatureFlag(flag: FeatureFlagKey): Promise<void> {
-	const flags = await getFeatureFlags({ fresh: true });
-
-	if (!flags[flag]) {
-		error(404, 'Not found');
-	}
 }

@@ -1,5 +1,5 @@
 import { RpcTarget } from 'cloudflare:workers';
-import { inScope, type Scope } from '#lib/server/context.js';
+import type { Scope } from '#lib/server/context.js';
 import {
 	type AdminVmPowerInput,
 	adminDeleteVm,
@@ -9,6 +9,7 @@ import {
 	adminStopVm,
 	listAllAdminVms
 } from '#lib/server/handlers/admin-vms.js';
+import { inScope } from '#lib/server/scope.js';
 
 export class AdminVms extends RpcTarget {
 	readonly #scope: Scope;

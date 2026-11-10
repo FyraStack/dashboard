@@ -1,11 +1,12 @@
 import { RpcTarget } from 'cloudflare:workers';
-import { inScope, type Scope } from '#lib/server/context.js';
+import type { Scope } from '#lib/server/context.js';
 import {
 	type AttachVolumeInput,
 	attachVolume,
 	deleteVolume,
 	detachVolume
 } from '#lib/server/handlers/volumes.js';
+import { inScope } from '#lib/server/scope.js';
 
 export class Volume extends RpcTarget {
 	readonly #scope: Scope;

@@ -1,6 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { context } from '#lib/server/context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import { requireUser } from '#lib/server/auth-context.js';
 import { sshKeys } from '#lib/server/db/schema.js';
 import { error } from '#lib/server/http.js';
 import { withIdempotency } from '#lib/server/idempotency.js';
@@ -20,25 +19,15 @@ export interface DeleteSshKeyInput {
 }
 
 export function listSshKeys() {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
+	const { db, user } = requireUser();
 
 	return db.query.sshKeys.findMany({
-		where: eq(sshKeys.userId, locals.user.id)
+		where: eq(sshKeys.userId, user.id)
 	});
 }
 
 export async function createSshKey(params: CreateSshKeyInput) {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
+	const { db, user } = requireUser();
 
 	const parts = params.publicKey.trim().split(WHITESPACE_PATTERN);
 	if (parts.length < 2) {
@@ -61,7 +50,7 @@ export async function createSshKey(params: CreateSshKeyInput) {
 		error(400, 'Invalid SSH public key: could not compute fingerprint');
 	}
 
-	const userId = locals.user.id;
+	const userId = user.id;
 	const { idempotencyKey, ...operationArgs } = params;
 	return withIdempotency(
 		db,
@@ -86,23 +75,16 @@ export async function createSshKey(params: CreateSshKeyInput) {
 }
 
 export async function deleteSshKey(params: DeleteSshKeyInput) {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
+	const { db, user } = requireUser();
 
 	const key = await db.query.sshKeys.findFirst({
-		where: and(eq(sshKeys.id, params.keyId), eq(sshKeys.userId, locals.user.id))
+		where: and(eq(sshKeys.id, params.keyId), eq(sshKeys.userId, user.id))
 	});
 
 	if (!key) {
 		error(404, 'SSH key not found');
 	}
 
-	await db
-		.delete(sshKeys)
-		.where(and(eq(sshKeys.id, params.keyId), eq(sshKeys.userId, locals.user.id)));
+	await db.delete(sshKeys).where(and(eq(sshKeys.id, params.keyId), eq(sshKeys.userId, user.id)));
 	captureServerEvent('ssh_key_deleted');
 }

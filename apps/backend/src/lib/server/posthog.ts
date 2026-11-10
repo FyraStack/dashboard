@@ -1,6 +1,7 @@
 import { env, waitUntil } from 'cloudflare:workers';
 import { PostHog } from 'posthog-node/edge';
-import { type Context, context } from '#lib/server/context.js';
+import { posthogRegion } from 'stack-shared/posthog';
+import { type Context, currentContext } from '#lib/server/context.js';
 
 type EventProperties = Record<string, string | number | boolean | null | undefined>;
 
@@ -11,9 +12,7 @@ interface CaptureOptions {
 }
 
 function ingestHost(): string {
-	return env.POSTHOG_HOST?.includes('eu.')
-		? 'https://eu.i.posthog.com'
-		: 'https://us.i.posthog.com';
+	return `https://${posthogRegion(env.POSTHOG_HOST)}.i.posthog.com`;
 }
 
 function createClient(): PostHog | null {
@@ -22,14 +21,6 @@ function createClient(): PostHog | null {
 		return null;
 	}
 	return new PostHog(token, { host: ingestHost(), flushAt: 1, flushInterval: 0 });
-}
-
-function currentEvent(): Context | null {
-	try {
-		return context();
-	} catch {
-		return null;
-	}
 }
 
 function dispatch(send: (client: PostHog) => Promise<void>) {
@@ -59,7 +50,7 @@ export function captureServerEvent(
 	properties: EventProperties = {},
 	options: CaptureOptions = {}
 ) {
-	const event = currentEvent();
+	const event = currentContext();
 	const distinctId = options.distinctId ?? event?.locals.user?.id;
 	if (!distinctId) {
 		return;

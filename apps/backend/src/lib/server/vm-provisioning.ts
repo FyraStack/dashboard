@@ -8,9 +8,9 @@ import {
 } from '#lib/server/billing/autumn.js';
 import { createBillingMeter } from '#lib/server/billing/metering.js';
 import { config } from '#lib/server/config.js';
-import { inSystemScope } from '#lib/server/context.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { baseImages, vms, vmTypes } from '#lib/server/db/schema.js';
+import { errorMessage } from '#lib/server/errors.js';
 import { error } from '#lib/server/http.js';
 import {
 	allocateVmNetworking,
@@ -20,6 +20,7 @@ import {
 	vmAllocations
 } from '#lib/server/ipam.js';
 import { applyDefaultPtrRecords } from '#lib/server/ptr-records.js';
+import { inSystemScope } from '#lib/server/scope.js';
 import { allocateProxmoxVmid } from '#lib/server/vm-identity.js';
 
 export interface ProvisionVmInput {
@@ -46,10 +47,6 @@ interface ProvisioningVm {
 }
 
 const DISK_IMPORT_TIMEOUT_MS = 20 * 60_000;
-
-function errorMessage(err: unknown) {
-	return err instanceof Error ? err.message : String(err);
-}
 
 async function settleProvisioningVm(
 	vmId: string,

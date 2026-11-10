@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { AnnouncementImageInput, AnnouncementImageType } from 'stack-backend/types';
+	import type { AnnouncementImageInput } from 'stack-backend/types';
+	import type { AnnouncementImageType } from 'stack-shared/announcements';
 	import { toast } from 'svelte-sonner';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';

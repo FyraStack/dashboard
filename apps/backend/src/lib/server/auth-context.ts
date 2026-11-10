@@ -1,12 +1,33 @@
 import { and, eq } from 'drizzle-orm';
-import { hasProjectRole, type PermissionLevel } from '#lib/auth/organization-permissions.js';
-import { context } from '#lib/server/context.js';
+import { hasProjectRole, type PermissionLevel } from 'stack-shared/project-roles';
+import { type AppUser, context } from '#lib/server/context.js';
 import { member, organization, user } from '#lib/server/db/auth.schema.js';
-import type { Database } from '#lib/server/db/index.js';
+import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { error } from '#lib/server/http.js';
 
-export function hasAdminRole(role: string | null | undefined): boolean {
+function hasAdminRole(role: string | null | undefined): boolean {
 	return role?.split(',').includes('admin') ?? false;
+}
+
+export function isAdminUser(candidate: {
+	role?: string | null;
+	isAdmin?: boolean | null;
+}): boolean {
+	return hasAdminRole(candidate.role) || Boolean(candidate.isAdmin);
+}
+
+export function requireUser(): { db: Database; user: AppUser } {
+	const { locals } = context();
+	if (!locals.user) {
+		error(401, 'Authentication required');
+	}
+	return { db: initDrizzle(), user: locals.user };
+}
+
+export async function requireAdminUser(): Promise<{ db: Database; user: AppUser }> {
+	const current = requireUser();
+	await requireAdmin(current.db, current.user.id);
+	return current;
 }
 
 function cachedLookup<T>(key: string, compute: () => Promise<T>): Promise<T> {

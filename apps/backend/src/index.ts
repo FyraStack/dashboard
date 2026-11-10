@@ -1,8 +1,10 @@
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { instrumentWorkflowWithSentry, withSentry } from '@sentry/cloudflare';
+import { authBasePath } from 'stack-shared/auth';
+import { initAuth } from '#lib/server/auth.js';
 import { getBackend } from '#lib/server/backends/index.js';
-import { inScope } from '#lib/server/context.js';
-import { runBillingMeter, runIpamReconcile } from '#lib/server/jobs.js';
+import { runBilling, runMaintenance } from '#lib/server/jobs.js';
+import { inScope, inSystemScope } from '#lib/server/scope.js';
 import { rememberSentryClient, sentryOptions } from '#lib/server/sentry.js';
 import { VmDeletionWorkflow } from '#lib/server/vm-deletion.js';
 import { VmProvisioningWorkflow } from '#lib/server/vm-provisioning.js';
@@ -26,8 +28,6 @@ export type { TwoFactorReset } from './rpc/two-factor-reset.ts';
 export type { Vm } from './rpc/vm.ts';
 export type { Volume } from './rpc/volume.ts';
 
-const authBasePath = '/api/auth';
-
 function isAuthPath(pathname: string) {
 	return pathname === authBasePath || pathname.startsWith(`${authBasePath}/`);
 }
@@ -43,7 +43,7 @@ async function pingProxmox() {
 
 async function runJob(label: string, job: () => Promise<unknown>) {
 	try {
-		const result = await inScope({ headers: {}, system: true }, job);
+		const result = await inSystemScope(job);
 		console.log(`${label} ok: ${JSON.stringify(result)}`);
 	} catch (cause) {
 		console.error(`${label} failed`, cause);
@@ -57,23 +57,22 @@ class Api extends WorkerEntrypoint<Env> {
 			return new Response('Not found', { status: 404 });
 		}
 
-		return inScope({ headers: request.headers, url: request.url, skipSession: true }, async () => {
-			const { initAuth } = await import('#lib/server/auth.js');
-			return initAuth().handler(request);
-		});
+		return inScope({ headers: request.headers, url: request.url, skipSession: true }, () =>
+			initAuth().handler(request)
+		);
 	}
 
 	scheduled(_controller: ScheduledController) {
 		if (this.env.BILLING_DISABLED === 'true') {
-			console.warn('billing meter skipped: BILLING_DISABLED is true');
+			console.warn('billing skipped: BILLING_DISABLED is true');
 		} else {
-			this.ctx.waitUntil(runJob('billing meter', runBillingMeter));
+			this.ctx.waitUntil(runJob('billing', runBilling));
 		}
-		this.ctx.waitUntil(runJob('ipam reconcile', runIpamReconcile));
+		this.ctx.waitUntil(runJob('maintenance', runMaintenance));
 	}
 
 	health() {
-		return inScope({ headers: {}, system: true }, pingProxmox);
+		return inSystemScope(pingProxmox);
 	}
 
 	as(headers: Record<string, string>, url: string) {

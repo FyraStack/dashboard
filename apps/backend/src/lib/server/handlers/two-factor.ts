@@ -1,13 +1,15 @@
+import type { TotpResetChoice, TwoFactorDisableMethod } from 'stack-shared/auth';
 import TotpResetCodeEmail from '#lib/emails/totp-reset-code.svelte';
 import { initAuth, VERIFIED_2FA_DISABLE_HEADER } from '#lib/server/auth.js';
+import { requireUser } from '#lib/server/auth-context.js';
+import { runInBackground } from '#lib/server/background.js';
 import { context } from '#lib/server/context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { sendSecurityAlertEmail } from '#lib/server/email-notifications.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import { error } from '#lib/server/http.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
-import { withStepUpAttemptLimit } from '#lib/server/step-up.js';
 import {
 	beginTotpReset,
 	clearTotpResetGrant,
@@ -15,34 +17,33 @@ import {
 	removeTotpWithVerifiedPassword,
 	requireTotpResetGrant,
 	resolvePendingTwoFactorUser,
-	TOTP_RESET_CODE_TTL_MS,
 	type TotpResetUser,
 	verifyTotpResetCode as verifyTotpResetEmailCode
 } from '#lib/server/totp-reset.js';
-
-const CODE_LENGTH = 6;
+import { verifyTotpCode } from '#lib/server/totp-verification.js';
+import {
+	VERIFICATION_CODE_TTL_MS,
+	withStepUpAttemptLimit
+} from '#lib/server/verification-codes.js';
 
 export interface DisableTwoFactorWithVerificationInput {
 	code: string;
-	method: string;
+	method: TwoFactorDisableMethod;
 	password: string;
 }
 export interface VerifyTotpResetCodeInput {
 	code: string;
 }
 export interface ConfirmTotpResetChoiceInput {
-	choice: string;
+	choice: TotpResetChoice | 'reset-totp' | 'disable-totp';
 	password: string;
 }
 
 export async function disableTwoFactorWithVerification(
 	params: DisableTwoFactorWithVerificationInput
 ) {
-	const { locals, request, url } = context();
-	const { user } = locals;
-	if (!user) {
-		error(401, 'Authentication required');
-	}
+	const { db, user } = requireUser();
+	const { request, url } = context();
 
 	if (!params.password) {
 		error(400, 'Enter your current password.');
@@ -51,26 +52,15 @@ export async function disableTwoFactorWithVerification(
 	const auth = initAuth();
 	const setCookie: string[] = [];
 	if (params.method === 'totp') {
-		const code = params.code.replace(/\D/g, '');
-		if (code.length !== CODE_LENGTH) {
-			error(400, 'Enter the verification code from your authenticator app.');
-		}
-
-		const verified = await withStepUpAttemptLimit(initDrizzle(), user.id, () =>
-			auth.api.verifyTOTP({
-				headers: request.headers,
-				body: { code, trustDevice: false },
-				returnHeaders: true
-			})
-		);
+		const verified = await verifyTotpCode(db, user.id, params.code);
 		setCookie.push(...verified.headers.getSetCookie());
-	} else if (params.method === 'backupCode') {
+	} else {
 		const code = params.code.trim();
 		if (!code) {
 			error(400, 'Enter a backup code.');
 		}
 
-		const verified = await withStepUpAttemptLimit(initDrizzle(), user.id, () =>
+		const verified = await withStepUpAttemptLimit(db, user.id, () =>
 			auth.api.verifyBackupCode({
 				headers: request.headers,
 				body: { code, disableSession: true, trustDevice: false },
@@ -78,8 +68,6 @@ export async function disableTwoFactorWithVerification(
 			})
 		);
 		setCookie.push(...verified.headers.getSetCookie());
-	} else {
-		error(400, 'Choose a valid verification method.');
 	}
 
 	const headers = new Headers(request.headers);
@@ -92,19 +80,22 @@ export async function disableTwoFactorWithVerification(
 	});
 	setCookie.push(...disabled.headers.getSetCookie());
 
-	await sendSecurityAlertEmail({
-		to: user.email,
-		userName: user.name,
-		alertType: 'Two-factor authentication disabled',
-		message: 'Authenticator app two-factor authentication was disabled for your Stack account.',
-		actionUrl: url.origin
-	});
+	runInBackground(
+		sendSecurityAlertEmail({
+			to: user.email,
+			userName: user.name,
+			alertType: 'Two-factor authentication disabled',
+			message: 'Authenticator app two-factor authentication was disabled for your Stack account.',
+			actionUrl: url.origin
+		}),
+		'two-factor disabled alert'
+	);
 	captureServerEvent('two_factor_disabled', { verification_method: params.method });
 
 	return { setCookie };
 }
 
-async function resolveTotpResetUser(db: ReturnType<typeof initDrizzle>): Promise<TotpResetUser> {
+async function resolveTotpResetUser(db: Database): Promise<TotpResetUser> {
 	const event = context();
 	if (event.locals.user) {
 		error(403, 'Two-factor authentication cannot be reset while signed in.');
@@ -125,7 +116,7 @@ export async function sendTotpResetCode() {
 
 	await sendRenderedEmail({
 		component: TotpResetCodeEmail,
-		props: { userName: user.name, code, expiresInMinutes: TOTP_RESET_CODE_TTL_MS / 60_000 },
+		props: { userName: user.name, code, expiresInMinutes: VERIFICATION_CODE_TTL_MS / 60_000 },
 		subject: 'Reset your Stack two-factor authentication',
 		to: user.email
 	});
@@ -162,17 +153,22 @@ export async function confirmTotpResetChoice(params: ConfirmTotpResetChoiceInput
 		)
 	);
 	await clearTotpResetGrant(db, user.id);
-	await sendSecurityAlertEmail({
-		to: user.email,
-		userName: user.name,
-		alertType:
-			choice === 'reset' ? 'Two-factor authentication reset' : 'Two-factor authentication disabled',
-		message:
-			choice === 'reset'
-				? 'Authenticator app two-factor authentication was reset for your Stack account during sign-in. The old authenticator no longer works. Finish setting up the new one to turn two-factor authentication back on.'
-				: 'Authenticator app two-factor authentication was disabled for your Stack account during sign-in.',
-		actionUrl: context().url.origin
-	});
+	runInBackground(
+		sendSecurityAlertEmail({
+			to: user.email,
+			userName: user.name,
+			alertType:
+				choice === 'reset'
+					? 'Two-factor authentication reset'
+					: 'Two-factor authentication disabled',
+			message:
+				choice === 'reset'
+					? 'Authenticator app two-factor authentication was reset for your Stack account during sign-in. The old authenticator no longer works. Finish setting up the new one to turn two-factor authentication back on.'
+					: 'Authenticator app two-factor authentication was disabled for your Stack account during sign-in.',
+			actionUrl: context().url.origin
+		}),
+		'two-factor reset alert'
+	);
 	captureServerEvent('totp_reset_completed', { choice }, { distinctId: user.id });
 	return { choice, signInEmail: user.email };
 }

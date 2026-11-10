@@ -1,7 +1,7 @@
 import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import type { VerificationMethod } from 'stack-shared/auth';
 import AdminProjectDeletionCodeEmail from '#lib/emails/admin-project-deletion-code.svelte';
 import {
-	ADMIN_VERIFICATION_CODE_TTL_MS,
 	beginAdminVerification,
 	consumeAdminVerification
 } from '#lib/server/admin-verification.js';
@@ -17,6 +17,7 @@ import { withIdempotency } from '#lib/server/idempotency.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { createOwnedProject, toProjectName } from '#lib/server/project-creation.js';
 import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
+import { VERIFICATION_CODE_TTL_MS } from '#lib/server/verification-codes.js';
 import { provisionVm } from '#lib/server/vm-provisioning.js';
 
 export type AdminProjectBillingStatus = 'configured' | 'past_due' | 'suspended' | 'none';
@@ -71,7 +72,7 @@ export interface BeginDeleteProjectInput {
 
 export interface DeleteProjectWithVerificationInput {
 	code?: string;
-	method: string;
+	method: VerificationMethod;
 	projectId: string;
 }
 
@@ -294,7 +295,7 @@ export async function beginDeleteProject(params: BeginDeleteProjectInput) {
 				userName: adminUser.name,
 				projectName: target.name,
 				code,
-				expiresInMinutes: ADMIN_VERIFICATION_CODE_TTL_MS / 60_000
+				expiresInMinutes: VERIFICATION_CODE_TTL_MS / 60_000
 			},
 			subject: 'Confirm Stack project deletion',
 			to: adminUser.email

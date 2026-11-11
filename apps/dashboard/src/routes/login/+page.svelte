@@ -1,12 +1,13 @@
 <script lang="ts">
-	import SiGithub from '@icons-pack/svelte-simple-icons/icons/SiGithub';
 	import { authClient } from '#lib/auth-client.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { authHref, goAfterAuth } from '#lib/auth-redirect.js';
+	import AuthError from '#lib/components/auth-error.svelte';
+	import AuthLogo from '#lib/components/auth-logo.svelte';
+	import GithubSignInButton from '#lib/components/github-sign-in-button.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { goto } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
-	import AlertCircle from '~icons/nucleo/alert-circle';
 	import CheckCircle2 from '~icons/nucleo/check-circle';
 	import Eye from '~icons/nucleo/eye';
 	import EyeOff from '~icons/nucleo/eye-off';
@@ -21,9 +22,7 @@
 	let { data }: { data: PageData } = $props();
 	const redirectTo = $derived(data.redirectTo ?? '/');
 	const verified = $derived(data.verified ?? false);
-	const registerHref = $derived(
-		redirectTo === '/' ? '/register' : `/register?redirectTo=${encodeURIComponent(redirectTo)}`
-	);
+	const registerHref = $derived(authHref('/register', redirectTo));
 
 	let email = $state('');
 	let password = $state('');
@@ -31,30 +30,6 @@
 	let errorMessage = $state('');
 	let loading = $state(false);
 	let passkeyLoading = $state(false);
-	let socialLoading = $state<'github' | null>(null);
-
-	async function signInWithSocial(provider: 'github') {
-		if (socialLoading) {
-			return;
-		}
-		errorMessage = '';
-		socialLoading = provider;
-		try {
-			const { error: err } = await authClient.signIn.social({ provider, callbackURL: redirectTo });
-			if (err) {
-				errorMessage = err.message ?? 'Unable to sign in.';
-				socialLoading = null;
-			}
-		} catch {
-			errorMessage = 'Unable to sign in.';
-			socialLoading = null;
-		}
-	}
-
-	function twoFactorHref(method: 'passkey' | 'totp') {
-		const path = `/login/two-factor/${method}`;
-		return redirectTo === '/' ? path : `${path}?redirectTo=${encodeURIComponent(redirectTo)}`;
-	}
 
 	async function handleLogin() {
 		if (!(email && password)) {
@@ -77,17 +52,17 @@
 			const methods = loginData.twoFactorMethods;
 
 			if (methods?.includes('passkey')) {
-				goto(twoFactorHref('passkey'));
+				goto(authHref('/login/two-factor/passkey', redirectTo));
 				return;
 			}
 
 			if (!methods || methods.includes('totp')) {
-				goto(twoFactorHref('totp'));
+				goto(authHref('/login/two-factor/totp', redirectTo));
 				return;
 			}
 		}
 
-		goto(redirectTo).catch(() => goto('/'));
+		await goAfterAuth(redirectTo);
 	}
 
 	async function handlePasskeySignIn() {
@@ -103,7 +78,7 @@
 			return;
 		}
 
-		goto(redirectTo).catch(() => goto('/'));
+		await goAfterAuth(redirectTo);
 	}
 </script>
 
@@ -113,22 +88,13 @@
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">
-		<div class="mb-10 flex items-center justify-center gap-2">
-			<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
-			<span class="text-base font-semibold tracking-tight text-foreground">Stack</span>
-			<Badge class="h-4 px-1.5 text-[10px]" variant="secondary">Alpha</Badge>
-		</div>
+		<AuthLogo />
 
 		<div class="space-y-5">
 			<h1 class="text-center text-lg font-medium text-foreground">Sign in</h1>
 
 			{#if errorMessage}
-				<div
-					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-				>
-					<AlertCircle class="size-4 shrink-0" />
-					{errorMessage}
-				</div>
+				<AuthError>{errorMessage}</AuthError>
 			{/if}
 
 			{#if verified}
@@ -204,19 +170,7 @@
 				<div class="h-px flex-1 bg-muted"></div>
 			</div>
 
-			<Button
-				variant="outline"
-				size="sm"
-				class="w-full gap-1.5"
-				loading={socialLoading === 'github'}
-				disabled={socialLoading !== null}
-				onclick={() => signInWithSocial('github')}
-			>
-				{#if socialLoading !== 'github'}
-					<SiGithub class="h-3.5 w-3.5" color="currentColor" />
-				{/if}
-				GitHub
-			</Button>
+			<GithubSignInButton {redirectTo} onError={(message) => (errorMessage = message)} />
 
 			<Button
 				variant="outline"

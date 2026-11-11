@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { reverseDnsZoneForCidr } from 'stack-shared/ptr';
-	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -8,16 +7,16 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { dependencies } from '#lib/dependencies.js';
+	import { runOptimistic } from '#lib/optimistic.js';
 	import {
 		createIpamPrefix,
 		deleteIpamPrefix,
 		getIpamPtrDefaultFormats,
-		listIpamPrefixes,
 		setIpamPrefixDisabled,
 		updateIpamPrefix,
 		updateIpamPtrDefaultFormats
 	} from '#lib/remote/ipam.remote.js';
-	import { type AdminPageData, AdminState, type IpamPrefix } from '#lib/state/admin.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
 	import { invalidate } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
@@ -27,13 +26,13 @@
 	import Pencil from '~icons/nucleo/pencil';
 	import Power from '~icons/nucleo/power';
 	import Trash2 from '~icons/nucleo/trash';
+	import type { PageProps } from './$types';
 
-	let { data }: { data: AdminPageData } = $props();
-	const admin = new AdminState(untrack(() => data));
+	let { data }: PageProps = $props();
 
-	$effect(() => {
-		admin.sync(data);
-	});
+	type IpamPrefix = (typeof data.ipamPrefixes)[number];
+
+	let prefixes = $derived<IpamPrefix[]>(data.ipamPrefixes);
 
 	let dialogOpen = $state(false);
 	let editing = $state<IpamPrefix | null>(null);
@@ -55,12 +54,8 @@
 	let ptrFormatIpv4 = $state('');
 	let ptrFormatIpv6 = $state('');
 
-	const ipv4Count = $derived(
-		admin.ipamPrefixes.filter((prefix) => prefix.family === 'ipv4').length
-	);
-	const ipv6Count = $derived(
-		admin.ipamPrefixes.filter((prefix) => prefix.family === 'ipv6').length
-	);
+	const ipv4Count = $derived(prefixes.filter((prefix) => prefix.family === 'ipv4').length);
+	const ipv6Count = $derived(prefixes.filter((prefix) => prefix.family === 'ipv6').length);
 	const isIpv6Prefix = $derived(cidr.trim().includes(':'));
 
 	function formatCount(value: string) {
@@ -106,13 +101,6 @@
 		dialogOpen = true;
 	}
 
-	async function refreshPrefixes() {
-		const prefixesQuery = listIpamPrefixes();
-		await prefixesQuery.refresh();
-		admin.ipamPrefixes = await prefixesQuery;
-		await invalidate('app:ipam-prefixes');
-	}
-
 	async function savePrefix() {
 		if (!(name.trim() && cidr.trim() && (isIpv6Prefix || gatewayAddress.trim()))) {
 			return;
@@ -139,7 +127,7 @@
 				await createIpamPrefix(payload);
 			}
 			dialogOpen = false;
-			await refreshPrefixes();
+			await invalidate(dependencies.admin.ipamPrefixes);
 		} catch (err) {
 			formError = getErrorMessage(err, 'Failed to save prefix');
 		} finally {
@@ -148,16 +136,22 @@
 	}
 
 	async function togglePrefix(prefix: IpamPrefix) {
-		const previous = admin.ipamPrefixes.map((item) => ({ ...item }));
-		admin.ipamPrefixes = admin.ipamPrefixes.map((item) =>
-			item.id === prefix.id ? { ...item, disabled: !prefix.disabled } : item
-		);
-
+		const nextDisabled = !prefix.disabled;
 		try {
-			await setIpamPrefixDisabled({ prefixId: prefix.id, disabled: !prefix.disabled });
-			await refreshPrefixes();
+			await runOptimistic({
+				apply: () => {
+					const previous = prefixes;
+					prefixes = prefixes.map((item) =>
+						item.id === prefix.id ? { ...item, disabled: nextDisabled } : item
+					);
+					return () => {
+						prefixes = previous;
+					};
+				},
+				commit: () => setIpamPrefixDisabled({ prefixId: prefix.id, disabled: nextDisabled }),
+				invalidates: [dependencies.admin.ipamPrefixes]
+			});
 		} catch (err) {
-			admin.ipamPrefixes = previous;
 			toast.error(getErrorMessage(err, 'Failed to update prefix'));
 		}
 	}
@@ -215,8 +209,7 @@
 		}
 		try {
 			await deleteIpamPrefix({ prefixId: prefix.id });
-			admin.ipamPrefixes = admin.ipamPrefixes.filter((item) => item.id !== prefix.id);
-			await invalidate('app:ipam-prefixes');
+			await invalidate(dependencies.admin.ipamPrefixes);
 		} catch (err) {
 			toast.error(getErrorMessage(err, 'Failed to delete prefix'));
 		}
@@ -244,7 +237,7 @@
 		</div>
 	</div>
 
-	{#if admin.ipamPrefixes.length === 0}
+	{#if prefixes.length === 0}
 		<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
 			<Network class="mb-3 h-6 w-6" />
 			<p class="text-xs">No IPAM prefixes configured</p>
@@ -268,7 +261,7 @@
 				</tr>
 			</thead>
 			<tbody class="divide-y divide-border/50">
-				{#each admin.ipamPrefixes as prefix (prefix.id)}
+				{#each prefixes as prefix (prefix.id)}
 					<tr class="transition-colors hover:bg-muted/20">
 						<td class="px-5 py-3">
 							<div class="flex items-center gap-2">

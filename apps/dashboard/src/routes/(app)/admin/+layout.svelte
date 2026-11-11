@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { featureFlagKeys } from 'stack-shared/feature-flags';
-	import { type Snippet, untrack } from 'svelte';
+	import { defaultFeatureFlags, featureFlagKeys } from 'stack-shared/feature-flags';
+	import type { Snippet } from 'svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import Cpu from '~icons/nucleo/cpu';
@@ -15,54 +14,53 @@
 	import Server from '~icons/nucleo/server';
 	import UserCog from '~icons/nucleo/user-cog';
 
-	let { data, children }: { data: AdminPageData; children: Snippet } = $props();
-	const admin = new AdminState(untrack(() => data));
-	$effect(() => {
-		admin.sync(data);
-	});
+	import type { LayoutData } from './$types';
+
+	let { data, children }: { data: LayoutData; children: Snippet } = $props();
+	const enabledFlags = $derived(data.featureFlags);
 
 	const tabs = $derived([
 		{
 			href: resolve('admin/users'),
 			label: 'Users',
 			icon: UserCog,
-			count: admin.adminUsers.length
+			count: data.adminUsers.length
 		},
 		{
 			href: resolve('admin/projects'),
 			label: 'Projects',
 			icon: FolderOpen,
-			count: admin.adminProjects.length
+			count: data.adminProjects.length
 		},
 		{
 			href: resolve('admin/vms'),
 			label: 'VMs',
 			icon: Server,
-			count: admin.adminVms.filter((vm) => vm.active).length
+			count: data.adminVms.filter((vm) => vm.active).length
 		},
 		{
 			href: resolve('admin/vm-types'),
 			label: 'VM Types',
 			icon: Cpu,
-			count: admin.vmTypes.length
+			count: data.vmTypes.length
 		},
 		{
 			href: resolve('admin/images'),
 			label: 'Images',
 			icon: Disc,
-			count: admin.images.length
+			count: data.images.length
 		},
 		{
 			href: resolve('admin/ipam'),
 			label: 'IPAM',
 			icon: Network,
-			count: admin.ipamPrefixes.length
+			count: data.ipamPrefixes.length
 		},
 		{
 			href: resolve('admin/features'),
 			label: 'Feature Flags',
 			icon: Flag,
-			count: featureFlagKeys.filter((key) => admin.featureFlags[key]).length
+			count: featureFlagKeys.filter((key) => enabledFlags[key]).length
 		},
 		{
 			href: resolve('admin/emails'),

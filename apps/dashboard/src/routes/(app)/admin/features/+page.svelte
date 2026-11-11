@@ -1,5 +1,6 @@
 <script lang="ts">
 	import {
+		defaultFeatureFlags,
 		type FeatureFlagCategory,
 		type FeatureFlagKey,
 		featureFlagCategories,
@@ -8,9 +9,11 @@
 		featureFlagKeys,
 		featureFlagLabels
 	} from 'stack-shared/feature-flags';
-	import { untrack } from 'svelte';
 	import type { IconComponent } from '#lib';
-	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
+	import { dependencies } from '#lib/dependencies.js';
+	import { runOptimistic } from '#lib/optimistic.js';
+	import { updateFeatureFlag } from '#lib/remote/feature-flags.remote.js';
+	import { getErrorMessage } from '#lib/utils.js';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';
 	import X from '~icons/lucide/x';
@@ -30,6 +33,7 @@
 	import Shield from '~icons/nucleo/shield';
 	import Terminal from '~icons/nucleo/terminal';
 	import Upload from '~icons/nucleo/upload';
+	import type { PageProps } from './$types';
 
 	const featureFlagIcons: Record<FeatureFlagKey, IconComponent> = {
 		colocation: Server,
@@ -53,33 +57,51 @@
 		server: FolderOpen
 	};
 
-	let { data }: { data: AdminPageData } = $props();
-	const admin = new AdminState(untrack(() => data));
-	$effect(() => {
-		admin.sync(data);
-	});
+	let { data }: PageProps = $props();
 
-	const enabledCount = $derived(featureFlagKeys.filter((k) => admin.featureFlags[k]).length);
+	let featureFlags = $derived(data.featureFlags);
+	let saving = $state<Partial<Record<FeatureFlagKey, boolean>>>({});
+	let errorMessage = $state('');
+
+	const enabledCount = $derived(featureFlagKeys.filter((k) => featureFlags[k]).length);
 	const totalCount = featureFlagKeys.length;
 
-	function toggleFlag(flag: FeatureFlagKey) {
-		if (admin.featureFlagSaving[flag]) {
+	async function toggleFlag(flag: FeatureFlagKey) {
+		if (saving[flag]) {
 			return;
 		}
-		admin.toggleFeatureFlag(flag, !admin.featureFlags[flag]);
+		const enabled = !featureFlags[flag];
+		errorMessage = '';
+		saving[flag] = true;
+		try {
+			await runOptimistic({
+				apply: () => {
+					const previous = featureFlags;
+					featureFlags = { ...featureFlags, [flag]: enabled };
+					return () => {
+						featureFlags = previous;
+					};
+				},
+				commit: () => updateFeatureFlag({ flag, enabled }),
+				invalidates: [dependencies.admin.featureFlags]
+			});
+		} catch (err) {
+			errorMessage = getErrorMessage(err, 'Failed to update feature flag');
+		} finally {
+			saving[flag] = false;
+		}
 	}
 </script>
 
 <div class="flex-1 overflow-auto">
 	<div class="flex flex-col gap-5 p-5">
-		{#if admin.featureFlagError}
+		{#if errorMessage}
 			<div
 				class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 			>
-				<AlertTriangle class="size-4 shrink-0" />{admin.featureFlagError}
+				<AlertTriangle class="size-4 shrink-0" />{errorMessage}
 			</div>
 		{/if}
-		<!-- Summary header -->
 		<div class="flex items-center justify-between">
 			<div class="flex items-center gap-3">
 				<div
@@ -93,10 +115,9 @@
 			</div>
 		</div>
 
-		<!-- Category cards -->
 		{#each Object.entries(featureFlagCategories) as [category, flags] (category)}
 			{@const CatIcon = categoryIcons[category as FeatureFlagCategory]}
-			{@const catEnabled = flags.filter((f) => admin.featureFlags[f]).length}
+			{@const catEnabled = flags.filter((f) => featureFlags[f]).length}
 			<div class="border border-border/60 bg-background/30">
 				<div class="flex items-center justify-between border-b border-border/50 px-4 py-3">
 					<div class="flex items-center gap-2.5">
@@ -122,7 +143,7 @@
 				</div>
 				<div class="flex flex-col">
 					{#each flags as flag, i (flag)}
-						{@const enabled = admin.featureFlags[flag]}
+						{@const enabled = featureFlags[flag]}
 						{@const Icon = featureFlagIcons[flag]}
 						<div
 							class="group flex items-center justify-between gap-4 px-4 py-3.5 transition-colors hover:bg-muted/20 {i ===
@@ -156,7 +177,7 @@
 								</div>
 							</div>
 							<div class="flex shrink-0 items-center gap-3">
-								{#if admin.featureFlagSaving[flag]}
+								{#if saving[flag]}
 									<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 								{/if}
 								<button
@@ -165,7 +186,7 @@
 										? 'bg-red-600'
 										: 'hover:bg-muted-foreground'}"
 									onclick={() => toggleFlag(flag)}
-									disabled={admin.featureFlagSaving[flag]}
+									disabled={saving[flag]}
 									aria-label="Toggle {featureFlagLabels[flag]}"
 								>
 									<span

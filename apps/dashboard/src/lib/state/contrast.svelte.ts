@@ -1,19 +1,10 @@
 import { MediaQuery } from 'svelte/reactivity';
 
-/**
- * High contrast preference.
- *
- * - `auto` follows the OS/browser `prefers-contrast: more` setting (default)
- * - `on` / `off` force it
- *
- * The effective value is reflected as `data-contrast="more"` on `<html>`, which
- * the CSS (and the `high-contrast:` variant) keys off. An inline script in
- * `src/app.html` resolves it before first paint; keep it in sync with this file.
- */
+// An inline script in src/app.html resolves this preference before first paint; keep it in sync.
 export type ContrastPreference = 'auto' | 'on' | 'off';
 
 export const contrastPreferenceStorageKey = 'contrast-preference';
-export const contrastAttribute = 'data-contrast';
+const contrastAttribute = 'data-contrast';
 
 function isContrastPreference(value: unknown): value is ContrastPreference {
 	return value === 'auto' || value === 'on' || value === 'off';
@@ -36,12 +27,10 @@ class ContrastState {
 
 	preference = $state<ContrastPreference>(readPreference());
 
-	/** Whether the system currently asks for more contrast. */
 	get systemPrefersMore() {
 		return this.#system.current;
 	}
 
-	/** Whether high contrast is actually in effect. */
 	get enabled() {
 		return this.preference === 'on' || (this.preference === 'auto' && this.#system.current);
 	}
@@ -55,7 +44,6 @@ class ContrastState {
 		}
 	}
 
-	/** Reflect the effective value onto the document. Call from an effect. */
 	apply() {
 		const root = document.documentElement;
 		if (this.enabled) {
@@ -65,7 +53,6 @@ class ContrastState {
 		}
 	}
 
-	/** Pick up preference changes made in other tabs. */
 	syncFromStorage(event: StorageEvent) {
 		if (event.key === contrastPreferenceStorageKey && isContrastPreference(event.newValue)) {
 			this.preference = event.newValue;

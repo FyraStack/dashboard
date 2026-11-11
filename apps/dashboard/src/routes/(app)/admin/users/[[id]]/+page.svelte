@@ -1,19 +1,38 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
-	import { authClient } from '#lib/auth-client.js';
+	import type { VerificationMethod } from 'stack-shared/auth';
+	import type { Snippet } from 'svelte';
+	import type { IconComponent } from '#lib';
+	import { hasAnyTwoFactor } from '#lib/admin-users.js';
+	import { describeDeletionVerification } from '#lib/admin-verification.js';
+	import FilterMenu from '#lib/components/admin/filter-menu.svelte';
+	import { adminMenuItemClass } from '#lib/components/admin/menu-item-class.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
 	import { Separator } from '#lib/components/ui/separator/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { type AdminUser, beginDeleteUser } from '#lib/remote/admin-users.remote.js';
-	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
+	import VerificationDialog from '#lib/components/verification-dialog.svelte';
+	import { dependencies } from '#lib/dependencies.js';
+	import { formatDate, formatDateTime, initials } from '#lib/format.js';
+	import { runOptimistic } from '#lib/optimistic.js';
+	import {
+		type AdminUser,
+		beginDeleteUser,
+		deleteUserWithVerification,
+		getOrganizationResources,
+		getUserResources,
+		setUserAdmin,
+		setUserBillingExempt,
+		setUserDisabled,
+		setUserTwoFactor,
+		type UserOrganization
+	} from '#lib/remote/admin-users.remote.js';
 	import { getErrorMessage } from '#lib/utils.js';
-	import { goto } from '$app/navigation';
+	import { statusBadgeClass } from '#lib/vm-status.js';
+	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import Check from '~icons/lucide/check';
@@ -29,13 +48,11 @@
 	import Crown from '~icons/nucleo/crown';
 	import Fingerprint from '~icons/nucleo/fingerprint';
 	import Globe from '~icons/nucleo/globe';
-	import HardDrive from '~icons/nucleo/hard-drive';
 	import Hash from '~icons/nucleo/hash';
 	import Key from '~icons/nucleo/key';
 	import Lock from '~icons/nucleo/lock';
 	import Mail from '~icons/nucleo/mail';
 	import Search from '~icons/nucleo/search';
-	import Server from '~icons/nucleo/server';
 	import Shield from '~icons/nucleo/shield';
 	import ShieldCheck from '~icons/nucleo/shield-check';
 	import Terminal from '~icons/nucleo/terminal';
@@ -43,91 +60,29 @@
 	import Unlock from '~icons/nucleo/unlock';
 	import User from '~icons/nucleo/user';
 	import Users from '~icons/nucleo/users';
+	import type { PageProps } from './$types';
 
-	type DeletionVerificationMethod = 'passkey' | 'totp' | 'email';
-	let { data }: { data: AdminPageData } = $props();
-	const admin = new AdminState(untrack(() => data));
-	$effect(() => {
-		admin.sync(data);
-	});
+	type SavingField = 'admin' | 'billingExempt' | 'disabled' | 'twoFactor';
+	type ResourceType = 'session' | 'account' | 'org' | 'sshKey' | 'apiToken';
+	type UserResources = Awaited<ReturnType<typeof getUserResources>>;
+	type OrganizationResources = Awaited<ReturnType<typeof getOrganizationResources>>;
 
-	const usersBase = resolve('admin/users');
+	const resourceViews: Record<
+		ResourceType,
+		{ count: (user: AdminUser) => number; icon: IconComponent; label: string }
+	> = {
+		session: { label: 'Sessions', icon: Terminal, count: (user) => user.sessionCount },
+		account: { label: 'Accounts', icon: Globe, count: (user) => user.accountCount },
+		org: { label: 'Organizations', icon: Users, count: (user) => user.orgCount },
+		sshKey: { label: 'SSH Keys', icon: Key, count: (user) => user.sshKeyCount },
+		apiToken: { label: 'API Tokens', icon: Fingerprint, count: (user) => user.apiTokenCount }
+	};
+	const resourceTypes = Object.keys(resourceViews) as ResourceType[];
 
-	function openUser(userId: string) {
-		goto(resolve(`admin/users/${userId}`), { reset: false });
-	}
-
-	function closeUser() {
-		goto(usersBase, { reset: false });
-	}
-
-	$effect(() => {
-		const { id } = page.params;
-		if (!id) {
-			if (admin.userSheetOpen) {
-				admin.closeUserSheet();
-			}
-			return;
-		}
-		const target = admin.adminUsers.find((account) => account.id === id);
-		if (target) {
-			admin.openUserSheet(target);
-		}
-	});
-
-	const adminCount = $derived(admin.adminUsers.filter((u) => u.isAdmin).length);
-	const userCount = $derived(admin.adminUsers.length);
-	const verifiedCount = $derived(admin.adminUsers.filter((u) => u.emailVerified).length);
-	const has2faCount = $derived(
-		admin.adminUsers.filter((u) => u.twoFactorEnabled || u.passkeyCount > 0).length
-	);
-	let deleteDialogOpen = $state(false);
-	let deletePreparing = $state(false);
-	let deleteVerifying = $state(false);
-	let deleteError = $state('');
-	let deleteUserId = $state('');
-	let deleteUserName = $state('');
-	let deleteUserEmail = $state('');
-	let deleteVerificationMethod = $state<DeletionVerificationMethod>('email');
-	let deleteVerificationEmail = $state('');
-	let deleteVerificationCode = $state('');
-	const normalizedDeleteVerificationCode = $derived(deleteVerificationCode.replace(/\D/g, ''));
-	const deleteVerificationDescription = $derived.by(() => {
-		if (deleteVerificationMethod === 'passkey') {
-			return `Use your registered passkey to confirm permanently deleting ${deleteUserEmail}.`;
-		}
-
-		if (deleteVerificationMethod === 'totp') {
-			return `Enter a code from your authenticator app to confirm permanently deleting ${deleteUserEmail}.`;
-		}
-
-		return `Enter the code sent to ${deleteVerificationEmail} to confirm permanently deleting ${deleteUserEmail}.`;
-	});
-
-	const deleteVerificationDisabled = $derived(
-		deleteVerifying ||
-			deletePreparing ||
-			!deleteUserId ||
-			(deleteVerificationMethod !== 'passkey' && normalizedDeleteVerificationCode.length !== 6)
-	);
-	const sortedUsers = $derived(
-		[...admin.adminUsers].sort((a, b) => {
-			if (a.isAdmin && !b.isAdmin) {
-				return -1;
-			}
-			if (!a.isAdmin && b.isAdmin) {
-				return 1;
-			}
-			return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-		})
-	);
-
-	let userSearch = $state('');
-	let roleFilter = $state<'all' | 'admin' | 'user'>('all');
-	let statusFilter = $state<'all' | 'verified' | 'unverified' | 'twofa' | 'disabled' | 'exempt'>(
-		'all'
-	);
-
+	const roleOptions = [
+		{ value: 'admin', label: 'Admin', icon: Crown },
+		{ value: 'user', label: 'User', icon: User }
+	] as const;
 	const roleFilterOptions = [
 		{ value: 'admin', label: 'Admins' },
 		{ value: 'user', label: 'Users' }
@@ -139,70 +94,110 @@
 		{ value: 'disabled', label: 'Disabled' },
 		{ value: 'exempt', label: 'Billing exempt' }
 	] as const;
-	const roleFilterLabel = $derived(
-		roleFilterOptions.find((option) => option.value === roleFilter)?.label ?? 'All'
+	const avatarColors = [
+		'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+		'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+		'bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-400',
+		'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400',
+		'bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-400',
+		'bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400',
+		'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/20 dark:text-cyan-400',
+		'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
+	];
+	const tagClasses = {
+		danger: statusBadgeClass.danger,
+		success: statusBadgeClass.success,
+		muted: 'border-ring/20 bg-muted/30 text-muted-foreground',
+		amber: 'border-amber-500/20 bg-amber-500/10 text-amber-400',
+		violet: 'border-violet-500/20 bg-violet-500/10 text-violet-400'
+	} as const;
+
+	let { data }: PageProps = $props();
+
+	let users = $derived<AdminUser[]>(data.adminUsers);
+	let errorMessage = $state('');
+	let saving = $state<Record<string, SavingField>>({});
+
+	let search = $state('');
+	let roleFilter = $state<'all' | 'admin' | 'user'>('all');
+	let statusFilter = $state<'all' | 'verified' | 'unverified' | 'twofa' | 'disabled' | 'exempt'>(
+		'all'
 	);
-	const statusFilterLabel = $derived(
-		statusFilterOptions.find((option) => option.value === statusFilter)?.label ?? 'All'
+
+	let drilldownUserId = $state('');
+	let drilldownType = $state<ResourceType | null>(null);
+	let drilldownOrg = $state<UserOrganization | null>(null);
+	let resources = $state<UserResources | null>(null);
+	let resourcesLoading = $state(false);
+	let orgResources = $state<OrganizationResources | null>(null);
+	let orgResourcesLoading = $state(false);
+
+	let twoFactorDisableTarget = $state<AdminUser | null>(null);
+
+	let deletePreparing = $state(false);
+	let deleteOpen = $state(false);
+	let deletion = $state<{
+		id: string;
+		name: string;
+		email: string;
+		method: VerificationMethod;
+		verificationEmail: string;
+	} | null>(null);
+
+	const usersBase = resolve('admin/users');
+	const selectedUser = $derived(
+		page.params.id ? (users.find((account) => account.id === page.params.id) ?? null) : null
 	);
+	const adminCount = $derived(users.filter((u) => u.isAdmin).length);
+	const verifiedCount = $derived(users.filter((u) => u.emailVerified).length);
+	const twoFactorCount = $derived(users.filter(hasAnyTwoFactor).length);
+	const tableUsers = $derived(
+		[...users]
+			.sort((a, b) => {
+				if (a.isAdmin !== b.isAdmin) {
+					return a.isAdmin ? -1 : 1;
+				}
+				return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+			})
+			.filter((account) => {
+				if (roleFilter === 'admin' && !account.isAdmin) {
+					return false;
+				}
+				if (roleFilter === 'user' && account.isAdmin) {
+					return false;
+				}
+				if (!matchesStatusFilter(account)) {
+					return false;
+				}
+				const term = search.trim().toLowerCase();
+				if (!term) {
+					return true;
+				}
+				return [account.name, account.email, account.id].some((value) =>
+					value.toLowerCase().includes(term)
+				);
+			})
+	);
+
+	const inDrilldown = $derived(drilldownUserId === selectedUser?.id);
+	const resourceType = $derived(inDrilldown ? drilldownType : null);
+	const selectedOrg = $derived(inDrilldown ? drilldownOrg : null);
 
 	function matchesStatusFilter(account: AdminUser) {
-		if (statusFilter === 'verified') {
-			return account.emailVerified;
-		}
-		if (statusFilter === 'unverified') {
-			return !account.emailVerified;
-		}
-		if (statusFilter === 'twofa') {
-			return account.twoFactorEnabled || account.passkeyCount > 0;
-		}
-		if (statusFilter === 'disabled') {
-			return account.disabled;
-		}
-		if (statusFilter === 'exempt') {
-			return account.billingExempt;
-		}
-		return true;
-	}
-
-	const tableUsers = $derived(
-		sortedUsers.filter((account) => {
-			if (roleFilter === 'admin' && !account.isAdmin) {
-				return false;
-			}
-			if (roleFilter === 'user' && account.isAdmin) {
-				return false;
-			}
-			if (!matchesStatusFilter(account)) {
-				return false;
-			}
-			const term = userSearch.trim().toLowerCase();
-			if (!term) {
+		switch (statusFilter) {
+			case 'verified':
+				return account.emailVerified;
+			case 'unverified':
+				return !account.emailVerified;
+			case 'twofa':
+				return hasAnyTwoFactor(account);
+			case 'disabled':
+				return account.disabled;
+			case 'exempt':
+				return account.billingExempt;
+			default:
 				return true;
-			}
-			return [account.name, account.email, account.id].some((value) =>
-				value.toLowerCase().includes(term)
-			);
-		})
-	);
-
-	function formatDate(date: Date) {
-		return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(
-			new Date(date)
-		);
-	}
-
-	function formatDateShort(date: Date) {
-		return new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(date));
-	}
-
-	function initials(name: string) {
-		return name
-			.split(' ')
-			.map((n) => n[0])
-			.join('')
-			.slice(0, 2)
-			.toUpperCase();
+		}
 	}
 
 	function twoFactorSummary(account: AdminUser) {
@@ -217,107 +212,174 @@
 	}
 
 	function avatarColor(name: string) {
-		const colors = [
-			'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-			'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
-			'bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-400',
-			'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400',
-			'bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-400',
-			'bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400',
-			'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/20 dark:text-cyan-400',
-			'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
-		];
 		let hash = 0;
-		for (let i = 0; i < name.length; i += 1) {
-			// biome-ignore lint/suspicious/noBitwiseOperators: string hash relies on int32 truncation
-			hash = name.charCodeAt(i) + ((hash << 5) - hash);
+		for (const char of name) {
+			hash = (hash * 31 + (char.codePointAt(0) ?? 0)) % avatarColors.length;
 		}
-		return colors[Math.abs(hash) % colors.length];
+		return avatarColors[hash];
 	}
 
-	const roleOptions = [
-		{ value: 'admin', label: 'Admin', icon: Crown },
-		{ value: 'user', label: 'User', icon: User }
-	] as const;
-
-	const resourceLabels = {
-		session: { label: 'Sessions', icon: Terminal },
-		account: { label: 'Accounts', icon: Globe },
-		org: { label: 'Organizations', icon: Users },
-		sshKey: { label: 'SSH Keys', icon: Key },
-		apiToken: { label: 'API Tokens', icon: Fingerprint },
-		vm: { label: 'Virtual Machines', icon: Server },
-		volume: { label: 'Volumes', icon: HardDrive }
-	} as const;
-
-	function resetDeleteDialog() {
-		deleteDialogOpen = false;
-		deleteError = '';
-		deleteUserId = '';
-		deleteUserName = '';
-		deleteUserEmail = '';
-		deleteVerificationMethod = 'email';
-		deleteVerificationEmail = '';
-		deleteVerificationCode = '';
+	function openUser(userId: string) {
+		goto(resolve(`admin/users/${userId}`), { reset: false });
 	}
 
-	async function openDeleteDialog(user: AdminUser) {
-		if (deletePreparing || deleteVerifying) {
+	function closeUser() {
+		drilldownType = null;
+		drilldownOrg = null;
+		goto(usersBase, { reset: false });
+	}
+
+	async function updateUser(
+		userId: string,
+		field: SavingField,
+		patch: Partial<AdminUser>,
+		commit: () => Promise<unknown>,
+		failureMessage: string
+	) {
+		errorMessage = '';
+		saving[userId] = field;
+		try {
+			await runOptimistic({
+				apply: () => {
+					const previous = users;
+					users = users.map((account) =>
+						account.id === userId ? { ...account, ...patch } : account
+					);
+					return () => {
+						users = previous;
+					};
+				},
+				commit,
+				invalidates: [dependencies.admin.users]
+			});
+			return true;
+		} catch (err) {
+			errorMessage = getErrorMessage(err, failureMessage);
+			return false;
+		} finally {
+			delete saving[userId];
+		}
+	}
+
+	async function changeAdminAccess(userId: string, isAdmin: boolean) {
+		const updated = await updateUser(
+			userId,
+			'admin',
+			{ isAdmin },
+			() => setUserAdmin({ userId, isAdmin }),
+			'Failed to update admin access'
+		);
+		if (updated && userId === page.data.user.id && !isAdmin) {
+			await goto('/');
+		}
+	}
+
+	function changeDisabled(userId: string, disabled: boolean) {
+		return updateUser(
+			userId,
+			'disabled',
+			{ disabled },
+			() => setUserDisabled({ userId, disabled }),
+			'Failed to update status'
+		);
+	}
+
+	function changeBillingExempt(userId: string, billingExempt: boolean) {
+		return updateUser(
+			userId,
+			'billingExempt',
+			{ billingExempt },
+			() => setUserBillingExempt({ userId, billingExempt }),
+			'Failed to update billing exemption'
+		);
+	}
+
+	function askDisableTwoFactor(account: AdminUser) {
+		twoFactorDisableTarget = account;
+	}
+
+	function cancelDisableTwoFactor() {
+		twoFactorDisableTarget = null;
+	}
+
+	function disableTwoFactor() {
+		const target = twoFactorDisableTarget;
+		twoFactorDisableTarget = null;
+		if (target) {
+			updateUser(
+				target.id,
+				'twoFactor',
+				{ twoFactorEnabled: false },
+				() => setUserTwoFactor({ userId: target.id, twoFactorEnabled: false }),
+				'Failed to update two-factor status'
+			);
+		}
+	}
+
+	async function loadUserResources(userId: string, type: ResourceType) {
+		drilldownUserId = userId;
+		drilldownType = type;
+		resourcesLoading = true;
+		try {
+			const query = getUserResources({ userId });
+			await query.refresh();
+			resources = await query;
+		} catch (err) {
+			errorMessage = getErrorMessage(err, 'Failed to load resources');
+		} finally {
+			resourcesLoading = false;
+		}
+	}
+
+	async function loadOrgResources(org: UserOrganization) {
+		drilldownOrg = org;
+		orgResources = null;
+		orgResourcesLoading = true;
+		try {
+			const query = getOrganizationResources({ orgId: org.id });
+			await query.refresh();
+			orgResources = await query;
+		} catch (err) {
+			errorMessage = getErrorMessage(err, 'Failed to load organization resources');
+		} finally {
+			orgResourcesLoading = false;
+		}
+	}
+
+	async function beginDelete(account: AdminUser) {
+		if (deletePreparing) {
 			return;
 		}
-
 		deletePreparing = true;
-		deleteError = '';
-		deleteUserId = user.id;
-		deleteUserName = user.name;
-		deleteUserEmail = user.email;
-		deleteVerificationCode = '';
-
+		errorMessage = '';
 		try {
-			const result = await beginDeleteUser({ userId: user.id });
-			deleteUserName = result.targetName;
-			deleteUserEmail = result.targetEmail;
-			deleteVerificationMethod = result.method;
-			deleteVerificationEmail = result.email;
-			deleteDialogOpen = true;
+			const result = await beginDeleteUser({ userId: account.id });
+			deletion = {
+				id: account.id,
+				name: result.targetName,
+				email: result.targetEmail,
+				method: result.method,
+				verificationEmail: result.email
+			};
+			deleteOpen = true;
 		} catch (err) {
-			admin.adminUserError = getErrorMessage(err, 'Failed to prepare user deletion');
-			deleteUserId = '';
+			errorMessage = getErrorMessage(err, 'Failed to prepare user deletion');
 		} finally {
 			deletePreparing = false;
 		}
 	}
 
-	async function confirmDeleteUser() {
-		if (deleteVerificationDisabled) {
+	async function confirmDelete(code: string) {
+		if (!deletion) {
 			return;
 		}
-
-		deleteVerifying = true;
-		deleteError = '';
-
-		try {
-			if (deleteVerificationMethod === 'passkey') {
-				const { error } = await authClient.signIn.passkey({ autoFill: false });
-
-				if (error) {
-					deleteError = error.message ?? 'Failed to verify passkey.';
-					return;
-				}
-			}
-
-			await admin.deleteUser(
-				deleteUserId,
-				deleteVerificationMethod,
-				normalizedDeleteVerificationCode
-			);
-			resetDeleteDialog();
-			closeUser();
-		} catch (err) {
-			deleteError = getErrorMessage(err, 'Failed to delete user');
-		} finally {
-			deleteVerifying = false;
-		}
+		await deleteUserWithVerification({
+			userId: deletion.id,
+			method: deletion.method,
+			code
+		});
+		closeUser();
+		await invalidate(dependencies.admin.users);
 	}
 </script>
 
@@ -325,18 +387,142 @@
 	<title>Users</title>
 </svelte:head>
 
+{#snippet statCard(
+	Icon: IconComponent,
+	tint: string,
+	iconClass: string,
+	value: number,
+	label: string
+)}
+	<div
+		class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
+	>
+		<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md {tint}">
+			<Icon class="h-4 w-4 {iconClass}" />
+		</div>
+		<div class="flex flex-col">
+			<span class="text-lg leading-none font-semibold text-foreground">{value}</span>
+			<span class="mt-0.5 text-[10px] text-muted-foreground">{label}</span>
+		</div>
+	</div>
+{/snippet}
+
+{#snippet tag(
+	classes: string,
+	Icon: IconComponent,
+	label: string
+)}
+	<span
+		class="inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium {classes}"
+	>
+		<Icon class="h-2.5 w-2.5" />{label}
+	</span>
+{/snippet}
+
+{#snippet sectionTitle(
+	title: string
+)}
+	<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase">{title}</span>
+{/snippet}
+
+{#snippet accountRow(
+	Icon: IconComponent,
+	label: string,
+	value: string,
+	valueClass = 'text-muted-foreground'
+)}
+	<div class="flex items-center justify-between">
+		<span class="flex items-center gap-2 text-xs text-muted-foreground">
+			<Icon class="h-3 w-3" />{label}
+		</span>
+		<span class="text-xs {valueClass}">{value}</span>
+	</div>
+{/snippet}
+
+{#snippet avatar(
+	account: AdminUser,
+	sizeClass: string,
+	shapeClass: string,
+	textClass: string
+)}
+	{#if account.image}
+		<img
+			src={account.image}
+			alt={account.name}
+			class="{sizeClass} shrink-0 object-cover {shapeClass}"
+		/>
+	{:else}
+		<div
+			class="flex {sizeClass} shrink-0 items-center justify-center font-bold {shapeClass} {textClass} {avatarColor(
+				account.name
+			)}"
+		>
+			{initials(account.name)}
+		</div>
+	{/if}
+{/snippet}
+
+{#snippet backHeader(
+	title: string,
+	onBack: () => void
+)}
+	<div class="flex items-center gap-2">
+		<Button
+			variant="ghost"
+			size="sm"
+			class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+			onclick={onBack}
+			aria-label="Back"
+		>
+			<ChevronLeft class="h-4 w-4" />
+		</Button>
+		<span class="text-base font-semibold text-foreground">{title}</span>
+	</div>
+{/snippet}
+
+{#snippet loadingRow()}
+	<div class="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+		<Loader2 class="h-4 w-4 animate-spin" />
+		<span class="text-xs">Loading...</span>
+	</div>
+{/snippet}
+
+{#snippet toggleRow(
+	Icon: IconComponent,
+	iconClass: string,
+	title: string,
+	description: string,
+	isSaving: boolean,
+	toggle: Snippet
+)}
+	<div class="flex items-center justify-between">
+		<div class="flex items-center gap-2">
+			<Icon class="h-4 w-4 {iconClass}" />
+			<div class="flex flex-col">
+				<span class="text-sm font-medium text-foreground">{title}</span>
+				<span class="text-[11px] text-muted-foreground">{description}</span>
+			</div>
+		</div>
+		<div class="flex items-center gap-2">
+			{#if isSaving}
+				<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+			{/if}
+			{@render toggle()}
+		</div>
+	</div>
+{/snippet}
+
 <div class="flex-1 overflow-auto">
 	<div class="flex flex-col gap-5 p-5">
-		{#if admin.adminUserError}
+		{#if errorMessage}
 			<div
 				class="flex items-center gap-2 rounded-md border border-red-300 bg-red-100 px-3 py-2 text-xs text-red-800 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-400"
 			>
 				<AlertTriangle class="size-4 shrink-0" />
-				{admin.adminUserError}
+				{errorMessage}
 			</div>
 		{/if}
 
-		<!-- Header -->
 		<div class="flex items-center justify-between">
 			<div>
 				<h2 class="text-base font-semibold tracking-tight text-foreground">Users</h2>
@@ -346,52 +532,11 @@
 			</div>
 		</div>
 
-		<!-- Stat row -->
 		<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-			<div
-				class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
-			>
-				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-sky-500/10">
-					<Users class="h-4 w-4 text-sky-400" />
-				</div>
-				<div class="flex flex-col">
-					<span class="text-lg leading-none font-semibold text-foreground">{userCount}</span>
-					<span class="mt-0.5 text-[10px] text-muted-foreground">Total users</span>
-				</div>
-			</div>
-			<div
-				class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
-			>
-				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-500/10">
-					<ShieldCheck class="h-4 w-4 text-red-400" />
-				</div>
-				<div class="flex flex-col">
-					<span class="text-lg leading-none font-semibold text-foreground">{adminCount}</span>
-					<span class="mt-0.5 text-[10px] text-muted-foreground">Admins</span>
-				</div>
-			</div>
-			<div
-				class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
-			>
-				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-500/10">
-					<Mail class="h-4 w-4 text-emerald-400" />
-				</div>
-				<div class="flex flex-col">
-					<span class="text-lg leading-none font-semibold text-foreground">{verifiedCount}</span>
-					<span class="mt-0.5 text-[10px] text-muted-foreground">Verified</span>
-				</div>
-			</div>
-			<div
-				class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
-			>
-				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-500/10">
-					<Key class="h-4 w-4 text-amber-400" />
-				</div>
-				<div class="flex flex-col">
-					<span class="text-lg leading-none font-semibold text-foreground">{has2faCount}</span>
-					<span class="mt-0.5 text-[10px] text-muted-foreground">With 2FA</span>
-				</div>
-			</div>
+			{@render statCard(Users, 'bg-sky-500/10', 'text-sky-400', users.length, 'Total users')}
+			{@render statCard(ShieldCheck, 'bg-red-500/10', 'text-red-400', adminCount, 'Admins')}
+			{@render statCard(Mail, 'bg-emerald-500/10', 'text-emerald-400', verifiedCount, 'Verified')}
+			{@render statCard(Key, 'bg-amber-500/10', 'text-amber-400', twoFactorCount, 'With 2FA')}
 		</div>
 
 		<div class="flex flex-col gap-3">
@@ -399,79 +544,23 @@
 				<div class="relative max-w-xs flex-1">
 					<Search class="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
 					<Input
-						bind:value={userSearch}
+						bind:value={search}
 						placeholder="Search by name, email, ID..."
 						class="h-8 pl-8 text-xs"
 					/>
 				</div>
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger
-						class="flex h-8 items-center gap-1.5 rounded-md border border-border/50 px-3 text-xs transition-colors hover:bg-muted hover:text-foreground {roleFilter ===
-						'all'
-							? 'text-muted-foreground'
-							: 'text-foreground'}"
-					>
-						Role: {roleFilterLabel}
-						<ChevronDown class="h-3 w-3 text-muted-foreground" />
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Content class="w-44 border-border bg-background">
-						<DropdownMenu.Item
-							class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-							onSelect={() => (roleFilter = 'all')}
-						>
-							All roles
-							{#if roleFilter === 'all'}
-								<Check class="ml-auto h-3 w-3 text-emerald-400" />
-							{/if}
-						</DropdownMenu.Item>
-						<DropdownMenu.Separator class="bg-muted" />
-						{#each roleFilterOptions as option (option.value)}
-							<DropdownMenu.Item
-								class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-								onSelect={() => (roleFilter = option.value)}
-							>
-								{option.label}
-								{#if roleFilter === option.value}
-									<Check class="ml-auto h-3 w-3 text-emerald-400" />
-								{/if}
-							</DropdownMenu.Item>
-						{/each}
-					</DropdownMenu.Content>
-				</DropdownMenu.Root>
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger
-						class="flex h-8 items-center gap-1.5 rounded-md border border-border/50 px-3 text-xs transition-colors hover:bg-muted hover:text-foreground {statusFilter ===
-						'all'
-							? 'text-muted-foreground'
-							: 'text-foreground'}"
-					>
-						Status: {statusFilterLabel}
-						<ChevronDown class="h-3 w-3 text-muted-foreground" />
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Content class="w-44 border-border bg-background">
-						<DropdownMenu.Item
-							class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-							onSelect={() => (statusFilter = 'all')}
-						>
-							All statuses
-							{#if statusFilter === 'all'}
-								<Check class="ml-auto h-3 w-3 text-emerald-400" />
-							{/if}
-						</DropdownMenu.Item>
-						<DropdownMenu.Separator class="bg-muted" />
-						{#each statusFilterOptions as option (option.value)}
-							<DropdownMenu.Item
-								class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-								onSelect={() => (statusFilter = option.value)}
-							>
-								{option.label}
-								{#if statusFilter === option.value}
-									<Check class="ml-auto h-3 w-3 text-emerald-400" />
-								{/if}
-							</DropdownMenu.Item>
-						{/each}
-					</DropdownMenu.Content>
-				</DropdownMenu.Root>
+				<FilterMenu
+					label="Role"
+					allLabel="All roles"
+					options={roleFilterOptions}
+					bind:value={roleFilter}
+				/>
+				<FilterMenu
+					label="Status"
+					allLabel="All statuses"
+					options={statusFilterOptions}
+					bind:value={statusFilter}
+				/>
 			</div>
 			{#if tableUsers.length === 0}
 				<div class="flex flex-col items-center justify-center gap-2 py-20 text-muted-foreground">
@@ -497,26 +586,13 @@
 						</thead>
 						<tbody class="divide-y divide-border/50">
 							{#each tableUsers as account (account.id)}
-								{@const colorClass = avatarColor(account.name)}
 								<tr
 									class="cursor-pointer transition-colors hover:bg-muted/20"
 									onclick={() => openUser(account.id)}
 								>
 									<td class="px-4 py-2.5">
 										<div class="flex items-center gap-2.5">
-											{#if account.image}
-												<img
-													src={account.image}
-													alt={account.name}
-													class="h-7 w-7 shrink-0 object-cover"
-												/>
-											{:else}
-												<div
-													class="flex h-7 w-7 shrink-0 items-center justify-center text-[10px] font-bold {colorClass}"
-												>
-													{initials(account.name)}
-												</div>
-											{/if}
+											{@render avatar(account, 'h-7 w-7', '', 'text-[10px]')}
 											<div class="flex min-w-0 flex-col">
 												<span class="truncate font-medium text-foreground">{account.name}</span>
 												<span class="truncate text-[10px] text-muted-foreground"
@@ -527,48 +603,24 @@
 									</td>
 									<td class="px-4 py-2.5">
 										{#if account.isAdmin}
-											<span
-												class="inline-flex items-center gap-1 rounded-sm border border-red-300 bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400"
-											>
-												<Shield class="h-2.5 w-2.5" />Admin
-											</span>
+											{@render tag(tagClasses.danger, Shield, 'Admin')}
 										{:else}
-											<span
-												class="inline-flex items-center gap-1 rounded-sm border border-ring/20 bg-muted/30 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-											>
-												<User class="h-2.5 w-2.5" />User
-											</span>
+											{@render tag(tagClasses.muted, User, 'User')}
 										{/if}
 									</td>
 									<td class="px-4 py-2.5">
 										<div class="flex flex-wrap items-center gap-1">
 											{#if account.emailVerified}
-												<span
-													class="inline-flex items-center gap-1 rounded-sm border border-emerald-300 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"
-												>
-													<Check class="h-2.5 w-2.5" />Verified
-												</span>
+												{@render tag(tagClasses.success, Check, 'Verified')}
 											{/if}
-											{#if account.twoFactorEnabled || account.passkeyCount > 0}
-												<span
-													class="inline-flex items-center gap-1 rounded-sm border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
-												>
-													<Key class="h-2.5 w-2.5" />2FA
-												</span>
+											{#if hasAnyTwoFactor(account)}
+												{@render tag(tagClasses.amber, Key, '2FA')}
 											{/if}
 											{#if account.disabled}
-												<span
-													class="inline-flex items-center gap-1 rounded-sm border border-red-300 bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400"
-												>
-													<X class="h-2.5 w-2.5" />Disabled
-												</span>
+												{@render tag(tagClasses.danger, X, 'Disabled')}
 											{/if}
 											{#if account.billingExempt}
-												<span
-													class="inline-flex items-center gap-1 rounded-sm border border-violet-500/20 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-400"
-												>
-													<CreditCard class="h-2.5 w-2.5" />Exempt
-												</span>
+												{@render tag(tagClasses.violet, CreditCard, 'Exempt')}
 											{/if}
 										</div>
 									</td>
@@ -586,7 +638,7 @@
 										</div>
 									</td>
 									<td class="px-4 py-2.5 text-muted-foreground">
-										{formatDateShort(account.createdAt)}
+										{formatDate(account.createdAt)}
 									</td>
 									<td class="px-4 py-2.5 text-right">
 										<button
@@ -611,25 +663,14 @@
 	</div>
 </div>
 
-<!-- User Detail Sheet -->
-<Sheet.Root open={admin.userSheetOpen} onOpenChange={(v) => !v && closeUser()}>
+<Sheet.Root open={selectedUser !== null} onOpenChange={(open) => !open && closeUser()}>
 	<Sheet.Content side="right" class="w-full border-border bg-background p-6 sm:max-w-md">
-		{#if admin.selectedUser && admin.userResourcesOpen === null}
-			{@const u = admin.selectedUser}
-			{@const colorClass = avatarColor(u.name)}
+		{#if selectedUser && resourceType === null}
+			{@const u = selectedUser}
 			{@const RoleIcon = u.isAdmin ? Crown : User}
-			{@const isAdminSaving = admin.adminUserSaving[u.id] || admin.userSheetSaving[u.id]?.saving}
-			<!-- Header -->
+			{@const busy = Boolean(saving[u.id])}
 			<div class="flex items-center gap-4">
-				{#if u.image}
-					<img src={u.image} alt={u.name} class="h-12 w-12 shrink-0 rounded-full object-cover" />
-				{:else}
-					<div
-						class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-base font-bold {colorClass}"
-					>
-						{initials(u.name)}
-					</div>
-				{/if}
+				{@render avatar(u, 'h-12 w-12', 'rounded-full', 'text-base')}
 				<div class="flex min-w-0 flex-col">
 					<span class="text-base font-semibold text-foreground">{u.name}</span>
 					<span class="truncate text-xs text-muted-foreground">{u.email}</span>
@@ -639,7 +680,6 @@
 			<Separator class="bg-muted" />
 
 			<div class="flex flex-col gap-6">
-				<!-- Status badges -->
 				<div class="flex flex-wrap items-center gap-2">
 					{#if u.emailVerified}
 						<span
@@ -663,19 +703,18 @@
 					{/if}
 				</div>
 
-				<!-- Role -->
 				<div class="flex flex-col gap-2">
 					<span class="text-xs font-medium text-muted-foreground">Role</span>
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger
-							disabled={isAdminSaving}
+							disabled={busy}
 							class="flex h-9 w-full items-center justify-between rounded-md border border-border/50 bg-muted/40 px-3 text-xs text-foreground transition-colors hover:bg-muted"
 						>
 							<span class="flex items-center gap-2">
 								<RoleIcon class="h-3.5 w-3.5 text-muted-foreground" />
 								{u.isAdmin ? 'Admin' : 'User'}
 							</span>
-							{#if isAdminSaving}
+							{#if saving[u.id] === 'admin'}
 								<Loader2 class="h-3 w-3 animate-spin text-muted-foreground" />
 							{:else}
 								<ChevronDown class="h-3 w-3 text-muted-foreground" />
@@ -688,16 +727,12 @@
 							<DropdownMenu.Separator class="bg-muted" />
 							{#each roleOptions as option (option.value)}
 								<DropdownMenu.Item
-									class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-									onSelect={() =>
-										option.value === 'admin'
-											? admin.setUserAdmin(u.id, true)
-											: admin.setUserAdmin(u.id, false)}
+									class={adminMenuItemClass}
+									onSelect={() => changeAdminAccess(u.id, option.value === 'admin')}
 								>
 									<option.icon class="h-3.5 w-3.5 text-muted-foreground" />
 									{option.label}
-									{#if (u.isAdmin && option.value === 'admin') ||
-										(!u.isAdmin && option.value === 'user')}
+									{#if u.isAdmin === (option.value === 'admin')}
 										<Check class="ml-auto h-3 w-3 text-emerald-400" />
 									{/if}
 								</DropdownMenu.Item>
@@ -708,143 +743,73 @@
 
 				<Separator class="bg-muted" />
 
-				<!-- Security toggles -->
 				<div class="flex flex-col gap-4">
-					<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
-						>Security</span
-					>
-
-					<!-- Disabled toggle -->
-					<div class="flex items-center justify-between">
-						<div class="flex items-center gap-2">
-							{#if u.disabled}
-								<X class="h-4 w-4 text-red-400" />
-							{:else}
-								<Shield class="h-4 w-4 text-emerald-400" />
-							{/if}
-							<div class="flex flex-col">
-								<span class="text-sm font-medium text-foreground">
-									{u.disabled ? 'Disabled' : 'Active'}
-								</span>
-								<span class="text-[11px] text-muted-foreground">
-									{u.disabled ? 'User cannot access the platform' : 'Account is in good standing'}
-								</span>
-							</div>
-						</div>
-						<div class="flex items-center gap-2">
-							{#if admin.userSheetSaving[u.id]?.field === 'disabled' &&
-								admin.userSheetSaving[u.id]?.saving}
-								<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-							{/if}
-							<Switch
-								bind:checked={() => u.disabled, (v) => admin.setUserDisabled(u.id, v)}
-								disabled={isAdminSaving}
-							/>
-						</div>
-					</div>
-
-					<!-- 2FA toggle -->
-					<div class="flex items-center justify-between">
-						<div class="flex items-center gap-2">
-							{#if u.twoFactorEnabled || u.passkeyCount > 0}
-								<Lock class="h-4 w-4 text-emerald-400" />
-							{:else}
-								<Unlock class="h-4 w-4 text-muted-foreground" />
-							{/if}
-							<div class="flex flex-col">
-								<span class="text-sm font-medium text-foreground">Two-factor auth</span>
-								<span class="text-[11px] text-muted-foreground">
-									{twoFactorSummary(u)}
-								</span>
-							</div>
-						</div>
-						<div class="flex items-center gap-2">
-							{#if admin.userSheetSaving[u.id]?.field === 'twoFactor' &&
-								admin.userSheetSaving[u.id]?.saving}
-								<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-							{/if}
-							<Switch
-								bind:checked={
-									() => u.twoFactorEnabled,
-									(v) => (u.twoFactorEnabled ? admin.prompt2FAConfirm(u.id, v) : undefined)
-								}
-								disabled={!u.twoFactorEnabled || isAdminSaving}
-							/>
-						</div>
-					</div>
+					{@render sectionTitle('Security')}
+					{#snippet disabledSwitch()}
+						<Switch
+							bind:checked={() => u.disabled, (value) => changeDisabled(u.id, value)}
+							disabled={busy}
+						/>
+					{/snippet}
+					{@render toggleRow(
+						u.disabled ? X : Shield,
+						u.disabled ? 'text-red-400' : 'text-emerald-400',
+						u.disabled ? 'Disabled' : 'Active',
+						u.disabled ? 'User cannot access the platform' : 'Account is in good standing',
+						saving[u.id] === 'disabled',
+						disabledSwitch
+					)}
+					{#snippet twoFactorSwitch()}
+						<Switch
+							bind:checked={() => u.twoFactorEnabled, (value) => !value && askDisableTwoFactor(u)}
+							disabled={!u.twoFactorEnabled || busy}
+						/>
+					{/snippet}
+					{@render toggleRow(
+						hasAnyTwoFactor(u) ? Lock : Unlock,
+						hasAnyTwoFactor(u) ? 'text-emerald-400' : 'text-muted-foreground',
+						'Two-factor auth',
+						twoFactorSummary(u),
+						saving[u.id] === 'twoFactor',
+						twoFactorSwitch
+					)}
 				</div>
 
 				<Separator class="bg-muted" />
 
-				<!-- Billing -->
 				<div class="flex flex-col gap-4">
-					<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
-						>Billing</span
-					>
-					<div class="flex items-center justify-between">
-						<div class="flex items-center gap-2">
-							<CreditCard
-								class="h-4 w-4 {u.billingExempt ? 'text-violet-400' : 'text-muted-foreground'}"
-							/>
-							<div class="flex flex-col">
-								<span class="text-sm font-medium text-foreground">Billing exempt</span>
-								<span class="text-[11px] text-muted-foreground">
-									{u.billingExempt
-										? 'Usage in projects they own is not metered or billed'
-										: 'Usage is metered and billed normally'}
-								</span>
-							</div>
-						</div>
-						<div class="flex items-center gap-2">
-							{#if admin.userSheetSaving[u.id]?.field === 'billingExempt' &&
-								admin.userSheetSaving[u.id]?.saving}
-								<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-							{/if}
-							<Switch
-								bind:checked={() => u.billingExempt, (v) => admin.setUserBillingExempt(u.id, v)}
-								disabled={isAdminSaving}
-							/>
-						</div>
-					</div>
+					{@render sectionTitle('Billing')}
+					{#snippet billingExemptSwitch()}
+						<Switch
+							bind:checked={() => u.billingExempt, (value) => changeBillingExempt(u.id, value)}
+							disabled={busy}
+						/>
+					{/snippet}
+					{@render toggleRow(
+						CreditCard,
+						u.billingExempt ? 'text-violet-400' : 'text-muted-foreground',
+						'Billing exempt',
+						u.billingExempt
+							? 'Usage in projects they own is not metered or billed'
+							: 'Usage is metered and billed normally',
+						saving[u.id] === 'billingExempt',
+						billingExemptSwitch
+					)}
 				</div>
 
 				<Separator class="bg-muted" />
 
-				<!-- Account info -->
 				<div class="flex flex-col gap-3">
-					<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
-						>Account</span
-					>
+					{@render sectionTitle('Account')}
 					<div class="flex flex-col gap-2">
-						<div class="flex items-center justify-between">
-							<span class="flex items-center gap-2 text-xs text-muted-foreground">
-								<Hash class="h-3 w-3" />User ID
-							</span>
-							<span class="font-mono text-xs text-muted-foreground">{u.id}</span>
-						</div>
-						<div class="flex items-center justify-between">
-							<span class="flex items-center gap-2 text-xs text-muted-foreground">
-								<Calendar class="h-3 w-3" />Created
-							</span>
-							<span class="text-xs text-muted-foreground">{formatDate(u.createdAt)}</span>
-						</div>
-						<div class="flex items-center justify-between">
-							<span class="flex items-center gap-2 text-xs text-muted-foreground">
-								<Clock class="h-3 w-3" />Updated
-							</span>
-							<span class="text-xs text-muted-foreground">{formatDate(u.updatedAt)}</span>
-						</div>
-						<div class="flex items-center justify-between">
-							<span class="flex items-center gap-2 text-xs text-muted-foreground">
-								<Mail class="h-3 w-3" />Email
-							</span>
-							<span class="text-xs text-muted-foreground">{u.email}</span>
-						</div>
+						{@render accountRow(Hash, 'User ID', u.id, 'font-mono text-muted-foreground')}
+						{@render accountRow(Calendar, 'Created', formatDateTime(u.createdAt))}
+						{@render accountRow(Clock, 'Updated', formatDateTime(u.updatedAt))}
+						{@render accountRow(Mail, 'Email', u.email)}
 						<div class="flex items-center justify-between">
 							<span class="flex items-center gap-2 text-xs text-muted-foreground"
 								><Mail class="h-3 w-3" />Verified</span
 							>
-
 							<span
 								class="flex items-center gap-1 text-xs {u.emailVerified
 									? 'text-emerald-400'
@@ -863,7 +828,6 @@
 
 				<Separator class="bg-muted" />
 
-				<!-- Danger zone -->
 				<div class="flex flex-col gap-3 rounded-sm border border-red-500/20 bg-red-500/5 p-3">
 					<div class="flex items-start gap-2">
 						<Trash2 class="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
@@ -879,10 +843,10 @@
 						variant="destructive"
 						size="sm"
 						class="w-fit gap-1.5 text-xs"
-						onclick={() => openDeleteDialog(u)}
-						disabled={isAdminSaving || deletePreparing}
+						onclick={() => beginDelete(u)}
+						disabled={busy || deletePreparing}
 					>
-						{#if deletePreparing && deleteUserId === u.id}
+						{#if deletePreparing}
 							<Loader2 class="h-3 w-3 animate-spin" />
 							Preparing...
 						{:else}
@@ -894,121 +858,49 @@
 
 				<Separator class="bg-muted" />
 
-				<!-- Resources counts with click-to-expand -->
 				<div class="flex flex-col gap-3">
-					<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
-						>Resources</span
-					>
+					{@render sectionTitle('Resources')}
 					<div class="grid grid-cols-2 gap-2">
-						<button
-							type="button"
-							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
-							onclick={() => u.sessionCount > 0 && admin.loadUserResources(u.id, 'session')}
-						>
-							<Terminal class="size-4 shrink-0 text-muted-foreground" />
-							<div class="flex flex-col">
-								<span class="text-sm font-semibold text-foreground">{u.sessionCount}</span>
-								<span class="text-[10px] text-muted-foreground">Sessions</span>
-							</div>
-							{#if u.sessionCount > 0}
-								<ChevronRight class="ml-auto h-3 w-3 text-muted-foreground" />
-							{/if}
-						</button>
-						<button
-							type="button"
-							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
-							onclick={() => u.accountCount > 0 && admin.loadUserResources(u.id, 'account')}
-						>
-							<Globe class="size-4 shrink-0 text-muted-foreground" />
-							<div class="flex flex-col">
-								<span class="text-sm font-semibold text-foreground">{u.accountCount}</span>
-								<span class="text-[10px] text-muted-foreground">Accounts</span>
-							</div>
-							{#if u.accountCount > 0}
-								<ChevronRight class="ml-auto h-3 w-3 text-muted-foreground" />
-							{/if}
-						</button>
-						<button
-							type="button"
-							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
-							onclick={() => u.orgCount > 0 && admin.loadUserResources(u.id, 'org')}
-						>
-							<Users class="size-4 shrink-0 text-muted-foreground" />
-							<div class="flex flex-col">
-								<span class="text-sm font-semibold text-foreground">{u.orgCount}</span>
-								<span class="text-[10px] text-muted-foreground">Organizations</span>
-							</div>
-							{#if u.orgCount > 0}
-								<ChevronRight class="ml-auto h-3 w-3 text-muted-foreground" />
-							{/if}
-						</button>
-						<button
-							type="button"
-							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
-							onclick={() => u.sshKeyCount > 0 && admin.loadUserResources(u.id, 'sshKey')}
-						>
-							<Key class="size-4 shrink-0 text-muted-foreground" />
-							<div class="flex flex-col">
-								<span class="text-sm font-semibold text-foreground">{u.sshKeyCount}</span>
-								<span class="text-[10px] text-muted-foreground">SSH Keys</span>
-							</div>
-							{#if u.sshKeyCount > 0}
-								<ChevronRight class="ml-auto h-3 w-3 text-muted-foreground" />
-							{/if}
-						</button>
-						<button
-							type="button"
-							class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
-							onclick={() => u.apiTokenCount > 0 && admin.loadUserResources(u.id, 'apiToken')}
-						>
-							<Fingerprint class="size-4 shrink-0 text-muted-foreground" />
-							<div class="flex flex-col">
-								<span class="text-sm font-semibold text-foreground">{u.apiTokenCount}</span>
-								<span class="text-[10px] text-muted-foreground">API Tokens</span>
-							</div>
-							{#if u.apiTokenCount > 0}
-								<ChevronRight class="ml-auto h-3 w-3 text-muted-foreground" />
-							{/if}
-						</button>
+						{#each resourceTypes as type (type)}
+							{@const view = resourceViews[type]}
+							{@const count = view.count(u)}
+							<button
+								type="button"
+								class="flex items-center gap-2 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/40"
+								onclick={() => count > 0 && loadUserResources(u.id, type)}
+							>
+								<view.icon class="size-4 shrink-0 text-muted-foreground" />
+								<div class="flex flex-col">
+									<span class="text-sm font-semibold text-foreground">{count}</span>
+									<span class="text-[10px] text-muted-foreground">{view.label}</span>
+								</div>
+								{#if count > 0}
+									<ChevronRight class="ml-auto h-3 w-3 text-muted-foreground" />
+								{/if}
+							</button>
+						{/each}
 					</div>
 				</div>
 			</div>
-		{:else if admin.orgResourcesOpen && admin.selectedOrg}
-			{@const org = admin.selectedOrg}
+		{:else if selectedOrg}
 			<div class="flex flex-col gap-4">
-				<div class="flex items-center gap-2">
-					<Button
-						variant="ghost"
-						size="sm"
-						class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-						onclick={() => admin.closeOrgResources()}
-						aria-label="Back"
-					>
-						<ChevronLeft class="h-4 w-4" />
-					</Button>
-					<span class="text-base font-semibold text-foreground">{org.name}</span>
-				</div>
+				{@render backHeader(selectedOrg.name, () => (drilldownOrg = null))}
 				<Separator class="bg-muted" />
-				{#if admin.orgResourcesLoading}
-					<div class="flex items-center justify-center gap-2 py-8 text-muted-foreground">
-						<Loader2 class="h-4 w-4 animate-spin" />
-						<span class="text-xs">Loading...</span>
-					</div>
+				{#if orgResourcesLoading}
+					{@render loadingRow()}
 				{:else}
 					<div class="flex flex-col gap-2">
-						<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
-							>Virtual Machines</span
-						>
-						{#if admin.orgVms.length === 0}
+						{@render sectionTitle('Virtual Machines')}
+						{#if !orgResources?.vms.length}
 							<p class="text-xs text-muted-foreground">No VMs</p>
 						{:else}
 							<div class="flex flex-col gap-0 divide-y divide-border/50">
-								{#each admin.orgVms as vm (vm.id)}
+								{#each orgResources.vms as vm (vm.id)}
 									<div class="flex items-center justify-between py-2.5">
 										<div class="flex flex-col">
 											<span class="text-xs text-foreground">{vm.name}</span>
 											<span class="text-[11px] text-muted-foreground"
-												>{new Date(vm.createdAt).toLocaleString()}</span
+												>{formatDateTime(vm.createdAt)}</span
 											>
 										</div>
 										<Badge variant="secondary" class="text-[10px]">{vm.status}</Badge>
@@ -1019,20 +911,18 @@
 					</div>
 					<Separator class="bg-muted" />
 					<div class="flex flex-col gap-2">
-						<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
-							>Volumes</span
-						>
-						{#if admin.orgVolumes.length === 0}
+						{@render sectionTitle('Volumes')}
+						{#if !orgResources?.volumes.length}
 							<p class="text-xs text-muted-foreground">No volumes</p>
 						{:else}
 							<div class="flex flex-col gap-0 divide-y divide-border/50">
-								{#each admin.orgVolumes as vol (vol.id)}
+								{#each orgResources.volumes as vol (vol.id)}
 									<div class="flex items-center justify-between py-2.5">
 										<div class="flex flex-col">
 											<span class="text-xs text-foreground">{vol.name}</span>
 											<span class="text-[11px] text-muted-foreground"
 												>{vol.size}
-												GB · {new Date(vol.createdAt).toLocaleString()}</span
+												GB · {formatDateTime(vol.createdAt)}</span
 											>
 										</div>
 									</div>
@@ -1042,73 +932,61 @@
 					</div>
 				{/if}
 			</div>
-		{:else if admin.userResourcesOpen !== null && admin.selectedUser}
-			{@const u = admin.selectedUser}
-			{@const type = admin.userResourcesOpen}
-			{@const info = resourceLabels[type]}
+		{:else if resourceType !== null && selectedUser}
+			{@const view = resourceViews[resourceType]}
 			<div class="flex flex-col gap-4">
-				<div class="flex items-center gap-2">
-					<Button
-						variant="ghost"
-						size="sm"
-						class="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-						onclick={() => admin.closeUserResources()}
-						aria-label="Back"
-					>
-						<ChevronLeft class="h-4 w-4" />
-					</Button>
-					<span class="text-base font-semibold text-foreground">{u.name}</span>
-				</div>
+				{@render backHeader(selectedUser.name, () => (drilldownType = null))}
 				<Separator class="bg-muted" />
 				<div class="flex items-center gap-2">
-					<info.icon class="h-4 w-4 text-muted-foreground" />
-					<span class="text-sm font-semibold text-foreground">{info.label}</span>
+					<view.icon class="h-4 w-4 text-muted-foreground" />
+					<span class="text-sm font-semibold text-foreground">{view.label}</span>
 				</div>
-				{#if admin.userResourcesLoading}
-					<div class="flex items-center justify-center gap-2 py-8 text-muted-foreground">
-						<Loader2 class="h-4 w-4 animate-spin" />
-						<span class="text-xs">Loading...</span>
-					</div>
-				{:else if type === 'session'}
-					{#if admin.userSessions.length === 0}
+				{#if resourcesLoading}
+					{@render loadingRow()}
+				{:else if resourceType === 'session'}
+					{#if !resources?.sessions.length}
 						<p class="py-4 text-xs text-muted-foreground">No sessions found</p>
 					{:else}
 						<div class="flex flex-col gap-0 divide-y divide-border/50">
-							{#each admin.userSessions as s (s.id)}
+							{#each resources.sessions as s (s.id)}
 								<div class="flex flex-col gap-0.5 py-2.5">
 									<span class="font-mono text-xs text-muted-foreground">{s.id}</span>
 									{#if s.ipAddress}
 										<span class="text-[11px] text-muted-foreground">IP: {s.ipAddress}</span>
 									{/if}
-									<span class="text-[11px] text-muted-foreground">{formatDate(s.createdAt)}</span>
+									<span class="text-[11px] text-muted-foreground"
+										>{formatDateTime(s.createdAt)}</span
+									>
 								</div>
 							{/each}
 						</div>
 					{/if}
-				{:else if type === 'account'}
-					{#if admin.userAccounts.length === 0}
+				{:else if resourceType === 'account'}
+					{#if !resources?.accounts.length}
 						<p class="py-4 text-xs text-muted-foreground">No accounts found</p>
 					{:else}
 						<div class="flex flex-col gap-0 divide-y divide-border/50">
-							{#each admin.userAccounts as a (a.id)}
+							{#each resources.accounts as a (a.id)}
 								<div class="flex flex-col gap-0.5 py-2.5">
 									<span class="text-xs font-medium text-foreground">{a.providerId}</span>
 									<span class="font-mono text-[11px] text-muted-foreground">{a.accountId}</span>
-									<span class="text-[11px] text-muted-foreground">{formatDate(a.createdAt)}</span>
+									<span class="text-[11px] text-muted-foreground"
+										>{formatDateTime(a.createdAt)}</span
+									>
 								</div>
 							{/each}
 						</div>
 					{/if}
-				{:else if type === 'org'}
-					{#if admin.userOrgs.length === 0}
+				{:else if resourceType === 'org'}
+					{#if !resources?.members.length}
 						<p class="py-4 text-xs text-muted-foreground">No organizations found</p>
 					{:else}
 						<div class="flex flex-col gap-0 divide-y divide-border/50">
-							{#each admin.userOrgs as o (o.id)}
+							{#each resources.members as o (o.id)}
 								<button
 									type="button"
 									class="flex items-center justify-between py-2.5 text-left transition-colors"
-									onclick={() => admin.loadOrgResources(o)}
+									onclick={() => loadOrgResources(o)}
 								>
 									<span class="text-xs text-foreground">{o.name}</span>
 									<div class="flex items-center gap-1.5">
@@ -1119,12 +997,12 @@
 							{/each}
 						</div>
 					{/if}
-				{:else if type === 'sshKey'}
-					{#if admin.userSshKeys.length === 0}
+				{:else if resourceType === 'sshKey'}
+					{#if !resources?.sshKeys.length}
 						<p class="py-4 text-xs text-muted-foreground">No SSH keys found</p>
 					{:else}
 						<div class="flex flex-col gap-0 divide-y divide-border/50">
-							{#each admin.userSshKeys as k (k.id)}
+							{#each resources.sshKeys as k (k.id)}
 								<div class="flex flex-col gap-0.5 py-2.5">
 									<span class="text-xs text-foreground">{k.name}</span>
 									<span class="font-mono text-[11px] text-muted-foreground">{k.fingerprint}</span>
@@ -1132,16 +1010,16 @@
 							{/each}
 						</div>
 					{/if}
-				{:else if type === 'apiToken'}
-					{#if admin.userApiTokens.length === 0}
+				{:else if resourceType === 'apiToken'}
+					{#if !resources?.apiTokens.length}
 						<p class="py-4 text-xs text-muted-foreground">No API tokens found</p>
 					{:else}
 						<div class="flex flex-col gap-0 divide-y divide-border/50">
-							{#each admin.userApiTokens as t (t.id)}
+							{#each resources.apiTokens as t (t.id)}
 								<div class="flex flex-col gap-0.5 py-2.5">
 									<span class="text-xs text-foreground">{t.name}</span>
 									<span class="text-[11px] text-muted-foreground"
-										>{new Date(t.createdAt).toLocaleString()}</span
+										>{formatDateTime(t.createdAt)}</span
 									>
 								</div>
 							{/each}
@@ -1153,117 +1031,52 @@
 	</Sheet.Content>
 </Sheet.Root>
 
-<!-- User Deletion Verification Modal -->
-<Dialog.Root
-	bind:open={deleteDialogOpen}
-	onOpenChange={(value) => {
-		if (!(value || deleteVerifying)) {
-			resetDeleteDialog();
-		}
-	}}
->
-	<Dialog.Content class="border-border bg-background sm:max-w-md">
-		<Dialog.Header>
-			<Dialog.Title class="text-base text-foreground">Delete {deleteUserName}?</Dialog.Title>
-			<Dialog.Description class="text-xs text-muted-foreground">
-				{deleteVerificationDescription}
-			</Dialog.Description>
-		</Dialog.Header>
-
-		<form
-			class="flex flex-col gap-4 pt-4"
-			onsubmit={(event) => {
-				event.preventDefault();
-				confirmDeleteUser();
-			}}
+{#if deletion}
+	<VerificationDialog
+		bind:open={deleteOpen}
+		method={deletion.method}
+		title="Delete {deletion.name}?"
+		description={describeDeletionVerification(
+			deletion.method,
+			deletion.email,
+			deletion.verificationEmail
+		)}
+		emailHint="We sent a deletion code to {deletion.verificationEmail}."
+		destructive
+		submitLabel="Delete user"
+		passkeySubmitLabel="Verify and delete"
+		submittingLabel="Deleting..."
+		failureMessage="Failed to delete user"
+		confirm={confirmDelete}
+	>
+		<div
+			class="flex flex-col gap-2 rounded-sm border border-red-500/20 bg-red-500/5 p-3 text-xs leading-5 text-red-200/80"
 		>
-			<div
-				class="flex flex-col gap-2 rounded-sm border border-red-500/20 bg-red-500/5 p-3 text-xs leading-5 text-red-200/80"
-			>
-				<p class="font-medium text-red-200">This action cannot be undone.</p>
-				<p>
-					Deleting {deleteUserEmail} permanently removes their account, sessions, sign-in methods,
-					SSH keys, and API tokens.
-				</p>
-				<p>
-					If they are the only member of an organization, that organization and all of its servers,
-					volumes, invitations, and local billing records will also be deleted.
-				</p>
-				<p>
-					If an organization has other members, the oldest remaining member will be promoted to
-					owner.
-				</p>
-			</div>
+			<p class="font-medium text-red-200">This action cannot be undone.</p>
+			<p>
+				Deleting {deletion.email} permanently removes their account, sessions, sign-in methods, SSH
+				keys, and API tokens.
+			</p>
+			<p>
+				If they are the only member of an organization, that organization and all of its servers,
+				volumes, invitations, and local billing records will also be deleted.
+			</p>
+			<p>
+				If an organization has other members, the oldest remaining member will be promoted to owner.
+			</p>
+		</div>
+	</VerificationDialog>
+{/if}
 
-			{#if deleteVerificationMethod === 'passkey'}
-				<div class="flex items-center gap-3 rounded-sm border border-border bg-background/40 p-3">
-					<Fingerprint class="size-5 shrink-0 text-muted-foreground" />
-					<p class="text-sm text-muted-foreground">
-						Your browser will ask you to authenticate with your registered passkey.
-					</p>
-				</div>
-			{:else}
-				<div class="flex flex-col gap-1.5">
-					<Label>
-						{deleteVerificationMethod === 'totp' ? 'Authenticator Code' : 'Email Verification Code'}
-					</Label>
-					<Input
-						bind:value={deleteVerificationCode}
-						inputmode="numeric"
-						placeholder="000000"
-						maxlength={6}
-						autocomplete="one-time-code"
-					/>
-					{#if deleteVerificationMethod === 'email'}
-						<p class="text-xs text-muted-foreground">
-							We sent a deletion code to {deleteVerificationEmail}.
-						</p>
-					{/if}
-				</div>
-			{/if}
-
-			{#if deleteError}
-				<p class="text-xs text-red-400">{deleteError}</p>
-			{/if}
-
-			<Dialog.Footer class="flex items-center gap-2 pt-2">
-				<Button
-					variant="outline"
-					type="button"
-					size="sm"
-					class="border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-					onclick={() => resetDeleteDialog()}
-					disabled={deleteVerifying}
-				>
-					Cancel
-				</Button>
-				<Button
-					variant="destructive"
-					type="submit"
-					size="sm"
-					class="gap-1.5 text-xs"
-					disabled={deleteVerificationDisabled}
-				>
-					{#if deleteVerifying}
-						<Loader2 class="h-3 w-3 animate-spin" />
-						Deleting...
-					{:else}
-						<Trash2 class="h-3 w-3" />
-						{deleteVerificationMethod === 'passkey' ? 'Verify and delete' : 'Delete user'}
-					{/if}
-				</Button>
-			</Dialog.Footer>
-		</form>
-	</Dialog.Content>
-</Dialog.Root>
-
-<!-- 2FA Disable Confirmation Modal (only for disabling) -->
-<Dialog.Root open={admin.twoFADialogOpen} onOpenChange={(v) => !v && admin.cancel2FAConfirm()}>
+<Dialog.Root
+	open={twoFactorDisableTarget !== null}
+	onOpenChange={(open) => !open && cancelDisableTwoFactor()}
+>
 	<Dialog.Content class="border-border bg-background sm:max-w-sm">
 		<Dialog.Header>
 			<Dialog.Title class="text-base text-foreground">Disable two-factor auth?</Dialog.Title>
 			<Dialog.Description class="text-xs text-muted-foreground">
-				{admin.selectedUser?.name ?? 'This user'}
+				{twoFactorDisableTarget?.name ?? 'This user'}
 				will be required to reconfigure 2FA on their next sign-in. This reduces account security.
 			</Dialog.Description>
 		</Dialog.Header>
@@ -1272,17 +1085,10 @@
 				variant="outline"
 				size="sm"
 				class="border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-				onclick={() => admin.cancel2FAConfirm()}
+				onclick={() => (twoFactorDisableTarget = null)}
 				>Cancel</Button
 			>
-
-			<Button size="sm" class="text-xs" onclick={() => admin.commit2FAConfirm()}>
-				{#if admin.userSheetSaving[admin.twoFAPendingUserId]?.saving}
-					<Loader2 class="h-3 w-3 animate-spin" />
-				{:else}
-					Confirm disable
-				{/if}
-			</Button>
+			<Button size="sm" class="text-xs" onclick={disableTwoFactor}>Confirm disable</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

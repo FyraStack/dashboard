@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { extractPlaceholders, fieldToken } from 'stack-shared/email-campaign';
 	import { onMount, untrack } from 'svelte';
+	import { hasAnyTwoFactor } from '#lib/admin-users.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { autofillAttributes } from '#lib/components/ui/input/autofill.js';
@@ -14,7 +15,6 @@
 		renderCampaignEditor,
 		sendCampaignEmails
 	} from '#lib/remote/email-campaign.remote.js';
-	import { AdminState } from '#lib/state/admin.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
 	import { page } from '$app/state';
 	import Check from '~icons/lucide/check';
@@ -28,10 +28,6 @@
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	const admin = new AdminState(untrack(() => data));
-	$effect(() => {
-		admin.sync(data);
-	});
 
 	const campaignTemplates = $derived(data.campaignCatalog.templates);
 	const batchSize = $derived(data.campaignCatalog.batchSize);
@@ -151,7 +147,7 @@
 
 	const activeVmsByOwnerEmail = $derived.by(() => {
 		const map = new Map<string, { count: number; types: Set<string> }>();
-		for (const vm of admin.adminVms) {
+		for (const vm of data.adminVms) {
 			if (!(vm.active && vm.ownerEmail)) {
 				continue;
 			}
@@ -166,9 +162,7 @@
 	});
 	const vmTypeOptions = $derived(
 		[
-			...new Set(
-				admin.adminVms.flatMap((vm) => (vm.active && vm.vmTypeName ? [vm.vmTypeName] : []))
-			)
+			...new Set(data.adminVms.flatMap((vm) => (vm.active && vm.vmTypeName ? [vm.vmTypeName] : [])))
 		].sort()
 	);
 
@@ -286,7 +280,7 @@
 			case 'totp':
 				return matchesFlag(account.twoFactorEnabled, condition);
 			case 'twoFactor':
-				return matchesFlag(account.twoFactorEnabled || account.passkeyCount > 0, condition);
+				return matchesFlag(hasAnyTwoFactor(account), condition);
 			case 'passkey':
 				return matchesFlag(account.passkeyCount > 0, condition);
 			default: {
@@ -297,7 +291,7 @@
 	}
 
 	const queryRecipients = $derived(
-		admin.adminUsers.filter((account) =>
+		data.adminUsers.filter((account) =>
 			audienceConditions.every((condition) => matchesAudienceCondition(account, condition))
 		)
 	);
@@ -424,7 +418,6 @@
 
 <div class="flex-1 overflow-auto">
 	<div class="mx-auto flex w-full max-w-3xl flex-col gap-6 p-5">
-		<!-- Template -->
 		<div class="flex flex-wrap gap-1.5">
 			{#each campaignTemplates as entry (entry.key)}
 				<button
@@ -442,7 +435,6 @@
 			{/each}
 		</div>
 
-		<!-- Editor -->
 		<div class="flex flex-col gap-3">
 			<div class="flex items-center gap-3 border border-border bg-background px-3">
 				<span class="shrink-0 text-xs font-medium text-muted-foreground">Subject</span>
@@ -655,7 +647,6 @@
 			{/if}
 		</div>
 
-		<!-- Actions -->
 		<div class="flex flex-col gap-3 border-t border-border pt-4">
 			{#if previewError}
 				<div
@@ -737,7 +728,6 @@
 	</div>
 </div>
 
-<!-- Preview Dialog -->
 <Dialog.Root bind:open={previewOpen}>
 	<Dialog.Content class="border-border bg-background sm:max-w-2xl">
 		<Dialog.Header>

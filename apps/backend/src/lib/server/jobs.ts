@@ -9,54 +9,50 @@ import {
 	syncPendingUsage
 } from '#lib/server/billing/metering.js';
 import { initDrizzle } from '#lib/server/db/index.js';
-import { error } from '#lib/server/http.js';
 import { purgeExpiredIdempotencyKeys } from '#lib/server/idempotency.js';
 import { reconcileOrphanedIpamAllocations } from '#lib/server/ipam.js';
 import { purgeExpiredDeletedOrganizations } from '#lib/server/project-deletion.js';
 import { purgeExpiredDeletedVms } from '#lib/server/vm-deletion.js';
 
-export async function runBillingMeter() {
-	const idempotencyPurge = await purgeExpiredIdempotencyKeys().catch((err) => {
-		console.error('Idempotency key purge failed', err);
-		return { purged: 0, failed: true };
-	});
+async function runSteps(steps: Record<string, () => Promise<unknown>>) {
+	const results: Record<string, unknown> = {};
+	const failed: string[] = [];
 
-	if (!isBillingConfigured()) {
-		error(503, 'Billing is not configured');
+	for (const [name, step] of Object.entries(steps)) {
+		try {
+			// biome-ignore lint/performance/noAwaitInLoops: steps run in order so a later step sees the effects of an earlier one
+			results[name] = await step();
+		} catch (cause) {
+			console.error(`${name} failed`, cause);
+			failed.push(name);
+		}
 	}
 
-	const reconciled = await reconcileOrphanedMeters().catch((err) => {
-		console.error('Orphaned meter reconciliation failed', err);
-		return { closed: 0, failed: true };
-	});
-	const metered = await meterActiveResources();
-	const synced = await syncPendingUsage();
-	const cancellations = await retryOrphanedProjectBillingCancellations();
-	const enforcement = await enforceProjectBillingGrace().catch((err) => {
-		console.error('Billing grace enforcement failed', err);
-		return { checked: 0, suspended: 0, failed: true };
-	});
-	const purge = await purgeExpiredDeletedVms().catch((err) => {
-		console.error('Deleted VM purge failed', err);
-		return { purged: 0, failed: true };
-	});
-	const projectPurge = await purgeExpiredDeletedOrganizations().catch((err) => {
-		console.error('Deleted project purge failed', err);
-		return { purged: 0, failed: true };
-	});
-	return {
-		reconciled,
-		metered,
-		synced,
-		cancellations,
-		enforcement,
-		purge,
-		projectPurge,
-		idempotencyPurge
-	};
+	if (failed.length > 0) {
+		throw new Error(`Steps failed: ${failed.join(', ')}. Completed: ${JSON.stringify(results)}`);
+	}
+	return results;
 }
 
-export async function runIpamReconcile() {
-	const ipam = await reconcileOrphanedIpamAllocations(initDrizzle());
-	return { ipam };
+export function runBilling() {
+	if (!isBillingConfigured()) {
+		return Promise.resolve({ skipped: 'Billing is not configured' });
+	}
+
+	return runSteps({
+		reconciled: reconcileOrphanedMeters,
+		metered: meterActiveResources,
+		synced: syncPendingUsage,
+		cancellations: retryOrphanedProjectBillingCancellations,
+		enforcement: enforceProjectBillingGrace
+	});
+}
+
+export function runMaintenance() {
+	return runSteps({
+		idempotencyKeys: () => purgeExpiredIdempotencyKeys(),
+		deletedVms: () => purgeExpiredDeletedVms(),
+		deletedProjects: () => purgeExpiredDeletedOrganizations(),
+		ipam: () => reconcileOrphanedIpamAllocations(initDrizzle())
+	});
 }

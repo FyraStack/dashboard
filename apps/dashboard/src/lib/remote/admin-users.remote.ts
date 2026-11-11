@@ -43,11 +43,6 @@ export const setUserTwoFactor = command(setTwoFactorParams, (input) =>
 	backend((me) => me.admin().users().setTwoFactor(input))
 );
 
-const setRoleParams = type({ userId: 'string', role: 'string' });
-export const setUserRole = command(setRoleParams, (input) =>
-	backend((me) => me.admin().users().setRole(input))
-);
-
 const beginDeleteUserParams = type({ userId: 'string' });
 export const beginDeleteUser = command(beginDeleteUserParams, (input) =>
 	backend((me) => me.admin().users().beginDelete(input))

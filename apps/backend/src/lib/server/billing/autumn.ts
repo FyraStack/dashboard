@@ -4,6 +4,7 @@ import { member, organization, user } from '#lib/server/db/auth.schema.js';
 import { initDrizzle } from '#lib/server/db/index.js';
 import { projectBillingCustomers } from '#lib/server/db/schema.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
+import { errorMessage } from '#lib/server/errors.js';
 import { error } from '#lib/server/http.js';
 import type { CapPeriod } from './caps.ts';
 
@@ -19,10 +20,6 @@ export function createAutumnClient() {
 	}
 
 	return new Autumn({ secretKey, failOpen: false });
-}
-
-function errorMessage(err: unknown) {
-	return err instanceof Error ? err.message : String(err);
 }
 
 export function autumnStatus(err: unknown) {

@@ -43,11 +43,7 @@ export async function softDeleteOrganizationResources(
 	const now = Date.now();
 	await closeProjectMeters(organizationId, now);
 
-	const billingCancelled = await cancelProjectBilling(organizationId).catch((err) => {
-		console.warn(`Failed to cancel Autumn billing for project ${organizationId}`, err);
-		return false;
-	});
-	if (billingCancelled) {
+	if (await cancelProjectBilling(organizationId)) {
 		await deleteLocalProjectBillingCustomer(organizationId);
 	}
 	await abandonProjectUsageEvents(organizationId, 'Project deleted');

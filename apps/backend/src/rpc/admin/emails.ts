@@ -1,5 +1,5 @@
 import { RpcTarget } from 'cloudflare:workers';
-import { inScope, type Scope } from '#lib/server/context.js';
+import type { Scope } from '#lib/server/context.js';
 import {
 	listCampaignTemplates,
 	type PreviewCampaignEmailInput,
@@ -9,6 +9,7 @@ import {
 	type SendCampaignEmailsInput,
 	sendCampaignEmails
 } from '#lib/server/handlers/email-campaign.js';
+import { inScope } from '#lib/server/scope.js';
 
 export class AdminEmails extends RpcTarget {
 	readonly #scope: Scope;

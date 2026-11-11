@@ -1,5 +1,5 @@
 import { RpcTarget } from 'cloudflare:workers';
-import { inScope, type Scope } from '#lib/server/context.js';
+import type { Scope } from '#lib/server/context.js';
 import {
 	type CreateIpamPrefixInput,
 	createIpamPrefix,
@@ -14,6 +14,7 @@ import {
 	updateIpamPrefix,
 	updateIpamPtrDefaultFormats
 } from '#lib/server/handlers/ipam.js';
+import { inScope } from '#lib/server/scope.js';
 
 export class AdminIpam extends RpcTarget {
 	readonly #scope: Scope;

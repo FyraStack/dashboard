@@ -1,5 +1,5 @@
 import { RpcTarget } from 'cloudflare:workers';
-import { inScope, type Scope } from '#lib/server/context.js';
+import type { Scope } from '#lib/server/context.js';
 import {
 	getVmNetworking,
 	type SetVmPtrRecordInput,
@@ -19,6 +19,7 @@ import {
 	startVm,
 	stopVm
 } from '#lib/server/handlers/vms.js';
+import { inScope } from '#lib/server/scope.js';
 
 export class Vm extends RpcTarget {
 	readonly #scope: Scope;

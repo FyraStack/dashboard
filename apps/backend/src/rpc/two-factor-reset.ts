@@ -1,5 +1,5 @@
 import { RpcTarget } from 'cloudflare:workers';
-import { inScope, type Scope } from '#lib/server/context.js';
+import type { Scope } from '#lib/server/context.js';
 import { loadTotpLoginPage } from '#lib/server/handlers/account-login.js';
 import {
 	type ConfirmTotpResetChoiceInput,
@@ -8,6 +8,7 @@ import {
 	type VerifyTotpResetCodeInput,
 	verifyTotpResetCode
 } from '#lib/server/handlers/two-factor.js';
+import { inScope } from '#lib/server/scope.js';
 
 export class TwoFactorReset extends RpcTarget {
 	readonly #scope: Scope;

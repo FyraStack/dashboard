@@ -1,23 +1,15 @@
 import { and, eq, ne } from 'drizzle-orm';
-import {
-	type PermissionLevel,
-	type ProjectRole,
-	projectRoles
-} from '#lib/auth/organization-permissions.js';
+import { type PermissionLevel, type ProjectRole, projectRoles } from 'stack-shared/project-roles';
 import { initAuth } from '#lib/server/auth.js';
-import { requireProjectAccess } from '#lib/server/auth-context.js';
+import { requireProjectAccess, requireUser } from '#lib/server/auth-context.js';
 import { runInBackground } from '#lib/server/background.js';
-import {
-	ensureLocalProjectBillingCustomer,
-	ensureProjectCustomer,
-	updateProjectCustomer
-} from '#lib/server/billing/autumn.js';
+import { updateProjectCustomer } from '#lib/server/billing/autumn.js';
 import { context } from '#lib/server/context.js';
 import { member, organization } from '#lib/server/db/auth.schema.js';
-import { initDrizzle } from '#lib/server/db/index.js';
 import { error } from '#lib/server/http.js';
 import { withIdempotency } from '#lib/server/idempotency.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { createOwnedProject, toProjectName } from '#lib/server/project-creation.js';
 import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
 
 export type ProjectListResult = {
@@ -64,8 +56,6 @@ export interface AddMemberInput {
 	permissions: 'admin' | 'read_write' | 'read';
 	projectId: string;
 }
-const assignableMemberRoles: readonly PermissionLevel[] = ['admin', 'read_write', 'read'];
-
 export interface UpdateMemberRoleInput {
 	permissions: 'admin' | 'read_write' | 'read';
 	projectId: string;
@@ -76,33 +66,15 @@ export interface RemoveMemberInput {
 	userId: string;
 }
 
-function toProjectName(name: string) {
-	return name.trim() || 'Untitled Project';
-}
-
-function toSlug(name: string) {
-	const slug = name
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-|-$/g, '')
-		.slice(0, 42);
-
-	return `${slug || 'project'}-${Date.now().toString(36)}`;
-}
+const assignableMemberRoles: readonly PermissionLevel[] = ['admin', 'read_write', 'read'];
 
 function toProjectRole(role: string): ProjectRole {
 	return projectRoles.includes(role as ProjectRole) ? (role as ProjectRole) : 'read';
 }
 
 export async function listProjects(): Promise<ProjectListResult> {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const userId = locals.user.id;
-	const db = initDrizzle();
+	const { db, user } = requireUser();
+	const userId = user.id;
 	const memberships = await db.query.member.findMany({
 		where: eq(member.userId, userId),
 		with: { organization: { with: { members: true } } }
@@ -127,13 +99,8 @@ export async function listProjects(): Promise<ProjectListResult> {
 }
 
 export async function getProject(input: GetProjectInput): Promise<ProjectDetails> {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, locals.user.id, input.projectId);
+	const { db, user } = requireUser();
+	await requireProjectAccess(db, user.id, input.projectId);
 
 	const org = await db.query.organization.findFirst({
 		where: eq(organization.id, input.projectId),
@@ -167,56 +134,34 @@ export async function getProject(input: GetProjectInput): Promise<ProjectDetails
 }
 
 export function createProject(input: CreateProjectInput): Promise<{ id: string }> {
-	const { locals, request } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const userId = locals.user.id;
+	const { db, user } = requireUser();
 	const name = toProjectName(input.name);
 	return withIdempotency(
-		initDrizzle(),
-		{ key: input.idempotencyKey, operation: 'projects.createProject', args: { name, userId } },
+		db,
+		{
+			key: input.idempotencyKey,
+			operation: 'projects.createProject',
+			args: { name, userId: user.id }
+		},
 		async () => {
-			const auth = initAuth();
-			const org = await auth.api.createOrganization({
-				headers: request.headers,
-				body: {
-					name,
-					slug: toSlug(name)
-				}
-			});
-
-			await ensureLocalProjectBillingCustomer(org.id);
-			runInBackground(ensureProjectCustomer(org.id), `sync autumn customer for project ${org.id}`);
-			captureServerEvent('project_created', {}, { projectId: org.id });
-
-			return { id: org.id };
+			const { id } = await createOwnedProject(name);
+			captureServerEvent('project_created', {}, { projectId: id });
+			return { id };
 		}
 	);
 }
 
 export async function deleteProject(input: DeleteProjectInput): Promise<void> {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, locals.user.id, input.projectId, 'owner');
+	const { db, user } = requireUser();
+	await requireProjectAccess(db, user.id, input.projectId, 'owner');
 
 	await softDeleteOrganizationResources(db, input.projectId);
 	captureServerEvent('project_deleted', {}, { projectId: input.projectId });
 }
 
 export async function updateProject(input: UpdateProjectInput): Promise<void> {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, locals.user.id, input.projectId, 'admin');
+	const { db, user } = requireUser();
+	await requireProjectAccess(db, user.id, input.projectId, 'admin');
 
 	await db
 		.update(organization)
@@ -231,17 +176,11 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
 }
 
 export async function addMember(input: AddMemberInput): Promise<void> {
-	const { locals, request } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
+	const { db, user } = requireUser();
+	await requireProjectAccess(db, user.id, input.projectId, 'admin');
 
-	const db = initDrizzle();
-	await requireProjectAccess(db, locals.user.id, input.projectId, 'admin');
-
-	const auth = initAuth();
-	await auth.api.createInvitation({
-		headers: request.headers,
+	await initAuth().api.createInvitation({
+		headers: context().request.headers,
 		body: {
 			email: input.email.trim(),
 			role: input.permissions,
@@ -257,13 +196,8 @@ export async function addMember(input: AddMemberInput): Promise<void> {
 }
 
 export async function updateMemberRole(input: UpdateMemberRoleInput): Promise<void> {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, locals.user.id, input.projectId, 'admin');
+	const { db, user } = requireUser();
+	await requireProjectAccess(db, user.id, input.projectId, 'admin');
 
 	if (!assignableMemberRoles.includes(input.permissions)) {
 		error(400, 'Invalid project role');
@@ -291,13 +225,8 @@ export async function updateMemberRole(input: UpdateMemberRoleInput): Promise<vo
 }
 
 export async function removeMember(input: RemoveMemberInput): Promise<void> {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, locals.user.id, input.projectId, 'admin');
+	const { db, user } = requireUser();
+	await requireProjectAccess(db, user.id, input.projectId, 'admin');
 
 	const target = await db.query.member.findFirst({
 		where: and(eq(member.organizationId, input.projectId), eq(member.userId, input.userId))

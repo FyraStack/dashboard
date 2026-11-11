@@ -1,8 +1,8 @@
 import { and, eq, gt, sql } from 'drizzle-orm';
+import { ulid } from 'ulid';
 import { verification } from '#lib/server/db/auth.schema.js';
 import type { Database } from '#lib/server/db/index.js';
 import { error } from '#lib/server/http.js';
-import { ulid } from '#lib/server/id.js';
 
 const STEP_UP_MAX_ATTEMPTS = 5;
 const STEP_UP_LOCKOUT_MS = 15 * 60 * 1000;

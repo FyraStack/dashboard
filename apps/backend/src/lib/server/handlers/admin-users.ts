@@ -1,13 +1,13 @@
-import { asc, count, desc, eq } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ne, or, sql } from 'drizzle-orm';
 import AdminUserDeletionCodeEmail from '#lib/emails/admin-user-deletion-code.svelte';
 import {
 	ADMIN_VERIFICATION_CODE_TTL_MS,
 	beginAdminVerification,
 	consumeAdminVerification
 } from '#lib/server/admin-verification.js';
-import { hasAdminRole, requireAdmin } from '#lib/server/auth-context.js';
+import { isAdminUser, requireAdminUser } from '#lib/server/auth-context.js';
 import { updateProjectCustomer } from '#lib/server/billing/autumn.js';
-import { context } from '#lib/server/context.js';
+import { makeCountMap } from '#lib/server/count-map.js';
 import {
 	account,
 	member,
@@ -16,8 +16,8 @@ import {
 	session,
 	user
 } from '#lib/server/db/auth.schema.js';
-import { initDrizzle } from '#lib/server/db/index.js';
-import { apiTokens, sshKeys, vms, volumes } from '#lib/server/db/schema.js';
+import type { Database } from '#lib/server/db/index.js';
+import { apiTokens, sshKeys } from '#lib/server/db/schema.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { error } from '#lib/server/http.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
@@ -96,11 +96,6 @@ export interface SetUserTwoFactorInput {
 	userId: string;
 }
 
-export interface SetUserRoleInput {
-	role: string;
-	userId: string;
-}
-
 export interface BeginDeleteUserInput {
 	userId: string;
 }
@@ -115,97 +110,96 @@ export interface GetUserResourcesInput {
 	userId: string;
 }
 
-export interface GetOrganizationResourcesInput {
-	orgId: string;
+const adminUserCondition = or(
+	eq(user.isAdmin, true),
+	sql`'admin' = any(string_to_array(${user.role}, ','))`
+);
+
+async function requireUserRecord(db: Database, userId: string) {
+	const target = await db.query.user.findFirst({ where: eq(user.id, userId) });
+	if (!target) {
+		error(404, 'User not found');
+	}
+	return target;
 }
 
-async function requireCurrentAdmin() {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
+async function assertAnotherAdminExists(
+	db: Database,
+	target: { role: string | null; isAdmin: boolean | null }
+) {
+	if (!isAdminUser(target)) {
+		return;
 	}
 
-	const db = initDrizzle();
-	await requireAdmin(db, locals.user.id);
-
-	return { db, userId: locals.user.id };
+	const [{ adminCount }] = await db
+		.select({ adminCount: count() })
+		.from(user)
+		.where(adminUserCondition);
+	if (adminCount <= 1) {
+		error(400, 'At least one admin is required.');
+	}
 }
 
-async function assertCanDeleteUser(
-	db: ReturnType<typeof initDrizzle>,
-	adminUserId: string,
-	targetUserId: string
-) {
+async function assertCanDeleteUser(db: Database, adminUserId: string, targetUserId: string) {
 	if (adminUserId === targetUserId) {
 		error(400, 'You cannot delete your own account.');
 	}
 
-	const target = await db.query.user.findFirst({ where: eq(user.id, targetUserId) });
-	if (!target) {
-		error(404, 'User not found');
-	}
-
-	if (hasAdminRole(target.role) || target.isAdmin) {
-		const adminRows = await db.select({ role: user.role, isAdmin: user.isAdmin }).from(user);
-		const adminCount = adminRows.filter((row) => hasAdminRole(row.role) || row.isAdmin).length;
-		if (adminCount <= 1) {
-			error(400, 'At least one admin is required.');
-		}
-	}
-
+	const target = await requireUserRecord(db, targetUserId);
+	await assertAnotherAdminExists(db, target);
 	return target;
 }
 
-async function deleteUserData(db: ReturnType<typeof initDrizzle>, targetUserId: string) {
+async function deleteUserData(db: Database, targetUserId: string) {
 	await settleUserOrganizations(db, targetUserId);
 	await db.delete(apiTokens).where(eq(apiTokens.userId, targetUserId));
 	await db.delete(sshKeys).where(eq(sshKeys.userId, targetUserId));
 	await db.delete(user).where(eq(user.id, targetUserId));
 }
 
-async function settleUserOrganizations(db: ReturnType<typeof initDrizzle>, targetUserId: string) {
-	const memberships = await db
+async function settleUserOrganizations(db: Database, targetUserId: string) {
+	const ownedProjects = await db
 		.select({ organizationId: member.organizationId })
 		.from(member)
-		.where(eq(member.userId, targetUserId));
+		.where(and(eq(member.userId, targetUserId), eq(member.role, 'owner')));
 
-	for (const membership of memberships) {
+	for (const { organizationId } of ownedProjects) {
 		// biome-ignore lint/performance/noAwaitInLoops: each organization settlement syncs Autumn and tears down backend resources, so run them one at a time
-		const otherMembers = await db
-			.select({ id: member.id, userId: member.userId, createdAt: member.createdAt })
+		const [successor] = await db
+			.select({ id: member.id })
 			.from(member)
-			.where(eq(member.organizationId, membership.organizationId))
-			.orderBy(asc(member.createdAt));
-		const oldestRemainingMember = otherMembers.find((item) => item.userId !== targetUserId);
+			.where(and(eq(member.organizationId, organizationId), ne(member.userId, targetUserId)))
+			.orderBy(asc(member.createdAt))
+			.limit(1);
 
-		if (oldestRemainingMember) {
-			await db.update(member).set({ role: 'owner' }).where(eq(member.id, oldestRemainingMember.id));
-			await updateProjectCustomer(membership.organizationId).catch((err) => {
-				console.warn(
-					`Failed to sync Autumn customer after ownership transfer for project ${membership.organizationId}`,
-					err
-				);
-			});
+		if (!successor) {
+			await softDeleteOrganizationResources(db, organizationId);
 			continue;
 		}
 
-		await softDeleteOrganizationResources(db, membership.organizationId);
+		await db.update(member).set({ role: 'owner' }).where(eq(member.id, successor.id));
+		await updateProjectCustomer(organizationId).catch((err) => {
+			console.warn(
+				`Failed to sync Autumn customer after ownership transfer for project ${organizationId}`,
+				err
+			);
+		});
 	}
 }
 
-function makeCountMap(rows: { userId: string | null; count: number }[]) {
-	const map = new Map<string, number>();
-	for (const row of rows) {
-		if (!row.userId) {
-			continue;
-		}
-		map.set(row.userId, row.count);
+async function updateUserRole(db: Database, userId: string, role: 'admin' | 'user') {
+	const target = await requireUserRecord(db, userId);
+	const isAdmin = role === 'admin';
+	if (!isAdmin) {
+		await assertAnotherAdminExists(db, target);
 	}
-	return map;
+
+	await db.update(user).set({ role, isAdmin }).where(eq(user.id, userId));
+	return isAdmin;
 }
 
 export async function listAdminUsers(): Promise<AdminUser[]> {
-	const { db } = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 
 	const users = await db
 		.select({
@@ -227,15 +221,15 @@ export async function listAdminUsers(): Promise<AdminUser[]> {
 
 	const [sessions, accounts, members, sshKeysData, apiTokensData, passkeysData] = await Promise.all(
 		[
-			db.select({ userId: session.userId, count: count() }).from(session).groupBy(session.userId),
-			db.select({ userId: account.userId, count: count() }).from(account).groupBy(account.userId),
-			db.select({ userId: member.userId, count: count() }).from(member).groupBy(member.userId),
-			db.select({ userId: sshKeys.userId, count: count() }).from(sshKeys).groupBy(sshKeys.userId),
+			db.select({ key: session.userId, count: count() }).from(session).groupBy(session.userId),
+			db.select({ key: account.userId, count: count() }).from(account).groupBy(account.userId),
+			db.select({ key: member.userId, count: count() }).from(member).groupBy(member.userId),
+			db.select({ key: sshKeys.userId, count: count() }).from(sshKeys).groupBy(sshKeys.userId),
 			db
-				.select({ userId: apiTokens.userId, count: count() })
+				.select({ key: apiTokens.userId, count: count() })
 				.from(apiTokens)
 				.groupBy(apiTokens.userId),
-			db.select({ userId: passkey.userId, count: count() }).from(passkey).groupBy(passkey.userId)
+			db.select({ key: passkey.userId, count: count() }).from(passkey).groupBy(passkey.userId)
 		]
 	);
 
@@ -253,7 +247,7 @@ export async function listAdminUsers(): Promise<AdminUser[]> {
 		billingExempt: userRow.billingExempt ?? false,
 		twoFactorEnabled: userRow.twoFactorEnabled ?? false,
 		passkeyCount: passkeyMap.get(userRow.id) ?? 0,
-		isAdmin: hasAdminRole(role) || legacyIsAdmin,
+		isAdmin: isAdminUser({ role, isAdmin: legacyIsAdmin }),
 		sessionCount: sessionMap.get(userRow.id) ?? 0,
 		accountCount: accountMap.get(userRow.id) ?? 0,
 		orgCount: memberMap.get(userRow.id) ?? 0,
@@ -263,34 +257,15 @@ export async function listAdminUsers(): Promise<AdminUser[]> {
 }
 
 export async function setUserAdmin(params: SetUserAdminInput) {
-	const { db } = await requireCurrentAdmin();
-	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) {
-		error(404, 'User not found');
-	}
-
-	if (!params.isAdmin && (hasAdminRole(target.role) || target.isAdmin)) {
-		const adminRows = await db.select({ role: user.role, isAdmin: user.isAdmin }).from(user);
-		const adminCount = adminRows.filter((row) => hasAdminRole(row.role) || row.isAdmin).length;
-		if (adminCount <= 1) {
-			error(400, 'At least one admin is required');
-		}
-	}
-
-	await db
-		.update(user)
-		.set({ role: params.isAdmin ? 'admin' : 'user', isAdmin: params.isAdmin })
-		.where(eq(user.id, params.userId));
+	const { db } = await requireAdminUser();
+	await updateUserRole(db, params.userId, params.isAdmin ? 'admin' : 'user');
 
 	return { userId: params.userId, isAdmin: params.isAdmin };
 }
 
 export async function setUserDisabled(params: SetUserDisabledInput) {
-	const { db } = await requireCurrentAdmin();
-	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) {
-		error(404, 'User not found');
-	}
+	const { db } = await requireAdminUser();
+	const target = await requireUserRecord(db, params.userId);
 
 	await db
 		.update(user)
@@ -309,11 +284,8 @@ export async function setUserDisabled(params: SetUserDisabledInput) {
 }
 
 export async function setUserBillingExempt(params: SetUserBillingExemptInput) {
-	const { db } = await requireCurrentAdmin();
-	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) {
-		error(404, 'User not found');
-	}
+	const { db } = await requireAdminUser();
+	await requireUserRecord(db, params.userId);
 
 	await db
 		.update(user)
@@ -329,11 +301,8 @@ export async function setUserBillingExempt(params: SetUserBillingExemptInput) {
 }
 
 export async function setUserTwoFactor(params: SetUserTwoFactorInput) {
-	const { db } = await requireCurrentAdmin();
-	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) {
-		error(404, 'User not found');
-	}
+	const { db } = await requireAdminUser();
+	await requireUserRecord(db, params.userId);
 
 	await db
 		.update(user)
@@ -343,35 +312,11 @@ export async function setUserTwoFactor(params: SetUserTwoFactorInput) {
 	return { userId: params.userId, twoFactorEnabled: params.twoFactorEnabled };
 }
 
-export async function setUserRole(params: SetUserRoleInput) {
-	const { db } = await requireCurrentAdmin();
-	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) {
-		error(404, 'User not found');
-	}
-
-	await db
-		.update(user)
-		.set({ role: params.role, isAdmin: hasAdminRole(params.role) })
-		.where(eq(user.id, params.userId));
-
-	captureServerEvent('admin_user_role_changed', {
-		target_user_id: params.userId,
-		role: params.role
-	});
-
-	return { userId: params.userId, role: params.role, isAdmin: hasAdminRole(params.role) };
-}
-
 export async function beginDeleteUser(params: BeginDeleteUserInput) {
-	const { db, userId: adminUserId } = await requireCurrentAdmin();
-	const adminUser = context().locals.user;
-	if (!adminUser) {
-		error(401, 'Authentication required');
-	}
+	const { db, user: adminUser } = await requireAdminUser();
 
-	const target = await assertCanDeleteUser(db, adminUserId, params.userId);
-	const { method, code } = await beginAdminVerification(db, adminUserId, params.userId);
+	const target = await assertCanDeleteUser(db, adminUser.id, params.userId);
+	const { method, code } = await beginAdminVerification(db, adminUser.id, params.userId);
 
 	if (code) {
 		await sendRenderedEmail({
@@ -391,10 +336,10 @@ export async function beginDeleteUser(params: BeginDeleteUserInput) {
 }
 
 export async function deleteUserWithVerification(params: DeleteUserWithVerificationInput) {
-	const { db, userId: adminUserId } = await requireCurrentAdmin();
-	const target = await assertCanDeleteUser(db, adminUserId, params.userId);
+	const { db, user: adminUser } = await requireAdminUser();
+	const target = await assertCanDeleteUser(db, adminUser.id, params.userId);
 
-	await consumeAdminVerification(db, adminUserId, params.userId, params.method, params.code);
+	await consumeAdminVerification(db, adminUser.id, params.userId, params.method, params.code);
 	await deleteUserData(db, params.userId);
 	captureServerEvent('admin_user_deleted', {
 		target_user_id: params.userId,
@@ -405,12 +350,9 @@ export async function deleteUserWithVerification(params: DeleteUserWithVerificat
 }
 
 export async function getUserResources(params: GetUserResourcesInput) {
-	const { db } = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 
-	const target = await db.query.user.findFirst({ where: eq(user.id, params.userId) });
-	if (!target) {
-		error(404, 'User not found');
-	}
+	await requireUserRecord(db, params.userId);
 
 	const [sessions, accounts, members, sshKeysList, apiTokenList] = await Promise.all([
 		db
@@ -451,40 +393,4 @@ export async function getUserResources(params: GetUserResourcesInput) {
 	]);
 
 	return { sessions, accounts, members, sshKeys: sshKeysList, apiTokens: apiTokenList };
-}
-
-export async function getOrganizationResources(params: GetOrganizationResourcesInput) {
-	const { db } = await requireCurrentAdmin();
-
-	const target = await db.query.organization.findFirst({
-		where: eq(organization.id, params.orgId)
-	});
-	if (!target) {
-		error(404, 'Organization not found');
-	}
-
-	const [vmsData, volumesData] = await Promise.all([
-		db
-			.select({
-				id: vms.id,
-				name: vms.name,
-				status: vms.status,
-				createdAt: vms.createdAt
-			})
-			.from(vms)
-			.where(eq(vms.ownerProjectId, params.orgId))
-			.orderBy(vms.name),
-		db
-			.select({
-				id: volumes.id,
-				name: volumes.name,
-				size: volumes.size,
-				createdAt: volumes.createdAt
-			})
-			.from(volumes)
-			.where(eq(volumes.ownerProjectId, params.orgId))
-			.orderBy(volumes.name)
-	]);
-
-	return { vms: vmsData, volumes: volumesData };
 }

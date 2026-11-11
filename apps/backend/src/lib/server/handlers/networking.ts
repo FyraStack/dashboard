@@ -1,5 +1,5 @@
 import { asc, eq } from 'drizzle-orm';
-import type { PermissionLevel } from '#lib/auth/organization-permissions.js';
+import type { PermissionLevel } from 'stack-shared/project-roles';
 import { requireProjectAccess } from '#lib/server/auth-context.js';
 import { isBunnyConfigured } from '#lib/server/bunny.js';
 import { context } from '#lib/server/context.js';

@@ -1,5 +1,5 @@
 import { RpcTarget } from 'cloudflare:workers';
-import { inScope, type Scope } from '#lib/server/context.js';
+import type { Scope } from '#lib/server/context.js';
 import {
 	type CreateImageInput,
 	createImage,
@@ -16,6 +16,7 @@ import {
 	type UpdateImageInput,
 	updateImage
 } from '#lib/server/handlers/images.js';
+import { inScope } from '#lib/server/scope.js';
 
 export class AdminImages extends RpcTarget {
 	readonly #scope: Scope;

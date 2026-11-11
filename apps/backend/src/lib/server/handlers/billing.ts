@@ -16,6 +16,7 @@ import { initDrizzle } from '#lib/server/db/index.js';
 import { error } from '#lib/server/http.js';
 import { withIdempotency } from '#lib/server/idempotency.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { safeReturnPath } from '#lib/server/urls.js';
 
 export interface GetProjectBillingInput {
 	projectId: string;
@@ -35,14 +36,6 @@ export interface SetupProjectBillingPaymentInput {
 }
 
 const MAX_CREDITS_PER_PURCHASE = 1_000_000;
-
-export function safeReturnPath(value: string | undefined, fallback: string) {
-	if (!value?.startsWith('/') || value.startsWith('//')) {
-		return fallback;
-	}
-
-	return value;
-}
 
 export async function getProjectBilling(input: GetProjectBillingInput) {
 	const { locals } = context();

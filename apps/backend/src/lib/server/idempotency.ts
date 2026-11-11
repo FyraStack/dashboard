@@ -1,5 +1,5 @@
 import { and, eq, inArray, lt, or } from 'drizzle-orm';
-import { type RequestDetails, requestFingerprint } from '#lib/idempotency.js';
+import { type RequestDetails, requestFingerprint } from 'stack-shared/request-fingerprint';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { idempotencyKeys } from '#lib/server/db/schema.js';
 import { error } from '#lib/server/http.js';

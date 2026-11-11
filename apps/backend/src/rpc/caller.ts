@@ -1,11 +1,10 @@
 import { RpcTarget } from 'cloudflare:workers';
-import { requireAdmin } from '#lib/server/auth-context.js';
-import { context, inScope, releaseScope, type Scope } from '#lib/server/context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import { requireAdminUser } from '#lib/server/auth-context.js';
+import { context, type Scope } from '#lib/server/context.js';
 import { listImages } from '#lib/server/handlers/images.js';
 import { loadAcceptInvitationPage } from '#lib/server/handlers/project-invitations.js';
 import { listVmTypes } from '#lib/server/handlers/vm-types.js';
-import { error } from '#lib/server/http.js';
+import { inScope, releaseScope } from '#lib/server/scope.js';
 import { Account } from './account.ts';
 import { Admin } from './admin.ts';
 import { Project } from './project.ts';
@@ -76,11 +75,7 @@ export class Caller extends RpcTarget {
 
 	admin() {
 		return inScope(this.#scope, async () => {
-			const { locals } = context();
-			if (!locals.user) {
-				error(401, 'Authentication required');
-			}
-			await requireAdmin(initDrizzle(), locals.user.id);
+			await requireAdminUser();
 			return new Admin(this.#scope);
 		});
 	}

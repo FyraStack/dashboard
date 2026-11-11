@@ -17,7 +17,6 @@ import {
 	setUserAdmin,
 	setUserBillingExempt,
 	setUserDisabled,
-	setUserRole,
 	setUserTwoFactor,
 	type UserAccount,
 	type UserApiToken,
@@ -486,26 +485,6 @@ export class AdminState {
 			this.stopUserSheetSave(userId);
 			this.twoFAPendingUserId = '';
 			this.twoFAPendingValue = false;
-		}
-	}
-
-	async setUserRole(userId: string, role: string) {
-		const previousUsers = this.adminUsers.map((u) => ({ ...u }));
-		this.adminUserError = '';
-		this.startUserSheetSave(userId, 'role');
-		this.updateUserField(userId, (u) => ({
-			...u,
-			role,
-			isAdmin: role === 'admin'
-		}));
-		try {
-			await setUserRole({ userId, role });
-			await invalidate('app:admin-users');
-		} catch (err) {
-			this.adminUsers = previousUsers;
-			this.adminUserError = getErrorMessage(err, 'Failed to update role');
-		} finally {
-			this.stopUserSheetSave(userId);
 		}
 	}
 

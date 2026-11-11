@@ -1,7 +1,7 @@
 import { APIError } from 'better-auth/api';
 import { initAuth } from '#lib/server/auth.js';
+import { requireUser } from '#lib/server/auth-context.js';
 import { context } from '#lib/server/context.js';
-import { error } from '#lib/server/http.js';
 
 export interface LoadAcceptInvitationPageInput {
 	invitationId: string;
@@ -25,10 +25,8 @@ export type AcceptInvitationPage =
 export async function loadAcceptInvitationPage(
 	input: LoadAcceptInvitationPageInput
 ): Promise<AcceptInvitationPage> {
-	const { locals, request } = context();
-	if (!(locals.user && locals.session)) {
-		error(401, 'Authentication required');
-	}
+	const { user } = requireUser();
+	const { request } = context();
 
 	const auth = initAuth();
 
@@ -42,7 +40,7 @@ export async function loadAcceptInvitationPage(
 			organizationName: invitation.organizationName,
 			inviterEmail: invitation.inviterEmail,
 			role: invitation.role,
-			email: locals.user.email
+			email: user.email
 		};
 	} catch (err) {
 		if (err instanceof APIError) {
@@ -53,7 +51,7 @@ export async function loadAcceptInvitationPage(
 					? 'This invitation was sent to a different email address.'
 					: 'This invitation is invalid, expired, or has already been used.',
 				wrongAccount,
-				email: locals.user.email,
+				email: user.email,
 				invitationId: input.invitationId
 			};
 		}

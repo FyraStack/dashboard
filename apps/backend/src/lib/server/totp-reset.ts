@@ -1,9 +1,9 @@
 import { and, eq, gt } from 'drizzle-orm';
+import { ulid } from 'ulid';
 import type { Context } from '#lib/server/context.js';
 import { error } from '#lib/server/http.js';
 import { account, twoFactor, user, verification } from './db/auth.schema.ts';
 import type { initDrizzle } from './db/index.ts';
-import { ulid } from './id.ts';
 
 export const TOTP_RESET_CODE_LENGTH = 6;
 export const TOTP_RESET_CODE_TTL_MS = 10 * 60 * 1000;

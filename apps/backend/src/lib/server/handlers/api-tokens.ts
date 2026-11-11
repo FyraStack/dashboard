@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
-import { context } from '#lib/server/context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import { sha256Hex, toHex } from 'stack-shared/hash';
+import { requireUser } from '#lib/server/auth-context.js';
 import { apiTokens } from '#lib/server/db/schema.js';
 import { error } from '#lib/server/http.js';
 import { withIdempotency } from '#lib/server/idempotency.js';
@@ -15,14 +15,9 @@ export interface RevokeApiTokenInput {
 }
 
 export async function listApiTokens() {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
+	const { db, user } = requireUser();
 	const tokens = await db.query.apiTokens.findMany({
-		where: eq(apiTokens.userId, locals.user.id)
+		where: eq(apiTokens.userId, user.id)
 	});
 
 	return tokens.map((t) => ({
@@ -34,29 +29,14 @@ export async function listApiTokens() {
 }
 
 function generateToken(): string {
-	const bytes = new Uint8Array(32);
-	crypto.getRandomValues(bytes);
-	return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function hashToken(token: string): Promise<string> {
-	const encoder = new TextEncoder();
-	const data = encoder.encode(token);
-	const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-	const hashArray = Array.from(new Uint8Array(hashBuffer));
-	return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+	return toHex(crypto.getRandomValues(new Uint8Array(32)));
 }
 
 export async function createApiToken(params: CreateApiTokenInput) {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	const userId = locals.user.id;
+	const { db, user } = requireUser();
+	const userId = user.id;
 	const plainToken = generateToken();
-	const tokenHash = await hashToken(plainToken);
+	const tokenHash = await sha256Hex(plainToken);
 	let insertedNow = false;
 
 	const { id } = await withIdempotency(
@@ -92,14 +72,9 @@ export async function createApiToken(params: CreateApiTokenInput) {
 }
 
 export async function revokeApiToken(params: RevokeApiTokenInput) {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
+	const { db, user } = requireUser();
 	const token = await db.query.apiTokens.findFirst({
-		where: and(eq(apiTokens.id, params.tokenId), eq(apiTokens.userId, locals.user.id))
+		where: and(eq(apiTokens.id, params.tokenId), eq(apiTokens.userId, user.id))
 	});
 
 	if (!token) {
@@ -108,6 +83,6 @@ export async function revokeApiToken(params: RevokeApiTokenInput) {
 
 	await db
 		.delete(apiTokens)
-		.where(and(eq(apiTokens.id, params.tokenId), eq(apiTokens.userId, locals.user.id)));
+		.where(and(eq(apiTokens.id, params.tokenId), eq(apiTokens.userId, user.id)));
 	captureServerEvent('api_token_revoked', { token_id: params.tokenId });
 }

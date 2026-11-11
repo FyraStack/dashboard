@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { isValidPtrHostname } from 'stack-shared/ptr';
 	import { toast } from 'svelte-sonner';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
@@ -6,7 +7,6 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
-	import { isValidPtrHostname } from '#lib/ptr.js';
 	import { deleteVm, renameVm } from '#lib/remote/vms.remote.js';
 	import {
 		getServer,

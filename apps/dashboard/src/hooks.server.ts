@@ -2,11 +2,8 @@ import { env, waitUntil } from 'cloudflare:workers';
 import { handleErrorWithSentry, initCloudflareSentryHandle, sentryHandle } from '@sentry/sveltekit';
 import { type RequestEvent, redirect } from '@sveltejs/kit';
 import { type Handle, type HandleServerError, sequence } from '@sveltejs/kit/hooks';
-import {
-	accessibilityFixtureEnabled,
-	accessibilityFixtureSession,
-	accessibilityFixtureUser
-} from '#lib/server/accessibility-fixtures.js';
+import { authBasePath, passwordResetTokenCookie, sessionCookieNames } from 'stack-shared/auth';
+import { resetPasswordPath } from 'stack-shared/routes';
 import { applySetCookies, backend } from '#lib/server/backend.js';
 import { captureServerException } from '#lib/server/posthog.js';
 import { handlePostHogProxy } from '#lib/server/posthog-proxy.js';
@@ -19,34 +16,29 @@ const publicRoutes = [
 	'/register',
 	'/signup',
 	'/forgot-password',
-	'/reset-password',
+	resetPasswordPath,
 	'/accept-invitation',
-	'/api/',
-	'/internal/',
-	'/_app/remote/'
+	'/internal'
 ];
 const authPages = ['/login', '/register', '/signup', '/forgot-password'];
-const authBasePath = '/api/auth';
 const remoteFunctionPath = '/_app/remote/';
-const sessionCookieNames = new Set([
-	'better-auth.session_token',
-	'__Secure-better-auth.session_token',
-	'better-auth-session_token',
-	'__Secure-better-auth-session_token'
-]);
+
+function isUnderPath(pathname: string, base: string) {
+	return pathname === base || pathname.startsWith(`${base}/`);
+}
 
 function isPublicRequest(event: RequestEvent) {
 	return (
-		event.route.id === null || publicRoutes.some((route) => event.url.pathname.startsWith(route))
+		event.route.id === null || publicRoutes.some((route) => isUnderPath(event.url.pathname, route))
 	);
 }
 
 function isAuthPage(pathname: string) {
-	return authPages.some((route) => pathname.startsWith(route));
+	return authPages.some((route) => isUnderPath(pathname, route));
 }
 
 function isAuthEndpoint(pathname: string) {
-	return pathname === authBasePath || pathname.startsWith(`${authBasePath}/`);
+	return isUnderPath(pathname, authBasePath);
 }
 
 function hasSessionCookie(request: Request) {
@@ -57,7 +49,7 @@ function hasSessionCookie(request: Request) {
 
 	return cookie.split(';').some((part) => {
 		const [name] = part.trimStart().split('=', 1);
-		return sessionCookieNames.has(name);
+		return sessionCookieNames.some((sessionCookieName) => sessionCookieName === name);
 	});
 }
 
@@ -68,13 +60,6 @@ async function proxyAuthRequest(request: Request) {
 
 const handleAuth: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
-
-	if (accessibilityFixtureEnabled && !isAuthPage(pathname)) {
-		event.locals.session = accessibilityFixtureSession;
-		event.locals.user = accessibilityFixtureUser;
-		event.locals.activeProjectId = accessibilityFixtureSession.activeOrganizationId;
-		return resolve(event);
-	}
 
 	if (isAuthEndpoint(pathname)) {
 		return proxyAuthRequest(event.request);
@@ -135,23 +120,21 @@ const handleBackendRelease: Handle = async ({ event, resolve }) => {
 	return releaseAfterBody(response, event);
 };
 
-const passwordResetPath = '/reset-password';
-const passwordResetTokenCookie = 'password_reset_token';
 const passwordResetTokenMaxAge = 60 * 60;
 
 const handlePasswordResetToken: Handle = ({ event, resolve }) => {
 	const token = event.url.searchParams.get('token');
-	if (event.url.pathname !== passwordResetPath || !token) {
+	if (event.url.pathname !== resetPasswordPath || !token) {
 		return resolve(event);
 	}
 
 	event.cookies.set(passwordResetTokenCookie, token, {
-		path: passwordResetPath,
+		path: resetPasswordPath,
 		httpOnly: true,
 		sameSite: 'lax',
 		maxAge: passwordResetTokenMaxAge
 	});
-	redirect(303, passwordResetPath);
+	redirect(303, resetPasswordPath);
 };
 
 let sentryRequestHandle: Handle | undefined;

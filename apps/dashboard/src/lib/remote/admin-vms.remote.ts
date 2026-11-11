@@ -1,20 +1,10 @@
 import { type } from 'arktype';
-import type { AdminVm } from 'stack-backend/types';
-import {
-	accessibilityFixtureAdminVms,
-	accessibilityFixtureEnabled
-} from '#lib/server/accessibility-fixtures.js';
 import { backend } from '#lib/server/backend.js';
 import { command, query } from '$app/server';
 
 export type { AdminVm } from 'stack-backend/types';
 
-export const listAllAdminVms = query(async (): Promise<AdminVm[]> => {
-	if (accessibilityFixtureEnabled) {
-		return accessibilityFixtureAdminVms;
-	}
-	return await backend((me) => me.admin().vms().list());
-});
+export const listAllAdminVms = query(() => backend((me) => me.admin().vms().list()));
 
 const powerParams = type({ vmId: 'string' });
 

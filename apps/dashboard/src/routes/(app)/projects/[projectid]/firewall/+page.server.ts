@@ -1,10 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { requireFeature } from '#lib/feature-gate.js';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ parent }) => {
-	const { featureFlags } = await parent();
-
-	if (!featureFlags.firewall) {
-		error(404, 'Not found');
-	}
-};
+export const load: PageServerLoad = ({ parent }) => requireFeature(parent, 'firewall');

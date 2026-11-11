@@ -1,8 +1,7 @@
 import { redirect } from '@sveltejs/kit';
+import { pendingPasskeyHintCookie } from 'stack-shared/auth';
 import { backend } from '#lib/server/backend.js';
 import type { PageServerLoad } from './$types';
-
-const pendingPasskeyHintCookie = 'pending_passkey_2fa_hint';
 
 export const load: PageServerLoad = async ({ cookies, url }) => {
 	if (cookies.get(pendingPasskeyHintCookie) === 'passkey') {

@@ -9,7 +9,7 @@
 		reverseVmBillingUsage,
 		type VmBillingUsage
 	} from '#lib/remote/admin-billing.remote.js';
-	import { getErrorMessage, runQuery } from '#lib/utils.js';
+	import { getErrorMessage } from '#lib/utils.js';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
 	import CreditCard from '~icons/nucleo/credit-card';
@@ -78,9 +78,9 @@
 		loading = true;
 		loadError = '';
 		try {
-			const result = await runQuery(
-				getVmBillingUsage({ vmId, periodStart: start, periodEnd: end })
-			);
+			const usageQuery = getVmBillingUsage({ vmId, periodStart: start, periodEnd: end });
+			await usageQuery.refresh();
+			const result = await usageQuery;
 			if (current !== request) {
 				return;
 			}

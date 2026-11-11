@@ -4,7 +4,6 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { listVmStatuses } from '#lib/remote/vms.remote.js';
 	import { type ServerInfo, serversState, syncServers } from '#lib/state/servers.svelte.js';
-	import { clientTimingLog, runQuery } from '#lib/utils.js';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import ChevronDown from '~icons/lucide/chevron-down';
@@ -150,37 +149,36 @@
 			}
 			refreshing = true;
 			serversState.statusRefreshing = true;
-			const started = performance.now();
 			const requestedServerIds = new Set(serversState.servers.map((server) => server.id));
 
 			try {
-				const statuses = await runQuery(
-					listVmStatuses({ projectId: pollingProjectId }),
-					'listVmStatuses'
-				);
+				const statuses = await loadStatuses();
 				// Ignore requests from a previous project or before the latest VM action.
-				if (cancelled || refreshVersion !== serversState.refreshVersion) {
-					return;
+				if (statuses && !cancelled && refreshVersion === serversState.refreshVersion) {
+					applyStatuses(statuses, requestedServerIds);
 				}
-				applyStatuses(statuses, requestedServerIds);
-			} catch {
-				clientTimingLog('vm.status.refresh.error', { 'project.id': pollingProjectId });
 			} finally {
-				finishRefresh(started);
+				finishRefresh();
 			}
 		}
 
-		function finishRefresh(started: number) {
+		async function loadStatuses() {
+			try {
+				const statusesQuery = listVmStatuses({ projectId: pollingProjectId });
+				await statusesQuery.refresh();
+				return await statusesQuery;
+			} catch {
+				return null;
+			}
+		}
+
+		function finishRefresh() {
 			refreshing = false;
 			if (cancelled || refreshVersion !== serversState.refreshVersion) {
 				return;
 			}
 			serversState.statusRefreshing = false;
 			serversState.firstStatusRefreshComplete = true;
-			clientTimingLog('vm.status.refresh.end', {
-				'project.id': pollingProjectId,
-				duration_ms: Math.round(performance.now() - started)
-			});
 			if (document.visibilityState === 'visible') {
 				timeout = setTimeout(
 					refreshStatuses,

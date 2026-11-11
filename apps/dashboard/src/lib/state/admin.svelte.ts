@@ -1,13 +1,13 @@
 import type { VerificationMethod } from 'stack-shared/auth';
-import { untrack } from 'svelte';
-import { toast } from 'svelte-sonner';
-import { config } from '#lib/config.js';
 import {
 	defaultFeatureFlags,
 	type FeatureFlagKey,
 	type FeatureFlags,
 	featureFlagKeys
-} from '#lib/feature-flags.js';
+} from 'stack-shared/feature-flags';
+import { untrack } from 'svelte';
+import { toast } from 'svelte-sonner';
+import { config } from '#lib/config.js';
 import { type AdminProject, setProjectBillingExempt } from '#lib/remote/admin-projects.remote.js';
 import {
 	type AdminUser,
@@ -51,7 +51,7 @@ import {
 	reorderVmTypes,
 	updateVmType
 } from '#lib/remote/vm-types.remote.js';
-import { getErrorMessage, runQuery } from '#lib/utils.js';
+import { getErrorMessage } from '#lib/utils.js';
 import { goto, invalidate } from '$app/navigation';
 import { page } from '$app/state';
 
@@ -324,7 +324,9 @@ export class AdminState {
 		);
 		try {
 			await setUserAdmin({ userId, isAdmin });
-			this.adminUsers = await runQuery(listAdminUsers());
+			const usersQuery = listAdminUsers();
+			await usersQuery.refresh();
+			this.adminUsers = await usersQuery;
 			await invalidate('app:admin-users');
 		} catch (err) {
 			this.adminUsers = previousUsers;
@@ -414,7 +416,9 @@ export class AdminState {
 
 	async refreshAdminVms() {
 		try {
-			this.adminVms = await runQuery(listAllAdminVms());
+			const vmsQuery = listAllAdminVms();
+			await vmsQuery.refresh();
+			this.adminVms = await vmsQuery;
 		} catch (err) {
 			this.adminVmError = getErrorMessage(err, 'Failed to refresh servers');
 		}
@@ -509,7 +513,9 @@ export class AdminState {
 		this.userResourcesLoading = true;
 		this.userResourcesOpen = type;
 		try {
-			const result = await runQuery(getUserResources({ userId }));
+			const resourcesQuery = getUserResources({ userId });
+			await resourcesQuery.refresh();
+			const result = await resourcesQuery;
 			this.userSessions = result.sessions;
 			this.userAccounts = result.accounts;
 			this.userOrgs = result.members;
@@ -531,7 +537,9 @@ export class AdminState {
 		this.orgResourcesLoading = true;
 		this.orgResourcesOpen = true;
 		try {
-			const result = await runQuery(getOrganizationResources({ orgId: org.id }));
+			const resourcesQuery = getOrganizationResources({ orgId: org.id });
+			await resourcesQuery.refresh();
+			const result = await resourcesQuery;
 			this.orgVms = result.vms;
 			this.orgVolumes = result.volumes;
 		} catch (err) {
@@ -665,10 +673,10 @@ export class AdminState {
 		this.isoLoading = true;
 		this.isoError = '';
 		try {
-			const [images, targets] = await Promise.all([
-				runQuery(listProxmoxImages()),
-				runQuery(listProxmoxImageImportTargets())
-			]);
+			const imagesQuery = listProxmoxImages();
+			const targetsQuery = listProxmoxImageImportTargets();
+			await Promise.all([imagesQuery.refresh(), targetsQuery.refresh()]);
+			const [images, targets] = await Promise.all([imagesQuery, targetsQuery]);
 			this.pveImages = images;
 			this.pveImageImportTargets = targets;
 		} catch (err) {
@@ -753,9 +761,9 @@ export class AdminState {
 						if (task.status === 'stopped') {
 							return task;
 						}
-						const status = await runQuery(
-							getProxmoxTaskStatus({ node: task.node, upid: task.upid })
-						);
+						const statusQuery = getProxmoxTaskStatus({ node: task.node, upid: task.upid });
+						await statusQuery.refresh();
+						const status = await statusQuery;
 						return { ...task, status: status.status, exitstatus: status.exitstatus };
 					})
 				);

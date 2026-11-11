@@ -66,8 +66,7 @@
 			"vars": {
 				"PUBLIC_POSTHOG_KEY": "phc_xpPsXXeqca5GUtozk5DvUdTFMwAjYN7z4SDYLHSqwHpX",
 				"PUBLIC_POSTHOG_HOST": "https://us.posthog.com",
-				"PUBLIC_SENTRY_DSN": "https://509fc8298796e65c16acbef704256178@o271654.ingest.us.sentry.io/4512122021412864",
-				"STACK_TIMING_SPAM": "true"
+				"PUBLIC_SENTRY_DSN": "https://509fc8298796e65c16acbef704256178@o271654.ingest.us.sentry.io/4512122021412864"
 			},
 			"services": [
 				{

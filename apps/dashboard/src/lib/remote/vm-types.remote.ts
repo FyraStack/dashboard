@@ -1,21 +1,13 @@
 import { type } from 'arktype';
-import {
-	accessibilityFixtureEnabled,
-	accessibilityFixtureVmTypes
-} from '#lib/server/accessibility-fixtures.js';
+import { instructionSetArchitecture } from '#lib/remote/schemas.js';
 import { backend } from '#lib/server/backend.js';
 import { command, query } from '$app/server';
 
-export const listVmTypes = query(async () => {
-	if (accessibilityFixtureEnabled) {
-		return accessibilityFixtureVmTypes;
-	}
-	return await backend((me) => me.listVmTypes());
-});
+export const listVmTypes = query(() => backend((me) => me.listVmTypes()));
 
 const createParams = type({
 	name: 'string',
-	isa: "'x86'",
+	isa: instructionSetArchitecture,
 	cores: 'number',
 	ramCapacity: 'number',
 	storageAmount: 'number',
@@ -27,17 +19,7 @@ export const createVmType = command(createParams, (input) =>
 	backend((me) => me.admin().vmTypes().create(input))
 );
 
-const updateParams = type({
-	vmTypeId: 'string',
-	name: 'string?',
-	isa: "'x86'?",
-	cores: 'number?',
-	ramCapacity: 'number?',
-	storageAmount: 'number?',
-	rate: 'string?',
-	cap: 'string?',
-	autumnFeatureId: 'string?'
-});
+const updateParams = type({ vmTypeId: 'string' }).merge(createParams.partial());
 export const updateVmType = command(updateParams, (input) =>
 	backend((me) => me.admin().vmTypes().update(input))
 );

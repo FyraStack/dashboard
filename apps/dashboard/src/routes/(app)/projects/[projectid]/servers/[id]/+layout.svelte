@@ -1,9 +1,9 @@
 <script lang="ts">
+	import type { FeatureFlags } from 'stack-shared/feature-flags';
 	import { toast } from 'svelte-sonner';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
-	import type { FeatureFlags } from '#lib/feature-flags.js';
 	import { killVm, rebootVm, startVm, stopVm } from '#lib/remote/vms.remote.js';
 	import {
 		getServerWithFallback,

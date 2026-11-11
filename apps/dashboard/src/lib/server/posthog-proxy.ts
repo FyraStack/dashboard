@@ -1,13 +1,10 @@
 import type { Handle } from '@sveltejs/kit/hooks';
-import { posthogProxyPath } from '#lib/analytics/posthog.js';
+import { posthogRegion } from 'stack-shared/posthog';
+import { posthogProxyPath } from '#lib/posthog-proxy-path.js';
 import { PUBLIC_POSTHOG_HOST } from '$app/env/public';
 
-function posthogRegion(): 'us' | 'eu' {
-	return PUBLIC_POSTHOG_HOST?.includes('eu.') ? 'eu' : 'us';
-}
-
 function upstreamHost(pathname: string): string {
-	const region = posthogRegion();
+	const region = posthogRegion(PUBLIC_POSTHOG_HOST);
 	const isStaticAsset =
 		pathname.startsWith(`${posthogProxyPath}/static/`) ||
 		pathname.startsWith(`${posthogProxyPath}/array/`);

@@ -1,22 +1,17 @@
 import { error } from '@sveltejs/kit';
-import { vpsServerTabFeatureFlags } from '#lib/feature-flags.js';
+import { vpsServerTabFeatureFlags } from 'stack-shared/feature-flags';
+import { requireFeature } from '#lib/feature-gate.js';
 import type { LayoutLoad } from './$types';
 
 export const load: LayoutLoad = async ({ params, parent, url }) => {
-	const { featureFlags, projectId, servers } = await parent();
 	const tab = url.pathname.split('/').pop();
 	const featureFlag = vpsServerTabFeatureFlags[tab as keyof typeof vpsServerTabFeatureFlags];
-
-	if (featureFlag && !featureFlags[featureFlag]) {
-		error(404, 'Not found');
+	if (featureFlag) {
+		await requireFeature(parent, featureFlag);
 	}
 
-	if (!projectId) {
-		error(404, 'Project not found');
-	}
+	const { servers } = await parent();
 
-	// The parent already checked project access and loaded these VM summaries.
-	// Live state is refreshed by the server list without blocking tab navigation.
 	const server = servers.find((item) => item.id === params.id);
 	if (!server) {
 		error(404, `VM "${params.id}" not found`);

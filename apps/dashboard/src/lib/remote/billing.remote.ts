@@ -1,4 +1,5 @@
 import { type } from 'arktype';
+import { idempotencyKeySchema } from '#lib/remote/schemas.js';
 import { backend } from '#lib/server/backend.js';
 import { command } from '$app/server';
 
@@ -7,7 +8,7 @@ const setupParams = type({ projectId: 'string', returnTo: 'string?', discountCod
 const purchaseCreditsParams = type({
 	projectId: 'string',
 	credits: 'number.integer > 0',
-	idempotencyKey: '0 < string <= 128'
+	idempotencyKey: idempotencyKeySchema
 });
 
 export const openBillingPortal = command(projectParams, ({ projectId }) =>

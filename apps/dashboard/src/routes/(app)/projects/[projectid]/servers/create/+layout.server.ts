@@ -1,4 +1,7 @@
-import { error, redirect } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
+import { billingSetupTokenParam } from 'stack-shared/billing';
+import { createServerPath } from 'stack-shared/routes';
+import { dependencies } from '#lib/dependencies.js';
 import { listImages } from '#lib/remote/images.remote.js';
 import { listSshKeys } from '#lib/remote/ssh-keys.remote.js';
 import { listVmTypes } from '#lib/remote/vm-types.remote.js';
@@ -7,17 +10,15 @@ import { backend } from '#lib/server/backend.js';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ params, parent, depends, url }) => {
-	depends('project:create-server');
-	depends('app:ssh-keys');
-	depends('app:ipam-prefixes');
+	depends(
+		dependencies.project.createServer,
+		dependencies.app.sshKeys,
+		dependencies.app.ipamPrefixes
+	);
 	const { featureFlags } = await parent();
-	if (!params.projectid) {
-		error(404, 'Project not found');
-	}
-
-	const billingSetupToken = url.searchParams.get('billing_setup');
+	const billingSetupToken = url.searchParams.get(billingSetupTokenParam);
 	if (billingSetupToken) {
-		const cleanPath = `/projects/${params.projectid}/servers/create`;
+		const cleanPath = createServerPath(params.projectid);
 		const { paymentUrl } = await backend(
 			async (me) =>
 				await me.project(params.projectid).completeCreateServerBillingSetup({
@@ -31,7 +32,7 @@ export const load: LayoutServerLoad = async ({ params, parent, depends, url }) =
 	const [vmTypes, dbImages, volumes, sshKeys, createServerPage] = await Promise.all([
 		listVmTypes(),
 		listImages(),
-		featureFlags?.volumes ? listVolumes({ projectId: params.projectid }) : [],
+		featureFlags.volumes ? listVolumes({ projectId: params.projectid }) : [],
 		listSshKeys(),
 		backend((me) => me.project(params.projectid).createServerPage())
 	]);

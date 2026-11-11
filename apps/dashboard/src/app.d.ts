@@ -4,6 +4,7 @@
 
 import type { Api } from 'stack-backend';
 import type { AppSession, AppUser } from 'stack-backend/types';
+import type { FeatureFlags } from 'stack-shared/feature-flags';
 
 declare global {
 	namespace App {
@@ -15,12 +16,7 @@ declare global {
 		}
 
 		interface PageData {
-			featureFlags?: {
-				colocation: boolean;
-				firewall: boolean;
-				images: boolean;
-				volumes: boolean;
-			};
+			featureFlags?: FeatureFlags;
 			isAdmin?: boolean;
 		}
 	}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { FeatureFlags } from 'stack-shared/feature-flags';
 	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import type { IconComponent } from '#lib';
@@ -14,7 +15,6 @@
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import { Toaster } from '#lib/components/ui/sonner/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
-	import type { FeatureFlags } from '#lib/feature-flags.js';
 	import { markAnnouncementsRead } from '#lib/remote/announcements.remote.js';
 	import { listVms } from '#lib/remote/vms.remote.js';
 	import {
@@ -22,7 +22,7 @@
 		UserSettingsState,
 		type UserSettingsTab
 	} from '#lib/state/user-settings.svelte.js';
-	import { getErrorMessage, runQuery } from '#lib/utils.js';
+	import { getErrorMessage } from '#lib/utils.js';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -311,7 +311,9 @@
 		commandServersLoading = true;
 
 		try {
-			const vms = await runQuery(listVms({ projectId }));
+			const vmsQuery = listVms({ projectId });
+			await vmsQuery.refresh();
+			const vms = await vmsQuery;
 			if (requestId !== commandServersRequestId) {
 				return;
 			}

@@ -1,17 +1,10 @@
 import { type } from 'arktype';
-import {
-	accessibilityFixtureEnabled,
-	accessibilityFixtureImages
-} from '#lib/server/accessibility-fixtures.js';
+import { checksumAlgorithms } from 'stack-shared/compute';
+import { instructionSetArchitecture } from '#lib/remote/schemas.js';
 import { backend } from '#lib/server/backend.js';
 import { command, query } from '$app/server';
 
-export const listImages = query(async () => {
-	if (accessibilityFixtureEnabled) {
-		return accessibilityFixtureImages;
-	}
-	return await backend((me) => me.listImages());
-});
+export const listImages = query(() => backend((me) => me.listImages()));
 
 const createParams = type({
 	name: 'string',
@@ -24,26 +17,13 @@ const createParams = type({
 	accentColor: 'string?',
 	secureBoot: 'boolean?',
 	filePath: 'string',
-	isa: "'x86'"
+	isa: instructionSetArchitecture
 });
 export const createImage = command(createParams, (input) =>
 	backend((me) => me.admin().images().create(input))
 );
 
-const updateParams = type({
-	imageId: 'string',
-	name: 'string?',
-	version: 'string?',
-	description: 'string?',
-	icon: 'string?',
-	color: 'string?',
-	isOfficial: 'boolean?',
-	logoSvg: 'string?',
-	accentColor: 'string?',
-	secureBoot: 'boolean?',
-	filePath: 'string?',
-	isa: "'x86'?"
-});
+const updateParams = type({ imageId: 'string' }).merge(createParams.partial());
 export const updateImage = command(updateParams, (input) =>
 	backend((me) => me.admin().images().update(input))
 );
@@ -67,7 +47,7 @@ const importUrlParams = type({
 	filename: 'string',
 	storage: 'string?',
 	checksum: 'string?',
-	checksumAlgorithm: "'md5' | 'sha1' | 'sha224' | 'sha256' | 'sha384' | 'sha512'?",
+	'checksumAlgorithm?': type.enumerated(...checksumAlgorithms),
 	verifyCertificates: 'boolean?'
 });
 export const importProxmoxImageFromUrl = command(importUrlParams, (input) =>

@@ -73,7 +73,6 @@
 		},
 		{
 			"includes": [
-				"apps/dashboard/src/lib/ptr.ts",
 				"packages/shared/src/ptr.ts",
 				"apps/backend/src/lib/server/ipam.ts",
 				"apps/backend/src/lib/server/backends/proxmox/index.ts"

@@ -1,19 +1,27 @@
-import type { CampaignTemplateCatalog, ProjectBillingPage } from 'stack-backend/types';
-import type { FeatureFlags } from '#lib/feature-flags.js';
+import type {
+	Account,
+	Admin,
+	AdminEmails,
+	AdminIpam,
+	AdminProjects,
+	AdminUsers,
+	AdminVms,
+	Caller,
+	Project,
+	Projects,
+	Vm
+} from 'stack-backend';
+import type { AppSession, AppUser } from 'stack-backend/types';
+import { encodeHttpError } from 'stack-shared/http-error';
 
-export const accessibilityFixtureEnabled = process.env.ACCESSIBILITY_FIXTURES === '1';
+export const accessibilityFixtureProjectId = 'accessibility-project';
+export const accessibilityFixtureServerId = 'accessibility-server';
+
+type Resolved<T extends (...args: never[]) => Promise<unknown>> = Awaited<ReturnType<T>>;
 
 const now = new Date('2026-01-01T00:00:00.000Z');
 
-export const accessibilityFixtureProject = {
-	id: 'accessibility-project',
-	projectName: 'Accessibility Project',
-	ownerUserId: 'accessibility-user',
-	creationDate: now.getTime(),
-	role: 'owner' as const
-};
-
-export const accessibilityFixtureUser = {
+const user: AppUser = {
 	id: 'accessibility-user',
 	name: 'Accessibility Tester',
 	email: 'accessibility@example.com',
@@ -25,19 +33,19 @@ export const accessibilityFixtureUser = {
 	isAdmin: true
 };
 
-export const accessibilityFixtureSession = {
+const session: AppSession = {
 	id: 'accessibility-session',
-	userId: accessibilityFixtureUser.id,
+	userId: user.id,
 	token: 'accessibility-session-token',
 	expiresAt: new Date('2027-01-01T00:00:00.000Z'),
 	createdAt: now,
 	updatedAt: now,
 	ipAddress: null,
 	userAgent: null,
-	activeOrganizationId: accessibilityFixtureProject.id
+	activeOrganizationId: accessibilityFixtureProjectId
 };
 
-export const accessibilityFixtureFeatureFlags: FeatureFlags = {
+const featureFlags: Resolved<Admin['layout']>['featureFlags'] = {
 	colocation: false,
 	firewall: false,
 	images: false,
@@ -54,77 +62,95 @@ export const accessibilityFixtureFeatureFlags: FeatureFlags = {
 	vpsSettings: true
 };
 
-export const accessibilityFixtureProjects = [accessibilityFixtureProject];
+const projectSummary: Resolved<Projects['list']>[number] = {
+	id: accessibilityFixtureProjectId,
+	projectName: 'Accessibility Project',
+	ownerUserId: user.id,
+	creationDate: now.getTime(),
+	role: 'owner'
+};
 
-export const accessibilityFixtureProjectDetails = {
-	id: accessibilityFixtureProject.id,
-	projectName: accessibilityFixtureProject.projectName,
-	ownerUserId: accessibilityFixtureUser.id,
-	ownerName: accessibilityFixtureUser.name,
-	ownerEmail: accessibilityFixtureUser.email,
-	creationDate: accessibilityFixtureProject.creationDate,
+const projectDetails: Resolved<Project['get']> = {
+	id: projectSummary.id,
+	projectName: projectSummary.projectName,
+	ownerUserId: user.id,
+	ownerName: user.name,
+	ownerEmail: user.email,
+	creationDate: projectSummary.creationDate,
 	members: [
 		{
 			userId: 'accessibility-member',
 			name: 'Fixture Member',
 			email: 'member@example.com',
-			permissions: 'read_write' as const
+			permissions: 'read_write'
 		}
 	]
 };
 
-export const accessibilityFixtureServers = [
-	{
-		id: 'accessibility-server',
-		name: 'a11y-server-01',
-		proxmoxId: 1001,
-		active: true,
-		ownerProjectId: accessibilityFixtureProject.id,
-		vmTypeId: 'starter',
-		creationDate: '2026-01-01T00:00:00.000Z',
-		status: 'ready' as const,
-		vmType: {
-			name: 'Starter',
-			cores: 2,
-			ramCapacity: 4,
-			storageAmount: 50
-		},
-		live: {
-			id: 'a11y-server-01',
-			proxmoxId: 1001,
-			proxmoxNode: 'fixture-node',
-			name: 'a11y-server-01',
-			status: 'running' as const,
-			cores: 2,
-			memory: 4 * 1024 * 1024 * 1024,
-			disk: 50 * 1024 * 1024 * 1024,
-			uptime: 86_400,
-			networkInterfaces: {
-				eth0: {
-					ipAddresses: ['192.0.2.10', '2001:db8::10']
-				}
-			},
-			metrics: {
-				cpu: 18,
-				memory: 42,
-				disk: 33,
-				networkIn: 1024,
-				networkOut: 2048,
-				diskRead: 512,
-				diskWrite: 256
-			}
-		}
-	}
-];
+const serverProxmoxId = 1001;
+const serverProxmoxNode = 'fixture-node';
+const serverIpv4 = '192.0.2.10';
+const serverIpv6 = '2001:db8::10';
 
-export const accessibilityFixtureBillingOverview = {
+type Server = Resolved<Vm['get']>;
+
+const vmType: NonNullable<Server['vmType']> = {
+	name: 'Starter',
+	cores: 2,
+	ramCapacity: 4,
+	storageAmount: 50
+};
+
+const live: NonNullable<Server['live']> & {
+	metrics: NonNullable<NonNullable<Server['live']>['metrics']>;
+	networkInterfaces: NonNullable<NonNullable<Server['live']>['networkInterfaces']>;
+} = {
+	id: 'a11y-server-01',
+	proxmoxId: serverProxmoxId,
+	proxmoxNode: serverProxmoxNode,
+	name: 'a11y-server-01',
+	status: 'running',
+	cores: 2,
+	memory: 4 * 1024 * 1024 * 1024,
+	disk: 50 * 1024 * 1024 * 1024,
+	uptime: 86_400,
+	networkInterfaces: {
+		eth0: {
+			ipAddresses: [serverIpv4, serverIpv6]
+		}
+	},
+	metrics: {
+		cpu: 18,
+		memory: 42,
+		disk: 33,
+		networkIn: 1024,
+		networkOut: 2048,
+		diskRead: 512,
+		diskWrite: 256
+	}
+};
+
+const server: Server = {
+	id: accessibilityFixtureServerId,
+	name: 'a11y-server-01',
+	proxmoxId: serverProxmoxId,
+	active: true,
+	ownerProjectId: projectSummary.id,
+	vmTypeId: 'starter',
+	creationDate: '2026-01-01T00:00:00.000Z',
+	status: 'ready',
+	vmType,
+	live
+};
+
+const billing: Extract<Resolved<Project['billingPage']>, { kind: 'page' }>['billing'] = {
 	setupRequired: false,
 	activeResourceCount: 1,
 	activeResources: [
 		{
 			id: 'starter',
 			label: 'Starter',
-			resourceType: 'vm' as const,
+			resourceType: 'vm',
 			count: 1,
 			hours: 720,
 			cost: 36.0
@@ -136,17 +162,17 @@ export const accessibilityFixtureBillingOverview = {
 		prepaidPrice: { amount: 10, billingUnits: 1000 }
 	},
 	invoices: []
-} satisfies Extract<ProjectBillingPage, { kind: 'page' }>['billing'];
+};
 
-export const accessibilityFixtureAdminUsers = [
+const adminUsers: Resolved<AdminUsers['list']> = [
 	{
-		id: accessibilityFixtureUser.id,
-		name: accessibilityFixtureUser.name,
-		email: accessibilityFixtureUser.email,
-		image: accessibilityFixtureUser.image,
-		emailVerified: accessibilityFixtureUser.emailVerified,
-		role: accessibilityFixtureUser.role,
-		isAdmin: accessibilityFixtureUser.isAdmin,
+		id: user.id,
+		name: user.name,
+		email: user.email,
+		image: null,
+		emailVerified: user.emailVerified,
+		role: 'admin',
+		isAdmin: true,
 		disabled: false,
 		billingExempt: false,
 		twoFactorEnabled: false,
@@ -161,64 +187,65 @@ export const accessibilityFixtureAdminUsers = [
 	}
 ];
 
-export const accessibilityFixtureAdminProjects = [
+const adminProjects: Resolved<AdminProjects['list']> = [
 	{
-		id: accessibilityFixtureProject.id,
-		name: accessibilityFixtureProject.projectName,
+		id: projectSummary.id,
+		name: projectSummary.projectName,
 		slug: 'accessibility-project',
 		createdAt: now.getTime(),
-		ownerId: accessibilityFixtureUser.id,
-		ownerName: accessibilityFixtureUser.name,
-		ownerEmail: accessibilityFixtureUser.email,
+		ownerId: user.id,
+		ownerName: user.name,
+		ownerEmail: user.email,
 		ownerBillingExempt: false,
 		memberCount: 2,
 		vmCount: 1,
 		volumeCount: 0,
-		billingStatus: 'configured' as const,
+		billingStatus: 'configured',
 		billingExempt: false,
 		disabled: false
 	}
 ];
 
-export const accessibilityFixtureAdminVms = [
+const adminVms: Resolved<AdminVms['list']> = [
 	{
-		id: accessibilityFixtureServers[0].id,
-		name: accessibilityFixtureServers[0].name,
-		proxmoxId: accessibilityFixtureServers[0].proxmoxId,
-		proxmoxNode: accessibilityFixtureServers[0].live.proxmoxNode,
-		active: accessibilityFixtureServers[0].active,
-		status: accessibilityFixtureServers[0].status,
+		id: server.id,
+		name: server.name,
+		proxmoxId: serverProxmoxId,
+		proxmoxNode: serverProxmoxNode,
+		active: server.active,
+		status: server.status,
 		statusError: null,
-		liveStatus: accessibilityFixtureServers[0].live.status,
-		uptime: accessibilityFixtureServers[0].live.uptime,
-		cpuUsage: accessibilityFixtureServers[0].live.metrics.cpu,
-		memoryUsageBytes: accessibilityFixtureServers[0].live.memory,
-		memoryTotalBytes: accessibilityFixtureServers[0].live.memory,
+		liveStatus: live.status,
+		uptime: live.uptime,
+		cpuUsage: live.metrics.cpu ?? null,
+		memoryUsageBytes: live.memory,
+		memoryTotalBytes: live.memory,
 		createdAt: now.getTime(),
 		deletedAt: null,
 		lastKnownAt: now.getTime(),
-		lastKnownIpv4: accessibilityFixtureServers[0].live.networkInterfaces.eth0.ipAddresses[0],
-		lastKnownIpv6: accessibilityFixtureServers[0].live.networkInterfaces.eth0.ipAddresses[1],
-		projectId: accessibilityFixtureProject.id,
-		projectName: accessibilityFixtureProject.projectName,
+		lastKnownIpv4: serverIpv4,
+		lastKnownIpv6: serverIpv6,
+		projectId: projectSummary.id,
+		projectName: projectSummary.projectName,
 		projectBillingExempt: false,
-		ownerName: accessibilityFixtureUser.name,
-		ownerEmail: accessibilityFixtureUser.email,
+		ownerName: user.name,
+		ownerEmail: user.email,
 		ownerBillingExempt: false,
-		vmTypeName: accessibilityFixtureServers[0].vmType.name,
-		vmTypeCores: accessibilityFixtureServers[0].vmType.cores,
-		vmTypeRamCapacity: accessibilityFixtureServers[0].vmType.ramCapacity,
-		vmTypeStorageAmount: accessibilityFixtureServers[0].vmType.storageAmount,
+		vmTypeName: vmType.name,
+		vmTypeCores: vmType.cores,
+		vmTypeRamCapacity: vmType.ramCapacity,
+		vmTypeStorageAmount: vmType.storageAmount,
 		vmTypeRate: '0.05'
 	}
 ];
 
-export const accessibilityFixtureIpamPrefixes = [
+const ipamPrefixes: Resolved<AdminIpam['listPrefixes']> = [
 	{
 		id: 'accessibility-prefix-v4',
 		name: 'Test IPv4',
 		cidr: '192.0.2.0/24',
-		family: 'ipv4' as const,
+		family: 'ipv4',
+		createdAt: now.getTime(),
 		disabled: false,
 		ipv6UseTransitAddress: false,
 		whitelistStart: null,
@@ -232,7 +259,7 @@ export const accessibilityFixtureIpamPrefixes = [
 	}
 ];
 
-export const accessibilityFixtureVmTypes = [
+const vmTypes: Resolved<Caller['listVmTypes']> = [
 	{
 		id: 'starter',
 		name: 'Starter',
@@ -246,7 +273,7 @@ export const accessibilityFixtureVmTypes = [
 	}
 ];
 
-export const accessibilityFixtureImages = [
+const images: Resolved<Caller['listImages']> = [
 	{
 		id: 'ubuntu-2404',
 		name: 'Ubuntu',
@@ -264,7 +291,7 @@ export const accessibilityFixtureImages = [
 	}
 ];
 
-export const accessibilityFixtureCampaignCatalog: CampaignTemplateCatalog = {
+const campaignCatalog: Resolved<AdminEmails['templates']> = {
 	batchSize: 25,
 	templates: [
 		{
@@ -326,9 +353,112 @@ export const accessibilityFixtureCampaignCatalog: CampaignTemplateCatalog = {
 	]
 };
 
-export const accessibilityFixtureCampaignEditorHtml = [
+const campaignEditorHtml = [
 	'<h1>[[FIELD:heading]]</h1>',
 	'<p>Hi [[FIELD:userName]],</p>',
 	'<p>[[FIELD:body]]</p>',
 	'<p><a href="https://stack.wtf/billing">[[FIELD:actionLabel]]</a></p>'
 ].join('');
+
+function notFound(what: string): never {
+	throw encodeHttpError({ status: 404, message: `${what} not found` });
+}
+
+function strict<T extends object>(path: string, implemented: T): T {
+	return new Proxy(implemented, {
+		get(target, key, receiver) {
+			if (typeof key === 'symbol' || key === 'then' || key in target) {
+				return Reflect.get(target, key, receiver);
+			}
+			return () => {
+				throw new Error(`Fixture backend does not implement ${path}.${key}`);
+			};
+		}
+	});
+}
+
+function fixtureProject(projectId: string) {
+	const methods: Pick<Project, 'get' | 'billingPage' | 'listVms' | 'listVmStatuses'> = {
+		get: async () => (projectId === projectSummary.id ? projectDetails : notFound('Project')),
+		billingPage: async () => ({
+			kind: 'page',
+			projectId,
+			canManageBilling: true,
+			billing
+		}),
+		listVms: async () => [server],
+		listVmStatuses: async () => [
+			{
+				id: server.id,
+				status: 'running',
+				liveStatus: live.status,
+				uptime: live.uptime,
+				memory: live.memory,
+				disk: live.disk,
+				networkInterfaces: live.networkInterfaces,
+				metrics: live.metrics
+			}
+		]
+	};
+	return strict('project', methods);
+}
+
+function fixtureVm(vmId: string) {
+	const methods: Pick<Vm, 'get' | 'metricsHistory'> = {
+		get: async () => (vmId === server.id ? server : notFound(`VM "${vmId}"`)),
+		metricsHistory: async () => [
+			{ time: Date.now() - 120_000, cpu: 0.18, memory: 0.41, bandwidth: 2048, diskIo: 256 },
+			{ time: Date.now() - 60_000, cpu: 0.2, memory: 0.42, bandwidth: 4096, diskIo: 512 }
+		]
+	};
+	return strict('vm', methods);
+}
+
+function fixtureAdmin() {
+	const layout: Pick<Admin, 'layout'> = { layout: async () => ({ featureFlags }) };
+	const users: Pick<AdminUsers, 'list'> = { list: async () => adminUsers };
+	const projects: Pick<AdminProjects, 'list'> = { list: async () => adminProjects };
+	const vms: Pick<AdminVms, 'list'> = { list: async () => adminVms };
+	const ipam: Pick<AdminIpam, 'listPrefixes' | 'ptrDefaultFormats'> = {
+		listPrefixes: async () => ipamPrefixes,
+		ptrDefaultFormats: async () => ({ defaultPtrFormatIpv4: '', defaultPtrFormatIpv6: '' })
+	};
+	const emails: Pick<AdminEmails, 'templates' | 'renderEditor'> = {
+		templates: async () => campaignCatalog,
+		renderEditor: async () => ({ html: campaignEditorHtml })
+	};
+	return strict('admin', {
+		...layout,
+		users: () => strict('admin.users', users),
+		projects: () => strict('admin.projects', projects),
+		vms: () => strict('admin.vms', vms),
+		ipam: () => strict('admin.ipam', ipam),
+		emails: () => strict('admin.emails', emails)
+	});
+}
+
+export function createFixtureCaller() {
+	const account: Pick<Account, 'appLayout'> = {
+		appLayout: async () => ({
+			isAdmin: true,
+			featureFlags,
+			announcementsEnabled: true,
+			unreadAnnouncements: []
+		})
+	};
+	const projects: Pick<Projects, 'list'> = { list: async () => [projectSummary] };
+	const root: Pick<Caller, 'release' | 'session' | 'listImages' | 'listVmTypes'> = {
+		release: () => undefined,
+		session: async () => ({ current: { session, user }, setCookie: [] }),
+		listImages: async () => images,
+		listVmTypes: async () => vmTypes
+	};
+	return strict('caller', {
+		...root,
+		account: () => strict('account', account),
+		projects: () => strict('projects', projects),
+		project: fixtureProject,
+		vm: fixtureVm,
+		admin: fixtureAdmin
+	});
+}

@@ -1,37 +1,22 @@
-import { redirect } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
+import { dependencies } from '#lib/dependencies.js';
 import { listProjects } from '#lib/remote/projects.remote.js';
-import {
-	accessibilityFixtureEnabled,
-	accessibilityFixtureFeatureFlags,
-	accessibilityFixtureProjects,
-	accessibilityFixtureUser
-} from '#lib/server/accessibility-fixtures.js';
 import { backend } from '#lib/server/backend.js';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ locals, depends }) => {
-	depends('app:projects');
-	depends('app:feature-flags');
+	depends(dependencies.app.projects, dependencies.app.featureFlags);
 
-	if (!(locals.user && locals.session)) {
-		throw redirect(303, '/login');
+	const { user } = locals;
+	if (!user) {
+		error(401, 'Not signed in');
 	}
 
 	const [projects, { featureFlags, isAdmin, announcementsEnabled, unreadAnnouncements }] =
-		accessibilityFixtureEnabled
-			? [
-					accessibilityFixtureProjects,
-					{
-						featureFlags: accessibilityFixtureFeatureFlags,
-						isAdmin: accessibilityFixtureUser.isAdmin,
-						announcementsEnabled: true,
-						unreadAnnouncements: []
-					}
-				]
-			: await Promise.all([listProjects(), backend((me) => me.account().appLayout())]);
+		await Promise.all([listProjects(), backend((me) => me.account().appLayout())]);
 
 	return {
-		user: locals.user,
+		user,
 		isAdmin,
 		projects,
 		activeProjectId: locals.activeProjectId ?? null,

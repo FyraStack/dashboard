@@ -173,7 +173,7 @@
 		confirming = true;
 		confirmError = '';
 		try {
-			const result = await confirmTotpResetChoice({ password, choice: 'reset-totp' });
+			const result = await confirmTotpResetChoice({ password, choice: 'reset' });
 			const outcome = await signInAfterReset(result.signInEmail);
 			if (outcome === 'passkey') {
 				onPasskeyChallenge?.();
@@ -213,7 +213,7 @@
 		confirming = true;
 		confirmError = '';
 		try {
-			const result = await confirmTotpResetChoice({ password, choice: 'disable-totp' });
+			const result = await confirmTotpResetChoice({ password, choice: 'disable' });
 			const outcome = await signInAfterReset(result.signInEmail);
 			if (outcome === 'passkey') {
 				onPasskeyChallenge?.();

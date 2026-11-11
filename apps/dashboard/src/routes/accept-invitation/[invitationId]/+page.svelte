@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { isProjectRole, projectRoleLabels } from '#lib/auth/organization-permissions.js';
+	import { isProjectRole, projectRoleLabels } from 'stack-shared/project-roles';
 	import { authClient } from '#lib/auth-client.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';

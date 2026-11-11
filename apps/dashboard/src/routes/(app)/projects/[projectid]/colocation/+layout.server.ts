@@ -1,10 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { requireFeature } from '#lib/feature-gate.js';
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = async ({ parent }) => {
-	const { featureFlags } = await parent();
-
-	if (!featureFlags.colocation) {
-		error(404, 'Not found');
-	}
-};
+export const load: LayoutServerLoad = ({ parent }) => requireFeature(parent, 'colocation');

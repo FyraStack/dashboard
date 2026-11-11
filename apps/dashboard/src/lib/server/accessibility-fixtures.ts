@@ -82,7 +82,6 @@ export const accessibilityFixtureServers = [
 		ownerProjectId: accessibilityFixtureProject.id,
 		vmTypeId: 'starter',
 		creationDate: '2026-01-01T00:00:00.000Z',
-		backend: 'proxmox' as const,
 		status: 'ready' as const,
 		vmType: {
 			name: 'Starter',

@@ -1,7 +1,6 @@
 import { asc, desc, eq } from 'drizzle-orm';
-import { requireAdmin } from '#lib/server/auth-context.js';
-import { context } from '#lib/server/context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import type { defaultIsa } from 'stack-shared/compute';
+import { requireAdminUser, requireUser } from '#lib/server/auth-context.js';
 import { vmTypes } from '#lib/server/db/schema.js';
 import { error } from '#lib/server/http.js';
 
@@ -9,22 +8,14 @@ export interface CreateVmTypeInput {
 	autumnFeatureId: string;
 	cap: string;
 	cores: number;
-	isa: 'x86';
+	isa: typeof defaultIsa;
 	name: string;
 	ramCapacity: number;
 	rate: string;
 	storageAmount: number;
 }
 
-export interface UpdateVmTypeInput {
-	autumnFeatureId?: string;
-	cap?: string;
-	cores?: number;
-	isa?: 'x86';
-	name?: string;
-	ramCapacity?: number;
-	rate?: string;
-	storageAmount?: number;
+export interface UpdateVmTypeInput extends Partial<CreateVmTypeInput> {
 	vmTypeId: string;
 }
 
@@ -36,24 +27,12 @@ export interface DeleteVmTypeInput {
 	vmTypeId: string;
 }
 
-async function requireCurrentAdmin() {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireAdmin(db, locals.user.id);
-
-	return db;
+function normalizeAutumnFeatureId(value: string) {
+	return value.trim() || null;
 }
 
 export async function listVmTypes() {
-	if (!context().locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
+	const { db } = requireUser();
 	const rows = await db.query.vmTypes.findMany({
 		orderBy: [asc(vmTypes.sortOrder), asc(vmTypes.id)]
 	});
@@ -71,7 +50,7 @@ export async function listVmTypes() {
 }
 
 export async function createVmType(params: CreateVmTypeInput) {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 
 	const lastVmType = await db.query.vmTypes.findFirst({
 		orderBy: [desc(vmTypes.sortOrder)]
@@ -88,7 +67,7 @@ export async function createVmType(params: CreateVmTypeInput) {
 			storageAmount: params.storageAmount,
 			rate: params.rate,
 			cap: params.cap,
-			autumnFeatureId: params.autumnFeatureId.trim() || null
+			autumnFeatureId: normalizeAutumnFeatureId(params.autumnFeatureId)
 		})
 		.returning();
 
@@ -96,7 +75,7 @@ export async function createVmType(params: CreateVmTypeInput) {
 }
 
 export async function updateVmType(params: UpdateVmTypeInput) {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 
 	const existing = await db.query.vmTypes.findFirst({
 		where: eq(vmTypes.id, params.vmTypeId)
@@ -105,15 +84,13 @@ export async function updateVmType(params: UpdateVmTypeInput) {
 		error(404, 'VM type not found');
 	}
 
-	const { vmTypeId, ...fields } = params;
-	const updates = Object.fromEntries(
-		Object.entries(fields)
-			.filter(([, v]) => v !== undefined)
-			.map(([key, value]) => [
-				key,
-				key === 'autumnFeatureId' ? String(value).trim() || null : value
-			])
-	);
+	const { vmTypeId, autumnFeatureId, ...fields } = params;
+	const updates = {
+		...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)),
+		...(autumnFeatureId === undefined
+			? {}
+			: { autumnFeatureId: normalizeAutumnFeatureId(autumnFeatureId) })
+	};
 	if (Object.keys(updates).length === 0) {
 		return;
 	}
@@ -122,7 +99,7 @@ export async function updateVmType(params: UpdateVmTypeInput) {
 }
 
 export async function reorderVmTypes(params: ReorderVmTypesInput) {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 
 	const rows = await db.query.vmTypes.findMany({ columns: { id: true } });
 	const existingIds = new Set(rows.map((row) => row.id));
@@ -143,7 +120,7 @@ export async function reorderVmTypes(params: ReorderVmTypesInput) {
 }
 
 export async function deleteVmType(params: DeleteVmTypeInput) {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 
 	const existing = await db.query.vmTypes.findFirst({
 		where: eq(vmTypes.id, params.vmTypeId)

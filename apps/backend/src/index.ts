@@ -2,7 +2,7 @@ import { WorkerEntrypoint } from 'cloudflare:workers';
 import { instrumentWorkflowWithSentry, withSentry } from '@sentry/cloudflare';
 import { authBasePath } from 'stack-shared/auth';
 import { initAuth } from '#lib/server/auth.js';
-import { getBackend } from '#lib/server/backends/index.js';
+import { proxmox } from '#lib/server/backends/index.js';
 import { runBilling, runMaintenance } from '#lib/server/jobs.js';
 import { inScope, inSystemScope } from '#lib/server/scope.js';
 import { rememberSentryClient, sentryOptions } from '#lib/server/sentry.js';
@@ -34,7 +34,7 @@ function isAuthPath(pathname: string) {
 
 async function pingProxmox() {
 	try {
-		await getBackend('proxmox').ping();
+		await proxmox().ping();
 		return { ok: true as const };
 	} catch {
 		return { ok: false as const, message: 'PVE backend unavailable' };

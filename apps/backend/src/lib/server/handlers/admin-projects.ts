@@ -10,7 +10,7 @@ import { requireProjectBillingActive } from '#lib/server/billing/state.js';
 import { makeCountMap } from '#lib/server/count-map.js';
 import { member, organization, user } from '#lib/server/db/auth.schema.js';
 import type { Database } from '#lib/server/db/index.js';
-import { projectBillingCustomers, sshKeys, vms, volumes } from '#lib/server/db/schema.js';
+import { projectBillingCustomers, vms, volumes } from '#lib/server/db/schema.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { error } from '#lib/server/http.js';
 import { withIdempotency } from '#lib/server/idempotency.js';
@@ -18,7 +18,7 @@ import { captureServerEvent } from '#lib/server/posthog.js';
 import { createOwnedProject, toProjectName } from '#lib/server/project-creation.js';
 import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
 import { VERIFICATION_CODE_TTL_MS } from '#lib/server/verification-codes.js';
-import { provisionVm } from '#lib/server/vm-provisioning.js';
+import { provisionRequestedVm, type RequestedVm } from '#lib/server/vm-provisioning.js';
 
 export type AdminProjectBillingStatus = 'configured' | 'past_due' | 'suspended' | 'none';
 
@@ -50,15 +50,8 @@ export interface CreateAdminProjectInput {
 	ownerUserId: string;
 }
 
-export interface CreateAdminVmInput {
+export interface CreateAdminVmInput extends RequestedVm {
 	idempotencyKey: string;
-	imageId?: string;
-	name: string;
-	networkingMode?: 'both' | 'ipv6';
-	password?: string;
-	projectId: string;
-	sshKeyIds?: string[];
-	vmTypeId: string;
 }
 
 export interface SetProjectDisabledInput {
@@ -232,12 +225,6 @@ export async function createAdminVm(params: CreateAdminVmInput) {
 		.limit(1);
 
 	const sshKeyIds = params.sshKeyIds ?? [];
-	const keys =
-		sshKeyIds.length > 0 && owner
-			? await db.query.sshKeys.findMany({ where: eq(sshKeys.userId, owner.userId) })
-			: [];
-	const publicKeys = keys.filter((key) => sshKeyIds.includes(key.id)).map((key) => key.publicKey);
-
 	const { idempotencyKey, ...operationArgs } = params;
 	return withIdempotency(
 		db,
@@ -246,18 +233,14 @@ export async function createAdminVm(params: CreateAdminVmInput) {
 			operation: 'admin.createVm',
 			args: { ...operationArgs, userId: adminUser.id, sshKeyIds: [...sshKeyIds].sort() }
 		},
-		() =>
-			provisionVm(db, {
-				projectId: params.projectId,
-				vmTypeId: params.vmTypeId,
-				name: params.name,
-				userId: owner?.userId ?? adminUser.id,
-				billingExempt,
-				networkingMode: params.networkingMode,
-				imageId: params.imageId,
-				sshPublicKeys: publicKeys,
-				password: params.password
-			})
+		async () =>
+			(
+				await provisionRequestedVm(db, params, {
+					billingExempt,
+					keyOwnerId: owner?.userId,
+					userId: owner?.userId ?? adminUser.id
+				})
+			).created
 	);
 }
 

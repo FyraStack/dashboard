@@ -1,14 +1,13 @@
-import { desc, eq } from 'drizzle-orm';
-import { requireAdmin } from '#lib/server/auth-context.js';
-import { getBackend, type VmInfo } from '#lib/server/backends/index.js';
-import { context } from '#lib/server/context.js';
+import { desc, eq, sql } from 'drizzle-orm';
+import type { VmLifecycleStatus, VmPowerState } from 'stack-shared/vm-status';
+import { requireAdminUser } from '#lib/server/auth-context.js';
+import { proxmox, type VmInfo, type VmPowerAction } from '#lib/server/backends/index.js';
+import { findLiveVm } from '#lib/server/backends/proxmox/index.js';
 import { member, organization, user } from '#lib/server/db/auth.schema.js';
-import { initDrizzle } from '#lib/server/db/index.js';
 import { vms, vmTypes } from '#lib/server/db/schema.js';
-import { error } from '#lib/server/http.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { assertPowerable, requireVm } from '#lib/server/vm-access.js';
 import { queueVmDeletion } from '#lib/server/vm-deletion.js';
-import { findLiveVm } from '#lib/server/vm-identity.js';
 
 export interface AdminVm {
 	active: boolean;
@@ -19,7 +18,7 @@ export interface AdminVm {
 	lastKnownAt: number | null;
 	lastKnownIpv4: string | null;
 	lastKnownIpv6: string | null;
-	liveStatus: string | null;
+	liveStatus: VmPowerState | null;
 	memoryTotalBytes: number | null;
 	memoryUsageBytes: number | null;
 	name: string;
@@ -31,7 +30,7 @@ export interface AdminVm {
 	projectName: string | null;
 	proxmoxId: number | null;
 	proxmoxNode: string | null;
-	status: 'provisioning' | 'ready' | 'error' | 'deleting';
+	status: VmLifecycleStatus;
 	statusError: string | null;
 	uptime: number;
 	vmTypeCores: number | null;
@@ -41,20 +40,12 @@ export interface AdminVm {
 	vmTypeStorageAmount: number | null;
 }
 
-export interface AdminVmPowerInput {
+export interface AdminVmInput {
 	vmId: string;
 }
 
-async function requireCurrentAdmin() {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireAdmin(db, locals.user.id);
-
-	return db;
+export interface AdminPowerVmInput extends AdminVmInput {
+	action: VmPowerAction;
 }
 
 type LiveState = Pick<AdminVm, 'liveStatus' | 'cpuUsage' | 'memoryUsageBytes' | 'memoryTotalBytes'>;
@@ -62,7 +53,7 @@ type LiveState = Pick<AdminVm, 'liveStatus' | 'cpuUsage' | 'memoryUsageBytes' | 
 function describeLiveState(
 	active: boolean,
 	live: VmInfo | null,
-	lastKnownStatus: string | null
+	lastKnownStatus: VmPowerState | null
 ): LiveState {
 	if (!active) {
 		return { liveStatus: null, cpuUsage: null, memoryUsageBytes: null, memoryTotalBytes: null };
@@ -76,7 +67,7 @@ function describeLiveState(
 }
 
 export async function listAllAdminVms(): Promise<AdminVm[]> {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 
 	const [rows, owners] = await Promise.all([
 		db
@@ -86,10 +77,9 @@ export async function listAllAdminVms(): Promise<AdminVm[]> {
 				proxmoxId: vms.proxmoxId,
 				proxmoxNode: vms.proxmoxNode,
 				active: vms.active,
-				backend: vms.backend,
 				status: vms.status,
 				statusError: vms.statusError,
-				lastKnownStatus: vms.lastKnownStatus,
+				lastKnownStatus: sql<VmPowerState | null>`${vms.lastKnownStatus}`,
 				lastKnownUptime: vms.lastKnownUptime,
 				lastKnownAt: vms.lastKnownAt,
 				createdAt: vms.createdAt,
@@ -123,7 +113,7 @@ export async function listAllAdminVms(): Promise<AdminVm[]> {
 
 	let liveVms: VmInfo[] = [];
 	try {
-		liveVms = await getBackend('proxmox').listVms();
+		liveVms = await proxmox().listVms();
 	} catch (err) {
 		console.warn('Failed to load Proxmox VM statuses', err);
 	}
@@ -164,54 +154,22 @@ export async function listAllAdminVms(): Promise<AdminVm[]> {
 	});
 }
 
-async function adminPowerAction(
-	vmId: string,
-	action: 'startVm' | 'stopVm' | 'killVm' | 'rebootVm'
-) {
-	const db = await requireCurrentAdmin();
+export async function adminPowerVm(params: AdminPowerVmInput) {
+	const { db } = await requireAdminUser();
+	const row = await requireVm(db, params.vmId);
+	assertPowerable(row);
 
-	const row = await db.query.vms.findFirst({ where: eq(vms.id, vmId) });
-	if (!row) {
-		error(404, `VM "${vmId}" not found`);
-	}
-	if (!row.active) {
-		error(400, `VM "${row.name}" is no longer active`);
-	}
-	if (row.status === 'deleting') {
-		error(409, `VM "${row.name}" is being deleted`);
-	}
-
-	await getBackend(row.backend)[action](row.id, row.proxmoxId ?? undefined);
+	await proxmox()[params.action](row.id, row.proxmoxId ?? undefined);
 	captureServerEvent(
 		'admin_vm_power_action',
-		{ vm_id: row.id, action },
+		{ vm_id: row.id, action: params.action },
 		{ projectId: row.ownerProjectId }
 	);
 }
 
-export function adminStartVm(params: AdminVmPowerInput) {
-	return adminPowerAction(params.vmId, 'startVm');
-}
-
-export function adminStopVm(params: AdminVmPowerInput) {
-	return adminPowerAction(params.vmId, 'stopVm');
-}
-
-export function adminKillVm(params: AdminVmPowerInput) {
-	return adminPowerAction(params.vmId, 'killVm');
-}
-
-export function adminRebootVm(params: AdminVmPowerInput) {
-	return adminPowerAction(params.vmId, 'rebootVm');
-}
-
-export async function adminDeleteVm(params: AdminVmPowerInput) {
-	const db = await requireCurrentAdmin();
-
-	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
-	if (!row) {
-		error(404, `VM "${params.vmId}" not found`);
-	}
+export async function adminDeleteVm(params: AdminVmInput) {
+	const { db } = await requireAdminUser();
+	const row = await requireVm(db, params.vmId);
 	if (!row.active) {
 		return;
 	}

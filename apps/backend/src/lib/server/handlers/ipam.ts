@@ -1,7 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { requireAdmin } from '#lib/server/auth-context.js';
-import { context } from '#lib/server/context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import { requireAdminUser } from '#lib/server/auth-context.js';
 import { ipamAllocations, ipamPrefixes } from '#lib/server/db/schema.js';
 import { error } from '#lib/server/http.js';
 import { listIpamPrefixesWithStats, normalizeIpamPrefixInput } from '#lib/server/ipam.js';
@@ -36,37 +34,21 @@ export interface UpdateIpamPtrDefaultFormatsInput {
 	defaultPtrFormatIpv6: string;
 }
 
-async function requireCurrentAdmin() {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireAdmin(db, locals.user.id);
-
-	return db;
-}
-
 export async function listIpamPrefixes() {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 	return listIpamPrefixesWithStats(db);
 }
 
 export async function createIpamPrefix(params: CreateIpamPrefixInput) {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 	const normalized = normalizeIpamPrefixInput(params);
-
-	if (!normalized.name) {
-		error(400, 'Name is required');
-	}
 
 	const [inserted] = await db.insert(ipamPrefixes).values(normalized).returning();
 	return inserted;
 }
 
 export async function updateIpamPrefix(params: UpdateIpamPrefixInput) {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 	const existing = await db.query.ipamPrefixes.findFirst({
 		where: eq(ipamPrefixes.id, params.prefixId)
 	});
@@ -75,9 +57,6 @@ export async function updateIpamPrefix(params: UpdateIpamPrefixInput) {
 	}
 
 	const normalized = normalizeIpamPrefixInput(params);
-	if (!normalized.name) {
-		error(400, 'Name is required');
-	}
 
 	if (existing.ipv6UseTransitAddress !== normalized.ipv6UseTransitAddress) {
 		const allocation = await db.query.ipamAllocations.findFirst({
@@ -98,7 +77,7 @@ export async function updateIpamPrefix(params: UpdateIpamPrefixInput) {
 }
 
 export async function setIpamPrefixDisabled(params: SetIpamPrefixDisabledInput) {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 	const [updated] = await db
 		.update(ipamPrefixes)
 		.set({ disabled: params.disabled })
@@ -112,7 +91,7 @@ export async function setIpamPrefixDisabled(params: SetIpamPrefixDisabledInput) 
 }
 
 export async function deleteIpamPrefix(params: DeleteIpamPrefixInput) {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 	const existing = await db.query.ipamPrefixes.findFirst({
 		where: eq(ipamPrefixes.id, params.prefixId)
 	});
@@ -131,12 +110,12 @@ export async function deleteIpamPrefix(params: DeleteIpamPrefixInput) {
 }
 
 export async function getIpamPtrDefaultFormats() {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 	return getIpamPtrDefaults(db);
 }
 
 export async function updateIpamPtrDefaultFormats(params: UpdateIpamPtrDefaultFormatsInput) {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 	await saveIpamPtrDefaults(db, params);
 	return getIpamPtrDefaults(db);
 }

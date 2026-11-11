@@ -1,5 +1,5 @@
 import { and, asc, eq, isNull, type SQL } from 'drizzle-orm';
-import { getBackend } from '#lib/server/backends/index.js';
+import { proxmox } from '#lib/server/backends/index.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { projectBillingCustomers, vms } from '#lib/server/db/schema.js';
 import {
@@ -17,14 +17,14 @@ async function suspendProjectVms(projectId: string) {
 	const db = initDrizzle();
 	const activeVms = await db.query.vms.findMany({
 		where: and(eq(vms.ownerProjectId, projectId), eq(vms.active, true)),
-		columns: { id: true, proxmoxId: true, backend: true }
+		columns: { id: true, proxmoxId: true }
 	});
 
 	let stopped = 0;
 	for (const vm of activeVms) {
 		try {
 			// biome-ignore lint/performance/noAwaitInLoops: VMs are stopped one at a time so Proxmox isn't flooded with concurrent stop tasks
-			await getBackend(vm.backend).stopVm(vm.id, vm.proxmoxId ?? undefined);
+			await proxmox().stopVm(vm.id, vm.proxmoxId ?? undefined);
 			stopped += 1;
 		} catch (err) {
 			console.warn(`Failed to suspend VM ${vm.id} for past-due project ${projectId}`, err);

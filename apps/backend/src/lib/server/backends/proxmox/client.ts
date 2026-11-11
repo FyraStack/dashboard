@@ -1,5 +1,6 @@
 import ky, { HTTPError, type KyInstance } from 'ky';
-import { createVpcFetch } from '#lib/server/vpc.js';
+import type { ChecksumAlgorithm, MetricsTimeframe } from 'stack-shared/compute';
+import type { VpcFetch } from '#lib/server/vpc.js';
 import type {
 	PveAgentNetworkInterface,
 	PveClusterResource,
@@ -11,7 +12,6 @@ import type {
 	PveQemuConfig,
 	PveQemuRrdData,
 	PveQemuStatus,
-	PveQemuVm,
 	PveResponse,
 	PveStorage,
 	PveStorageContent,
@@ -19,11 +19,11 @@ import type {
 	PveTaskStatus
 } from './types.ts';
 
-export interface ProxmoxClientConfig {
+interface ProxmoxClientConfig {
 	baseUrl: string;
+	fetch: VpcFetch;
 	tokenId: string;
 	tokenSecret: string;
-	vpc?: Fetcher;
 }
 
 const TRAILING_SLASHES = /\/+$/;
@@ -46,7 +46,7 @@ export class ProxmoxClient {
 	private readonly api: KyInstance;
 
 	constructor(config: ProxmoxClientConfig) {
-		const { baseUrl, tokenId, tokenSecret, vpc } = config;
+		const { baseUrl, tokenId, tokenSecret, fetch } = config;
 
 		this.api = ky.create({
 			prefix: `${baseUrl.replace(TRAILING_SLASHES, '')}/api2/json`,
@@ -55,7 +55,7 @@ export class ProxmoxClient {
 				Accept: 'application/json'
 			},
 			timeout: 30_000,
-			fetch: createVpcFetch(vpc ? [vpc] : [])
+			fetch
 		});
 	}
 
@@ -99,28 +99,8 @@ export class ProxmoxClient {
 		});
 	}
 
-	// Nodes
-
 	async listNodes(): Promise<PveNode[]> {
 		const res = await this.api.get('nodes').json<PveResponse<PveNode[]>>();
-		return res.data;
-	}
-
-	async getNode(node: string): Promise<PveNode> {
-		const nodes = await this.listNodes();
-		const found = nodes.find((n) => n.node === node);
-		if (!found) {
-			throw new Error(`Proxmox node "${node}" not found`);
-		}
-		return found;
-	}
-
-	// QEMU VMs
-
-	async listQemuVms(node: string): Promise<PveQemuVm[]> {
-		const res = await this.api
-			.get(`nodes/${encodeURIComponent(node)}/qemu`)
-			.json<PveResponse<PveQemuVm[]>>();
 		return res.data;
 	}
 
@@ -141,7 +121,7 @@ export class ProxmoxClient {
 	async getQemuRrdData(
 		node: string,
 		vmid: number,
-		params: { timeframe: 'hour' | 'day' | 'week' | 'month' | 'year'; cf?: 'AVERAGE' | 'MAX' }
+		params: { timeframe: MetricsTimeframe; cf?: 'AVERAGE' | 'MAX' }
 	): Promise<PveQemuRrdData[]> {
 		const res = await this.api
 			.get(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/rrddata`, {
@@ -327,8 +307,6 @@ export class ProxmoxClient {
 		return res.data;
 	}
 
-	// VM power actions
-
 	async startVm(node: string, vmid: number): Promise<string> {
 		const res = await this.api
 			.post(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/start`)
@@ -363,8 +341,6 @@ export class ProxmoxClient {
 			.json<PveResponse<string>>();
 		return res.data;
 	}
-
-	// Storage
 
 	async listStorage(node: string): Promise<PveStorage[]> {
 		const res = await this.api
@@ -409,7 +385,7 @@ export class ProxmoxClient {
 			filename: string;
 			content: 'import';
 			checksum?: string;
-			checksumAlgorithm?: 'md5' | 'sha1' | 'sha224' | 'sha256' | 'sha384' | 'sha512';
+			checksumAlgorithm?: ChecksumAlgorithm;
 			verifyCertificates?: boolean;
 		}
 	): Promise<string> {
@@ -438,8 +414,6 @@ export class ProxmoxClient {
 			throw error;
 		}
 	}
-
-	// Tasks
 
 	async getTaskStatus(node: string, upid: string): Promise<PveTaskStatus> {
 		const res = await this.api
@@ -498,8 +472,6 @@ export class ProxmoxClient {
 		}
 	}
 
-	// Cluster
-
 	async listHaResources(): Promise<PveHaResource[]> {
 		const res = await this.api.get('cluster/ha/resources').json<PveResponse<PveHaResource[]>>();
 		return res.data;
@@ -523,13 +495,9 @@ export class ProxmoxClient {
 		return res.data;
 	}
 
-	// Guest agent
-
 	async getNetworkInterfaces(node: string, vmid: number): Promise<PveAgentNetworkInterface[]> {
 		const res = await this.api
-			// diable retry for fetching network interfaces
-			// causes performance issues on querying VM network interfaces, ky retries 3x then gives up anyway
-			// so we give up early after first attempt
+			// ky retries failed requests 3x by default; this call fails on every attempt while the guest agent is not running, so retrying only adds latency
 			.get(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/agent/network-get-interfaces`, {
 				retry: 0
 			})

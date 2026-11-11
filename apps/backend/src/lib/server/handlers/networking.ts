@@ -1,13 +1,11 @@
 import { asc, eq } from 'drizzle-orm';
-import type { PermissionLevel } from 'stack-shared/project-roles';
-import { requireProjectAccess } from '#lib/server/auth-context.js';
+import { requireUser } from '#lib/server/auth-context.js';
 import { isBunnyConfigured } from '#lib/server/bunny.js';
-import { context } from '#lib/server/context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
-import { ipamAllocations, ipamPtrRecords, vms } from '#lib/server/db/schema.js';
+import { ipamAllocations, ipamPtrRecords } from '#lib/server/db/schema.js';
 import { error } from '#lib/server/http.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { setPtrRecord } from '#lib/server/ptr-records.js';
+import { requireAccessibleVm } from '#lib/server/vm-access.js';
 
 export interface GetVmNetworkingInput {
 	vmId: string;
@@ -19,26 +17,9 @@ export interface SetVmPtrRecordInput {
 	vmId: string;
 }
 
-async function requireVmAccess(vmId: string, level?: PermissionLevel) {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	const vm = await db.query.vms.findFirst({ where: eq(vms.id, vmId) });
-	if (!vm) {
-		error(404, 'VM not found');
-	}
-	if (vm.ownerProjectId) {
-		await requireProjectAccess(db, locals.user.id, vm.ownerProjectId, level);
-	}
-
-	return { db, vm };
-}
-
 export async function getVmNetworking(input: GetVmNetworkingInput) {
-	const { db } = await requireVmAccess(input.vmId);
+	const { db, user } = requireUser();
+	await requireAccessibleVm(db, user, input.vmId);
 
 	const allocations = await db.query.ipamAllocations.findMany({
 		where: eq(ipamAllocations.associatedVmId, input.vmId),
@@ -66,7 +47,8 @@ export async function getVmNetworking(input: GetVmNetworkingInput) {
 }
 
 export async function setVmPtrRecord(input: SetVmPtrRecordInput) {
-	const { db } = await requireVmAccess(input.vmId, 'read_write');
+	const { db, user } = requireUser();
+	await requireAccessibleVm(db, user, input.vmId, 'read_write');
 
 	const allocation = await db.query.ipamAllocations.findFirst({
 		where: eq(ipamAllocations.id, input.allocationId),

@@ -1,25 +1,11 @@
-import { timingLog } from '#lib/server/observability.js';
-import { getBackendEnv } from './env.ts';
+import { env } from 'cloudflare:workers';
+import { createVpcFetch } from '#lib/server/vpc.js';
 import { ProxmoxClient } from './proxmox/client.ts';
 import { ProxmoxBackend } from './proxmox/index.ts';
-import type { VmBackend } from './types.ts';
 
-export type {
-	BackendImage,
-	BackendImageImportParams,
-	BackendImageImportTarget,
-	VmBackend,
-	VmConfigureParams,
-	VmCreateParams,
-	VmCreateResult,
-	VmInfo,
-	VmMetricsHistorySample,
-	VmMetricsTimeframe,
-	VmResizeParams,
-	VmStatus
-} from './types.ts';
+export type { VmCreateParams, VmInfo, VmPowerAction } from './types.ts';
 
-let cached: { key: string; backend: VmBackend } | null = null;
+let cached: ProxmoxBackend | null = null;
 
 function parseNodeList(value: string | undefined): string[] {
 	if (!value) {
@@ -32,10 +18,9 @@ function parseNodeList(value: string | undefined): string[] {
 }
 
 function createProxmox(): ProxmoxBackend {
-	const started = performance.now();
-	const env = getBackendEnv();
+	const tokenSecret = env.PROXMOX_TOKEN_SECRET ?? env.PROXMOX_API_SECRET;
 
-	if (!(env.PROXMOX_API_URL && env.PROXMOX_TOKEN_ID && env.PROXMOX_TOKEN_SECRET)) {
+	if (!(env.PROXMOX_API_URL && env.PROXMOX_TOKEN_ID && tokenSecret)) {
 		throw new Error(
 			'Proxmox backend requires PROXMOX_API_URL, PROXMOX_TOKEN_ID, and PROXMOX_TOKEN_SECRET'
 		);
@@ -53,21 +38,15 @@ function createProxmox(): ProxmoxBackend {
 		);
 	}
 
-	const proxmoxHost = new URL(env.PROXMOX_API_URL).host;
-	timingLog('backend.proxmox.create.start', {
-		'proxmox.host': proxmoxHost,
-		'proxmox.use_vpc': env.PROXMOX_USE_VPC !== 'false'
-	});
-
 	const client = new ProxmoxClient({
 		baseUrl: env.PROXMOX_API_URL,
 		tokenId: env.PROXMOX_TOKEN_ID,
-		tokenSecret: env.PROXMOX_TOKEN_SECRET,
-		vpc: env.PROXMOX_USE_VPC === 'false' ? undefined : env.PROXMOX_VPC
+		tokenSecret,
+		fetch: createVpcFetch([env.PROXMOX_VPC], env.PROXMOX_USE_VPC)
 	});
 
-	const backend = new ProxmoxBackend(client, {
-		snippetsVpc: env.PROXMOX_SNIPPETS_USE_VPC === 'false' ? undefined : env.SNIPPETS,
+	return new ProxmoxBackend(client, {
+		snippetsFetch: createVpcFetch([env.SNIPPETS], env.PROXMOX_SNIPPETS_USE_VPC),
 		snippetsEndpointUrl: env.PROXMOX_SNIPPETS_ENDPOINT_URL,
 		snippetsEndpointUsername: env.PROXMOX_SNIPPETS_ENDPOINT_USERNAME,
 		snippetsEndpointPassword: env.PROXMOX_SNIPPETS_ENDPOINT_PASSWORD,
@@ -76,45 +55,12 @@ function createProxmox(): ProxmoxBackend {
 		vmCpuType: env.PROXMOX_VM_CPU_TYPE,
 		excludedNodes: parseNodeList(env.PROXMOX_EXCLUDED_NODES)
 	});
-
-	timingLog('backend.proxmox.create.end', {
-		'proxmox.host': proxmoxHost,
-		duration_ms: Math.round((performance.now() - started) * 100) / 100
-	});
-
-	return backend;
 }
 
-export function getBackend(name: string): VmBackend {
-	// Skip cache in dev — module-level state survives HMR and goes stale
-	const started = performance.now();
-	const cacheHit = !import.meta.env.DEV && cached?.key === name;
-	timingLog('backend.get.start', { 'backend.name': name, 'backend.cache_hit': cacheHit });
-	if (!import.meta.env.DEV && cached?.key === name) {
-		const { backend } = cached;
-		timingLog('backend.get.end', {
-			'backend.name': name,
-			'backend.cache_hit': true,
-			duration_ms: Math.round((performance.now() - started) * 100) / 100
-		});
-		return backend;
+export function proxmox(): ProxmoxBackend {
+	if (cached && !import.meta.env.DEV) {
+		return cached;
 	}
-
-	let backend: VmBackend;
-
-	switch (name) {
-		case 'proxmox':
-			backend = createProxmox();
-			break;
-		default:
-			throw new Error(`Unknown VM backend: "${name}"`);
-	}
-
-	cached = { key: name, backend };
-	timingLog('backend.get.end', {
-		'backend.name': name,
-		'backend.cache_hit': false,
-		duration_ms: Math.round((performance.now() - started) * 100) / 100
-	});
-	return backend;
+	cached = createProxmox();
+	return cached;
 }

@@ -5,7 +5,7 @@ import {
 	isValidPtrHostname,
 	reverseDnsNameForIp,
 	sameAddress
-} from '#lib/ptr.js';
+} from 'stack-shared/ptr';
 import { BunnyClient, BunnyError, isBunnyConfigured } from '#lib/server/bunny.js';
 import type { initDrizzle } from '#lib/server/db/index.js';
 import { ipamPtrRecords, ipamSettings } from '#lib/server/db/schema.js';
@@ -177,7 +177,7 @@ export async function setPtrRecord(
 	}
 }
 
-export async function clearPtrRecord(db: QueryableDb, allocation: PtrAllocation, address: string) {
+async function clearPtrRecord(db: QueryableDb, allocation: PtrAllocation, address: string) {
 	const existing = await db.query.ipamPtrRecords.findFirst({
 		where: eq(ipamPtrRecords.address, address)
 	});

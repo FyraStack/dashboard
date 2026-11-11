@@ -1,50 +1,57 @@
-import { eq, inArray, sql } from 'drizzle-orm';
-import { isValidPtrHostname } from '#lib/ptr.js';
-import { requireProjectAccess } from '#lib/server/auth-context.js';
-import {
-	getBackend,
-	type VmBackend,
-	type VmInfo,
-	type VmMetricsTimeframe
-} from '#lib/server/backends/index.js';
+import { and, eq, inArray, type SQL, sql } from 'drizzle-orm';
+import type { MetricsTimeframe } from 'stack-shared/compute';
+import { isValidPtrHostname } from 'stack-shared/ptr';
+import { findPlanDowngrades } from 'stack-shared/vm-plans';
+import { toServerStatus } from 'stack-shared/vm-status';
+import { requireProjectAccess, requireUser } from '#lib/server/auth-context.js';
+import { proxmox, type VmInfo, type VmPowerAction } from '#lib/server/backends/index.js';
+import { findLiveVm } from '#lib/server/backends/proxmox/index.js';
 import { VmResizeError } from '#lib/server/backends/types.js';
 import { runInBackground } from '#lib/server/background.js';
 import { isBillingConfigured } from '#lib/server/billing/autumn.js';
 import { requireProjectBillingActive } from '#lib/server/billing/state.js';
-import { context } from '#lib/server/context.js';
-import { type Database, initDrizzle } from '#lib/server/db/index.js';
-import { ipamAllocations, sshKeys, vms, vmTypes } from '#lib/server/db/schema.js';
+import type { Database } from '#lib/server/db/index.js';
+import { ipamAllocations, vms, vmTypes } from '#lib/server/db/schema.js';
 import { error } from '#lib/server/http.js';
 import { withIdempotency } from '#lib/server/idempotency.js';
 import { instrument, timingLog } from '#lib/server/observability.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import {
+	assertMutable,
+	assertPowerable,
+	requireAccessibleVm,
+	requireVmAccess
+} from '#lib/server/vm-access.js';
 import { queueVmDeletion } from '#lib/server/vm-deletion.js';
-import { findLiveVm } from '#lib/server/vm-identity.js';
-import { provisionVm } from '#lib/server/vm-provisioning.js';
-import { findPlanDowngrades } from '#lib/vm-plans.js';
+import { provisionRequestedVm, type RequestedVm } from '#lib/server/vm-provisioning.js';
 
-interface VmRow extends Record<string, unknown> {
-	active: boolean;
-	backend: 'proxmox';
-	createdAt: number;
-	creationDate: string;
-	id: string;
-	lastKnownAt: number | null;
-	lastKnownIpv4: string | null;
-	lastKnownIpv6: string | null;
-	lastKnownStatus: VmInfo['status'] | null;
-	lastKnownUptime: number;
-	name: string;
-	ownerProjectId: string | null;
-	proxmoxId: number | null;
-	proxmoxNode: string | null;
-	status: 'provisioning' | 'ready' | 'error' | 'deleting';
-	vmTypeCores: number | null;
-	vmTypeId: string;
-	vmTypeName: string | null;
-	vmTypeRamCapacity: number | null;
-	vmTypeStorageAmount: number | null;
+function selectVmRows(db: Database, where: SQL | undefined) {
+	return db
+		.select({
+			id: vms.id,
+			name: vms.name,
+			proxmoxId: vms.proxmoxId,
+			proxmoxNode: vms.proxmoxNode,
+			active: vms.active,
+			ownerProjectId: vms.ownerProjectId,
+			vmTypeId: vms.vmTypeId,
+			creationDate: vms.creationDate,
+			status: vms.status,
+			lastKnownIpv4: vms.lastKnownIpv4,
+			lastKnownIpv6: vms.lastKnownIpv6,
+			lastKnownStatus: sql<VmInfo['status'] | null>`${vms.lastKnownStatus}`,
+			lastKnownUptime: vms.lastKnownUptime,
+			vmTypeName: vmTypes.name,
+			vmTypeCores: vmTypes.cores,
+			vmTypeRamCapacity: vmTypes.ramCapacity,
+			vmTypeStorageAmount: vmTypes.storageAmount
+		})
+		.from(vms)
+		.leftJoin(vmTypes, eq(vmTypes.id, vms.vmTypeId))
+		.where(where);
 }
+
+type VmRow = Awaited<ReturnType<typeof selectVmRows>>[number];
 
 function getKnownNetworkInterfaces(row: VmRow): VmInfo['networkInterfaces'] | undefined {
 	if (!(row.lastKnownIpv4 || row.lastKnownIpv6)) {
@@ -147,7 +154,6 @@ function mapVmRow(row: VmRow, liveInput: VmInfo | null, assignedIps?: string[]) 
 		ownerProjectId: row.ownerProjectId,
 		vmTypeId: row.vmTypeId,
 		creationDate: row.creationDate,
-		backend: row.backend,
 		status: row.status,
 		vmType: row.vmTypeName
 			? {
@@ -159,31 +165,6 @@ function mapVmRow(row: VmRow, liveInput: VmInfo | null, assignedIps?: string[]) 
 			: null,
 		live
 	};
-}
-
-function toDashboardStatus(
-	status: VmRow['status'],
-	liveStatus: VmInfo['status'] | null | undefined
-): 'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'error' | 'unknown' {
-	if (status === 'deleting') {
-		return 'deleting';
-	}
-	if (status === 'error') {
-		return 'error';
-	}
-	if (status === 'provisioning') {
-		return 'provisioning';
-	}
-	if (liveStatus === 'running') {
-		return 'running';
-	}
-	if (liveStatus === 'paused') {
-		return 'restarting';
-	}
-	if (liveStatus === 'stopped') {
-		return 'stopped';
-	}
-	return 'unknown';
 }
 
 const persistableStatuses: VmInfo['status'][] = ['running', 'stopped', 'paused'];
@@ -219,19 +200,18 @@ function persistLiveState(db: Database, entries: { id: string; live: VmInfo }[])
 	runInBackground(work, 'persist vm live state');
 }
 
-function refreshVmNetworkInterfaces(db: Database, row: VmRow, backend: VmBackend): void {
-	if (!backend.getVmNetworkInterfaces || row.proxmoxId === null) {
+function refreshVmNetworkInterfaces(db: Database, row: VmRow): void {
+	const { proxmoxId } = row;
+	if (proxmoxId === null) {
 		return;
 	}
 
 	const work = instrument(
 		'vm.refreshNetworkInterfaces',
 		async () => {
-			const networkInterfaces = await backend.getVmNetworkInterfaces?.(
-				row.id,
-				row.proxmoxId ?? undefined,
-				{ proxmoxNode: row.proxmoxNode ?? undefined }
-			);
+			const networkInterfaces = await proxmox().getVmNetworkInterfaces(row.id, proxmoxId, {
+				proxmoxNode: row.proxmoxNode ?? undefined
+			});
 			const ips = getNetworkIpSnapshot(networkInterfaces);
 			if (!(ips.ipv4 || ips.ipv6)) {
 				return;
@@ -246,7 +226,7 @@ function refreshVmNetworkInterfaces(db: Database, row: VmRow, backend: VmBackend
 				})
 				.where(eq(vms.id, row.id));
 		},
-		{ 'vm.id': row.id, 'vm.proxmox_id': row.proxmoxId ?? undefined }
+		{ 'vm.id': row.id, 'vm.proxmox_id': proxmoxId }
 	);
 	runInBackground(work, `refresh vm network interfaces ${row.id}`);
 }
@@ -256,41 +236,10 @@ export interface ListVmsInput {
 }
 
 export async function listVms(params: ListVmsInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
+	const { db, user } = requireUser();
+	await requireProjectAccess(db, user.id, params.projectId);
 
-	const db = initDrizzle();
-	await requireProjectAccess(db, event.locals.user.id, params.projectId);
-
-	const result = await db.execute(sql`
-		select
-			${vms.id} as id,
-			${vms.name} as name,
-			${vms.proxmoxId} as "proxmoxId",
-			${vms.proxmoxNode} as "proxmoxNode",
-			${vms.active} as active,
-			${vms.ownerProjectId} as "ownerProjectId",
-			${vms.vmTypeId} as "vmTypeId",
-			${vms.creationDate} as "creationDate",
-			${vms.createdAt} as "createdAt",
-			${vms.backend} as backend,
-			${vms.status} as status,
-			${vms.lastKnownIpv4} as "lastKnownIpv4",
-			${vms.lastKnownIpv6} as "lastKnownIpv6",
-			${vms.lastKnownStatus} as "lastKnownStatus",
-			${vms.lastKnownUptime} as "lastKnownUptime",
-			${vms.lastKnownAt} as "lastKnownAt",
-			${vmTypes.name} as "vmTypeName",
-			${vmTypes.cores} as "vmTypeCores",
-			${vmTypes.ramCapacity} as "vmTypeRamCapacity",
-			${vmTypes.storageAmount} as "vmTypeStorageAmount"
-		from ${vms}
-		left join ${vmTypes} on ${vmTypes.id} = ${vms.vmTypeId}
-		where ${vms.ownerProjectId} = ${params.projectId}
-	`);
-	const rows = result.rows as VmRow[];
+	const rows = await selectVmRows(db, eq(vms.ownerProjectId, params.projectId));
 	const assignedIps = await getAssignedIps(
 		db,
 		rows.map((row) => row.id)
@@ -306,40 +255,9 @@ export interface GetVmInput {
 export async function getVm(params: GetVmInput) {
 	const started = performance.now();
 	timingLog('remote.vms.getVm.enter', { 'vm.id': params.vmId });
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
+	const { db, user } = requireUser();
 
-	const db = initDrizzle();
-	const result = await db.execute(sql`
-		select
-			${vms.id} as id,
-			${vms.name} as name,
-			${vms.proxmoxId} as "proxmoxId",
-			${vms.proxmoxNode} as "proxmoxNode",
-			${vms.active} as active,
-			${vms.ownerProjectId} as "ownerProjectId",
-			${vms.vmTypeId} as "vmTypeId",
-			${vms.creationDate} as "creationDate",
-			${vms.createdAt} as "createdAt",
-			${vms.backend} as backend,
-			${vms.status} as status,
-			${vms.lastKnownIpv4} as "lastKnownIpv4",
-			${vms.lastKnownIpv6} as "lastKnownIpv6",
-			${vms.lastKnownStatus} as "lastKnownStatus",
-			${vms.lastKnownUptime} as "lastKnownUptime",
-			${vms.lastKnownAt} as "lastKnownAt",
-			${vmTypes.name} as "vmTypeName",
-			${vmTypes.cores} as "vmTypeCores",
-			${vmTypes.ramCapacity} as "vmTypeRamCapacity",
-			${vmTypes.storageAmount} as "vmTypeStorageAmount"
-		from ${vms}
-		left join ${vmTypes} on ${vmTypes.id} = ${vms.vmTypeId}
-		where ${vms.id} = ${params.vmId}
-		limit 1
-	`);
-	const [row] = result.rows as VmRow[];
+	const [row] = await selectVmRows(db, eq(vms.id, params.vmId)).limit(1);
 	timingLog('remote.vms.getVm.db.end', {
 		'vm.id': params.vmId,
 		duration_ms: Math.round((performance.now() - started) * 100) / 100
@@ -348,30 +266,25 @@ export async function getVm(params: GetVmInput) {
 	if (!row) {
 		error(404, `VM "${params.vmId}" not found`);
 	}
-	if (row.ownerProjectId) {
-		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId);
-	}
+	await requireVmAccess(db, user, row);
 
 	const assignedIps = await getAssignedIps(db, [row.id]);
 
 	let live: VmInfo | null = null;
 	try {
-		const backend = getBackend(row.backend);
 		live = await instrument(
 			'remote.vms.getVm.backend',
 			() =>
-				backend.getVm(row.id, row.proxmoxId ?? undefined, {
-					proxmoxNode: row.proxmoxNode ?? undefined,
-					includeNetworkInterfaces: false
+				proxmox().getVm(row.id, row.proxmoxId ?? undefined, {
+					proxmoxNode: row.proxmoxNode ?? undefined
 				}),
 			{
-				'vm.backend': row.backend,
 				'vm.proxmox_id': row.proxmoxId ?? undefined,
 				'proxmox.node_hint': row.proxmoxNode ?? undefined
 			}
 		);
 		if (live.status === 'running') {
-			refreshVmNetworkInterfaces(db, row, backend);
+			refreshVmNetworkInterfaces(db, row);
 		}
 	} catch (err) {
 		console.warn(`Failed to load live VM state for ${row.id}`, err);
@@ -389,50 +302,36 @@ export async function getVm(params: GetVmInput) {
 }
 
 export interface GetVmMetricsHistoryInput {
-	timeframe?: 'hour' | 'day' | 'week' | 'month' | 'year';
+	timeframe?: MetricsTimeframe;
 	vmId: string;
 }
 
 export async function getVmMetricsHistory(params: GetVmMetricsHistoryInput) {
 	const started = performance.now();
+	const timeframe = params.timeframe ?? 'hour';
 	timingLog('remote.vms.getVmMetricsHistory.enter', {
 		'vm.id': params.vmId,
-		'vm.metrics.timeframe': params.timeframe ?? 'hour'
+		'vm.metrics.timeframe': timeframe
 	});
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
+	const { db, user } = requireUser();
 
-	const db = initDrizzle();
-	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
+	const row = await requireAccessibleVm(db, user, params.vmId);
 	timingLog('remote.vms.getVmMetricsHistory.db.end', {
 		'vm.id': params.vmId,
 		duration_ms: Math.round((performance.now() - started) * 100) / 100
 	});
-	if (!row) {
-		error(404, `VM "${params.vmId}" not found`);
-	}
-	if (row.ownerProjectId) {
-		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId);
-	}
 
 	try {
-		const backend = getBackend(row.backend);
 		const samples = await instrument(
 			'remote.vms.getVmMetricsHistory.backend',
 			() =>
-				backend.getVmMetricsHistory(
-					row.id,
-					row.proxmoxId ?? undefined,
-					(params.timeframe ?? 'hour') as VmMetricsTimeframe,
-					{ proxmoxNode: row.proxmoxNode ?? undefined }
-				),
+				proxmox().getVmMetricsHistory(row.id, row.proxmoxId ?? undefined, timeframe, {
+					proxmoxNode: row.proxmoxNode ?? undefined
+				}),
 			{
-				'vm.backend': row.backend,
 				'vm.proxmox_id': row.proxmoxId ?? undefined,
 				'proxmox.node_hint': row.proxmoxNode ?? undefined,
-				'vm.metrics.timeframe': params.timeframe ?? 'hour'
+				'vm.metrics.timeframe': timeframe
 			}
 		);
 		timingLog('remote.vms.getVmMetricsHistory.exit', {
@@ -458,41 +357,13 @@ export interface ListVmStatusesInput {
 export async function listVmStatuses(params: ListVmStatusesInput) {
 	const started = performance.now();
 	timingLog('remote.vms.listVmStatuses.enter', { 'project.id': params.projectId });
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
+	const { db, user } = requireUser();
+	await requireProjectAccess(db, user.id, params.projectId);
 
-	const db = initDrizzle();
-	await requireProjectAccess(db, event.locals.user.id, params.projectId);
-
-	const result = await db.execute(sql`
-		select
-			${vms.id} as id,
-			${vms.name} as name,
-			${vms.proxmoxId} as "proxmoxId",
-			${vms.proxmoxNode} as "proxmoxNode",
-			${vms.active} as active,
-			${vms.ownerProjectId} as "ownerProjectId",
-			${vms.vmTypeId} as "vmTypeId",
-			${vms.creationDate} as "creationDate",
-			${vms.createdAt} as "createdAt",
-			${vms.backend} as backend,
-			${vms.status} as status,
-			${vms.lastKnownIpv4} as "lastKnownIpv4",
-			${vms.lastKnownIpv6} as "lastKnownIpv6",
-			${vms.lastKnownStatus} as "lastKnownStatus",
-			${vms.lastKnownUptime} as "lastKnownUptime",
-			${vms.lastKnownAt} as "lastKnownAt",
-			${vmTypes.name} as "vmTypeName",
-			${vmTypes.cores} as "vmTypeCores",
-			${vmTypes.ramCapacity} as "vmTypeRamCapacity",
-			${vmTypes.storageAmount} as "vmTypeStorageAmount"
-		from ${vms}
-		left join ${vmTypes} on ${vmTypes.id} = ${vms.vmTypeId}
-		where ${vms.ownerProjectId} = ${params.projectId}
-	`);
-	const rows = (result.rows as VmRow[]).filter((row) => row.active);
+	const rows = await selectVmRows(
+		db,
+		and(eq(vms.ownerProjectId, params.projectId), eq(vms.active, true))
+	);
 	timingLog('remote.vms.listVmStatuses.db.end', {
 		'project.id': params.projectId,
 		'vm.status.project_active_count': rows.length,
@@ -501,8 +372,7 @@ export async function listVmStatuses(params: ListVmStatusesInput) {
 
 	let liveVms: VmInfo[] = [];
 	try {
-		const backend = getBackend('proxmox');
-		liveVms = await instrument('remote.vms.listVmStatuses.backend', () => backend.listVms(), {
+		liveVms = await instrument('remote.vms.listVmStatuses.backend', () => proxmox().listVms(), {
 			'vm.status.project_active_count': rows.length
 		});
 	} catch (err) {
@@ -523,7 +393,7 @@ export async function listVmStatuses(params: ListVmStatusesInput) {
 		const mapped = mapVmRow(row, live, assignedIps.get(row.id));
 		return {
 			id: mapped.id,
-			status: toDashboardStatus(row.status, mapped.live?.status),
+			status: toServerStatus(row.status, mapped.live?.status),
 			liveStatus: mapped.live?.status ?? null,
 			uptime: mapped.live?.uptime ?? 0,
 			memory: mapped.live?.memory ?? null,
@@ -543,37 +413,17 @@ export async function listVmStatuses(params: ListVmStatusesInput) {
 	return statuses;
 }
 
-export interface CreateVmInput {
+export interface CreateVmInput extends RequestedVm {
 	idempotencyKey: string;
-	imageId?: string;
-	name: string;
-	networkingMode?: 'both' | 'ipv6';
-	password?: string;
-	projectId: string;
-	sshKeyIds?: string[];
-	vmTypeId: string;
 }
 
 export async function createVm(params: CreateVmInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, event.locals.user.id, params.projectId, 'read_write');
+	const { db, user } = requireUser();
+	await requireProjectAccess(db, user.id, params.projectId, 'read_write');
 	const { billingExempt } = await requireProjectBillingActive(params.projectId);
 
 	const sshKeyIds = params.sshKeyIds ?? [];
-	const keys =
-		sshKeyIds.length > 0
-			? await db.query.sshKeys.findMany({
-					where: eq(sshKeys.userId, event.locals.user.id)
-				})
-			: [];
-	const publicKeys = keys.filter((key) => sshKeyIds.includes(key.id)).map((key) => key.publicKey);
-
-	const userId = event.locals.user.id;
+	const userId = user.id;
 	const { idempotencyKey, ...operationArgs } = params;
 	return withIdempotency(
 		db,
@@ -583,16 +433,10 @@ export async function createVm(params: CreateVmInput) {
 			args: { ...operationArgs, userId, sshKeyIds: [...sshKeyIds].sort() }
 		},
 		async () => {
-			const created = await provisionVm(db, {
-				projectId: params.projectId,
-				vmTypeId: params.vmTypeId,
-				name: params.name,
-				userId,
+			const { created, sshKeyCount } = await provisionRequestedVm(db, params, {
 				billingExempt,
-				networkingMode: params.networkingMode,
-				imageId: params.imageId,
-				sshPublicKeys: publicKeys,
-				password: params.password
+				keyOwnerId: userId,
+				userId
 			});
 			captureServerEvent(
 				'vm_created',
@@ -600,7 +444,7 @@ export async function createVm(params: CreateVmInput) {
 					vm_type_id: params.vmTypeId,
 					networking_mode: params.networkingMode ?? 'both',
 					image_id: params.imageId,
-					ssh_key_count: publicKeys.length,
+					ssh_key_count: sshKeyCount,
 					billing_exempt: billingExempt
 				},
 				{ projectId: params.projectId }
@@ -617,29 +461,9 @@ export interface RenameVmInput {
 }
 
 export async function renameVm(params: RenameVmInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
-	if (!row) {
-		error(404, `VM "${params.vmId}" not found`);
-	}
-	if (!row.active) {
-		error(409, `VM "${row.name}" is not active`);
-	}
-	if (row.status === 'deleting') {
-		error(409, `VM "${row.name}" is being deleted`);
-	}
-	if (row.status === 'provisioning') {
-		error(409, `VM "${row.name}" is still provisioning`);
-	}
-	if (!row.ownerProjectId) {
-		error(400, 'VM is not attached to a project');
-	}
-	await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
+	const { db, user } = requireUser();
+	const row = await requireAccessibleVm(db, user, params.vmId, 'read_write');
+	assertMutable(row);
 
 	const name = params.name.trim();
 	if (!name) {
@@ -650,8 +474,7 @@ export async function renameVm(params: RenameVmInput) {
 	}
 
 	if (params.updateHostname) {
-		const backend = getBackend(row.backend);
-		await backend.updateVmHostname(row.id, name, row.proxmoxId ?? undefined);
+		await proxmox().updateVmHostname(row.id, name, row.proxmoxId ?? undefined);
 	}
 
 	await db.update(vms).set({ name }).where(eq(vms.id, row.id));
@@ -668,21 +491,10 @@ export interface DeleteVmInput {
 }
 
 export async function deleteVm(params: DeleteVmInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	const row = await db.query.vms.findFirst({ where: eq(vms.id, params.vmId) });
-	if (!row) {
-		error(404, `VM "${params.vmId}" not found`);
-	}
+	const { db, user } = requireUser();
+	const row = await requireAccessibleVm(db, user, params.vmId, 'admin');
 	if (!row.active) {
 		return;
-	}
-	if (row.ownerProjectId) {
-		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'admin');
 	}
 
 	await queueVmDeletion(db, row);
@@ -693,63 +505,25 @@ export async function deleteVm(params: DeleteVmInput) {
 	);
 }
 
-async function powerAction(vmId: string, action: 'startVm' | 'stopVm' | 'killVm' | 'rebootVm') {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
+export interface PowerVmInput {
+	action: VmPowerAction;
+	vmId: string;
+}
+
+export async function powerVm(params: PowerVmInput) {
+	const { db, user } = requireUser();
+	const row = await requireAccessibleVm(db, user, params.vmId, 'read_write');
+	assertPowerable(row);
+	if (row.ownerProjectId && (params.action === 'startVm' || params.action === 'rebootVm')) {
+		await requireProjectBillingActive(row.ownerProjectId);
 	}
 
-	const db = initDrizzle();
-	const row = await db.query.vms.findFirst({ where: eq(vms.id, vmId) });
-	if (!row) {
-		error(404, `VM "${vmId}" not found`);
-	}
-	if (row.status === 'deleting') {
-		error(409, `VM "${row.name}" is being deleted`);
-	}
-	if (row.ownerProjectId) {
-		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
-		if (action === 'startVm' || action === 'rebootVm') {
-			await requireProjectBillingActive(row.ownerProjectId);
-		}
-	}
-
-	const backend = getBackend(row.backend);
-	await backend[action](row.id, row.proxmoxId ?? undefined);
+	await proxmox()[params.action](row.id, row.proxmoxId ?? undefined);
 	captureServerEvent(
 		'vm_power_action',
-		{ vm_id: row.id, action },
+		{ vm_id: row.id, action: params.action },
 		{ projectId: row.ownerProjectId }
 	);
-}
-
-export interface StartVmInput {
-	vmId: string;
-}
-export interface StopVmInput {
-	vmId: string;
-}
-export interface KillVmInput {
-	vmId: string;
-}
-export interface RebootVmInput {
-	vmId: string;
-}
-
-export function startVm(params: StartVmInput) {
-	return powerAction(params.vmId, 'startVm');
-}
-
-export function stopVm(params: StopVmInput) {
-	return powerAction(params.vmId, 'stopVm');
-}
-
-export function killVm(params: KillVmInput) {
-	return powerAction(params.vmId, 'killVm');
-}
-
-export function rebootVm(params: RebootVmInput) {
-	return powerAction(params.vmId, 'rebootVm');
 }
 
 export interface ResizeVmInput {
@@ -758,30 +532,10 @@ export interface ResizeVmInput {
 }
 
 export async function resizeVm(params: ResizeVmInput) {
-	const event = context();
-	if (!event.locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	const row = await db.query.vms.findFirst({
-		where: eq(vms.id, params.vmId),
-		with: { vmType: true }
-	});
-	if (!row) {
-		error(404, `VM "${params.vmId}" not found`);
-	}
-	if (!row.active) {
-		error(409, `VM "${row.name}" is not active`);
-	}
-	if (row.status === 'deleting') {
-		error(409, `VM "${row.name}" is being deleted`);
-	}
-	if (row.status === 'provisioning') {
-		error(409, `VM "${row.name}" is still provisioning`);
-	}
+	const { db, user } = requireUser();
+	const row = await requireAccessibleVm(db, user, params.vmId, 'read_write');
+	assertMutable(row);
 	if (row.ownerProjectId) {
-		await requireProjectAccess(db, event.locals.user.id, row.ownerProjectId, 'read_write');
 		await requireProjectBillingActive(row.ownerProjectId);
 	}
 
@@ -801,9 +555,8 @@ export async function resizeVm(params: ResizeVmInput) {
 		error(400, `Cannot resize to a smaller plan (${downgrades.join(', ')})`);
 	}
 
-	const backend = getBackend(row.backend);
 	try {
-		await backend.resizeVm(
+		await proxmox().resizeVm(
 			row.id,
 			{
 				cores: target.cores,

@@ -1,24 +1,22 @@
 import { Address4, Address6 } from 'ip-address';
 import ky, { HTTPError } from 'ky';
+import type { MetricsTimeframe } from 'stack-shared/compute';
+import type { VmPowerState } from 'stack-shared/vm-status';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
-import { config } from '#lib/server/config.js';
 import { instrument } from '#lib/server/observability.js';
-import { createVpcFetch } from '#lib/server/vpc.js';
+import type { VpcFetch } from '#lib/server/vpc.js';
 import type {
 	BackendImage,
 	BackendImageImportParams,
 	BackendImageImportTarget,
-	VmBackend,
 	VmConfigureParams,
 	VmCreateParams,
 	VmCreateResult,
 	VmInfo,
 	VmLookupOptions,
 	VmMetricsHistorySample,
-	VmMetricsTimeframe,
-	VmResizeParams,
-	VmStatus
+	VmResizeParams
 } from '../types.ts';
 import { VmNotFoundError, VmResizeError } from '../types.ts';
 import type { ProxmoxClient } from './client.ts';
@@ -28,6 +26,16 @@ const TAG_SEPARATORS = /[;,]/;
 const TRAILING_SLASHES = /\/+$/;
 const RBD_RM_IMAGE = /rbd rm '([^']+)'/;
 const DISK_SIZE_OPTION = /(?:^|,)size=(\d+(?:\.\d+)?)([KMGT]?)(?:,|$)/i;
+
+const VM_DISK_STORAGE = 'stack-volumes';
+const TENANT_POOL = 'stack-tenants';
+const VM_BRIDGE = 'public';
+const VM_NET_RATE_MBPS = 128;
+const IPV6_DEFAULT_GATEWAY = 'fe80::1040:ffff';
+const NAT64_PREFIX = '64:ff9b::/96';
+const NAT64_DNS64_SERVER = '2602:f41f:10:1040::ffff';
+const NAMESERVERS = ['1.1.1.1', '1.0.0.1', '2606:4700:4700::1111', '2606:4700:4700::1001'];
+const BOOT_DISK = 'virtio0';
 
 interface ResolvedVm {
 	node: string;
@@ -40,8 +48,17 @@ function haResourceId(vmid: number) {
 	return `vm:${vmid}`;
 }
 
+function toStableId(id: string) {
+	return id.toLowerCase();
+}
+
+export function findLiveVm(liveVms: VmInfo[], row: { id: string }): VmInfo | null {
+	const stableId = toStableId(row.id);
+	return liveVms.find((vm) => vm.stableId === stableId) ?? null;
+}
+
 function stableIdTag(id: string) {
-	return `${STABLE_ID_TAG_PREFIX}${id.toLowerCase()}`;
+	return `${STABLE_ID_TAG_PREFIX}${toStableId(id)}`;
 }
 
 function stableIdFromTags(tags: string | undefined): string | undefined {
@@ -50,7 +67,7 @@ function stableIdFromTags(tags: string | undefined): string | undefined {
 	}
 	const tag = tags
 		.split(TAG_SEPARATORS)
-		.map((entry) => entry.trim().toLowerCase())
+		.map((entry) => toStableId(entry.trim()))
 		.find((entry) => entry.startsWith(STABLE_ID_TAG_PREFIX));
 	return tag ? tag.slice(STABLE_ID_TAG_PREFIX.length) : undefined;
 }
@@ -63,7 +80,6 @@ interface CacheEntry<T> {
 const CLUSTER_RESOURCES_TTL_MS = 2000;
 const VM_STATUS_TTL_MS = 1000;
 const RUNNING_CONFIRMATION_TIMEOUT_MS = 30_000;
-const RUNNING_CONFIRMATION_INTERVAL_MS = 1000;
 const VM_STOP_TIMEOUT_MS = 60_000;
 const HA_STOP_TIMEOUT_MS = 120_000;
 const VM_STATE_POLL_INTERVAL_MS = 1000;
@@ -111,13 +127,13 @@ function clearProxmoxReadCaches() {
 }
 
 interface ProxmoxBackendOptions {
-	excludedNodes?: string[];
+	excludedNodes: string[];
 	firewallSecurityGroup?: string;
-	snippetsEndpointPassword?: string;
-	snippetsEndpointUrl?: string;
-	snippetsEndpointUsername?: string;
+	snippetsEndpointPassword: string;
+	snippetsEndpointUrl: string;
+	snippetsEndpointUsername: string;
+	snippetsFetch: VpcFetch;
 	snippetsStorage?: string;
-	snippetsVpc?: Fetcher;
 	vmCpuType?: string;
 }
 
@@ -130,17 +146,22 @@ interface CloudInitVendorConfigParams {
 	ipv6Gateway?: string;
 }
 
+function nat64Settings(network: VmCreateParams['networkConfig']) {
+	const ipv6Only = !network?.ipv4 && Boolean(network?.ipv6 || network?.ipv6Prefix);
+	return ipv6Only ? { prefix: NAT64_PREFIX, dns64Server: NAT64_DNS64_SERVER } : null;
+}
+
 function cloudInitVendorConfigParams(params: VmCreateParams): CloudInitVendorConfigParams {
 	const network = params.networkConfig;
+	const nat64 = nat64Settings(network);
 	return {
 		enableSshPasswordAuth: Boolean(params.password),
 		ipv4Gateway: network?.ipv4?.gateway || undefined,
-		ipv6Gateway: network?.ipv6 ? config.vmNetwork.ipv6DefaultGateway : undefined,
-		ipv6ExtraRoutes: network?.nat64Prefix ? [network.nat64Prefix] : []
+		ipv6Gateway: network?.ipv6 ? IPV6_DEFAULT_GATEWAY : undefined,
+		ipv6ExtraRoutes: nat64 ? [nat64.prefix] : []
 	};
 }
 
-// Name forced by `set-name` in the network config.
 const CLOUD_INIT_INTERFACE = 'eth0';
 
 /**
@@ -192,7 +213,7 @@ function smbios1Branding(stableId: string, tierName: string): Record<string, str
 		manufacturer: SMBIOS_BRAND,
 		product: tierName,
 		family: SMBIOS_BRAND,
-		serial: stableId.toLowerCase()
+		serial: toStableId(stableId)
 	};
 }
 
@@ -240,7 +261,6 @@ function smbios1Config(stableId: string, tierName: string) {
 	});
 }
 
-/** Returns the updated smbios1 string, or null if the branding already matches. */
 function rebrandSmbios1(raw: string | undefined, stableId: string, tierName: string) {
 	const current = parseSmbios1(raw);
 	const branding = smbios1Branding(stableId, tierName);
@@ -255,13 +275,6 @@ function rebrandSmbios1(raw: string | undefined, stableId: string, tierName: str
 		// Keep the existing UUID: guests (and licensing/activation) key off it.
 		uuid: current.uuid ?? crypto.randomUUID()
 	});
-}
-
-function generateMacAddress() {
-	const bytes = crypto.getRandomValues(new Uint8Array(6));
-	bytes[0] = (bytes[0] & 0xfe) | 0x02;
-
-	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0').toUpperCase()).join(':');
 }
 
 function firstIpv6AddressInPrefix(prefix: string) {
@@ -313,7 +326,8 @@ function withSshHostKeysPreserved(vendorConfig: string) {
 	return `#cloud-config\n${stringifyYaml({ ...vendorData, ssh_deletekeys: false })}`;
 }
 
-function cloudInitNetworkConfig(params: VmCreateParams, macAddress: string) {
+function cloudInitNetworkConfig(params: VmCreateParams) {
+	const nat64 = nat64Settings(params.networkConfig);
 	const delegatedPrefixAddress = params.networkConfig?.ipv6Prefix
 		? firstIpv6AddressInPrefix(params.networkConfig.ipv6Prefix)
 		: null;
@@ -334,35 +348,24 @@ function cloudInitNetworkConfig(params: VmCreateParams, macAddress: string) {
 			: []),
 		...(params.networkConfig?.ipv6
 			? [
-					{ to: '::/0', via: config.vmNetwork.ipv6DefaultGateway, 'on-link': true },
-					...(params.networkConfig.nat64Prefix
-						? [
-								{
-									to: params.networkConfig.nat64Prefix,
-									via: config.vmNetwork.ipv6DefaultGateway,
-									'on-link': true
-								}
-							]
-						: [])
+					{ to: '::/0', via: IPV6_DEFAULT_GATEWAY, 'on-link': true },
+					...(nat64 ? [{ to: nat64.prefix, via: IPV6_DEFAULT_GATEWAY, 'on-link': true }] : [])
 				]
 			: [])
 	];
 
-	const nat64Dns64Server = params.networkConfig?.nat64Dns64Server;
 	const yamlContents = stringifyYaml({
 		version: 2,
 		ethernets: {
 			public0: {
-				match: { macaddress: macAddress.toLowerCase() },
+				match: { macaddress: params.macAddress.toLowerCase() },
 				'set-name': CLOUD_INIT_INTERFACE,
 				dhcp4: false,
 				dhcp6: false,
 				addresses,
 				routes,
 				nameservers: {
-					addresses: nat64Dns64Server
-						? [nat64Dns64Server, ...config.vmNetwork.nameservers]
-						: config.vmNetwork.nameservers
+					addresses: nat64 ? [nat64.dns64Server, ...NAMESERVERS] : NAMESERVERS
 				}
 			}
 		}
@@ -371,33 +374,36 @@ function cloudInitNetworkConfig(params: VmCreateParams, macAddress: string) {
 	return yamlContents;
 }
 
-export class ProxmoxBackend implements VmBackend {
-	readonly name = 'proxmox' as const;
+function mapStatus(status: string): VmPowerState {
+	switch (status) {
+		case 'running':
+			return 'running';
+		case 'stopped':
+			return 'stopped';
+		case 'paused':
+			return 'paused';
+		default:
+			return 'unknown';
+	}
+}
+
+function usageRatio(used: number | undefined, max: number | undefined) {
+	return typeof used === 'number' && max ? used / max : undefined;
+}
+
+export class ProxmoxBackend {
 	private readonly client: ProxmoxClient;
 	private readonly options: ProxmoxBackendOptions;
 
-	constructor(client: ProxmoxClient, options: ProxmoxBackendOptions = {}) {
+	constructor(client: ProxmoxClient, options: ProxmoxBackendOptions) {
 		this.client = client;
 		this.options = options;
-	}
-
-	private mapStatus(status: string): VmStatus {
-		switch (status) {
-			case 'running':
-				return 'running';
-			case 'stopped':
-				return 'stopped';
-			case 'paused':
-				return 'paused';
-			default:
-				return 'unknown';
-		}
 	}
 
 	private async isOwnedBy(id: string, candidate: ResolvedVm): Promise<boolean> {
 		const vmConfig = await this.getCachedQemuConfig(candidate.node, candidate.vmid);
 		const claimed = stableIdFromTags(typeof vmConfig.tags === 'string' ? vmConfig.tags : undefined);
-		return claimed === id.toLowerCase();
+		return claimed === toStableId(id);
 	}
 
 	private async resolveFromHint(
@@ -427,10 +433,6 @@ export class ProxmoxBackend implements VmBackend {
 		);
 	}
 
-	private resolveForMutation(id: string, proxmoxId?: number): Promise<ResolvedVm> {
-		return this.resolveVerified(id, proxmoxId);
-	}
-
 	private async resolveVerified(id: string, proxmoxId?: number): Promise<ResolvedVm> {
 		const resolved = await this.resolve(id, proxmoxId);
 		vmConfigCache.delete(`${resolved.node}:${resolved.vmid}`);
@@ -448,7 +450,7 @@ export class ProxmoxBackend implements VmBackend {
 			() => this.getClusterResources('vm'),
 			{ 'vm.id': id, 'vm.proxmox_id': proxmoxId ?? undefined }
 		);
-		const expectedStableId = id.toLowerCase();
+		const expectedStableId = toStableId(id);
 		const match = resources.find(
 			(r) => r.type === 'qemu' && stableIdFromTags(r.tags) === expectedStableId
 		);
@@ -469,22 +471,16 @@ export class ProxmoxBackend implements VmBackend {
 	private async startAndAwaitRunning(node: string, vmid: number) {
 		const startUpid = await this.client.startVm(node, vmid);
 		await this.client.waitForTask(node, startUpid);
-		const deadline = Date.now() + RUNNING_CONFIRMATION_TIMEOUT_MS;
-		while (Date.now() < deadline) {
-			// biome-ignore lint/performance/noAwaitInLoops: polling Proxmox until the VM reports running is inherently sequential
-			const resources = await this.client.getClusterResources('vm');
-			const current = resources.find((resource) => resource.vmid === vmid);
-			if (current?.status === 'running') {
-				break;
-			}
-			await new Promise((resolve) => setTimeout(resolve, RUNNING_CONFIRMATION_INTERVAL_MS));
+		try {
+			await this.awaitVmStatus(node, vmid, 'running', RUNNING_CONFIRMATION_TIMEOUT_MS);
+		} finally {
+			clearProxmoxReadCaches();
 		}
-		clearProxmoxReadCaches();
 	}
 
 	async finishProvisioning(id: string, proxmoxId: number, params: { diskGb: number }) {
 		clearProxmoxReadCaches();
-		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
+		const { node, vmid } = await this.resolveVerified(id, proxmoxId);
 		const currentDiskGb = await this.awaitBootDiskGb(node, vmid);
 		if (params.diskGb > currentDiskGb) {
 			await this.resizeBootDisk(node, vmid, params.diskGb);
@@ -501,7 +497,7 @@ export class ProxmoxBackend implements VmBackend {
 		while (Date.now() < deadline) {
 			// biome-ignore lint/performance/noAwaitInLoops: polling Proxmox until the disk import releases the config lock is inherently sequential
 			const qemuConfig = await this.client.getQemuConfig(node, vmid);
-			const diskGb = parseDiskSizeGb(qemuConfig.virtio0);
+			const diskGb = parseDiskSizeGb(qemuConfig[BOOT_DISK]);
 			if (!qemuConfig.lock && diskGb !== null) {
 				return diskGb;
 			}
@@ -513,7 +509,7 @@ export class ProxmoxBackend implements VmBackend {
 	}
 
 	private async resizeBootDisk(node: string, vmid: number, diskGb: number) {
-		const upid = await this.client.resizeDisk(node, vmid, 'virtio0', `${diskGb}G`);
+		const upid = await this.client.resizeDisk(node, vmid, BOOT_DISK, `${diskGb}G`);
 		if (upid) {
 			await this.client.waitForTask(node, upid);
 		}
@@ -540,9 +536,6 @@ export class ProxmoxBackend implements VmBackend {
 	}
 
 	private resourceToInfo(r: PveClusterResource): VmInfo {
-		const memoryUsage = typeof r.mem === 'number' && r.maxmem ? r.mem / r.maxmem : undefined;
-		const diskUsage = typeof r.disk === 'number' && r.maxdisk ? r.disk / r.maxdisk : undefined;
-
 		const stableId = stableIdFromTags(r.tags);
 		return {
 			id: stableId ?? r.name ?? String(r.vmid),
@@ -550,15 +543,15 @@ export class ProxmoxBackend implements VmBackend {
 			proxmoxId: r.vmid,
 			proxmoxNode: r.node,
 			name: r.name ?? `VM ${r.vmid}`,
-			status: this.mapStatus(r.status ?? 'unknown'),
+			status: mapStatus(r.status ?? 'unknown'),
 			cores: r.maxcpu ?? 0,
 			memory: r.maxmem ?? 0,
 			disk: r.maxdisk ?? 0,
 			uptime: r.uptime ?? 0,
 			metrics: {
 				cpu: r.cpu,
-				memory: memoryUsage,
-				disk: diskUsage
+				memory: usageRatio(r.mem, r.maxmem),
+				disk: usageRatio(r.disk, r.maxdisk)
 			}
 		};
 	}
@@ -600,82 +593,47 @@ export class ProxmoxBackend implements VmBackend {
 		return storage.storage;
 	}
 
-	private async uploadSnippet(filename: string, content: string) {
-		const endpointUrl = this.options.snippetsEndpointUrl?.replace(TRAILING_SLASHES, '');
-		const username = this.options.snippetsEndpointUsername;
-		const password = this.options.snippetsEndpointPassword;
-
-		if (!(endpointUrl && username && password)) {
-			throw new Error(
-				'Custom cloud-init snippets require PROXMOX_SNIPPETS_ENDPOINT_URL, PROXMOX_SNIPPETS_ENDPOINT_USERNAME, and PROXMOX_SNIPPETS_ENDPOINT_PASSWORD'
-			);
-		}
-
-		const snippetFetch = createVpcFetch(this.options.snippetsVpc ? [this.options.snippetsVpc] : []);
+	private async requestSnippet(method: 'get' | 'put', filename: string, content?: string) {
+		const { snippetsEndpointUrl, snippetsEndpointUsername, snippetsEndpointPassword } =
+			this.options;
+		const action = method === 'put' ? 'upload' : 'read';
 
 		try {
-			await ky.put(`${endpointUrl}/${encodeURIComponent(filename)}`, {
-				headers: {
-					Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
-					'Content-Type': 'text/cloud-config'
-				},
-				body: content,
-				timeout: 60_000,
-				fetch: snippetFetch
-			});
+			return await ky(
+				`${snippetsEndpointUrl.replace(TRAILING_SLASHES, '')}/${encodeURIComponent(filename)}`,
+				{
+					method,
+					headers: {
+						Authorization: `Basic ${Buffer.from(`${snippetsEndpointUsername}:${snippetsEndpointPassword}`).toString('base64')}`,
+						...(content === undefined ? {} : { 'Content-Type': 'text/cloud-config' })
+					},
+					body: content,
+					timeout: 60_000,
+					fetch: this.options.snippetsFetch
+				}
+			).text();
 		} catch (err) {
 			if (err instanceof HTTPError) {
 				const body = await err.response.text().catch(() => '<unreadable response body>');
 				throw new Error(
-					`Snippet endpoint upload failed for ${filename}: ${err.response.status} ${err.response.statusText} - ${body}`,
+					`Snippet endpoint ${action} failed for ${filename}: ${err.response.status} ${err.response.statusText} - ${body}`,
 					{ cause: err }
 				);
 			}
 
 			const cause = err instanceof Error && err.cause ? `: ${String(err.cause)}` : '';
-			throw new Error(`Snippet endpoint upload failed for ${filename}: ${String(err)}${cause}`, {
+			throw new Error(`Snippet endpoint ${action} failed for ${filename}: ${String(err)}${cause}`, {
 				cause: err
 			});
 		}
 	}
 
-	private async readSnippet(filename: string) {
-		const endpointUrl = this.options.snippetsEndpointUrl?.replace(TRAILING_SLASHES, '');
-		const username = this.options.snippetsEndpointUsername;
-		const password = this.options.snippetsEndpointPassword;
+	private async uploadSnippet(filename: string, content: string) {
+		await this.requestSnippet('put', filename, content);
+	}
 
-		if (!(endpointUrl && username && password)) {
-			throw new Error(
-				'Custom cloud-init snippets require PROXMOX_SNIPPETS_ENDPOINT_URL, PROXMOX_SNIPPETS_ENDPOINT_USERNAME, and PROXMOX_SNIPPETS_ENDPOINT_PASSWORD'
-			);
-		}
-
-		const snippetFetch = createVpcFetch(this.options.snippetsVpc ? [this.options.snippetsVpc] : []);
-
-		try {
-			return await ky
-				.get(`${endpointUrl}/${encodeURIComponent(filename)}`, {
-					headers: {
-						Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`
-					},
-					timeout: 60_000,
-					fetch: snippetFetch
-				})
-				.text();
-		} catch (err) {
-			if (err instanceof HTTPError) {
-				const body = await err.response.text().catch(() => '<unreadable response body>');
-				throw new Error(
-					`Snippet endpoint read failed for ${filename}: ${err.response.status} ${err.response.statusText} - ${body}`,
-					{ cause: err }
-				);
-			}
-
-			const cause = err instanceof Error && err.cause ? `: ${String(err.cause)}` : '';
-			throw new Error(`Snippet endpoint read failed for ${filename}: ${String(err)}${cause}`, {
-				cause: err
-			});
-		}
+	private readSnippet(filename: string) {
+		return this.requestSnippet('get', filename);
 	}
 
 	async listVms(): Promise<VmInfo[]> {
@@ -697,7 +655,7 @@ export class ProxmoxBackend implements VmBackend {
 			this.getClusterResources('node')
 		]);
 		const haStateByNode = new Map(resources.map((r) => [r.node, r.hastate]));
-		const excluded = new Set(this.options.excludedNodes ?? []);
+		const excluded = new Set(this.options.excludedNodes);
 		const schedulable = nodes.filter((node) => {
 			if (node.status !== 'online') {
 				return false;
@@ -784,36 +742,21 @@ export class ProxmoxBackend implements VmBackend {
 			}
 		);
 
-		let networkInterfaces: VmInfo['networkInterfaces'] | undefined;
-		if (options.includeNetworkInterfaces !== false && status.status === 'running') {
-			try {
-				networkInterfaces = await this.getVmNetworkInterfaces(id, proxmoxId, { proxmoxNode: node });
-			} catch {
-				// guest agent may not be installed
-			}
-		}
-
-		const memoryUsage =
-			typeof status.mem === 'number' && status.maxmem ? status.mem / status.maxmem : undefined;
-		const diskUsage =
-			typeof status.disk === 'number' && status.maxdisk ? status.disk / status.maxdisk : undefined;
-
 		return {
 			id,
-			stableId: id.toLowerCase(),
+			stableId: toStableId(id),
 			proxmoxId: vmid,
 			proxmoxNode: node,
 			name: status.name ?? `VM ${status.vmid}`,
-			status: this.mapStatus(status.status),
+			status: mapStatus(status.status),
 			cores: status.cpus ?? 0,
 			memory: status.maxmem ?? 0,
 			disk: status.maxdisk ?? 0,
 			uptime: status.uptime ?? 0,
-			networkInterfaces,
 			metrics: {
 				cpu: status.cpu,
-				memory: memoryUsage,
-				disk: diskUsage,
+				memory: usageRatio(status.mem, status.maxmem),
+				disk: usageRatio(status.disk, status.maxdisk),
 				networkIn: status.netin,
 				networkOut: status.netout,
 				diskRead: status.diskread,
@@ -845,7 +788,7 @@ export class ProxmoxBackend implements VmBackend {
 	async getVmMetricsHistory(
 		id: string,
 		proxmoxId: number | undefined,
-		timeframe: VmMetricsTimeframe,
+		timeframe: MetricsTimeframe,
 		options: Pick<VmLookupOptions, 'proxmoxNode'> = {}
 	): Promise<VmMetricsHistorySample[]> {
 		const { node, vmid } = await this.resolveForRead(id, proxmoxId, options.proxmoxNode);
@@ -858,7 +801,7 @@ export class ProxmoxBackend implements VmBackend {
 		return samples.map((sample) => ({
 			time: sample.time,
 			cpu: sample.cpu ?? null,
-			memory: typeof sample.mem === 'number' && sample.maxmem ? sample.mem / sample.maxmem : null,
+			memory: usageRatio(sample.mem, sample.maxmem) ?? null,
 			bandwidth:
 				typeof sample.netin !== 'number' && typeof sample.netout !== 'number'
 					? null
@@ -887,19 +830,15 @@ export class ProxmoxBackend implements VmBackend {
 						...(params.password ? { cipassword: params.password } : {})
 					}
 				: {};
-		const bootDisk = 'virtio0';
-		const pvePool = config.proxmox.vmDiskStorage;
-		const macAddress = params.macAddress ?? generateMacAddress();
+		const pvePool = VM_DISK_STORAGE;
+		const { macAddress } = params;
 		const cloudInitNetworkConfigFilename = `stack-${vmid}-network.yaml`;
 		const cloudInitVendorConfigFilename = `stack-${vmid}-vendor.yaml`;
 		const cloudInitSnippetStorage = await this.snippetStorage(node.node);
 		const cloudInitNetworkConfigVolid = `${cloudInitSnippetStorage}:snippets/${cloudInitNetworkConfigFilename}`;
 		const cloudInitVendorConfigVolid = `${cloudInitSnippetStorage}:snippets/${cloudInitVendorConfigFilename}`;
 		await Promise.all([
-			this.uploadSnippet(
-				cloudInitNetworkConfigFilename,
-				cloudInitNetworkConfig(params, macAddress)
-			),
+			this.uploadSnippet(cloudInitNetworkConfigFilename, cloudInitNetworkConfig(params)),
 			this.uploadSnippet(
 				cloudInitVendorConfigFilename,
 				cloudInitVendorConfig(cloudInitVendorConfigParams(params))
@@ -922,11 +861,11 @@ export class ProxmoxBackend implements VmBackend {
 			scsihw: 'virtio-scsi-single',
 			...(params.imageSource
 				? {}
-				: { virtio0: `${pvePool}:${params.diskGb},cache=writeback,discard=on,iothread=1` }),
+				: { [BOOT_DISK]: `${pvePool}:${params.diskGb},cache=writeback,discard=on,iothread=1` }),
 			ide2: `${pvePool}:cloudinit`,
-			net0: `virtio=${macAddress},bridge=${config.proxmox.vmBridge},firewall=1,rate=${config.proxmox.vmNetRateMbps}`,
-			pool: config.proxmox.tenantPool,
-			boot: `order=${bootDisk}`,
+			net0: `virtio=${macAddress},bridge=${VM_BRIDGE},firewall=1,rate=${VM_NET_RATE_MBPS}`,
+			pool: TENANT_POOL,
+			boot: `order=${BOOT_DISK}`,
 			cicustom: `network=${cloudInitNetworkConfigVolid},vendor=${cloudInitVendorConfigVolid}`,
 			ciupgrade: 0,
 			...cloudInitAuth,
@@ -937,7 +876,6 @@ export class ProxmoxBackend implements VmBackend {
 		});
 		clearProxmoxReadCaches();
 		return {
-			id: params.id,
 			proxmoxId: vmid,
 			proxmoxNode: node.node,
 			macAddress,
@@ -1000,18 +938,17 @@ export class ProxmoxBackend implements VmBackend {
 		imageSource: string
 	): Promise<string | null> {
 		const qemuConfig = await this.client.getQemuConfig(node, vmid);
-		if (qemuConfig.lock || qemuConfig.virtio0) {
+		if (qemuConfig.lock || qemuConfig[BOOT_DISK]) {
 			return null;
 		}
-		const pvePool = config.proxmox.vmDiskStorage;
 		return await this.client.updateQemuConfigAsync(node, vmid, {
-			virtio0: `${pvePool}:0,import-from=${imageSource},cache=writeback,discard=on,iothread=1`
+			[BOOT_DISK]: `${VM_DISK_STORAGE}:0,import-from=${imageSource},cache=writeback,discard=on,iothread=1`
 		});
 	}
 
 	async updateVmHostname(id: string, hostname: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
-		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
+		const { node, vmid } = await this.resolveVerified(id, proxmoxId);
 		const storage = await this.snippetStorage(node);
 		const currentConfig = await this.client.getQemuConfig(node, vmid);
 		const customConfigs = (currentConfig.cicustom ?? '')
@@ -1041,7 +978,7 @@ export class ProxmoxBackend implements VmBackend {
 		clearProxmoxReadCaches();
 		let resolved: ResolvedVm;
 		try {
-			resolved = await this.resolveForMutation(id, proxmoxId);
+			resolved = await this.resolveVerified(id, proxmoxId);
 		} catch (err) {
 			if (err instanceof VmNotFoundError) {
 				return;
@@ -1065,6 +1002,7 @@ export class ProxmoxBackend implements VmBackend {
 	}
 
 	private async destroyVmAndWait(node: string, vmid: number): Promise<void> {
+		// Ceph RBD can still hold watchers on a just-stopped VM's images, and destroying immediately can end with "image still has watchers" warnings.
 		await new Promise((r) => setTimeout(r, 3000));
 		const upid = await this.destroyVm(node, vmid);
 		if (!upid) {
@@ -1094,9 +1032,10 @@ export class ProxmoxBackend implements VmBackend {
 	}
 
 	private async retryLeakedDiskRemoval(node: string, vmid: number, disks: string[]): Promise<void> {
-		const storage = config.proxmox.vmDiskStorage;
+		const storage = VM_DISK_STORAGE;
 		let remaining = disks;
 		for (let attempt = 1; remaining.length > 0 && attempt <= 3; attempt += 1) {
+			// Ceph RBD refuses `rbd rm` while "image still has watchers" and only succeeds once the stale watcher expires, so wait longer each round.
 			// biome-ignore lint/performance/noAwaitInLoops: backoff delay between retry rounds is intentionally sequential
 			await new Promise((r) => setTimeout(r, 5000 * attempt));
 			const stillLeaked: string[] = [];
@@ -1246,7 +1185,7 @@ export class ProxmoxBackend implements VmBackend {
 
 	async startVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
-		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
+		const { node, vmid } = await this.resolveVerified(id, proxmoxId);
 		await this.withHaRecovery(node, vmid, 'running', async () => {
 			await this.client.waitForTask(node, await this.client.startVm(node, vmid));
 		});
@@ -1254,7 +1193,7 @@ export class ProxmoxBackend implements VmBackend {
 
 	async stopVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
-		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
+		const { node, vmid } = await this.resolveVerified(id, proxmoxId);
 		await this.withHaRecovery(node, vmid, 'stopped', async () => {
 			await this.client.waitForTask(node, await this.client.shutdownVm(node, vmid));
 		});
@@ -1262,7 +1201,7 @@ export class ProxmoxBackend implements VmBackend {
 
 	async killVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
-		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
+		const { node, vmid } = await this.resolveVerified(id, proxmoxId);
 		await this.withHaRecovery(node, vmid, 'stopped', async () => {
 			await this.client.waitForTask(node, await this.forceStopVm(node, vmid));
 		});
@@ -1270,7 +1209,7 @@ export class ProxmoxBackend implements VmBackend {
 
 	async rebootVm(id: string, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
-		const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
+		const { node, vmid } = await this.resolveVerified(id, proxmoxId);
 		await this.withHaRecovery(node, vmid, 'running', async () => {
 			await this.client.waitForTask(node, await this.client.rebootVm(node, vmid));
 		});
@@ -1279,9 +1218,9 @@ export class ProxmoxBackend implements VmBackend {
 	async resizeVm(id: string, params: VmResizeParams, proxmoxId?: number): Promise<void> {
 		clearProxmoxReadCaches();
 		try {
-			const { node, vmid } = await this.resolveForMutation(id, proxmoxId);
+			const { node, vmid } = await this.resolveVerified(id, proxmoxId);
 			const qemuConfig = await this.client.getQemuConfig(node, vmid);
-			const currentDiskGb = parseDiskSizeGb(qemuConfig.virtio0);
+			const currentDiskGb = parseDiskSizeGb(qemuConfig[BOOT_DISK]);
 			if (currentDiskGb === null) {
 				throw new VmResizeError(`Could not determine the current disk size of VM ${vmid}`);
 			}

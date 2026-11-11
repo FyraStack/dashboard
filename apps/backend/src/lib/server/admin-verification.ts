@@ -1,59 +1,23 @@
 import { eq } from 'drizzle-orm';
-import { ulid } from 'ulid';
-import { initAuth } from '#lib/server/auth.js';
-import { context } from '#lib/server/context.js';
-import { passkey, twoFactor, verification } from '#lib/server/db/auth.schema.js';
-import type { initDrizzle } from '#lib/server/db/index.js';
+import type { VerificationMethod } from 'stack-shared/auth';
+import { passkey, twoFactor } from '#lib/server/db/auth.schema.js';
+import type { Database } from '#lib/server/db/index.js';
 import { error } from '#lib/server/http.js';
-import { consumeVerification, withStepUpAttemptLimit } from '#lib/server/step-up.js';
+import { verifyTotpCode } from '#lib/server/totp-verification.js';
+import {
+	consumeProof,
+	consumeVerificationCode,
+	issueVerificationCode,
+	storeVerification,
+	VERIFICATION_PROOF_TTL_MS,
+	verificationIdentifiers,
+	withStepUpAttemptLimit
+} from '#lib/server/verification-codes.js';
 
-export const ADMIN_VERIFICATION_CODE_LENGTH = 6;
-export const ADMIN_VERIFICATION_CODE_TTL_MS = 10 * 60 * 1000;
-const ADMIN_VERIFICATION_INTENT_TTL_MS = 60 * 1000;
-
-export type AdminVerificationMethod = 'passkey' | 'totp' | 'email';
-
-type Db = ReturnType<typeof initDrizzle>;
-
-function intentIdentifier(adminUserId: string) {
-	return `admin-user-delete-intent:${adminUserId}`;
-}
-
-function passkeyIdentifier(adminUserId: string, targetId: string) {
-	return `admin-user-delete-passkey:${adminUserId}:${targetId}`;
-}
-
-function emailIdentifier(adminUserId: string, targetId: string) {
-	return `admin-user-delete-email:${adminUserId}:${targetId}`;
-}
-
-export function normalizeVerificationCode(code: string) {
-	return code.replace(/\D/g, '');
-}
-
-function generateVerificationCode() {
-	const max = 10 ** ADMIN_VERIFICATION_CODE_LENGTH;
-	const upperBound = 0x1_00_00_00_00;
-	const limit = Math.floor(upperBound / max) * max;
-	let value: number;
-
-	do {
-		[value] = crypto.getRandomValues(new Uint32Array(1));
-	} while (value >= limit);
-
-	return (value % max).toString().padStart(ADMIN_VERIFICATION_CODE_LENGTH, '0');
-}
-
-async function hashVerificationCode(adminUserId: string, targetId: string, code: string) {
-	const data = new TextEncoder().encode(`${adminUserId}:${targetId}:${code}`);
-	const hash = await crypto.subtle.digest('SHA-256', data);
-	return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-export async function getAdminVerificationMethod(
-	db: Db,
+async function getAdminVerificationMethod(
+	db: Database,
 	adminUserId: string
-): Promise<AdminVerificationMethod> {
+): Promise<VerificationMethod> {
 	const [registeredPasskey] = await db
 		.select({ id: passkey.id })
 		.from(passkey)
@@ -74,74 +38,37 @@ export async function getAdminVerificationMethod(
 }
 
 export async function beginAdminVerification(
-	db: Db,
+	db: Database,
 	adminUserId: string,
 	targetId: string
-): Promise<{ method: AdminVerificationMethod; code: string | null }> {
+): Promise<{ method: VerificationMethod; code: string | null }> {
 	const method = await getAdminVerificationMethod(db, adminUserId);
 
-	await db.delete(verification).where(eq(verification.identifier, intentIdentifier(adminUserId)));
-
 	if (method === 'passkey') {
-		await db.insert(verification).values({
-			id: ulid(),
-			identifier: intentIdentifier(adminUserId),
+		await storeVerification(db, {
+			identifier: verificationIdentifiers.adminActionIntent(adminUserId),
 			value: targetId,
-			expiresAt: new Date(Date.now() + ADMIN_VERIFICATION_INTENT_TTL_MS)
+			ttlMs: VERIFICATION_PROOF_TTL_MS
 		});
 		return { method, code: null };
 	}
 
 	if (method === 'email') {
-		const code = generateVerificationCode();
-		const identifier = emailIdentifier(adminUserId, targetId);
-		const value = await hashVerificationCode(adminUserId, targetId, code);
-
-		await db.delete(verification).where(eq(verification.identifier, identifier));
-		await db.insert(verification).values({
-			id: ulid(),
-			identifier,
-			value,
-			expiresAt: new Date(Date.now() + ADMIN_VERIFICATION_CODE_TTL_MS)
-		});
+		const code = await issueVerificationCode(
+			db,
+			verificationIdentifiers.adminActionEmail(adminUserId, targetId)
+		);
 		return { method, code };
 	}
 
 	return { method, code: null };
 }
 
-async function consumePasskeyVerification(db: Db, adminUserId: string, targetId: string) {
-	const consumed = await consumeVerification(db, passkeyIdentifier(adminUserId, targetId));
-	if (!consumed) {
-		error(400, 'Verify with your passkey before performing this action.');
-	}
-}
-
-async function consumeEmailVerification(
-	db: Db,
-	adminUserId: string,
-	targetId: string,
-	code: string
-) {
-	const normalizedCode = normalizeVerificationCode(code);
-	if (normalizedCode.length !== ADMIN_VERIFICATION_CODE_LENGTH) {
-		error(400, 'Enter the verification code from your email.');
-	}
-
-	const value = await hashVerificationCode(adminUserId, targetId, normalizedCode);
-	await withStepUpAttemptLimit(db, adminUserId, async () => {
-		const consumed = await consumeVerification(db, emailIdentifier(adminUserId, targetId), value);
-		if (!consumed) {
-			error(400, 'Invalid or expired verification code.');
-		}
-	});
-}
-
 export async function consumeAdminVerification(
-	db: Db,
+	db: Database,
 	adminUserId: string,
 	targetId: string,
-	method: string,
+	method: VerificationMethod,
 	code: string | undefined
 ) {
 	const required = await getAdminVerificationMethod(db, adminUserId);
@@ -150,25 +77,24 @@ export async function consumeAdminVerification(
 	}
 
 	if (required === 'passkey') {
-		await consumePasskeyVerification(db, adminUserId, targetId);
-		return;
-	}
-
-	if (required === 'totp') {
-		const normalizedCode = normalizeVerificationCode(code ?? '');
-		if (normalizedCode.length !== ADMIN_VERIFICATION_CODE_LENGTH) {
-			error(400, 'Enter the verification code from your authenticator app.');
-		}
-
-		const auth = initAuth();
-		await withStepUpAttemptLimit(db, adminUserId, () =>
-			auth.api.verifyTOTP({
-				headers: context().request.headers,
-				body: { code: normalizedCode, trustDevice: false }
-			})
+		await consumeProof(
+			db,
+			verificationIdentifiers.adminActionPasskey(adminUserId, targetId),
+			'Verify with your passkey before performing this action.'
 		);
 		return;
 	}
 
-	await consumeEmailVerification(db, adminUserId, targetId, code ?? '');
+	if (required === 'totp') {
+		await verifyTotpCode(db, adminUserId, code ?? '');
+		return;
+	}
+
+	await withStepUpAttemptLimit(db, adminUserId, () =>
+		consumeVerificationCode(
+			db,
+			verificationIdentifiers.adminActionEmail(adminUserId, targetId),
+			code ?? ''
+		)
+	);
 }

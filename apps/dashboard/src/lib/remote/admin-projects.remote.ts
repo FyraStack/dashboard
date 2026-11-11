@@ -1,5 +1,6 @@
 import { type } from 'arktype';
 import type { AdminProject } from 'stack-backend/types';
+import { verificationMethods } from 'stack-shared/auth';
 import {
 	accessibilityFixtureAdminProjects,
 	accessibilityFixtureEnabled
@@ -54,7 +55,11 @@ export const beginDeleteProject = command(beginDeleteProjectParams, (input) =>
 	backend((me) => me.admin().projects().beginDelete(input))
 );
 
-const deleteProjectParams = type({ projectId: 'string', method: 'string', code: 'string?' });
+const deleteProjectParams = type({
+	projectId: 'string',
+	method: type.enumerated(...verificationMethods),
+	code: 'string?'
+});
 export const deleteProjectWithVerification = command(deleteProjectParams, (input) =>
 	backend((me) => me.admin().projects().deleteWithVerification(input))
 );

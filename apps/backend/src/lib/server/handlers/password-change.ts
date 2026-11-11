@@ -1,23 +1,23 @@
 import { and, eq } from 'drizzle-orm';
-import { ulid } from 'ulid';
+import type { VerificationMethod } from 'stack-shared/auth';
 import PasswordChangeCodeEmail from '#lib/emails/password-change-code.svelte';
 import { initAuth } from '#lib/server/auth.js';
-import { context } from '#lib/server/context.js';
-import { account, verification } from '#lib/server/db/auth.schema.js';
-import { type Database, initDrizzle } from '#lib/server/db/index.js';
+import { requireUser } from '#lib/server/auth-context.js';
+import { type AppUser, context } from '#lib/server/context.js';
+import { account } from '#lib/server/db/auth.schema.js';
+import type { Database } from '#lib/server/db/index.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
-import { error } from '#lib/server/http.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import { verifyTotpCode } from '#lib/server/totp-verification.js';
 import {
-	consumeVerification,
+	consumeProof,
+	consumeVerificationCode,
+	issueFreshVerificationCode,
 	restoreVerification,
+	VERIFICATION_CODE_TTL_MS,
+	verificationIdentifiers,
 	withStepUpAttemptLimit
-} from '#lib/server/step-up.js';
-
-type VerificationRow = typeof verification.$inferSelect;
-
-const CODE_LENGTH = 6;
-const CODE_TTL_MS = 10 * 60 * 1000;
+} from '#lib/server/verification-codes.js';
 
 export interface ConfirmPasswordChangeWithEmailInput {
 	code: string;
@@ -34,35 +34,14 @@ export interface ConfirmPasswordChangeWithPasskeyInput {
 	newPassword: string;
 }
 
-function passwordChangeIdentifier(userId: string) {
-	return `password-change:${userId}`;
+interface Passwords {
+	currentPassword: string;
+	newPassword: string;
 }
 
-function passwordChangePasskeyIdentifier(userId: string) {
-	return `password-change-passkey:${userId}`;
-}
-
-function generateCode() {
-	const max = 10 ** CODE_LENGTH;
-	const range = 2 ** 32;
-	const limit = range - (range % max);
-	const values = new Uint32Array(1);
-
-	do {
-		crypto.getRandomValues(values);
-	} while (values[0] >= limit);
-
-	return (values[0] % max).toString().padStart(CODE_LENGTH, '0');
-}
-
-async function hashCode(userId: string, code: string) {
-	const data = new TextEncoder().encode(`${userId}:${code}`);
-	const hash = await crypto.subtle.digest('SHA-256', data);
-	return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-function normalizeCode(code: string) {
-	return code.replace(/\D/g, '');
+interface Proof {
+	cookies: string[];
+	restore?: () => Promise<void>;
 }
 
 async function changePasswordOauth(newPassword: string): Promise<string[]> {
@@ -95,130 +74,86 @@ async function changePassword(currentPassword: string, newPassword: string): Pro
 	return changed.headers.getSetCookie();
 }
 
-async function changePasswordOrRestoreProof(
-	db: Database,
-	proof: VerificationRow,
-	params: { currentPassword: string; newPassword: string }
-) {
-	try {
-		return (await hasPassword())
-			? await changePassword(params.currentPassword, params.newPassword)
-			: await changePasswordOauth(params.newPassword);
-	} catch (err) {
-		await restoreVerification(db, proof);
-		throw err;
-	}
-}
-
-export async function sendPasswordChangeCode() {
-	const { user } = context().locals;
-	if (!user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	const code = generateCode();
-	const identifier = passwordChangeIdentifier(user.id);
-	const value = await hashCode(user.id, code);
-	const expiresAt = new Date(Date.now() + CODE_TTL_MS);
-
-	await db.delete(verification).where(eq(verification.identifier, identifier));
-	await db.insert(verification).values({ id: ulid(), identifier, value, expiresAt });
-
-	await sendRenderedEmail({
-		component: PasswordChangeCodeEmail,
-		props: { userName: user.name, code, expiresInMinutes: CODE_TTL_MS / 60_000 },
-		subject: 'Confirm your Stack password change',
-		to: user.email
-	});
-}
-
-export async function hasPassword() {
-	const db = initDrizzle();
-	const { user } = context().locals;
-	if (!user) {
-		error(401, 'Authentication required');
-	}
+async function hasCredentialPassword(db: Database, userId: string) {
 	const [credentialAccount] = await db
 		.select({ id: account.id })
 		.from(account)
-		.where(and(eq(account.userId, user.id), eq(account.providerId, 'credential')))
+		.where(and(eq(account.userId, userId), eq(account.providerId, 'credential')))
 		.limit(1);
 
 	return !!credentialAccount;
 }
 
-export async function confirmPasswordChangeWithEmail(params: ConfirmPasswordChangeWithEmailInput) {
-	const { user } = context().locals;
-	if (!user) {
-		error(401, 'Authentication required');
-	}
-
-	const code = normalizeCode(params.code);
-	if (code.length !== CODE_LENGTH) {
-		error(400, 'Enter the verification code from your email.');
-	}
-
-	const db = initDrizzle();
-	const value = await hashCode(user.id, code);
-	const proof = await withStepUpAttemptLimit(db, user.id, async () => {
-		const consumed = await consumeVerification(db, passwordChangeIdentifier(user.id), value);
-		if (!consumed) {
-			error(400, 'Invalid or expired verification code.');
-		}
-		return consumed;
-	});
-
-	const setCookie = await changePasswordOrRestoreProof(db, proof, params);
-	captureServerEvent('password_changed', { verification_method: 'email' });
-
-	return { setCookie };
+async function changeOwnPassword(db: Database, userId: string, passwords: Passwords) {
+	return (await hasCredentialPassword(db, userId))
+		? await changePassword(passwords.currentPassword, passwords.newPassword)
+		: await changePasswordOauth(passwords.newPassword);
 }
 
-export async function confirmPasswordChangeWithTotp(params: ConfirmPasswordChangeWithTotpInput) {
-	const { locals, request } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
+async function confirmPasswordChange(
+	method: VerificationMethod,
+	passwords: Passwords,
+	prove: (user: AppUser, db: Database) => Promise<Proof>
+) {
+	const { db, user } = requireUser();
 
-	const code = normalizeCode(params.code);
-	if (code.length !== CODE_LENGTH) {
-		error(400, 'Enter the verification code from your authenticator app.');
+	const proof = await prove(user, db);
+	let passwordCookies: string[];
+	try {
+		passwordCookies = await changeOwnPassword(db, user.id, passwords);
+	} catch (err) {
+		await proof.restore?.();
+		throw err;
 	}
+	captureServerEvent('password_changed', { verification_method: method });
 
-	const auth = initAuth();
-	const verified = await withStepUpAttemptLimit(initDrizzle(), locals.user.id, () =>
-		auth.api.verifyTOTP({
-			headers: request.headers,
-			body: { code, trustDevice: false },
-			returnHeaders: true
-		})
+	return { setCookie: [...proof.cookies, ...passwordCookies] };
+}
+
+export async function sendPasswordChangeCode() {
+	const { db, user } = requireUser();
+
+	const code = await issueFreshVerificationCode(
+		db,
+		verificationIdentifiers.passwordChangeCode(user.id)
 	);
 
-	const passwordCookies = (await hasPassword())
-		? await changePassword(params.currentPassword, params.newPassword)
-		: await changePasswordOauth(params.newPassword);
-	captureServerEvent('password_changed', { verification_method: 'totp' });
-
-	return { setCookie: [...verified.headers.getSetCookie(), ...passwordCookies] };
+	await sendRenderedEmail({
+		component: PasswordChangeCodeEmail,
+		props: { userName: user.name, code, expiresInMinutes: VERIFICATION_CODE_TTL_MS / 60_000 },
+		subject: 'Confirm your Stack password change',
+		to: user.email
+	});
 }
 
-export async function confirmPasswordChangeWithPasskey(
-	params: ConfirmPasswordChangeWithPasskeyInput
-) {
-	const { user } = context().locals;
-	if (!user) {
-		error(401, 'Authentication required');
-	}
+export function hasPassword() {
+	const { db, user } = requireUser();
+	return hasCredentialPassword(db, user.id);
+}
 
-	const db = initDrizzle();
-	const proof = await consumeVerification(db, passwordChangePasskeyIdentifier(user.id));
-	if (!proof) {
-		error(400, 'Verify with your passkey before changing your password.');
-	}
+export function confirmPasswordChangeWithEmail(params: ConfirmPasswordChangeWithEmailInput) {
+	return confirmPasswordChange('email', params, async (user, db) => {
+		const code = await withStepUpAttemptLimit(db, user.id, () =>
+			consumeVerificationCode(db, verificationIdentifiers.passwordChangeCode(user.id), params.code)
+		);
+		return { cookies: [], restore: () => restoreVerification(db, code) };
+	});
+}
 
-	const setCookie = await changePasswordOrRestoreProof(db, proof, params);
-	captureServerEvent('password_changed', { verification_method: 'passkey' });
+export function confirmPasswordChangeWithTotp(params: ConfirmPasswordChangeWithTotpInput) {
+	return confirmPasswordChange('totp', params, async (user, db) => {
+		const verified = await verifyTotpCode(db, user.id, params.code);
+		return { cookies: verified.headers.getSetCookie() };
+	});
+}
 
-	return { setCookie };
+export function confirmPasswordChangeWithPasskey(params: ConfirmPasswordChangeWithPasskeyInput) {
+	return confirmPasswordChange('passkey', params, async (user, db) => {
+		const proof = await consumeProof(
+			db,
+			verificationIdentifiers.passwordChangePasskey(user.id),
+			'Verify with your passkey before changing your password.'
+		);
+		return { cookies: [], restore: () => restoreVerification(db, proof) };
+	});
 }

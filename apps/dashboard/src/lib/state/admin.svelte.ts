@@ -1,3 +1,4 @@
+import type { VerificationMethod } from 'stack-shared/auth';
 import { untrack } from 'svelte';
 import { toast } from 'svelte-sonner';
 import { config } from '#lib/config.js';
@@ -488,7 +489,7 @@ export class AdminState {
 		}
 	}
 
-	async deleteUser(userId: string, method: string, code: string) {
+	async deleteUser(userId: string, method: VerificationMethod, code: string) {
 		this.adminUserError = '';
 		this.startUserSheetSave(userId, 'delete');
 		try {

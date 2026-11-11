@@ -5,8 +5,10 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { deleteSessionCookie, expireCookie } from 'better-auth/cookies';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
-import { and, count, eq, gt } from 'drizzle-orm';
+import { and, count, eq } from 'drizzle-orm';
 import { ac, organizationRoles } from 'stack-shared/access-control';
+import { pendingPasskeyHintCookie } from 'stack-shared/auth';
+import { resetPasswordPath } from 'stack-shared/routes';
 import { ulid } from 'ulid';
 import EmailChangeConfirmationEmail from '#lib/emails/email-change-confirmation.svelte';
 import OrganizationInvitationEmail from '#lib/emails/organization-invitation.svelte';
@@ -14,35 +16,22 @@ import ResetPasswordEmail from '#lib/emails/reset-password.svelte';
 import VerifyEmail from '#lib/emails/verify-email.svelte';
 import { userAdditionalFields } from '#lib/server/auth-user-fields.js';
 import { context as requestContext } from '#lib/server/context.js';
-import { member, user as userTable, verification } from '#lib/server/db/auth.schema.js';
+import { member, user as userTable } from '#lib/server/db/auth.schema.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
 import { sendSecurityAlertEmail } from '#lib/server/email-notifications.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
+import {
+	clearVerification,
+	recordPasskeyProofs,
+	verificationIdentifiers
+} from '#lib/server/verification-codes.js';
 
 const PENDING_PASSKEY_COOKIE = 'pending_passkey_2fa';
-const PENDING_PASSKEY_HINT_COOKIE = 'pending_passkey_2fa_hint';
 const PENDING_PASSKEY_MAX_AGE = 600;
-const PASSKEY_PASSWORD_CHANGE_MAX_AGE_MS = 60 * 1000;
 export const VERIFIED_2FA_DISABLE_HEADER = 'x-fyra-verified-2fa-disable';
-export const TOTP_SECRET_KEY_VERSION = 1;
-
-function passwordChangePasskeyIdentifier(userId: string) {
-	return `password-change-passkey:${userId}`;
-}
-
-function pendingEmailChangeIdentifier(userId: string) {
-	return `pending-email-change:${userId}`;
-}
-
-function adminUserDeletionIntentIdentifier(adminUserId: string) {
-	return `admin-user-delete-intent:${adminUserId}`;
-}
-
-function adminUserDeletionPasskeyIdentifier(adminUserId: string, targetUserId: string) {
-	return `admin-user-delete-passkey:${adminUserId}:${targetUserId}`;
-}
+const TOTP_SECRET_KEY_VERSION = 1;
 
 interface PasskeyRecord {
 	userId: string;
@@ -192,7 +181,7 @@ function buildAuth() {
 						component: ResetPasswordEmail,
 						props: {
 							userName: user.name,
-							resetUrl: `${baseURL}/reset-password?token=${encodeURIComponent(token)}`
+							resetUrl: `${baseURL}${resetPasswordPath}?token=${encodeURIComponent(token)}`
 						},
 						subject: 'Reset your Stack password',
 						to: user.email
@@ -211,14 +200,11 @@ function buildAuth() {
 					})
 				),
 			afterEmailVerification: async (user) => {
-				await db
-					.delete(verification)
-					.where(
-						and(
-							eq(verification.identifier, pendingEmailChangeIdentifier(user.id)),
-							eq(verification.value, user.email.toLowerCase())
-						)
-					);
+				await clearVerification(
+					db,
+					verificationIdentifiers.pendingEmailChange(user.id),
+					user.email.toLowerCase()
+				);
 				await resyncOwnedProjectBilling(user.id);
 			},
 			sendOnSignUp: true
@@ -300,7 +286,7 @@ function buildAuth() {
 									pendingPasskeyCookie.attributes
 								);
 								ctx.setCookie(
-									PENDING_PASSKEY_HINT_COOKIE,
+									pendingPasskeyHintCookie,
 									data.user.twoFactorEnabled ? 'totp' : 'passkey',
 									{
 										httpOnly: true,
@@ -358,42 +344,7 @@ function buildAuth() {
 								});
 							}
 
-							const [deletionIntent] = await db
-								.select({ id: verification.id, targetUserId: verification.value })
-								.from(verification)
-								.where(
-									and(
-										eq(
-											verification.identifier,
-											adminUserDeletionIntentIdentifier(verifiedPasskey.userId)
-										),
-										gt(verification.expiresAt, new Date())
-									)
-								)
-								.limit(1);
-
-							if (deletionIntent) {
-								const identifier = adminUserDeletionPasskeyIdentifier(
-									verifiedPasskey.userId,
-									deletionIntent.targetUserId
-								);
-								await db.delete(verification).where(eq(verification.identifier, identifier));
-								await db.delete(verification).where(eq(verification.id, deletionIntent.id));
-								await db.insert(verification).values({
-									id: ulid(),
-									identifier,
-									value: clientData.id,
-									expiresAt: new Date(Date.now() + PASSKEY_PASSWORD_CHANGE_MAX_AGE_MS)
-								});
-							}
-
-							const identifier = passwordChangePasskeyIdentifier(verifiedPasskey.userId);
-							await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
-							await ctx.context.internalAdapter.createVerificationValue({
-								identifier,
-								value: clientData.id,
-								expiresAt: new Date(Date.now() + PASSKEY_PASSWORD_CHANGE_MAX_AGE_MS)
-							});
+							await recordPasskeyProofs(db, verifiedPasskey.userId, clientData.id);
 							return;
 						}
 
@@ -405,7 +356,7 @@ function buildAuth() {
 						}
 
 						expireCookie(ctx as Parameters<typeof expireCookie>[0], pendingPasskeyCookie);
-						ctx.setCookie(PENDING_PASSKEY_HINT_COOKIE, '', {
+						ctx.setCookie(pendingPasskeyHintCookie, '', {
 							httpOnly: true,
 							maxAge: 0,
 							path: '/',

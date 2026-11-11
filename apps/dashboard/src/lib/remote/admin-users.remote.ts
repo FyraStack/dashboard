@@ -1,5 +1,6 @@
 import { type } from 'arktype';
 import type { AdminUser } from 'stack-backend/types';
+import { verificationMethods } from 'stack-shared/auth';
 import {
 	accessibilityFixtureAdminUsers,
 	accessibilityFixtureEnabled
@@ -48,7 +49,11 @@ export const beginDeleteUser = command(beginDeleteUserParams, (input) =>
 	backend((me) => me.admin().users().beginDelete(input))
 );
 
-const deleteUserParams = type({ userId: 'string', method: 'string', code: 'string?' });
+const deleteUserParams = type({
+	userId: 'string',
+	method: type.enumerated(...verificationMethods),
+	code: 'string?'
+});
 export const deleteUserWithVerification = command(deleteUserParams, (input) =>
 	backend((me) => me.admin().users().deleteWithVerification(input))
 );

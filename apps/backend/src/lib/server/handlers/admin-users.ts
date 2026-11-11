@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, ne, or, sql } from 'drizzle-orm';
+import type { VerificationMethod } from 'stack-shared/auth';
 import AdminUserDeletionCodeEmail from '#lib/emails/admin-user-deletion-code.svelte';
 import {
-	ADMIN_VERIFICATION_CODE_TTL_MS,
 	beginAdminVerification,
 	consumeAdminVerification
 } from '#lib/server/admin-verification.js';
@@ -22,6 +22,7 @@ import { sendRenderedEmail } from '#lib/server/email.js';
 import { error } from '#lib/server/http.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
+import { VERIFICATION_CODE_TTL_MS } from '#lib/server/verification-codes.js';
 
 export interface UserSession {
 	createdAt: Date;
@@ -102,7 +103,7 @@ export interface BeginDeleteUserInput {
 
 export interface DeleteUserWithVerificationInput {
 	code?: string;
-	method: string;
+	method: VerificationMethod;
 	userId: string;
 }
 
@@ -325,7 +326,7 @@ export async function beginDeleteUser(params: BeginDeleteUserInput) {
 				userName: adminUser.name,
 				targetEmail: target.email,
 				code,
-				expiresInMinutes: ADMIN_VERIFICATION_CODE_TTL_MS / 60_000
+				expiresInMinutes: VERIFICATION_CODE_TTL_MS / 60_000
 			},
 			subject: 'Confirm Stack user deletion',
 			to: adminUser.email

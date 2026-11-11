@@ -3,13 +3,15 @@
 	import { toast } from 'svelte-sonner';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { dependencies } from '#lib/dependencies.js';
+	import { formatMegabytes } from '#lib/format.js';
 	import type { listVmTypes } from '#lib/remote/vm-types.remote.js';
 	import { getVm, resizeVm } from '#lib/remote/vms.remote.js';
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
+	import { isLocked } from '#lib/vm-status.js';
 	import { invalidate } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
-	import { formatBytes } from '../../lib/server-summary';
+	import { useServer } from '../lib/server-context';
 	import type { PageProps } from './$types';
 
 	type VmPlan = Awaited<ReturnType<typeof listVmTypes>>[number];
@@ -18,19 +20,13 @@
 		'You cannot resize your server to a smaller size. For a resize to take effect, you will need to restart your server. You will need to manually expand your filesystem after a server resize.';
 
 	let { data }: PageProps = $props();
-	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
+	const server = useServer();
 	let resizingId = $state<string | null>(null);
 	let resizeError = $state('');
-	let serverBusy = $derived(
-		selectedServer.status === 'provisioning' || selectedServer.status === 'deleting'
-	);
-
-	function formatRam(mb: number): string {
-		return formatBytes(mb * 1024 * 1024);
-	}
+	let serverBusy = $derived(isLocked(server.current.status));
 
 	function describePlan(plan: VmPlan): string {
-		return `${plan.cores} vCPU, ${formatRam(plan.ramCapacity)} RAM, ${plan.storageAmount}GB disk`;
+		return `${plan.cores} vCPU, ${formatMegabytes(plan.ramCapacity)} RAM, ${plan.storageAmount}GB disk`;
 	}
 
 	function isDowngrade(plan: VmPlan): boolean {
@@ -43,7 +39,7 @@
 		}
 		const ok = await confirmDestructive({
 			title: `Resize to ${plan.name}?`,
-			description: `This changes ${selectedServer.name} to ${describePlan(plan)}. ${resizeCaveats}`,
+			description: `This changes ${server.current.name} to ${describePlan(plan)}. ${resizeCaveats}`,
 			confirmLabel: `Resize to ${plan.name}`
 		});
 		if (!ok) {
@@ -53,11 +49,11 @@
 		resizingId = plan.id;
 		resizeError = '';
 		try {
-			await resizeVm({ vmId: selectedServer.id, vmTypeId: plan.id }).updates(
-				getVm({ vmId: selectedServer.id })
+			await resizeVm({ vmId: server.current.id, vmTypeId: plan.id }).updates(
+				getVm({ vmId: server.current.id })
 			);
 			toast.success(`Resized to ${plan.name}. Restart the server for the change to take effect.`);
-			await invalidate('project:vms');
+			await invalidate(dependencies.project.vms);
 		} catch (err) {
 			resizeError = getErrorMessage(err, 'Failed to resize server.');
 			toast.error(resizeError);
@@ -71,11 +67,11 @@
 	<div>
 		<h2 class="text-sm font-semibold text-foreground">Resize Server</h2>
 		<p class="mt-1 text-xs text-muted-foreground">
-			Change the plan for {selectedServer.name}. Current plan:
-			{data.vmType?.name ?? selectedServer.plan}
+			Change the plan for {server.current.name}. Current plan:
+			{data.vmType?.name ?? server.current.plan}
 			{#if data.vmType}
 				({data.vmType.cores}
-				vCPU • {formatRam(data.vmType.ramCapacity)} RAM • {data.vmType.storageAmount}GB disk)
+				vCPU • {formatMegabytes(data.vmType.ramCapacity)} RAM • {data.vmType.storageAmount}GB disk)
 			{/if}
 		</p>
 	</div>
@@ -109,7 +105,7 @@
 					</div>
 					<p class="mt-2 text-xs text-muted-foreground">
 						{plan.cores}
-						vCPU • {formatRam(plan.ramCapacity)} RAM • {plan.storageAmount}GB disk
+						vCPU • {formatMegabytes(plan.ramCapacity)} RAM • {plan.storageAmount}GB disk
 					</p>
 					<Button
 						variant="outline"

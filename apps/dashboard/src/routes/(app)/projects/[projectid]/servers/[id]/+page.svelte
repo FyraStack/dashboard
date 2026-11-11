@@ -1,7 +1,10 @@
 <script lang="ts">
+	import { Clipboard } from '#lib/clipboard.svelte.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { formatPercent } from '#lib/format.js';
 	import { getVmMetricsHistory } from '#lib/remote/vms.remote.js';
-	import { getServerWithFallback, serversState } from '#lib/state/servers.svelte.js';
+	import { primaryAddress } from '#lib/server-info.js';
+	import { serversState } from '#lib/state/servers.svelte.js';
 	import { browser } from '$app/env';
 	import Check from '~icons/lucide/check';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
@@ -9,14 +12,14 @@
 	import FileText from '~icons/nucleo/file-text';
 	import Terminal from '~icons/nucleo/terminal';
 	import Trash2 from '~icons/nucleo/trash';
-	import { primaryAddress } from '../lib/server-summary';
 	import type { PageProps } from './$types';
+	import { useServer } from './lib/server-context';
 
 	let { data }: PageProps = $props();
-	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
-	let sshAddress = $derived(primaryAddress(selectedServer));
-	let copied = $state('');
-	let liveLoaded = $derived(selectedServer.liveLoaded || serversState.firstStatusRefreshComplete);
+	const server = useServer();
+	let sshAddress = $derived(primaryAddress(server.current));
+	const clipboard = new Clipboard();
+	let liveLoaded = $derived(server.current.liveLoaded || serversState.firstStatusRefreshComplete);
 	const metricsHistory = $derived(
 		browser ? getVmMetricsHistory({ vmId: data.serverId, timeframe: 'hour' }) : null
 	);
@@ -32,17 +35,7 @@
 	let liveChartSamplesByServer = $state<Record<string, ChartSample[]>>({});
 	let lastSampleKeyByServer = $state<Record<string, string>>({});
 
-	function formatPercent(value: number | null) {
-		if (value === null) {
-			return '-';
-		}
-		return `${Math.round(value * 100)}%`;
-	}
-
-	function formatRate(bytes: number | null) {
-		if (bytes === null) {
-			return '-';
-		}
+	function formatBytesPerSecond(bytes: number) {
 		const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
 		let value = bytes;
 		let unit = 0;
@@ -51,6 +44,10 @@
 			unit += 1;
 		}
 		return `${value >= 10 || unit === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unit]}`;
+	}
+
+	function formatOptional(value: number | null, format: (value: number) => string) {
+		return value === null ? '-' : format(value);
 	}
 
 	function buildPoints(
@@ -70,10 +67,10 @@
 	}
 
 	function serverMetricsSample(): ChartSample | null {
-		if (!selectedServer.liveLoaded) {
+		if (!server.current.liveLoaded) {
 			return null;
 		}
-		const { metrics } = selectedServer;
+		const { metrics } = server.current;
 		return {
 			cpu: metrics?.cpu ?? null,
 			memory: metrics?.memory ?? null,
@@ -98,20 +95,20 @@
 			return;
 		}
 		const key = sampleKey(sample);
-		if (lastSampleKeyByServer[selectedServer.id] === key) {
+		if (lastSampleKeyByServer[server.current.id] === key) {
 			return;
 		}
 
-		lastSampleKeyByServer[selectedServer.id] = key;
-		liveChartSamplesByServer[selectedServer.id] = [
-			...(liveChartSamplesByServer[selectedServer.id] ?? []),
+		lastSampleKeyByServer[server.current.id] = key;
+		liveChartSamplesByServer[server.current.id] = [
+			...(liveChartSamplesByServer[server.current.id] ?? []),
 			sample
 		].slice(-12);
 	});
 
 	let charts = $derived.by(() => {
-		const history = selectedServer.id === data.serverId ? (metricsHistory?.current ?? []) : [];
-		const liveSamples = liveChartSamplesByServer[selectedServer.id] ?? [];
+		const history = server.current.id === data.serverId ? (metricsHistory?.current ?? []) : [];
+		const liveSamples = liveChartSamplesByServer[server.current.id] ?? [];
 		const currentSample = serverMetricsSample();
 		const lastLiveSample = liveSamples.at(-1);
 		const samples = [
@@ -144,7 +141,7 @@
 					samples.map((sample) => sample.cpu),
 					1
 				),
-				value: formatPercent(lastValue('cpu'))
+				value: formatOptional(lastValue('cpu'), formatPercent)
 			},
 			{
 				label: 'RAM Usage',
@@ -154,7 +151,7 @@
 					samples.map((sample) => sample.memory),
 					1
 				),
-				value: formatPercent(lastValue('memory'))
+				value: formatOptional(lastValue('memory'), formatPercent)
 			},
 			{
 				label: 'Bandwidth',
@@ -164,7 +161,7 @@
 					samples.map((sample) => sample.bandwidth),
 					bandwidthMax
 				),
-				value: formatRate(lastValue('bandwidth'))
+				value: formatOptional(lastValue('bandwidth'), formatBytesPerSecond)
 			},
 			{
 				label: 'Disk I/O',
@@ -174,7 +171,7 @@
 					samples.map((sample) => sample.diskIo),
 					diskIoMax
 				),
-				value: formatRate(lastValue('diskIo'))
+				value: formatOptional(lastValue('diskIo'), formatBytesPerSecond)
 			}
 		];
 	});
@@ -208,16 +205,82 @@
 		error: 'text-red-700 dark:text-red-400'
 	};
 
-	function isLiveDetail(label: string) {
-		return ['Uptime'].includes(label);
-	}
-
-	function copyToClipboard(text: string, key: string) {
-		navigator.clipboard.writeText(text);
-		copied = key;
-		setTimeout(() => (copied = ''), 1500);
-	}
+	const serverDetails = $derived([
+		{ label: 'Plan', value: server.current.plan },
+		{ label: 'Region', value: server.current.region },
+		{ label: 'vCPU', value: `${server.current.vcpu}` },
+		{ label: 'RAM', value: server.current.ram },
+		{ label: 'Disk', value: server.current.disk },
+		{ label: 'Created', value: server.current.created },
+		{ label: 'Uptime', value: server.current.uptime ?? '-', live: true }
+	]);
 </script>
+
+{#snippet copyButton(
+	text: string,
+	key: string,
+	label: string
+)}
+	<button
+		type="button"
+		class="text-muted-foreground hover:text-foreground"
+		aria-label={label}
+		onclick={() => clipboard.copy(text, key)}
+	>
+		{#if clipboard.copiedKey === key}
+			<Check class="h-3 w-3 text-emerald-500" />
+		{:else}
+			<Copy class="h-3 w-3" />
+		{/if}
+	</button>
+{/snippet}
+
+{#snippet addressRow(
+	label: string,
+	value: string | null,
+	key: string,
+	valueClass: string,
+	skeletonClass: string
+)}
+	<div class="flex items-center justify-between px-5 py-2">
+		<span class="text-xs text-muted-foreground">{label}</span>
+		<div class="flex items-center gap-1.5">
+			{#if liveLoaded}
+				<span class="font-mono text-foreground {valueClass}">{value ?? '-'}</span>
+				{#if value}
+					{@render copyButton(value, key, `Copy ${label} address`)}
+				{/if}
+			{:else}
+				<span class="h-2.5 animate-pulse rounded bg-muted {skeletonClass}"></span>
+			{/if}
+		</div>
+	</div>
+{/snippet}
+
+{#snippet sshHint(
+	command: string,
+	key: string,
+	copyLabel: string,
+	lead: string,
+	commandClass: string,
+	leadClass: string
+)}
+	<div class="flex items-center gap-2 border border-border bg-background px-3 py-1.5">
+		<span class="text-muted-foreground {commandClass}">{command}</span>
+		{@render copyButton(command, key, copyLabel)}
+	</div>
+	<p class="text-muted-foreground {leadClass}">
+		{lead}
+		<a
+			href="https://fyrastack.com/docs/vps/ssh"
+			target="_blank"
+			rel="noopener noreferrer"
+			class="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
+			>SSH</a
+		>
+		in the meantime.
+	</p>
+{/snippet}
 
 <h1 class="sr-only">Server Overview</h1>
 
@@ -284,68 +347,18 @@
 		<div class="px-5 py-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
 			Server Details
 		</div>
-		{#each [
-			['Plan', selectedServer.plan],
-			['Region', selectedServer.region],
-			['vCPU', `${selectedServer.vcpu}`],
-			['RAM', selectedServer.ram],
-			['Disk', selectedServer.disk],
-			['Created', selectedServer.created],
-			['Uptime', selectedServer.uptime]
-		] as [label, value] (label)}
+		{#each serverDetails as detail (detail.label)}
 			<div class="flex items-center justify-between px-5 py-2">
-				<span class="text-xs text-muted-foreground">{label}</span>
-				{#if !liveLoaded && isLiveDetail(label)}
+				<span class="text-xs text-muted-foreground">{detail.label}</span>
+				{#if detail.live && !liveLoaded}
 					<span class="h-2.5 w-20 animate-pulse rounded bg-muted"></span>
 				{:else}
-					<span class="text-xs font-medium text-foreground">{value}</span>
+					<span class="text-xs font-medium text-foreground">{detail.value}</span>
 				{/if}
 			</div>
 		{/each}
-		<div class="flex items-center justify-between px-5 py-2">
-			<span class="text-xs text-muted-foreground">IPv4</span>
-			<div class="flex items-center gap-1.5">
-				{#if liveLoaded}
-					<span class="font-mono text-xs text-foreground">{selectedServer.ip}</span>
-					<button
-						type="button"
-						class="text-muted-foreground hover:text-foreground"
-						aria-label="Copy IPv4 address"
-						onclick={() => copyToClipboard(selectedServer.ip, 'ipv4')}
-					>
-						{#if copied === 'ipv4'}
-							<Check class="h-3 w-3 text-emerald-500" />
-						{:else}
-							<Copy class="h-3 w-3" />
-						{/if}
-					</button>
-				{:else}
-					<span class="h-2.5 w-24 animate-pulse rounded bg-muted"></span>
-				{/if}
-			</div>
-		</div>
-		<div class="flex items-center justify-between px-5 py-2">
-			<span class="text-xs text-muted-foreground">IPv6</span>
-			<div class="flex items-center gap-1.5">
-				{#if liveLoaded}
-					<span class="font-mono text-[11px] text-foreground">{selectedServer.ipv6}</span>
-					<button
-						type="button"
-						class="text-muted-foreground hover:text-foreground"
-						aria-label="Copy IPv6 address"
-						onclick={() => copyToClipboard(selectedServer.ipv6, 'ipv6')}
-					>
-						{#if copied === 'ipv6'}
-							<Check class="h-3 w-3 text-emerald-500" />
-						{:else}
-							<Copy class="h-3 w-3" />
-						{/if}
-					</button>
-				{:else}
-					<span class="h-2.5 w-28 animate-pulse rounded bg-muted"></span>
-				{/if}
-			</div>
-		</div>
+		{@render addressRow('IPv4', server.current.ip, 'ipv4', 'text-xs', 'w-24')}
+		{@render addressRow('IPv6', server.current.ipv6, 'ipv6', 'text-[11px]', 'w-28')}
 	</div>
 
 	<div class="col-span-3 flex flex-col bg-background">
@@ -364,53 +377,35 @@
 						<p class="mt-1 text-xs text-muted-foreground">Console access is not available yet.</p>
 					</div>
 					{#if sshAddress}
-						<div class="flex items-center gap-2 border border-border bg-background px-3 py-1.5">
-							<span class="text-xs text-muted-foreground">ssh root@{sshAddress}</span>
-							<button
-								type="button"
-								class="text-muted-foreground hover:text-foreground"
-								aria-label="Copy SSH command"
-								onclick={() => copyToClipboard(`ssh root@${sshAddress}`, 'ssh-console')}
-							>
-								{#if copied === 'ssh-console'}
-									<Check class="h-3 w-3 text-emerald-500" />
-								{:else}
-									<Copy class="h-3 w-3" />
-								{/if}
-							</button>
-						</div>
-						<p class="text-[11px] text-muted-foreground">
-							Connect over
-							<a
-								href="https://fyrastack.com/docs/vps/ssh"
-								target="_blank"
-								rel="noopener noreferrer"
-								class="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
-								>SSH</a
-							>
-							in the meantime.
-						</p>
+						{@render sshHint(
+							`ssh root@${sshAddress}`,
+							'ssh-console',
+							'Copy SSH command',
+							'Connect over',
+							'text-xs',
+							'text-[11px]'
+						)}
 					{/if}
 				</div>
-			{:else if selectedServer.status === 'running'}
+			{:else if server.current.status === 'running'}
 				{#each terminalLines as line (line.type + line.text)}
 					{#if line.type === 'prompt'}
 						<div>
-							<span class="text-muted-foreground">user@{selectedServer.name}~:</span>
+							<span class="text-muted-foreground">user@{server.current.name}~:</span>
 							{line.text}
 						</div>
 					{:else if line.type === 'output'}
 						<div class="text-muted-foreground">{line.text}</div>
 					{:else}
 						<div>
-							<span class="text-muted-foreground">user@{selectedServer.name}~:</span>
+							<span class="text-muted-foreground">user@{server.current.name}~:</span>
 							<span class="inline-block h-4 w-1.5 animate-pulse bg-muted-foreground"></span>
 						</div>
 					{/if}
 				{/each}
-			{:else if selectedServer.status === 'restarting'}
+			{:else if server.current.status === 'restarting'}
 				<div class="text-amber-500">Restarting server...</div>
-			{:else if selectedServer.status === 'unknown'}
+			{:else if server.current.status === 'unknown'}
 				<div class="text-muted-foreground">Server status unavailable. Reconnecting...</div>
 			{:else}
 				<div class="text-muted-foreground">Server is offline. Start the server to connect.</div>
@@ -448,35 +443,17 @@
 					<p class="mt-1 text-xs text-muted-foreground">Log streaming is not available yet.</p>
 				</div>
 				{#if sshAddress}
-					<div class="flex items-center gap-2 border border-border bg-background px-3 py-1.5">
-						<span class="text-muted-foreground">ssh root@{sshAddress} journalctl -f</span>
-						<button
-							type="button"
-							class="text-muted-foreground hover:text-foreground"
-							aria-label="Copy logs command"
-							onclick={() => copyToClipboard(`ssh root@${sshAddress} journalctl -f`, 'ssh-logs')}
-						>
-							{#if copied === 'ssh-logs'}
-								<Check class="h-3 w-3 text-emerald-500" />
-							{:else}
-								<Copy class="h-3 w-3" />
-							{/if}
-						</button>
-					</div>
-					<p class="text-muted-foreground">
-						Tail logs over
-						<a
-							href="https://fyrastack.com/docs/vps/ssh"
-							target="_blank"
-							rel="noopener noreferrer"
-							class="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
-							>SSH</a
-						>
-						in the meantime.
-					</p>
+					{@render sshHint(
+						`ssh root@${sshAddress} journalctl -f`,
+						'ssh-logs',
+						'Copy logs command',
+						'Tail logs over',
+						'',
+						''
+					)}
 				{/if}
 			</div>
-		{:else if selectedServer.status !== 'running'}
+		{:else if server.current.status !== 'running'}
 			<div class="flex h-full flex-col items-center justify-center gap-3">
 				<AlertTriangle class="h-8 w-8 text-amber-500/60" />
 				<div class="text-center">
@@ -486,7 +463,7 @@
 					</p>
 				</div>
 			</div>
-		{:else if !selectedServer.agentConnected}
+		{:else if !server.current.agentConnected}
 			<div class="flex h-full flex-col items-center justify-center gap-3">
 				<AlertTriangle class="h-8 w-8 text-red-400/60" />
 				<div class="text-center">

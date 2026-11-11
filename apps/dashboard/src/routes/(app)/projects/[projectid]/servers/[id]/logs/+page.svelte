@@ -2,16 +2,14 @@
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { autofillAttributes } from '#lib/components/ui/input/autofill.js';
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
+	import { primaryAddress } from '#lib/server-info.js';
 	import X from '~icons/lucide/x';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
 	import Search from '~icons/nucleo/search';
 	import Trash2 from '~icons/nucleo/trash';
-	import { primaryAddress } from '../../lib/server-summary';
-	import type { PageProps } from './$types';
+	import { useServer } from '../lib/server-context';
 
-	let { data }: PageProps = $props();
-	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
+	const server = useServer();
 	let logSearch = $state('');
 	let logSevFilter = $state<string | null>(null);
 	let logSourceFilter = $state<string | null>(null);
@@ -27,7 +25,7 @@
 			timestamp: '2026-04-27 05:10:18',
 			severity: 'info',
 			source: 'systemd',
-			message: `boot completed for ${selectedServer.name}`
+			message: `boot completed for ${server.current.name}`
 		},
 		{
 			id: 2,
@@ -41,14 +39,14 @@
 			timestamp: '2026-04-27 05:11:02',
 			severity: 'debug',
 			source: 'network',
-			message: `primary endpoint ${primaryAddress(selectedServer) ?? '-'}`
+			message: `primary endpoint ${primaryAddress(server.current) ?? '-'}`
 		},
 		{
 			id: 4,
 			timestamp: '2026-04-27 05:12:45',
-			severity: selectedServer.agentConnected ? 'info' : 'warn',
+			severity: server.current.agentConnected ? 'info' : 'warn',
 			source: 'app',
-			message: selectedServer.agentConnected ? 'control plane connected' : 'guest agent unreachable'
+			message: server.current.agentConnected ? 'control plane connected' : 'guest agent unreachable'
 		}
 	]);
 	let filteredLogs = $derived.by(() => {
@@ -80,7 +78,7 @@
 
 <div class="flex h-8 shrink-0 items-center justify-between border-b border-border px-4">
 	<div class="flex items-center gap-2">
-		<span class="text-xs font-medium text-muted-foreground">{selectedServer.name}</span>
+		<span class="text-xs font-medium text-muted-foreground">{server.current.name}</span>
 		{#if hasLogFilters}
 			<span class="text-[9px] text-muted-foreground"
 				>{filteredLogs.length}/{currentLogs.length}</span
@@ -146,7 +144,7 @@
 	Sample log data. Live log streaming isn't available yet.
 </div>
 <div class="min-h-0 flex-1 overflow-auto bg-background font-mono text-[11px] leading-relaxed">
-	{#if selectedServer.status !== 'running'}
+	{#if server.current.status !== 'running'}
 		<div class="flex h-full flex-col items-center justify-center gap-3">
 			<AlertTriangle class="h-10 w-10 text-amber-500/60" />
 			<div class="text-center">
@@ -156,7 +154,7 @@
 				</p>
 			</div>
 		</div>
-	{:else if !selectedServer.agentConnected}
+	{:else if !server.current.agentConnected}
 		<div class="flex h-full flex-col items-center justify-center gap-3">
 			<AlertTriangle class="h-10 w-10 text-red-400/60" />
 			<div class="text-center">

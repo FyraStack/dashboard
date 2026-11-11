@@ -1,93 +1,70 @@
 <script lang="ts">
+	import { projectBillingPath } from 'stack-shared/routes';
 	import BillingSetupDialog from '#lib/components/billing-setup-dialog.svelte';
-	import BuyCreditsDialog from '#lib/components/buy-credits-dialog.svelte';
-	import { openBillingPortal } from '#lib/remote/billing.remote.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { formatCurrency, formatDate, formatDecimal, formatUsd } from '#lib/format.js';
+	import { idempotent } from '#lib/idempotency.js';
+	import { openBillingPortal, purchaseCredits } from '#lib/remote/billing.remote.js';
 	import { getErrorMessage } from '#lib/utils.js';
+	import { type StatusTone, statusBadgeClass } from '#lib/vm-status.js';
+	import Loader2 from '~icons/lucide/loader-2';
 	import Cpu from '~icons/nucleo/cpu';
 	import CreditCard from '~icons/nucleo/credit-card';
 	import DollarSign from '~icons/nucleo/dollar-sign';
-	import HardDrive from '~icons/nucleo/hard-drive';
 	import Server from '~icons/nucleo/server';
+	import type { PageProps } from './$types';
 
-	type DateValue = Date | number | string | null | undefined;
+	const DEFAULT_BILLING_UNITS_PER_PACK = 100;
+	const topUpPresets = [5, 10, 25, 50];
 
-	type CustomerDetails = Record<string, unknown>;
-
-	type ActiveResource = Record<string, unknown> & {
-		id?: string;
-		label?: string;
-		name?: string;
-		productLabel?: string;
-		productName?: string;
-		resourceType?: string;
-		type?: string;
-		count?: number;
-		hours?: number;
-		cost?: number | null;
-		quantity?: number | string;
-		unit?: string;
-	};
-
-	interface CreditsDetails {
-		estimatedOverageCost?: number | null;
-		overageUsage?: number;
-		prepaidPrice?: { amount: number | null; billingUnits: number } | null;
-		remaining?: number;
-		usage?: number;
-	}
-
-	interface InvoiceDetails {
-		createdAt: number;
-		currency: string;
-		hostedInvoiceUrl: string | null;
-		status: string;
-		stripeId: string;
-		total: number;
-	}
-
-	type BillingDetails = Record<string, unknown> & {
-		activeResourceCount?: number;
-		activeResources?: ActiveResource[];
-		credits?: CreditsDetails | null;
-		customer?: CustomerDetails | null;
-		invoices?: InvoiceDetails[];
-		lastUpdatedAt?: DateValue;
-		setupRequired?: boolean;
-		status?: string;
-	};
-
-	let { data } = $props();
+	let { data }: PageProps = $props();
 
 	let billingSetupOpen = $state(false);
 	let buyCreditsOpen = $state(false);
 	let portalLoading = $state(false);
 	let actionError = $state('');
 
-	const projectId = $derived(data.projectId ?? '');
-	const canManageBilling = $derived(Boolean(data.canManageBilling));
-	const billing = $derived(data.billing as BillingDetails | null | undefined);
-	const billingReady = $derived(billing?.setupRequired === false);
-	const activeResources = $derived((billing?.activeResources ?? []) as ActiveResource[]);
-	const activeResourceCount = $derived(activeResources.length || billing?.activeResourceCount || 0);
-	const activeServers = $derived(
-		activeResources.reduce((total, r) => total + (typeof r.count === 'number' ? r.count : 0), 0)
-	);
-	const totalHours = $derived(
-		activeResources.reduce((total, r) => total + (typeof r.hours === 'number' ? r.hours : 0), 0)
-	);
-	const totalCost = $derived(
-		activeResources.reduce((total, r) => total + (typeof r.cost === 'number' ? r.cost : 0), 0)
-	);
-	const hasCost = $derived(activeResources.some((r) => typeof r.cost === 'number'));
-	const credits = $derived(billing?.credits ?? null);
-	const invoices = $derived(
-		[...(billing?.invoices ?? [])].sort((a, b) => b.createdAt - a.createdAt)
-	);
+	let topUpAmountInput = $state('10');
+	let topUpLoading = $state(false);
+	let topUpError = $state('');
+	let topUpResult = $state<{ url: string | null } | null>(null);
+
+	const { projectId } = $derived(data);
+	const { billing, canManageBilling } = $derived(data);
+	const billingReady = $derived(!billing.setupRequired);
+	const { activeResources, credits } = $derived(billing);
+	const activeServers = $derived(activeResources.reduce((total, r) => total + r.count, 0));
+	const totalHours = $derived(activeResources.reduce((total, r) => total + r.hours, 0));
+	const totalCost = $derived(activeResources.reduce((total, r) => total + (r.cost ?? 0), 0));
+	const hasCost = $derived(activeResources.some((r) => r.cost !== null));
+	const invoices = $derived([...billing.invoices].sort((a, b) => b.createdAt - a.createdAt));
 	const canBuyCredits = $derived(Boolean(credits) && canManageBilling && billingReady);
-	const creditRate = $derived(
-		typeof credits?.prepaidPrice?.amount === 'number' && credits.prepaidPrice.billingUnits > 0
-			? credits.prepaidPrice.amount / credits.prepaidPrice.billingUnits
-			: null
+
+	const packPrice = $derived.by(() => {
+		const amount = credits?.prepaidPrice?.amount ?? 0;
+		return amount > 0 ? amount : null;
+	});
+	const billingUnits = $derived(
+		credits?.prepaidPrice && credits.prepaidPrice.billingUnits > 0
+			? credits.prepaidPrice.billingUnits
+			: DEFAULT_BILLING_UNITS_PER_PACK
+	);
+	const creditRate = $derived(packPrice === null ? null : packPrice / billingUnits);
+	const balanceValue = $derived(
+		credits && creditRate !== null ? credits.remaining * creditRate : null
+	);
+	const topUpAmount = $derived(Number.parseFloat(topUpAmountInput));
+	const topUpAmountValid = $derived(Number.isFinite(topUpAmount) && topUpAmount > 0);
+	const packs = $derived(
+		packPrice !== null && topUpAmountValid ? Math.ceil(topUpAmount / packPrice - 1e-6) : 0
+	);
+	const billedNow = $derived(packPrice === null ? 0 : packs * packPrice);
+	const roundedUp = $derived(topUpAmountValid && packPrice !== null && billedNow > topUpAmount);
+	const canSubmitTopUp = $derived(
+		packPrice !== null && topUpAmountValid && packs * billingUnits > 0
 	);
 
 	const billingActionLabel = $derived.by(() => {
@@ -97,52 +74,19 @@
 		return billingReady ? 'Open billing portal' : 'Set up billing';
 	});
 
-	function formatCredits(value: number | undefined) {
-		return new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(
-			typeof value === 'number' ? value : 0
-		);
-	}
-
-	function formatHours(value: number | undefined) {
-		const hours = typeof value === 'number' ? value : 0;
-		return `${new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(hours)} hrs`;
-	}
-
-	function formatCost(value: number | null | undefined) {
-		if (typeof value !== 'number') {
-			return null;
+	function invoiceTone(status: string): StatusTone {
+		const normalized = status.toLowerCase();
+		if (normalized === 'paid') {
+			return 'success';
 		}
-		return new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' }).format(value);
-	}
-
-	function formatInvoiceDate(timestamp: number) {
-		return new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(timestamp));
-	}
-
-	function formatInvoiceTotal(invoice: InvoiceDetails) {
-		try {
-			return new Intl.NumberFormat('en', {
-				style: 'currency',
-				currency: invoice.currency.toUpperCase()
-			}).format(invoice.total);
-		} catch {
-			return `${invoice.total} ${invoice.currency.toUpperCase()}`;
+		if (normalized === 'open' || normalized === 'draft') {
+			return 'warning';
 		}
+		return 'muted';
 	}
 
-	function invoiceStatusClasses(status: string) {
-		const s = status.toLowerCase();
-		if (s === 'paid') {
-			return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400';
-		}
-		if (s === 'open' || s === 'draft') {
-			return 'bg-amber-500/10 text-amber-700 dark:text-amber-400';
-		}
-		return 'bg-muted/60 text-muted-foreground';
-	}
-
-	function friendlyLabel(value: unknown, fallback: string) {
-		if (typeof value !== 'string' || !value.trim()) {
+	function friendlyLabel(value: string, fallback: string) {
+		if (!value.trim()) {
 			return fallback;
 		}
 		return value
@@ -150,47 +94,6 @@
 			.replace(/\s+/g, ' ')
 			.trim()
 			.replace(/\b\w/g, (letter) => letter.toUpperCase());
-	}
-
-	function resourceLabel(resource: ActiveResource) {
-		const label = resource.label ?? resource.name ?? resource.productLabel ?? resource.productName;
-		return typeof label === 'string' && label.trim() ? label : 'Resource';
-	}
-
-	function resourceTypeLabel(resource: ActiveResource) {
-		const type = (resource.resourceType ?? resource.type ?? '').toLowerCase();
-		if (type === 'vm') {
-			return 'VPS';
-		}
-		return friendlyLabel(resource.resourceType ?? resource.type, 'Resource');
-	}
-
-	function activeResourceKey(resource: ActiveResource, index: number) {
-		return String(
-			resource.id ?? `${resource.label ?? resource.name ?? resource.type ?? 'resource'}-${index}`
-		);
-	}
-
-	function resourceIcon(type: string | undefined) {
-		if (!type) {
-			return Server;
-		}
-		const t = type.toLowerCase();
-		if (t.includes('volume') || t.includes('storage')) {
-			return HardDrive;
-		}
-		return Server;
-	}
-
-	function resourceStripe(resource: ActiveResource) {
-		const t = (resource.resourceType ?? resource.type ?? '').toLowerCase();
-		if (t === 'vm') {
-			return 'border-l-2 border-l-blue-500/60';
-		}
-		if (t === 'volume') {
-			return 'border-l-2 border-l-violet-500/60';
-		}
-		return '';
 	}
 
 	async function handleBillingAction() {
@@ -212,6 +115,35 @@
 			portalLoading = false;
 		}
 	}
+	async function handleTopUp() {
+		if (topUpLoading || !(topUpResult || canSubmitTopUp)) {
+			return;
+		}
+
+		topUpLoading = true;
+		topUpError = '';
+		try {
+			if (!topUpResult) {
+				topUpResult = await idempotent(purchaseCredits, 'billing.purchaseCredits', {
+					projectId,
+					credits: packs * billingUnits
+				});
+			}
+			if (topUpResult.url) {
+				window.location.href = topUpResult.url;
+				return;
+			}
+			window.location.reload();
+		} catch (err) {
+			topUpError = topUpResult
+				? 'Your purchase was submitted. Select Continue to open the payment page or refresh your balance.'
+				: getErrorMessage(
+						err,
+						'The purchase could not be confirmed. Check your billing history before trying again.'
+					);
+			topUpLoading = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -224,16 +156,130 @@
 		{projectId}
 		{billingReady}
 		{canManageBilling}
-		mode="billing-page"
-		returnTo={`/projects/${projectId}/billing`}
+		returnTo={projectBillingPath(projectId)}
 	/>
 	{#if credits}
-		<BuyCreditsDialog
-			bind:open={buyCreditsOpen}
-			{projectId}
-			prepaidPrice={credits.prepaidPrice ?? null}
-			remaining={credits.remaining}
-		/>
+		<Dialog.Root bind:open={buyCreditsOpen}>
+			<Dialog.Content class="border-border bg-background text-foreground sm:max-w-lg">
+				<Dialog.Header>
+					<div
+						class="mb-2 flex size-10 items-center justify-center rounded-lg border border-border bg-background"
+					>
+						<DollarSign class="size-5 text-emerald-300" />
+					</div>
+					<Dialog.Title>Top-up credits</Dialog.Title>
+					<Dialog.Description class="text-muted-foreground">
+						Credits are used before pay-as-you-go usage is billed, and they'll never expire.
+					</Dialog.Description>
+				</Dialog.Header>
+
+				{#if packPrice !== null}
+					<div class="space-y-2">
+						<Label for="top-up-amount" class="text-sm text-muted-foreground">Amount</Label>
+						<div class="relative">
+							<span
+								class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground"
+							>
+								$
+							</span>
+							<Input
+								id="top-up-amount"
+								type="number"
+								inputmode="decimal"
+								min={packPrice}
+								step={packPrice}
+								bind:value={topUpAmountInput}
+								disabled={topUpLoading}
+								class="border-border bg-background pr-12 pl-7 text-foreground tabular-nums"
+							/>
+							<span
+								class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground"
+							>
+								USD
+							</span>
+						</div>
+						<div class="flex gap-1.5">
+							{#each topUpPresets as preset (preset)}
+								<button
+									type="button"
+									disabled={topUpLoading}
+									onclick={() => (topUpAmountInput = String(preset))}
+									class="rounded-md border px-2.5 py-1 text-xs tabular-nums transition-colors {topUpAmountValid &&
+									topUpAmount === preset
+										? 'border-emerald-800/60 bg-emerald-950/40 text-emerald-300'
+										: 'border-border/60 text-muted-foreground hover:bg-muted/50'}"
+								>
+									${preset}
+								</button>
+							{/each}
+						</div>
+					</div>
+
+					<div class="rounded-md border border-border/60 bg-background/40">
+						{#if balanceValue !== null}
+							<div class="flex items-center justify-between px-3.5 py-2.5 text-sm">
+								<span class="text-muted-foreground">New balance</span>
+								<span class="font-medium text-foreground tabular-nums">
+									{formatUsd(canSubmitTopUp ? balanceValue + billedNow : balanceValue)}
+								</span>
+							</div>
+						{/if}
+						<div
+							class="flex items-center justify-between px-3.5 py-2.5 text-sm {balanceValue === null
+								? ''
+								: 'border-t border-border/40'}"
+						>
+							<span class="text-muted-foreground">Billed now</span>
+							<span class="font-semibold text-foreground tabular-nums">
+								{canSubmitTopUp ? formatUsd(billedNow) : '-'}
+							</span>
+						</div>
+					</div>
+
+					{#if roundedUp}
+						<p class="text-xs text-muted-foreground">
+							Credits are sold in {formatUsd(packPrice)} increments, so the amount is rounded up to
+							{formatUsd(billedNow)}.
+						</p>
+					{/if}
+				{:else}
+					<div class="rounded-md border border-border/60 bg-background/40 px-3.5 py-2.5">
+						<p class="text-sm text-muted-foreground">
+							Credit pricing is unavailable right now. Try again in a moment.
+						</p>
+					</div>
+				{/if}
+
+				{#if topUpError}
+					<div
+						role="alert"
+						class="rounded-md border border-red-300 bg-red-100 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+					>
+						{topUpError}
+					</div>
+				{/if}
+
+				<Dialog.Footer>
+					<Button variant="outline" size="sm" onclick={() => (buyCreditsOpen = false)}
+						>Not now</Button
+					>
+					<Button
+						size="sm"
+						onclick={handleTopUp}
+						disabled={topUpLoading || !(topUpResult || canSubmitTopUp)}
+					>
+						{#if topUpLoading}
+							<Loader2 class="size-3.5 animate-spin" />
+						{/if}
+						{#if topUpResult}
+							Continue
+						{:else}
+							{canSubmitTopUp ? `Top-up ${formatUsd(billedNow)}` : 'Top-up credits'}
+						{/if}
+					</Button>
+				</Dialog.Footer>
+			</Dialog.Content>
+		</Dialog.Root>
 	{/if}
 
 	<div class="flex h-12 shrink-0 items-center border-b border-border px-5">
@@ -255,41 +301,39 @@
 		{#snippet resourceRows()}
 			{#if activeResources.length}
 				<div class="mt-4 divide-y divide-border/40 rounded-md border border-border/60">
-					{#each activeResources as resource, index (activeResourceKey(resource, index))}
-						{@const Icon = resourceIcon(resource.resourceType ?? resource.type)}
-						{@const stripe = resourceStripe(resource)}
-						{@const costLabel = formatCost(resource.cost)}
+					{#each activeResources as resource (resource.id)}
 						<div
-							class="flex items-center justify-between px-4 py-3.5 transition-colors hover:bg-muted/20 {stripe}"
+							class="flex items-center justify-between px-4 py-3.5 transition-colors hover:bg-muted/20 border-l-2 border-l-blue-500/60"
 						>
 							<div class="flex items-center gap-3">
 								<div
 									class="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/60"
 								>
-									<Icon class="size-3.5 text-muted-foreground" />
+									<Server class="size-3.5 text-muted-foreground" />
 								</div>
 								<div>
-									<p class="text-sm font-medium text-foreground">{resourceLabel(resource)}</p>
-									<p class="text-xs text-muted-foreground">{resourceTypeLabel(resource)}</p>
+									<p class="text-sm font-medium text-foreground">{resource.label}</p>
+									<p class="text-xs text-muted-foreground">VPS</p>
 								</div>
 							</div>
 							<div class="text-right">
-								<p class="text-sm text-foreground tabular-nums">{resource.count ?? 0} active</p>
+								<p class="text-sm text-foreground tabular-nums">{resource.count} active</p>
 								<p class="text-xs text-muted-foreground tabular-nums">
-									{formatHours(resource.hours)}
-									{#if costLabel}
-										· {costLabel} est.
+									{formatDecimal(resource.hours)}
+									hrs
+									{#if resource.cost !== null}
+										· {formatUsd(resource.cost)} est.
 									{/if}
 								</p>
 							</div>
 						</div>
 					{/each}
 				</div>
-			{:else if activeResourceCount > 0}
+			{:else if billing.activeResourceCount > 0}
 				<div class="mt-4 rounded-md border border-border/60 bg-background/30 p-5 text-center">
 					<p class="text-sm text-muted-foreground">
-						You have {activeResourceCount} active
-						{activeResourceCount === 1 ? 'resource' : 'resources'}.
+						You have {billing.activeResourceCount} active
+						{billing.activeResourceCount === 1 ? 'resource' : 'resources'}.
 					</p>
 				</div>
 			{:else}
@@ -341,7 +385,8 @@
 						<p class="text-xs font-medium text-muted-foreground">Compute hours</p>
 					</div>
 					<p class="mt-2 text-2xl font-semibold text-foreground tabular-nums">
-						{formatHours(totalHours)}
+						{formatDecimal(totalHours)}
+						hrs
 					</p>
 				</div>
 				<div class="rounded-lg border border-border/60 bg-background/40 p-4">
@@ -350,7 +395,7 @@
 						<p class="text-xs font-medium text-muted-foreground">Est. cost</p>
 					</div>
 					<p class="mt-2 text-2xl font-semibold text-foreground tabular-nums">
-						{hasCost ? formatCost(totalCost) : '-'}
+						{hasCost ? formatUsd(totalCost) : '-'}
 					</p>
 				</div>
 				{#if credits}
@@ -360,14 +405,11 @@
 							<p class="text-xs font-medium text-muted-foreground">Credits</p>
 						</div>
 						<p class="mt-2 text-2xl font-semibold text-foreground tabular-nums">
-							{creditRate === null
-								? formatCredits(credits.remaining)
-								: formatCost((credits.remaining ?? 0) * creditRate)}
+							{balanceValue === null ? formatDecimal(credits.remaining) : formatUsd(balanceValue)}
 						</p>
-						{#if typeof credits.estimatedOverageCost === 'number' &&
-							credits.estimatedOverageCost > 0}
+						{#if credits.estimatedOverageCost !== null && credits.estimatedOverageCost > 0}
 							<p class="mt-0.5 text-xs text-muted-foreground tabular-nums">
-								{formatCost(credits.estimatedOverageCost)}
+								{formatUsd(credits.estimatedOverageCost)}
 								pay-as-you-go this cycle
 							</p>
 						{/if}
@@ -412,19 +454,19 @@
 									{#each invoices as invoice (invoice.stripeId)}
 										<tr>
 											<td class="py-3 pr-4 text-sm text-foreground">
-												{formatInvoiceDate(invoice.createdAt)}
+												{formatDate(invoice.createdAt)}
 											</td>
 											<td class="py-3 pr-4">
 												<span
-													class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {invoiceStatusClasses(
-														invoice.status
-													)}"
+													class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {statusBadgeClass[
+														invoiceTone(invoice.status)
+													]}"
 												>
 													{friendlyLabel(invoice.status, 'Unknown')}
 												</span>
 											</td>
 											<td class="py-3 text-right text-sm text-foreground tabular-nums">
-												{formatInvoiceTotal(invoice)}
+												{formatCurrency(invoice.total, invoice.currency)}
 											</td>
 											<td class="py-3 pl-4 text-right text-sm">
 												{#if invoice.hostedInvoiceUrl}

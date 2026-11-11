@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { isProjectRole, projectRoleLabels } from 'stack-shared/project-roles';
+	import { projectRoleLabels } from 'stack-shared/project-roles';
 	import { toast } from 'svelte-sonner';
 	import { authClient } from '#lib/auth-client.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -7,6 +7,7 @@
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
+	import { dependencies } from '#lib/dependencies.js';
 	import { idempotent } from '#lib/idempotency.js';
 	import {
 		createProject as createProjectRpc,
@@ -22,15 +23,12 @@
 	import FolderOpen from '~icons/nucleo/folder-open';
 	import Settings from '~icons/nucleo/settings';
 	import Trash2 from '~icons/nucleo/trash';
+	import type { PageProps } from './$types';
 
-	interface Project {
-		id: string;
-		projectName: string;
-		role: string;
-	}
+	type Project = Pick<PageProps['data']['projects'][number], 'id' | 'projectName' | 'role'>;
 
-	let { data } = $props();
-	let projects = $derived<Project[]>(data.projects ?? []);
+	let { data }: PageProps = $props();
+	let projects = $derived<Project[]>(data.projects);
 
 	let createOpen = $state(false);
 	let newProjectName = $state('');
@@ -56,7 +54,7 @@
 			newProjectName = '';
 			createOpen = false;
 			await authClient.organization.setActive({ organizationId: res.id });
-			await goto(`/projects/${res.id}/servers`, { invalidate: ['app:projects'] });
+			await goto(`/projects/${res.id}/servers`, { invalidate: [dependencies.app.projects] });
 		} catch (err) {
 			createProjectError = getErrorMessage(err, 'Project could not be created.');
 		} finally {
@@ -92,7 +90,7 @@
 		const target = deleteTarget;
 		try {
 			await deleteProjectRpc({ projectId: target.id });
-			await invalidate('app:projects');
+			await invalidate(dependencies.app.projects);
 			projects = projects.filter((p) => p.id !== target.id);
 			deleteTarget = null;
 			deleteConfirm = '';
@@ -179,7 +177,7 @@
 											{project.projectName}
 										</h2>
 										<p class="mt-1 text-sm text-muted-foreground">
-											{isProjectRole(project.role) ? projectRoleLabels[project.role] : project.role}
+											{projectRoleLabels[project.role]}
 										</p>
 									</div>
 								</div>

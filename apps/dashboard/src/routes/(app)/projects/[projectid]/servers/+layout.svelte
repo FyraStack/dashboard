@@ -1,130 +1,36 @@
 <script lang="ts">
+	import { createServerPath } from 'stack-shared/routes';
 	import { untrack } from 'svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { listVmStatuses } from '#lib/remote/vms.remote.js';
-	import { type ServerInfo, serversState, syncServers } from '#lib/state/servers.svelte.js';
+	import { primaryAddress } from '#lib/server-info.js';
+	import {
+		applyLiveStatuses,
+		listedServers,
+		serversState,
+		syncServers
+	} from '#lib/state/servers.svelte.js';
+	import { describeServerStatus, isPendingStatus, statusDotClass } from '#lib/vm-status.js';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import ChevronDown from '~icons/lucide/chevron-down';
 	import Plus from '~icons/lucide/plus';
 	import HardDrive from '~icons/nucleo/hard-drive';
-	import { primaryAddress } from './lib/server-summary';
 
 	let { data, children } = $props();
 
-	function formatUptime(seconds: number): string {
-		if (!seconds) {
-			return '-';
-		}
-		const d = Math.floor(seconds / 86_400);
-		const h = Math.floor((seconds % 86_400) / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		return `${d}d ${h}h ${m}m`;
-	}
-
-	function getFirstIp(
-		networkInterfaces: Record<string, { ipAddresses?: string[] | null }> | null | undefined,
-		match: (address: string) => boolean
-	): string | null {
-		return (
-			Object.values(networkInterfaces ?? {})
-				.flatMap((networkInterface) => networkInterface.ipAddresses ?? [])
-				.find((address) => address && match(address)) ?? null
-		);
-	}
-
-	type VmStatus = Awaited<ReturnType<typeof listVmStatuses>>[number];
-
-	function mergeLiveStatus(server: ServerInfo, next: VmStatus): ServerInfo {
-		return {
-			...server,
-			liveLoaded: true,
-			status:
-				server.status === 'restarting' && next.status !== 'running' ? 'restarting' : next.status,
-			agentConnected: next.liveStatus === 'running',
-			ip:
-				getFirstIp(
-					next.networkInterfaces,
-					(address) => !(address.startsWith('127.') || address.includes(':'))
-				) ?? server.ip,
-			ipv6: getFirstIp(next.networkInterfaces, (address) => address.includes(':')) ?? server.ipv6,
-			uptime: formatUptime(next.uptime),
-			metrics: next.metrics ?? server.metrics
-		};
-	}
-
-	function applyStatuses(statuses: VmStatus[], requestedServerIds: Set<string>) {
-		const byId = new Map(statuses.map((server) => [server.id, server]));
-		serversState.servers = serversState.servers
-			.filter((server) => byId.has(server.id) || !requestedServerIds.has(server.id))
-			.map((server) => {
-				const next = byId.get(server.id);
-				return next ? mergeLiveStatus(server, next) : server;
-			});
-	}
-
 	function hasPendingServers(): boolean {
-		return serversState.servers.some((server) =>
-			['provisioning', 'restarting', 'deleting'].includes(server.status)
-		);
-	}
-
-	function statusDotClass(server: { liveLoaded?: boolean; status: string }): string {
-		if (server.status === 'deleting') {
-			return 'animate-pulse bg-red-500';
-		}
-		if (!server.liveLoaded) {
-			return 'bg-muted-foreground';
-		}
-		switch (server.status) {
-			case 'running':
-				return 'bg-emerald-500';
-			case 'provisioning':
-				return 'animate-pulse bg-blue-500';
-			case 'restarting':
-				return 'animate-pulse bg-amber-500';
-			case 'unknown':
-				return 'bg-muted-foreground';
-			default:
-				return 'bg-red-500';
-		}
-	}
-
-	function statusLabel(s: { liveLoaded?: boolean; status: string }): string {
-		if (s.status === 'deleting') {
-			return 'Deleting';
-		}
-		if (!s.liveLoaded) {
-			return 'Unknown';
-		}
-		if (s.status === 'running') {
-			return 'Running';
-		}
-		if (s.status === 'provisioning') {
-			return 'Provisioning';
-		}
-		if (s.status === 'restarting') {
-			return 'Restarting';
-		}
-		if (s.status === 'unknown') {
-			return 'Unknown';
-		}
-		return 'Stopped';
+		return serversState.servers.some((server) => isPendingStatus(server.status));
 	}
 
 	const REFRESH_INTERVAL_MS = 30_000;
 	const PENDING_REFRESH_INTERVAL_MS = 3000;
-	const initialServers = $derived(data.servers ?? []);
-	const projectId = $derived(data.projectId ?? null);
-	const currentServers = $derived(
-		(serversState.projectId === projectId ? serversState.servers : initialServers).filter(
-			(server) => server.status !== 'deleting' && server.status !== 'error'
-		)
-	);
+	const projectId = $derived(data.projectId);
+	const currentServers = $derived(listedServers(projectId, data.servers));
 
 	$effect(() => {
-		const incoming = initialServers;
+		const incoming = data.servers;
 		const incomingProjectId = projectId;
 		untrack(() => syncServers(incomingProjectId, incoming));
 	});
@@ -132,9 +38,6 @@
 	$effect(() => {
 		const pollingProjectId = projectId;
 		const { refreshVersion } = serversState;
-		if (!pollingProjectId) {
-			return;
-		}
 
 		let cancelled = false;
 		let refreshing = false;
@@ -153,9 +56,8 @@
 
 			try {
 				const statuses = await loadStatuses();
-				// Ignore requests from a previous project or before the latest VM action.
 				if (statuses && !cancelled && refreshVersion === serversState.refreshVersion) {
-					applyStatuses(statuses, requestedServerIds);
+					applyLiveStatuses(statuses, requestedServerIds);
 				}
 			} finally {
 				finishRefresh();
@@ -205,12 +107,7 @@
 	});
 
 	$effect(() => {
-		if (
-			!projectId ||
-			serversState.loading ||
-			currentServers.length === 0 ||
-			currentPath !== serversPath
-		) {
+		if (currentServers.length === 0 || currentPath !== serversPath) {
 			return;
 		}
 		goto(`${serversPath}/${currentServers[0].id}`, { replace: true });
@@ -277,7 +174,7 @@
 					size="sm"
 					aria-label="Create server"
 					class="relative h-8 w-8 border-red-500/50 p-0 text-red-700 hover:border-red-500 hover:bg-red-100 hover:text-foreground lg:h-6 lg:w-6 dark:text-red-400 dark:hover:bg-red-950"
-					onclick={() => goto(`/projects/${page.params.projectid}/servers/create`)}
+					onclick={() => goto(createServerPath(projectId))}
 				>
 					<span
 						class="absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"
@@ -288,27 +185,14 @@
 			</div>
 		</div>
 		<div class="flex-1 overflow-y-auto {listOpen ? '' : 'hidden'} lg:block">
-			{#if serversState.loading}
-				<div class="divide-y divide-border">
-					{#each Array.from({ length: 3 }) as _, index (index)}
-						<div class="flex items-start justify-between px-4 py-3">
-							<div class="min-w-0 flex-1 space-y-2">
-								<div class="h-3 w-28 animate-pulse rounded bg-muted"></div>
-								<div class="h-2.5 w-36 animate-pulse rounded bg-muted/70"></div>
-							</div>
-							<div class="mt-1 ml-2 h-2 w-2 shrink-0 animate-pulse rounded-full bg-muted"></div>
-						</div>
-					{/each}
-				</div>
-			{/if}
-
 			{#each currentServers as server (server.id)}
+				{@const status = describeServerStatus(server.status, server.liveLoaded)}
 				<a
 					class="flex w-full items-start justify-between border-b border-border px-4 py-3 text-left transition-colors duration-100 {selectedServerId ===
 					server.id
 						? 'bg-muted/60'
 						: 'hover:bg-muted/30'}"
-					href={`/projects/${page.params.projectid}/servers/${server.id}`}
+					href={`/projects/${projectId}/servers/${server.id}`}
 					data-sveltekit-preload-data="tap"
 				>
 					<div class="min-w-0">
@@ -325,14 +209,16 @@
 					</div>
 					<span
 						role="img"
-						aria-label={`Status: ${statusLabel(server)}`}
-						title={statusLabel(server)}
-						class="mt-1 ml-2 h-2 w-2 shrink-0 rounded-full {statusDotClass(server)}"
+						aria-label={`Status: ${status.label}`}
+						title={status.label}
+						class="mt-1 ml-2 h-2 w-2 shrink-0 rounded-full {statusDotClass[
+							status.tone
+						]} {status.pending ? 'animate-pulse' : ''}"
 					></span>
 				</a>
 			{/each}
 
-			{#if !serversState.loading && currentServers.length === 0}
+			{#if currentServers.length === 0}
 				<div class="flex flex-col items-center justify-center py-8 text-muted-foreground lg:py-16">
 					<HardDrive class="mb-3 h-6 w-6" />
 					<p class="text-sm lg:text-xs">No servers</p>

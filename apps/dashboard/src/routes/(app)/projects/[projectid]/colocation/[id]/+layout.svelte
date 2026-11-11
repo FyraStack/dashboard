@@ -5,6 +5,8 @@
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
+	import { formatIsoDate } from '#lib/format.js';
+	import { type StatusTone, statusBadgeClass } from '#lib/vm-status.js';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -96,13 +98,10 @@
 		offline: 'bg-red-500'
 	};
 
-	const statusBadgeClass: Record<ColoUnitStatus, string> = {
-		online:
-			'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400',
-		provisioning:
-			'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400',
-		offline:
-			'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
+	const unitStatusTone: Record<ColoUnitStatus, StatusTone> = {
+		online: 'success',
+		provisioning: 'warning',
+		offline: 'danger'
 	};
 
 	interface TabDef {
@@ -149,7 +148,7 @@
 				ip: `23.193.50.${12 + unitCounter}`,
 				status: 'provisioning',
 				monthlyRate: rackPrices[newRackSize].replace('/mo', ''),
-				created: new Date().toISOString().slice(0, 10)
+				created: formatIsoDate(new Date())
 			};
 			units.push(unit);
 			await goto(resolve(tabHref(activeTab, unit.id)));
@@ -277,7 +276,10 @@
 			<div class="flex h-10 shrink-0 items-center justify-between border-b border-border px-5">
 				<div class="flex items-center gap-2">
 					<span class="text-sm font-medium text-foreground">{selectedUnit.name}</span>
-					<Badge variant="outline" class="text-[10px] {statusBadgeClass[selectedUnit.status]}">
+					<Badge
+						variant="outline"
+						class="text-[10px] {statusBadgeClass[unitStatusTone[selectedUnit.status]]}"
+					>
 						{selectedUnit.status}
 					</Badge>
 				</div>

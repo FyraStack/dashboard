@@ -1,19 +1,24 @@
 <script lang="ts">
-	import type { FeatureFlags } from 'stack-shared/feature-flags';
+	import { createServerPath } from 'stack-shared/routes';
 	import { onMount } from 'svelte';
+	import { Clipboard } from '#lib/clipboard.svelte.js';
 	import BillingSetupDialog from '#lib/components/billing-setup-dialog.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { autofillAttributes } from '#lib/components/ui/input/autofill.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { dependencies } from '#lib/dependencies.js';
+	import { formatMegabytes } from '#lib/format.js';
 	import { idempotent } from '#lib/idempotency.js';
+	import { compareVersionsDesc } from '#lib/image-versions.js';
 	import { generateServerName } from '#lib/name-generator.js';
+	import type { listImages } from '#lib/remote/images.remote.js';
 	import { createVm } from '#lib/remote/vms.remote.js';
 	import { createVolume as createProjectVolume } from '#lib/remote/volumes.remote.js';
 	import { requestServerStatusRefresh } from '#lib/state/servers.svelte.js';
 	import { userSettingsHref } from '#lib/state/user-settings.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
-	import { goto } from '$app/navigation';
+	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import ArrowLeft from '~icons/lucide/arrow-left';
@@ -31,63 +36,15 @@
 	import Key from '~icons/nucleo/key';
 	import Server from '~icons/nucleo/server';
 	import Upload from '~icons/nucleo/upload';
-
-	interface PageData {
-		billing?: { status?: string; setupRequired?: boolean } | null;
-		canManageBilling?: boolean;
-		currentProject?: { id: string } | null;
-		dbImages?: DbImage[];
-		featureFlags?: FeatureFlags;
-		ipamAvailability?: {
-			ipv4: { available: boolean; availableCount: string };
-			ipv6: { available: boolean; availableCount: string };
-		};
-		sshKeys?: {
-			id: string;
-			name: string;
-			fingerprint: string;
-		}[];
-		vmTypes?: VmType[];
-		volumes?: ExistingVolume[];
-	}
+	import type { PageProps } from './$types';
 
 	type ImageTab = 'os' | 'snapshots' | 'apps';
-	let { data }: { data: PageData } = $props();
+	let { data }: PageProps = $props();
+	type DbImage = Awaited<ReturnType<typeof listImages>>[number];
 	let imageTab = $state<ImageTab>('os');
 
-	interface VmType {
-		cap: string;
-		cores: number;
-		id: string;
-		name: string;
-		ramCapacity: number;
-		rate: string;
-		storageAmount: number;
-	}
-
-	interface DbImage {
-		accentColor: string;
-		color: string;
-		description: string;
-		filePath: string;
-		icon: string | null;
-		id: string;
-		imageType: string;
-		isOfficial: boolean;
-		logoSvg: string | null;
-		name: string;
-		version: string;
-	}
-
-	interface ExistingVolume {
-		associatedVmId: string | null;
-		id: string;
-		name: string;
-		size: number;
-	}
-
-	const vmTypes = $derived(data.vmTypes ?? []);
-	const dbImages = $derived(data.dbImages ?? []);
+	const vmTypes = $derived(data.vmTypes);
+	const dbImages = $derived(data.dbImages);
 	const officialDbImages = $derived(dbImages.filter((image) => image.isOfficial));
 	const customDbImages = $derived(dbImages.filter((image) => !image.isOfficial));
 	interface ImageGroup {
@@ -121,12 +78,12 @@
 			} satisfies ImageGroup;
 		});
 	});
-	const volumesEnabled = $derived(!!data.featureFlags?.volumes);
-	const projectId = $derived(data.currentProject?.id ?? page.params.projectid ?? '');
+	const volumesEnabled = $derived(data.featureFlags.volumes);
+	const projectId = $derived(data.project.id);
 	const billingReady = $derived(data.billing?.setupRequired === false);
-	const canManageBilling = $derived(Boolean(data.canManageBilling));
-	const ipv4Available = $derived(Boolean(data.ipamAvailability?.ipv4.available));
-	const ipv6Available = $derived(Boolean(data.ipamAvailability?.ipv6.available));
+	const canManageBilling = $derived(data.canManageBilling);
+	const ipv4Available = $derived(data.ipamAvailability.ipv4.available);
+	const ipv6Available = $derived(data.ipamAvailability.ipv6.available);
 	const bothNetworksAvailable = $derived(ipv4Available && ipv6Available);
 
 	let serverName = $state(generateServerName());
@@ -141,19 +98,13 @@
 	let selectedSshKeyIds = $state<string[]>([]);
 	let serverPassword = $state('');
 	let showServerPassword = $state(false);
-	let passwordCopied = $state(false);
+	const passwordClipboard = new Clipboard();
 	let selectedVolumeIds = $state<string[]>([]);
 	const networkingReady = $derived(
 		(networkingOption === 'both' && bothNetworksAvailable) ||
 			(networkingOption === 'ipv6' && ipv6Available)
 	);
 
-	interface SelectableVolume {
-		id: string;
-		name: string;
-		sizeGb: number;
-	}
-	let createdVolumes = $state<SelectableVolume[]>([]);
 	let newVolumeName = $state('');
 	let newVolumeSize = $state('10');
 	let showCreateVolume = $state(false);
@@ -170,14 +121,13 @@
 	let availableVolumes = $derived(
 		volumesEnabled
 			? [
-					...(data.volumes ?? [])
+					...data.volumes
 						.filter((volume) => volume.associatedVmId === null)
 						.map((volume) => ({
 							id: volume.id,
 							name: volume.name,
 							sizeGb: volume.size
-						})),
-					...createdVolumes
+						}))
 				]
 			: []
 	);
@@ -187,59 +137,37 @@
 			: 0
 	);
 
+	const sectionMeta = {
+		name: { label: 'Name', icon: Server },
+		image: { label: 'Image', icon: HardDrive },
+		plan: { label: 'Plan', icon: Server },
+		storage: { label: 'Storage', icon: Upload },
+		networking: { label: 'Networking', icon: Globe },
+		ssh: { label: 'Authentication', icon: Key }
+	} as const;
+
+	type SectionId = keyof typeof sectionMeta;
+
 	interface Section {
 		icon: typeof Server;
-		id: string;
+		id: SectionId;
 		isComplete: boolean;
 		label: string;
 	}
 
 	let sections = $derived<Section[]>([
-		{
-			id: 'name',
-			label: 'Name',
-			icon: Server,
-			isComplete: serverName.trim().length > 0
-		},
-
+		{ id: 'name', ...sectionMeta.name, isComplete: serverName.trim().length > 0 },
 		{
 			id: 'image',
-			label: 'Image',
-			icon: HardDrive,
+			...sectionMeta.image,
 			isComplete: selectedImageId !== null && selectedImageVersion !== null
 		},
-
-		{
-			id: 'plan',
-			label: 'Plan',
-			icon: Server,
-			isComplete: selectedPlanId !== null
-		},
-
+		{ id: 'plan', ...sectionMeta.plan, isComplete: selectedPlanId !== null },
 		...(volumesEnabled
-			? [
-					{
-						id: 'storage',
-						label: 'Storage',
-						icon: Upload,
-						isComplete: selectedPlanId !== null
-					}
-				]
+			? [{ id: 'storage' as const, ...sectionMeta.storage, isComplete: selectedPlanId !== null }]
 			: []),
-
-		{
-			id: 'networking',
-			label: 'Networking',
-			icon: Globe,
-			isComplete: true
-		},
-
-		{
-			id: 'ssh',
-			label: 'Authentication',
-			icon: Key,
-			isComplete: true
-		}
+		{ id: 'networking', ...sectionMeta.networking, isComplete: true },
+		{ id: 'ssh', ...sectionMeta.ssh, isComplete: true }
 	]);
 
 	let imagesSearch = $state('');
@@ -282,15 +210,6 @@
 		return Array.from({ length: 24 }, () => chars[randomIndex(chars.length)]).join('');
 	}
 
-	function compareVersionsDesc(a: string, b: string): number {
-		const na = Number.parseFloat(a);
-		const nb = Number.parseFloat(b);
-		if (!(Number.isNaN(na) || Number.isNaN(nb)) && na !== nb) {
-			return nb - na;
-		}
-		return b.localeCompare(a, undefined, { numeric: true });
-	}
-
 	function filteredOfficialGroups(): ImageGroup[] {
 		if (!imagesSearch.trim()) {
 			return officialImageGroups;
@@ -322,7 +241,7 @@
 		selectedImageVersion = img.version;
 	}
 
-	function scrollTosSection(sectionId: string) {
+	function scrollToSection(sectionId: string) {
 		const el = document.getElementById(`section-${sectionId}`);
 		if (el) {
 			el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -339,13 +258,6 @@
 		return 'cursor-pointer border-border text-muted-foreground hover:border-ring';
 	}
 
-	function formatRam(mb: number): string {
-		if (mb >= 1024) {
-			return `${(mb / 1024).toFixed(0)}GB`;
-		}
-		return `${mb}MB`;
-	}
-
 	async function createVolume() {
 		if (!volumesEnabled || creatingVolume) {
 			return;
@@ -353,18 +265,17 @@
 
 		const name = newVolumeName.trim();
 		const size = Number.parseInt(newVolumeSize, 10);
-		const routeProjectId = page.params.projectid;
-		if (!(name && size) || size < 1 || !routeProjectId) {
+		if (!(name && size) || size < 1) {
 			return;
 		}
 		creatingVolume = true;
 		try {
-			const created = await createProjectVolume({ projectId: routeProjectId, name, size });
-			createdVolumes = [...createdVolumes, { id: created.id, name, sizeGb: size }];
+			const created = await createProjectVolume({ projectId, name, size });
 			selectedVolumeIds = [...selectedVolumeIds, created.id];
 			newVolumeName = '';
 			newVolumeSize = '10';
 			showCreateVolume = false;
+			await invalidate(dependencies.project.createServer);
 		} catch (err) {
 			createError = getErrorMessage(err, 'Failed to create volume. Please try again.');
 		} finally {
@@ -379,24 +290,13 @@
 		return `${fp.slice(0, 12)}...${fp.slice(-8)}`;
 	}
 
-	async function copyServerPassword() {
-		if (!serverPassword) {
-			return;
-		}
-		await navigator.clipboard.writeText(serverPassword);
-		passwordCopied = true;
-		window.setTimeout(() => {
-			passwordCopied = false;
-		}, 1500);
-	}
-
 	async function openCreatedVm() {
 		if (!createdVm) {
 			return;
 		}
 		try {
 			await goto(resolve(`projects/${createdVm.projectId}/servers/${createdVm.id}`), {
-				invalidate: ['project:vms']
+				invalidate: [dependencies.project.vms]
 			});
 			requestServerStatusRefresh();
 		} catch {
@@ -423,10 +323,6 @@
 			return;
 		}
 
-		if (!projectId) {
-			createError = 'No project selected. Please select a project.';
-			return;
-		}
 		if (!billingReady) {
 			billingSetupOpen = true;
 			return;
@@ -466,14 +362,26 @@
 	<title>Create Server / Stack</title>
 </svelte:head>
 
+{#snippet sectionHeader(
+	id: SectionId
+)}
+	{@const Icon = sectionMeta[id].icon}
+	<div class="flex items-center gap-2 border-b border-border pb-2">
+		<Icon class="icon-flat size-4 shrink-0 text-red-400" />
+		<span class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
+			>{sectionMeta[id].label}</span
+		>
+	</div>
+{/snippet}
+
 <div class="flex h-full flex-col overflow-hidden">
 	<BillingSetupDialog
 		bind:open={billingSetupOpen}
 		{projectId}
 		{billingReady}
 		{canManageBilling}
-		mode="server-create"
-		returnTo={`/projects/${projectId}/servers/create`}
+		blockedResource="servers"
+		returnTo={createServerPath(projectId)}
 	/>
 
 	<div
@@ -484,7 +392,7 @@
 				variant="ghost"
 				size="sm"
 				class="h-9 shrink-0 gap-1.5 px-2.5 text-sm text-muted-foreground hover:text-foreground sm:h-7 sm:px-2 sm:text-xs"
-				onclick={() => goto(resolve(`projects/${page.params.projectid}/servers`))}
+				onclick={() => goto(resolve(`projects/${projectId}/servers`))}
 			>
 				<ArrowLeft class="h-3.5 w-3.5 sm:h-3 sm:w-3" />
 				Back
@@ -498,13 +406,7 @@
 			<div class="px-4 py-5 sm:px-6 sm:py-6">
 				<div class="flex flex-col gap-8">
 					<div id="section-name" class="scroll-mt-4">
-						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<Server class="icon-flat size-4 shrink-0 text-red-400" />
-							<span
-								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
-								>Name</span
-							>
-						</div>
+						{@render sectionHeader('name')}
 						<div class="mt-3 flex">
 							<Input
 								bind:value={serverName}
@@ -518,13 +420,7 @@
 					</div>
 
 					<div id="section-image" class="scroll-mt-4">
-						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<HardDrive class="icon-flat size-4 shrink-0 text-red-400" />
-							<span
-								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
-								>Image</span
-							>
-						</div>
+						{@render sectionHeader('image')}
 						<Tabs.Root bind:value={() => imageTab, setImageTab} class="mt-3">
 							<Tabs.List
 								class="flex h-auto w-full justify-start gap-2 overflow-x-auto rounded-none bg-transparent p-0"
@@ -683,13 +579,7 @@
 					</div>
 
 					<div id="section-plan" class="scroll-mt-4">
-						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<Server class="icon-flat size-4 shrink-0 text-red-400" />
-							<span
-								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
-								>Plan</span
-							>
-						</div>
+						{@render sectionHeader('plan')}
 						<div class="mt-3">
 							{#if vmTypes.length === 0}
 								<div class="flex flex-col items-center justify-center py-8 text-center">
@@ -722,7 +612,7 @@
 											>
 												<span>{plan.cores} vCPU</span>
 												<span class="text-muted-foreground">•</span>
-												<span>{formatRam(plan.ramCapacity)}</span>
+												<span>{formatMegabytes(plan.ramCapacity)}</span>
 												<span class="text-muted-foreground">•</span>
 												<span>{plan.storageAmount}GB</span>
 											</div>
@@ -740,13 +630,7 @@
 
 					{#if volumesEnabled}
 						<div id="section-storage" class="scroll-mt-4">
-							<div class="flex items-center gap-2 border-b border-border pb-2">
-								<Upload class="icon-flat size-4 shrink-0 text-red-400" />
-								<span
-									class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
-									>Storage</span
-								>
-							</div>
+							{@render sectionHeader('storage')}
 							<div class="mt-3">
 								{#if selectedPlan}
 									<div class="flex items-center gap-2 text-sm text-muted-foreground sm:text-xs">
@@ -883,13 +767,7 @@
 					{/if}
 
 					<div id="section-networking" class="scroll-mt-4">
-						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<Globe class="icon-flat size-4 shrink-0 text-red-400" />
-							<span
-								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
-								>Networking</span
-							>
-						</div>
+						{@render sectionHeader('networking')}
 						<div class="mt-3">
 							<div class="flex flex-col gap-2">
 								{#each [
@@ -931,15 +809,9 @@
 					</div>
 
 					<div id="section-ssh" class="scroll-mt-4 pb-8">
-						<div class="flex items-center gap-2 border-b border-border pb-2">
-							<Key class="icon-flat size-4 shrink-0 text-red-400" />
-							<span
-								class="text-sm font-semibold tracking-wider text-muted-foreground uppercase sm:text-xs"
-								>Authentication</span
-							>
-						</div>
+						{@render sectionHeader('ssh')}
 						<div class="mt-3">
-							{#if data.sshKeys && data.sshKeys.length > 0}
+							{#if data.sshKeys.length > 0}
 								<p class="mb-2 text-sm text-muted-foreground sm:text-xs">
 									Select one or more
 									<a
@@ -1040,9 +912,9 @@
 											class="flex h-11 w-11 shrink-0 items-center justify-center border border-border bg-muted text-muted-foreground transition-colors hover:text-foreground sm:h-9 sm:w-9"
 											aria-label="Copy password"
 											disabled={!serverPassword}
-											onclick={copyServerPassword}
+											onclick={() => passwordClipboard.copy(serverPassword)}
 										>
-											{#if passwordCopied}
+											{#if passwordClipboard.copiedKey !== null}
 												<Check class="h-4 w-4 text-emerald-500 sm:h-3.5 sm:w-3.5" />
 											{:else}
 												<Copy class="size-4" />
@@ -1076,7 +948,7 @@
 							<button
 								type="button"
 								class="flex items-center gap-2 px-2 py-2.5 text-left text-sm transition-colors hover:bg-muted/50 sm:py-1.5 sm:text-xs"
-								onclick={() => scrollTosSection(section.id)}
+								onclick={() => scrollToSection(section.id)}
 							>
 								{#if section.isComplete}
 									<Check class="h-3 w-3 shrink-0 text-emerald-500" />
@@ -1109,7 +981,7 @@
 								<span class="text-muted-foreground">Plan</span>
 								<span class="min-w-0 truncate text-right text-foreground">
 									{selectedPlan
-										? `${selectedPlan.name} (${selectedPlan.cores} vCPU, ${formatRam(selectedPlan.ramCapacity)})`
+										? `${selectedPlan.name} (${selectedPlan.cores} vCPU, ${formatMegabytes(selectedPlan.ramCapacity)})`
 										: '-'}
 								</span>
 							</div>

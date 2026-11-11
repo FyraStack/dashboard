@@ -1,7 +1,5 @@
-import {
-	isBillingConfigured,
-	retryOrphanedProjectBillingCancellations
-} from '#lib/server/billing/autumn.js';
+import { isBillingConfigured } from '#lib/server/billing/autumn.js';
+import { retryOrphanedProjectBillingCancellations } from '#lib/server/billing/customers.js';
 import { enforceProjectBillingGrace } from '#lib/server/billing/enforcement.js';
 import {
 	meterActiveResources,

@@ -1,10 +1,6 @@
 import { type } from 'arktype';
-import {
-	accessibilityFixtureBillingOverview,
-	accessibilityFixtureEnabled
-} from '#lib/server/accessibility-fixtures.js';
 import { backend } from '#lib/server/backend.js';
-import { command, query } from '$app/server';
+import { command } from '$app/server';
 
 const projectParams = type({ projectId: 'string' });
 const setupParams = type({ projectId: 'string', returnTo: 'string?', discountCode: 'string?' });
@@ -12,14 +8,6 @@ const purchaseCreditsParams = type({
 	projectId: 'string',
 	credits: 'number.integer > 0',
 	idempotencyKey: '0 < string <= 128'
-});
-
-export const getProjectBilling = query(projectParams, async ({ projectId }) => {
-	if (accessibilityFixtureEnabled) {
-		return accessibilityFixtureBillingOverview;
-	}
-
-	return await backend((me) => me.project(projectId).billing());
 });
 
 export const openBillingPortal = command(projectParams, ({ projectId }) =>

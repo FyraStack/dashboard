@@ -1,11 +1,11 @@
-import { hoursBetween } from './features.ts';
+import { hoursBetween } from './usage.ts';
 
 export interface CapPeriod {
 	end: number;
 	start: number;
 }
 
-export interface CapMeterState {
+interface CapMeterState {
 	capPeriodEnd: number | null;
 	capPeriodStart: number | null;
 	hoursThisPeriod: number | string;
@@ -34,13 +34,15 @@ export function capHoursFor(
 	return capValue / rateValue;
 }
 
-export function calendarMonthPeriod(at: number): CapPeriod {
+function calendarMonthPeriod(at: number): CapPeriod {
 	const date = new Date(at);
 	return {
 		start: Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1),
 		end: Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1)
 	};
 }
+
+const MAX_METERING_GAP_MS = 48 * 3_600_000;
 
 const DAY_MS = 86_400_000;
 const AVERAGE_MONTH_MS = 30.44 * DAY_MS;
@@ -70,7 +72,7 @@ function addUtcMonths(at: number, months: number) {
 	return shifted.getTime();
 }
 
-export function billingCyclePeriod(anchor: CapPeriod, at: number): CapPeriod {
+function billingCyclePeriod(anchor: CapPeriod, at: number): CapPeriod {
 	const length = anchor.end - anchor.start;
 	if (length <= 0) {
 		return calendarMonthPeriod(at);
@@ -145,4 +147,38 @@ export function sliceCapUsage(input: {
 			hoursThisPeriod: hours
 		}
 	};
+}
+
+export function periodAtFor(anchor: CapPeriod | null) {
+	return (at: number) => (anchor ? billingCyclePeriod(anchor, at) : calendarMonthPeriod(at));
+}
+
+export function meteringWindowStart(lastMeteredAt: number, now: number) {
+	return Math.max(lastMeteredAt, now - MAX_METERING_GAP_MS);
+}
+
+export function unmeteredBillableHours(
+	meter: CapMeterState & { lastMeteredAt: number },
+	input: { now: number; capHours: number; periodAt: (at: number) => CapPeriod }
+) {
+	const { segments } = sliceCapUsage({
+		from: meteringWindowStart(meter.lastMeteredAt, input.now),
+		to: input.now,
+		capHours: input.capHours,
+		state: meter,
+		periodAt: input.periodAt
+	});
+
+	return segments.reduce((total, segment) => total + segment.billableHours, 0);
+}
+
+export function releaseCapHours(
+	hoursThisPeriod: number | string,
+	capHours: number,
+	releasedHours: number
+) {
+	const counted = Number(hoursThisPeriod);
+	const withinCap = Number.isFinite(capHours) ? Math.min(counted, capHours) : counted;
+
+	return Math.max(0, withinCap - releasedHours);
 }

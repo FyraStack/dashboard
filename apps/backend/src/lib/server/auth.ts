@@ -15,6 +15,7 @@ import OrganizationInvitationEmail from '#lib/emails/organization-invitation.sve
 import ResetPasswordEmail from '#lib/emails/reset-password.svelte';
 import VerifyEmail from '#lib/emails/verify-email.svelte';
 import { userAdditionalFields } from '#lib/server/auth-user-fields.js';
+import { updateProjectCustomer } from '#lib/server/billing/customers.js';
 import { context as requestContext } from '#lib/server/context.js';
 import { member, user as userTable } from '#lib/server/db/auth.schema.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
@@ -82,7 +83,6 @@ const lazyDb = new Proxy({} as Database, {
 });
 
 async function resyncOwnedProjectBilling(userId: string) {
-	const { updateProjectCustomer } = await import('#lib/server/billing/autumn.js');
 	const db = initDrizzle();
 	const owned = await db
 		.select({ organizationId: member.organizationId })

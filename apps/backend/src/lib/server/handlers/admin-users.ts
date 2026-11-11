@@ -6,7 +6,7 @@ import {
 	consumeAdminVerification
 } from '#lib/server/admin-verification.js';
 import { isAdminUser, requireAdminUser } from '#lib/server/auth-context.js';
-import { updateProjectCustomer } from '#lib/server/billing/autumn.js';
+import { updateProjectCustomer } from '#lib/server/billing/customers.js';
 import { makeCountMap } from '#lib/server/count-map.js';
 import {
 	account,

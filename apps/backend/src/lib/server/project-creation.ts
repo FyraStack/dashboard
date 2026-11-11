@@ -3,7 +3,7 @@ import { runInBackground } from '#lib/server/background.js';
 import {
 	ensureLocalProjectBillingCustomer,
 	ensureProjectCustomer
-} from '#lib/server/billing/autumn.js';
+} from '#lib/server/billing/customers.js';
 import { context } from '#lib/server/context.js';
 import { error } from '#lib/server/http.js';
 

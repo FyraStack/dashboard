@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull, type SQL } from 'drizzle-orm';
 import { getBackend } from '#lib/server/backends/index.js';
 import { type Database, initDrizzle } from '#lib/server/db/index.js';
 import { projectBillingCustomers, vms } from '#lib/server/db/schema.js';
@@ -6,7 +6,8 @@ import {
 	sendProjectPastDueEmail,
 	sendProjectSuspendedEmail
 } from '#lib/server/email-notifications.js';
-import { getProjectBillingState, isBillingConfigured } from './autumn.ts';
+import { isBillingConfigured } from './autumn.ts';
+import { getProjectBillingStatus } from './state.ts';
 
 const GRACE_PERIOD_DAYS = 1000;
 const GRACE_PERIOD_MS = GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000;
@@ -33,63 +34,68 @@ async function suspendProjectVms(projectId: string) {
 	return stopped;
 }
 
-async function markProjectPastDue(db: Database, projectId: string, now: number) {
+interface EscalationClaim {
+	set: Partial<typeof projectBillingCustomers.$inferInsert>;
+	unclaimed: SQL;
+}
+
+async function claimAndNotify(
+	db: Database,
+	projectId: string,
+	now: number,
+	claim: EscalationClaim,
+	notice: { label: string; send: () => Promise<string | null> }
+) {
 	const claimed = await db
 		.update(projectBillingCustomers)
-		.set({ pastDueSince: now, updatedAt: now })
-		.where(
-			and(
-				eq(projectBillingCustomers.projectId, projectId),
-				isNull(projectBillingCustomers.pastDueSince)
-			)
-		)
+		.set({ ...claim.set, updatedAt: now })
+		.where(and(eq(projectBillingCustomers.projectId, projectId), claim.unclaimed))
 		.returning({ projectId: projectBillingCustomers.projectId });
-	if (claimed.length > 0) {
-		await sendProjectPastDueEmail(projectId, GRACE_PERIOD_DAYS)
-			.then((email) => {
-				if (email) {
-					console.info(`Sent past-due email to ${email} for project ${projectId}`);
-				}
-			})
-			.catch((err) => {
-				console.warn(`Failed to send past-due email for project ${projectId}`, err);
-			});
+	if (claimed.length === 0) {
+		return;
 	}
+
+	await notice
+		.send()
+		.then((email) => {
+			if (email) {
+				console.info(`Sent ${notice.label} email to ${email} for project ${projectId}`);
+			}
+		})
+		.catch((err) => {
+			console.warn(`Failed to send ${notice.label} email for project ${projectId}`, err);
+		});
+}
+
+function markProjectPastDue(db: Database, projectId: string, now: number) {
+	return claimAndNotify(
+		db,
+		projectId,
+		now,
+		{ set: { pastDueSince: now }, unclaimed: isNull(projectBillingCustomers.pastDueSince) },
+		{ label: 'past-due', send: () => sendProjectPastDueEmail(projectId, GRACE_PERIOD_DAYS) }
+	);
 }
 
 async function suspendProject(db: Database, projectId: string, now: number) {
 	const stopped = await suspendProjectVms(projectId);
-	const claimed = await db
-		.update(projectBillingCustomers)
-		.set({ suspendedAt: now, updatedAt: now })
-		.where(
-			and(
-				eq(projectBillingCustomers.projectId, projectId),
-				isNull(projectBillingCustomers.suspendedAt)
-			)
-		)
-		.returning({ projectId: projectBillingCustomers.projectId });
-	if (claimed.length > 0) {
-		await sendProjectSuspendedEmail(projectId)
-			.then((email) => {
-				if (email) {
-					console.info(`Sent suspension email to ${email} for project ${projectId}`);
-				}
-			})
-			.catch((err) => {
-				console.warn(`Failed to send suspension email for project ${projectId}`, err);
-			});
-	}
+	await claimAndNotify(
+		db,
+		projectId,
+		now,
+		{ set: { suspendedAt: now }, unclaimed: isNull(projectBillingCustomers.suspendedAt) },
+		{ label: 'suspension', send: () => sendProjectSuspendedEmail(projectId) }
+	);
 	return stopped;
 }
 
 async function enforceProjectGrace(db: Database, projectId: string, now: number) {
-	const state = await getProjectBillingState(projectId, { live: true });
+	const status = await getProjectBillingStatus(projectId, { live: true });
 	const customer = await db.query.projectBillingCustomers.findFirst({
 		where: eq(projectBillingCustomers.projectId, projectId)
 	});
 
-	if (PAST_DUE_STATUSES.has(state.status)) {
+	if (PAST_DUE_STATUSES.has(status)) {
 		const pastDueSince = customer?.pastDueSince ?? null;
 		if (pastDueSince === null) {
 			await markProjectPastDue(db, projectId, now);
@@ -103,7 +109,7 @@ async function enforceProjectGrace(db: Database, projectId: string, now: number)
 	}
 
 	if (
-		state.status === 'active' &&
+		status === 'active' &&
 		customer &&
 		(customer.pastDueSince !== null || customer.suspendedAt !== null)
 	) {

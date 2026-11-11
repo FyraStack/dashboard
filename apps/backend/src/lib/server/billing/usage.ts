@@ -1,7 +1,5 @@
 import type { billingResourceTypeEnum, vmTypes } from '#lib/server/db/schema.js';
 
-export const VOLUME_GIB_HOURS_FEATURE_ID = 'volume_gib_hours';
-
 export type BillingResourceType = (typeof billingResourceTypeEnum.enumValues)[number];
 
 type VmType = typeof vmTypes.$inferSelect;
@@ -16,6 +14,10 @@ export function requireVmFeatureId(vmType: Pick<VmType, 'name' | 'autumnFeatureI
 
 export function hoursBetween(start: number, end: number) {
 	return Math.max(0, (end - start) / 3_600_000);
+}
+
+export function estimatedCost(hours: number, ratePerHour: number) {
+	return Number((hours * ratePerHour).toFixed(2));
 }
 
 export function billedQuantity(units: number | string, billableHours: number) {
@@ -39,5 +41,17 @@ export function usageIdempotencyKey(input: {
 		input.units,
 		input.periodStart,
 		input.periodEnd
+	].join(':');
+}
+
+export function reversalIdempotencyKey(input: Parameters<typeof usageIdempotencyKey>[0]) {
+	return [
+		'reversal',
+		input.resourceType,
+		input.resourceId,
+		input.featureId,
+		input.periodStart,
+		input.periodEnd,
+		input.units
 	].join(':');
 }

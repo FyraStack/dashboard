@@ -1,7 +1,6 @@
 import { RpcTarget } from 'cloudflare:workers';
 import type { Scope } from '#lib/server/context.js';
 import {
-	getProjectBilling,
 	openBillingPortal,
 	type PurchaseCreditsInput,
 	purchaseCredits,
@@ -65,10 +64,6 @@ export class Project extends RpcTarget {
 
 	removeMember(input: Omit<RemoveMemberInput, 'projectId'>) {
 		return inScope(this.#scope, () => removeMember({ ...input, projectId: this.#id }));
-	}
-
-	billing() {
-		return inScope(this.#scope, () => getProjectBilling({ projectId: this.#id }));
 	}
 
 	openBillingPortal() {

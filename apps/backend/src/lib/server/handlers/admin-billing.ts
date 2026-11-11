@@ -1,10 +1,9 @@
-import { and, desc, eq, gt, lte, sql } from 'drizzle-orm';
-import { requireAdmin } from '#lib/server/auth-context.js';
-import { capHoursFor } from '#lib/server/billing/caps.js';
-import { syncUsageEvent } from '#lib/server/billing/metering.js';
-import { context } from '#lib/server/context.js';
+import { and, desc, eq, gt, lte } from 'drizzle-orm';
+import { requireAdminUser } from '#lib/server/auth-context.js';
+import { releaseMeterCapHours, syncUsageEvents } from '#lib/server/billing/metering.js';
+import { estimatedCost, reversalIdempotencyKey } from '#lib/server/billing/usage.js';
 import { organization } from '#lib/server/db/auth.schema.js';
-import { initDrizzle } from '#lib/server/db/index.js';
+import type { Database } from '#lib/server/db/index.js';
 import { billingMeters, billingUsageEvents, vms, vmTypes } from '#lib/server/db/schema.js';
 import { error } from '#lib/server/http.js';
 
@@ -24,24 +23,12 @@ export interface VmBillingUsage {
 	vmName: string;
 }
 
-async function requireCurrentAdmin() {
-	const { locals } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireAdmin(db, locals.user.id);
-
-	return db;
-}
-
 function roundHours(value: number) {
 	return Number(value.toFixed(6));
 }
 
 async function computeVmUsage(
-	db: ReturnType<typeof initDrizzle>,
+	db: Database,
 	vmId: string,
 	periodStart: number,
 	periodEnd: number
@@ -115,7 +102,7 @@ async function computeVmUsage(
 		eventCount,
 		ratePerHour: vm.ratePerHour,
 		estimatedAmount:
-			rate === null || Number.isNaN(rate) ? null : Number((reversibleHours * rate).toFixed(2))
+			rate === null || Number.isNaN(rate) ? null : estimatedCost(reversibleHours, rate)
 	};
 }
 
@@ -135,7 +122,7 @@ export interface VmBillingUsageInput {
 }
 
 export async function getVmBillingUsage(params: VmBillingUsageInput) {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 	validateWindow(params.periodStart, params.periodEnd);
 
 	return computeVmUsage(db, params.vmId, params.periodStart, params.periodEnd);
@@ -149,7 +136,7 @@ export interface ReverseVmBillingUsageInput {
 }
 
 export async function reverseVmBillingUsage(params: ReverseVmBillingUsageInput) {
-	const db = await requireCurrentAdmin();
+	const { db } = await requireAdminUser();
 	validateWindow(params.periodStart, params.periodEnd);
 
 	const usage = await computeVmUsage(db, params.vmId, params.periodStart, params.periodEnd);
@@ -188,15 +175,14 @@ export async function reverseVmBillingUsage(params: ReverseVmBillingUsageInput) 
 	);
 
 	const now = Date.now();
-	const idempotencyKey = [
-		'reversal',
-		'vm',
-		params.vmId,
-		usage.featureId,
-		params.periodStart,
-		params.periodEnd,
-		usage.reversibleHours
-	].join(':');
+	const idempotencyKey = reversalIdempotencyKey({
+		resourceType: 'vm',
+		resourceId: params.vmId,
+		featureId: usage.featureId,
+		units: usage.reversibleHours,
+		periodStart: params.periodStart,
+		periodEnd: params.periodEnd
+	});
 
 	const [event] = await db
 		.insert(billingUsageEvents)
@@ -224,37 +210,15 @@ export async function reverseVmBillingUsage(params: ReverseVmBillingUsageInput) 
 		meter.capPeriodEnd !== null &&
 		currentPeriodReversibleHours > 0
 	) {
-		const meterUnits = Number(meter.units);
-		const reversedMeterHours =
-			Number.isFinite(meterUnits) && meterUnits > 0
-				? currentPeriodReversibleHours / meterUnits
-				: currentPeriodReversibleHours;
-		const [vmType] = await db
-			.select({ rate: vmTypes.rate, cap: vmTypes.cap })
-			.from(vms)
-			.innerJoin(vmTypes, eq(vmTypes.id, vms.vmTypeId))
-			.where(eq(vms.id, params.vmId))
-			.limit(1);
-		const capHours = capHoursFor(vmType?.rate, vmType?.cap);
-		const billableCounter = Number.isFinite(capHours)
-			? sql`least(${billingMeters.hoursThisPeriod}, ${capHours})`
-			: sql`${billingMeters.hoursThisPeriod}`;
-
-		await db
-			.update(billingMeters)
-			.set({
-				hoursThisPeriod: sql`greatest(0, ${billableCounter} - ${reversedMeterHours})`
-			})
-			.where(
-				and(
-					eq(billingMeters.id, meter.id),
-					eq(billingMeters.capPeriodStart, meter.capPeriodStart),
-					eq(billingMeters.capPeriodEnd, meter.capPeriodEnd)
-				)
-			);
+		await releaseMeterCapHours({
+			meterId: meter.id,
+			periodStart: meter.capPeriodStart,
+			periodEnd: meter.capPeriodEnd,
+			releasedUsageHours: currentPeriodReversibleHours
+		});
 	}
 
-	const syncStatus = await syncUsageEvent(event.id);
+	const [syncStatus] = await syncUsageEvents([event]);
 
 	return {
 		reversedHours: usage.reversibleHours,

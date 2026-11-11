@@ -1,10 +1,14 @@
-import { getProjectMemberRole, requireProjectAccess } from '#lib/server/auth-context.js';
+import { projectBillingPath } from 'stack-shared/routes';
+import {
+	getProjectMemberRole,
+	requireProjectAccess,
+	requireUser
+} from '#lib/server/auth-context.js';
 import { runInBackground } from '#lib/server/background.js';
-import { attachDefaultProjectPlan } from '#lib/server/billing/autumn.js';
-import { getProjectBillingOverview, refreshProjectBilling } from '#lib/server/billing/overview.js';
+import { attachDefaultProjectPlan, refreshProjectBilling } from '#lib/server/billing/customers.js';
+import { getProjectBillingOverview } from '#lib/server/billing/overview.js';
 import { consumeBillingSetupToken } from '#lib/server/billing/setup-token.js';
 import { context } from '#lib/server/context.js';
-import { initDrizzle } from '#lib/server/db/index.js';
 import { error } from '#lib/server/http.js';
 
 export interface LoadProjectBillingPageInput {
@@ -24,17 +28,13 @@ export type ProjectBillingPage =
 export async function loadProjectBillingPage(
 	input: LoadProjectBillingPageInput
 ): Promise<ProjectBillingPage> {
-	const { locals, url } = context();
-	if (!locals.user) {
-		error(401, 'Authentication required');
-	}
-
-	const db = initDrizzle();
-	await requireProjectAccess(db, locals.user.id, input.projectId, 'admin');
-	const role = await getProjectMemberRole(db, locals.user.id, input.projectId);
+	const { db, user } = requireUser();
+	const { url } = context();
+	await requireProjectAccess(db, user.id, input.projectId, 'admin');
+	const role = await getProjectMemberRole(db, user.id, input.projectId);
 
 	if (input.billingSetupToken) {
-		const billingPath = `/projects/${input.projectId}/billing`;
+		const billingPath = projectBillingPath(input.projectId);
 		if (role !== 'owner') {
 			error(403, 'Project owner permission required');
 		}
@@ -42,7 +42,7 @@ export async function loadProjectBillingPage(
 		const grant = await consumeBillingSetupToken(
 			db,
 			input.projectId,
-			locals.user.id,
+			user.id,
 			input.billingSetupToken
 		);
 		if (!grant) {

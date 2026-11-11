@@ -2,7 +2,7 @@ import { and, eq, inArray, isNotNull, lt, ne } from 'drizzle-orm';
 import {
 	cancelProjectBilling,
 	deleteLocalProjectBillingCustomer
-} from '#lib/server/billing/autumn.js';
+} from '#lib/server/billing/customers.js';
 import {
 	abandonProjectUsageEvents,
 	closeProjectMeters,

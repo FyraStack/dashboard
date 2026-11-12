@@ -1,12 +1,11 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { autofillAttributes } from '#lib/components/ui/input/autofill.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
+	import { formatFileSize } from '#lib/format.js';
 	import GripVertical from '~icons/lucide/grip-vertical';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
@@ -19,20 +18,25 @@
 	import RefreshCw from '~icons/nucleo/refresh-cw';
 	import Trash2 from '~icons/nucleo/trash';
 	import Upload from '~icons/nucleo/upload';
+	import type { PageProps } from './$types';
+	import { type BaseImage, ImageEditor } from './image-editor.svelte.js';
+	import { ImageImport } from './image-import.svelte.js';
+	import { PveImages } from './pve-images.svelte.js';
 
-	let { data }: { data: AdminPageData } = $props();
-	const admin = new AdminState(untrack(() => data));
-	$effect(() => {
-		admin.sync(data);
-	});
+	let { data }: PageProps = $props();
 
-	function formatSize(bytes: number) {
-		const mb = bytes / (1024 * 1024);
-		if (mb >= 1024) {
-			return `${(mb / 1024).toFixed(1)} GB`;
-		}
-		return `${mb.toFixed(0)} MB`;
-	}
+	let images = $derived<BaseImage[]>(data.images);
+	const pve = new PveImages();
+	const importer = new ImageImport(pve);
+	const editor = new ImageEditor(
+		{
+			get: () => images,
+			set: (next) => {
+				images = next;
+			}
+		},
+		pve
+	);
 
 	function svgDataUrl(svg: string) {
 		return `data:image/svg+xml,${encodeURIComponent(svg)}`;
@@ -67,7 +71,7 @@
 	function imgDrop(event: DragEvent, index: number) {
 		event.preventDefault();
 		if (imgDragIndex !== null) {
-			admin.imgReorderGroups(imgDragIndex, index);
+			editor.reorderGroups(imgDragIndex, index);
 		}
 		imgDragIndex = null;
 		imgDropIndex = null;
@@ -83,36 +87,8 @@
 			return;
 		}
 		event.preventDefault();
-		admin.imgReorderGroups(index, event.key === 'ArrowUp' ? index - 1 : index + 1);
+		editor.reorderGroups(index, event.key === 'ArrowUp' ? index - 1 : index + 1);
 	}
-
-	let isNewImage = $derived(admin.imgGroupName === null);
-	let pendingSummary = $derived.by(() => {
-		const { new: added, changed, removed, details } = admin.imgPending;
-		const parts: string[] = [];
-		if (details) {
-			parts.push('details');
-		}
-		if (added) {
-			parts.push(`${added} new`);
-		}
-		if (changed) {
-			parts.push(`${changed} changed`);
-		}
-		if (removed) {
-			parts.push(`${removed} removed`);
-		}
-		return parts.join(', ');
-	});
-	let saveLabel = $derived.by(() => {
-		if (isNewImage) {
-			return 'Create image';
-		}
-		if (admin.imgActiveRows.length === 0) {
-			return 'Delete image';
-		}
-		return 'Save changes';
-	});
 
 	const statusStyles = {
 		new: 'text-emerald-700 dark:text-emerald-400',
@@ -120,28 +96,21 @@
 		removed: 'text-red-600 dark:text-red-400',
 		unchanged: 'text-muted-foreground'
 	} as const;
-	let localImportTargets = $derived(
-		admin.pveImageImportTargets.filter((target) => target.storage === admin.importStorage)
-	);
+	const localImportTargets = $derived(importer.localTargets);
 </script>
 
 <div class="flex-1 overflow-auto">
 	<div class="flex items-center justify-end gap-2 border-b border-border/60 px-5 py-2">
-		<Button
-			size="sm"
-			variant="outline"
-			class="h-7 gap-1.5 text-xs"
-			onclick={() => admin.imgImportOpen()}
-		>
+		<Button size="sm" variant="outline" class="h-7 gap-1.5 text-xs" onclick={() => importer.show()}>
 			<Upload class="h-3 w-3" />
 			Upload/Import Image
 		</Button>
-		<Button size="sm" class="h-7 gap-1.5 text-xs" onclick={() => admin.imgOpenCreate()}>
+		<Button size="sm" class="h-7 gap-1.5 text-xs" onclick={() => editor.openCreate()}>
 			<Plus class="h-3 w-3" />
 			Add Image
 		</Button>
 	</div>
-	{#if admin.images.length === 0}
+	{#if images.length === 0}
 		<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
 			<Disc class="mb-3 h-6 w-6" />
 			<p class="text-xs">No images configured</p>
@@ -149,7 +118,7 @@
 				variant="outline"
 				size="sm"
 				class="mt-3 gap-1.5 text-xs"
-				onclick={() => admin.imgOpenCreate()}
+				onclick={() => editor.openCreate()}
 				><Plus class="h-3 w-3" />
 				Add Image</Button
 			>
@@ -168,7 +137,7 @@
 					<th class="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th>
 				</tr>
 			</thead>
-			{#each admin.imageGroups as group, index (group.name)}
+			{#each editor.groups as group, index (group.name)}
 				{@const rep = group.representative}
 				<tbody
 					class="border-b border-border transition-colors {imgDragIndex === index
@@ -233,7 +202,7 @@
 								size="sm"
 								aria-label={`Manage ${group.name}`}
 								class="h-7 gap-1 px-2 text-xs"
-								onclick={() => admin.imgOpenManage(group.name)}
+								onclick={() => editor.openManage(group.name)}
 								><Pencil class="h-3 w-3" />
 								Manage</Button
 							>
@@ -267,8 +236,7 @@
 	{/if}
 </div>
 
-<!-- Import Image Dialog -->
-<Dialog.Root bind:open={admin.importDialogOpen}>
+<Dialog.Root bind:open={importer.open}>
 	<Dialog.Content class="border-border bg-background sm:max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>Upload/Import Image</Dialog.Title>
@@ -277,17 +245,17 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="flex flex-col gap-4 py-4">
-			{#if admin.importError}
+			{#if importer.error}
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
-					<AlertTriangle class="size-4 shrink-0" />{admin.importError}
+					<AlertTriangle class="size-4 shrink-0" />{importer.error}
 				</div>
 			{/if}
 
 			<div class="flex items-center justify-between">
 				<p class="text-xs text-muted-foreground">
-					Target: <span class="font-mono text-muted-foreground">{admin.importStorage}</span> on
+					Target: <span class="font-mono text-muted-foreground">{importer.storage}</span> on
 					{localImportTargets.length}
 					node{localImportTargets.length === 1 ? '' : 's'}.
 				</p>
@@ -295,10 +263,10 @@
 					variant="ghost"
 					size="sm"
 					class="h-6 gap-1 px-2 text-[10px] text-muted-foreground"
-					onclick={() => admin.loadPveImages()}
-					disabled={admin.isoLoading || admin.importSaving}
+					onclick={() => pve.load()}
+					disabled={pve.loading || importer.saving}
 				>
-					{#if admin.isoLoading}
+					{#if pve.loading}
 						<Loader2 class="h-3 w-3 animate-spin" />
 					{:else}
 						<RefreshCw class="h-3 w-3" />
@@ -307,8 +275,8 @@
 				</Button>
 			</div>
 
-			{#if admin.isoError}
-				<p class="text-xs text-red-400">{admin.isoError}</p>
+			{#if pve.error}
+				<p class="text-xs text-red-400">{pve.error}</p>
 			{:else if localImportTargets.length === 0}
 				<p class="text-xs text-muted-foreground">
 					No online nodes expose import-capable local storage.
@@ -318,20 +286,20 @@
 			<div class="flex flex-col gap-2">
 				<Label>Image URL</Label>
 				<Input
-					bind:value={admin.importUrl}
+					bind:value={importer.url}
 					placeholder="https://example.com/images/fedora.qcow2"
-					disabled={admin.importSaving}
-					onchange={() => !admin.importFilename.trim() && admin.importFilenameFromUrl()}
+					disabled={importer.saving}
+					onchange={() => importer.fillMissingFilename()}
 				/>
 			</div>
 
 			<div class="flex flex-col gap-2">
 				<Label>Filename</Label>
 				<Input
-					bind:value={admin.importFilename}
+					bind:value={importer.filename}
 					placeholder="fedora.qcow2"
-					disabled={admin.importSaving}
-					onfocus={() => !admin.importFilename.trim() && admin.importFilenameFromUrl()}
+					disabled={importer.saving}
+					onfocus={() => importer.fillMissingFilename()}
 				/>
 			</div>
 
@@ -339,9 +307,9 @@
 				<div class="flex flex-col gap-2">
 					<Label>Checksum</Label>
 					<select
-						bind:value={admin.importChecksumAlgorithm}
+						bind:value={importer.checksumAlgorithm}
 						class="h-9 w-full border border-border bg-muted px-3 text-sm text-foreground focus:border-ring focus:outline-none"
-						disabled={admin.importSaving}
+						disabled={importer.saving}
 					>
 						<option value="">None</option>
 						<option value="md5">md5</option>
@@ -355,9 +323,9 @@
 				<div class="flex flex-col gap-2">
 					<Label>Checksum Value</Label>
 					<Input
-						bind:value={admin.importChecksum}
+						bind:value={importer.checksum}
 						placeholder="optional"
-						disabled={admin.importSaving || !admin.importChecksumAlgorithm}
+						disabled={importer.saving || !importer.checksumAlgorithm}
 					/>
 				</div>
 			</div>
@@ -365,18 +333,18 @@
 			<label class="flex items-center gap-2 text-sm text-muted-foreground">
 				<input
 					type="checkbox"
-					bind:checked={admin.importVerifyCertificates}
-					disabled={admin.importSaving}
+					bind:checked={importer.verifyCertificates}
+					disabled={importer.saving}
 					class="h-4 w-4"
 				/>
 				Verify TLS certificates
 			</label>
 
-			{#if admin.importTasks.length > 0}
+			{#if importer.tasks.length > 0}
 				<div
 					class="border border-border bg-background px-3 py-2 font-mono text-xs text-muted-foreground"
 				>
-					{#each admin.importTasks as task (task.node)}
+					{#each importer.tasks as task (task.node)}
 						<div class="flex justify-between gap-4">
 							<span>{task.node}</span>
 							<span>{task.status}{task.exitstatus ? ` (${task.exitstatus})` : ''}</span>
@@ -389,16 +357,16 @@
 			<Button
 				variant="outline"
 				size="sm"
-				onclick={() => admin.imgImportClose()}
-				disabled={admin.importSaving}
+				onclick={() => importer.close()}
+				disabled={importer.saving}
 				>Cancel</Button
 			>
 			<Button
 				size="sm"
-				onclick={() => admin.importImageFromUrl()}
-				disabled={admin.importSaving || !admin.importUrl.trim() || localImportTargets.length === 0}
+				onclick={() => importer.submit()}
+				disabled={importer.saving || !importer.url.trim() || localImportTargets.length === 0}
 			>
-				{#if admin.importSaving}
+				{#if importer.saving}
 					<Loader2 class="h-3 w-3 animate-spin" />
 				{/if}
 				Import
@@ -407,44 +375,42 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<!-- Manage Image Dialog -->
-<Dialog.Root bind:open={admin.imgDialogOpen}>
+<Dialog.Root bind:open={editor.open}>
 	<Dialog.Content
 		class="max-h-[90vh] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-border bg-background sm:max-w-3xl"
 	>
 		<Dialog.Header>
-			<Dialog.Title>{isNewImage ? 'Add Image' : `Manage ${admin.imgGroupName}`}</Dialog.Title>
+			<Dialog.Title>{editor.isNew ? 'Add Image' : `Manage ${editor.groupName}`}</Dialog.Title>
 			<Dialog.Description>
-				{isNewImage
+				{editor.isNew
 					? 'Configure a base image and its versions for VM provisioning.'
 					: 'Edit details and versions. Nothing is saved until you hit Save.'}
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="-mx-4 flex min-h-0 min-w-0 flex-col gap-5 overflow-y-auto px-4 py-2">
-			{#if admin.imgError}
+			{#if editor.error}
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
-					<AlertTriangle class="size-4 shrink-0" />{admin.imgError}
+					<AlertTriangle class="size-4 shrink-0" />{editor.error}
 				</div>
 			{/if}
 
-			<!-- Shared details -->
 			<section class="flex flex-col gap-3">
 				<div class="flex items-center gap-3 border border-border bg-muted/40 px-3 py-2.5">
 					<span
-						class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden text-white {admin.imgColor}"
+						class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden text-white {editor.color}"
 					>
-						{#if admin.imgIsOfficial && admin.imgLogoSvg.trim()}
-							<img src={svgDataUrl(admin.imgLogoSvg)} alt="" class="h-5 w-5" />
+						{#if editor.isOfficial && editor.logoSvg.trim()}
+							<img src={svgDataUrl(editor.logoSvg)} alt="" class="h-5 w-5" />
 						{:else}
 							<Disc class="size-4" />
 						{/if}
 					</span>
 					<div class="flex min-w-0 flex-1 flex-col">
 						<span class="flex items-center gap-2 text-sm font-medium text-foreground">
-							{admin.imgName || 'New image'}
-							{#if admin.imgIsOfficial}
+							{editor.name || 'New image'}
+							{#if editor.isOfficial}
 								<Badge
 									variant="secondary"
 									class="text-[10px] text-emerald-700 dark:text-emerald-300"
@@ -452,36 +418,36 @@
 								>
 							{/if}
 						</span>
-						{#if admin.imgDescription}
-							<span class="line-clamp-2 text-xs text-muted-foreground">{admin.imgDescription}</span>
+						{#if editor.description}
+							<span class="line-clamp-2 text-xs text-muted-foreground">{editor.description}</span>
 						{/if}
 					</div>
 					<Button
 						variant="ghost"
 						size="sm"
 						class="h-7 shrink-0 px-2 text-xs text-muted-foreground"
-						aria-expanded={admin.imgDetailsExpanded}
-						onclick={() => (admin.imgDetailsExpanded = !admin.imgDetailsExpanded)}
+						aria-expanded={editor.detailsExpanded}
+						onclick={() => (editor.detailsExpanded = !editor.detailsExpanded)}
 					>
-						{admin.imgDetailsExpanded ? 'Hide details' : 'Edit details'}
+						{editor.detailsExpanded ? 'Hide details' : 'Edit details'}
 					</Button>
 				</div>
 
-				{#if admin.imgDetailsExpanded}
+				{#if editor.detailsExpanded}
 					<div class="flex flex-col gap-4 border-l-2 border-border pl-4">
 						<div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
 							<div class="flex flex-col gap-2">
 								<Label for="img-name">Name</Label>
 								<Input
 									id="img-name"
-									bind:value={admin.imgName}
+									bind:value={editor.name}
 									placeholder="Fedora Server"
-									list={isNewImage ? 'img-existing-names' : undefined}
-									onchange={() => admin.imgAdoptExistingName()}
+									list={editor.isNew ? 'img-existing-names' : undefined}
+									onchange={() => editor.adoptExistingName()}
 								/>
-								{#if isNewImage}
+								{#if editor.isNew}
 									<datalist id="img-existing-names">
-										{#each admin.imageGroups as group (group.name)}
+										{#each editor.groups as group (group.name)}
 											<option value={group.name}></option>
 										{/each}
 									</datalist>
@@ -492,12 +458,12 @@
 								<label
 									class="flex h-9 items-center gap-2 border border-border bg-muted px-3 text-sm text-muted-foreground"
 								>
-									<input type="checkbox" bind:checked={admin.imgIsOfficial} class="h-4 w-4" />
+									<input type="checkbox" bind:checked={editor.isOfficial} class="h-4 w-4" />
 									Official image
 								</label>
 							</div>
 						</div>
-						{#if isNewImage}
+						{#if editor.isNew}
 							<p class="-mt-2 text-[11px] text-muted-foreground">
 								Picking an existing name opens that image so you can add versions to it.
 							</p>
@@ -506,19 +472,19 @@
 						<div class="flex flex-col gap-2">
 							<Label>Description</Label>
 							<textarea
-								bind:value={admin.imgDescription}
+								bind:value={editor.description}
 								placeholder="Short description of this image..."
 								rows="2"
 								class="w-full resize-none border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
 							></textarea>
 						</div>
 
-						{#if admin.imgIsOfficial}
+						{#if editor.isOfficial}
 							<div class="grid grid-cols-[1fr_auto] gap-3">
 								<div class="flex flex-col gap-2">
 									<Label>Logo SVG</Label>
 									<textarea
-										bind:value={admin.imgLogoSvg}
+										bind:value={editor.logoSvg}
 										placeholder="<svg ...></svg>"
 										rows="3"
 										class="w-full resize-none border border-border bg-muted px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
@@ -528,10 +494,10 @@
 									<Label>Preview</Label>
 									<div
 										class="flex h-20 w-20 items-center justify-center border border-border bg-muted p-3 text-muted-foreground"
-										style:color={admin.imgAccentColor}
+										style:color={editor.accentColor}
 									>
-										{#if admin.imgLogoSvg.trim()}
-											<img src={svgDataUrl(admin.imgLogoSvg)} alt="" class="h-12 w-12" />
+										{#if editor.logoSvg.trim()}
+											<img src={svgDataUrl(editor.logoSvg)} alt="" class="h-12 w-12" />
 										{:else}
 											<Image class="h-6 w-6" />
 										{/if}
@@ -540,11 +506,11 @@
 							</div>
 							<div class="flex flex-col gap-2">
 								<Label>Accent Color</Label>
-								<Input bind:value={admin.imgAccentColor} placeholder="#6b7280" />
+								<Input bind:value={editor.accentColor} placeholder="#6b7280" />
 							</div>
 						{/if}
 
-						{#if !isNewImage}
+						{#if !editor.isNew}
 							<p class="text-[11px] text-muted-foreground">
 								Detail changes apply to every version of this image.
 							</p>
@@ -553,7 +519,6 @@
 				{/if}
 			</section>
 
-			<!-- Versions -->
 			<section class="flex flex-col gap-2">
 				<div class="flex items-center justify-between">
 					<Label>Versions</Label>
@@ -561,10 +526,10 @@
 						variant="ghost"
 						size="sm"
 						class="h-6 gap-1 px-2 text-[10px] text-muted-foreground"
-						onclick={() => admin.loadPveImages()}
-						disabled={admin.isoLoading}
+						onclick={() => pve.load()}
+						disabled={pve.loading}
 					>
-						{#if admin.isoLoading}
+						{#if pve.loading}
 							<Loader2 class="h-3 w-3 animate-spin" />
 						{:else}
 							<RefreshCw class="h-3 w-3" />
@@ -583,8 +548,8 @@
 						<span>Status</span>
 						<span class="sr-only">Remove</span>
 					</div>
-					{#each admin.imgRows as row, rowIndex (row.key)}
-						{@const status = admin.imgRowStatus(row)}
+					{#each editor.rows as row, rowIndex (row.key)}
+						{@const status = editor.rowStatus(row)}
 						<div class={row.error ? 'bg-red-950/20' : ''}>
 							<div
 								class="grid grid-cols-[7rem_minmax(0,1fr)_5rem_4.5rem_1.75rem] items-center gap-2 px-2 py-2 {row.removed
@@ -600,21 +565,20 @@
 								/>
 								<select
 									bind:value={row.filePath}
-									onchange={() => admin.imgRowFileChanged(row)}
+									onchange={() => editor.rowFileChanged(row)}
 									disabled={row.removed}
 									aria-label={`Proxmox image for version ${rowIndex + 1}`}
 									class="h-8 w-full min-w-0 border border-border bg-muted px-2 font-mono text-xs text-foreground focus:border-ring focus:outline-none"
 								>
 									<option value="">Select an imported image</option>
-									{#if row.filePath &&
-										!admin.pveImages.some((image) => image.volid === row.filePath)}
+									{#if row.filePath && !pve.images.some((image) => image.volid === row.filePath)}
 										<option value={row.filePath} disabled>{row.filePath} · missing</option>
 									{/if}
-									{#each admin.pveImages as image (image.volid)}
-										{@const usedBy = admin.imgFileUsedBy(image.volid, row.id)}
+									{#each pve.images as image (image.volid)}
+										{@const usedBy = editor.fileUsedBy(image.volid, row.id)}
 										<option value={image.volid}>
 											{image.volid}
-											· {formatSize(image.size)}{usedBy ? ` · used by ${usedBy}` : ''}
+											· {formatFileSize(image.size)}{usedBy ? ` · used by ${usedBy}` : ''}
 										</option>
 									{/each}
 								</select>
@@ -643,7 +607,7 @@
 									class="h-7 w-7 p-0 text-muted-foreground {row.removed
 										? 'hover:text-foreground'
 										: 'hover:text-red-400'}"
-									onclick={() => admin.imgToggleRemoveRow(row)}
+									onclick={() => editor.toggleRemoveRow(row)}
 								>
 									{#if row.removed}
 										<Undo class="h-3 w-3" />
@@ -665,24 +629,24 @@
 					variant="outline"
 					size="sm"
 					class="h-7 w-fit gap-1 text-xs"
-					onclick={() => admin.imgAddRow()}
+					onclick={() => editor.addRow()}
 					><Plus class="h-3 w-3" />
 					Add version</Button
 				>
 
-				{#if admin.isoError}
-					<p class="text-xs text-red-400">{admin.isoError}</p>
-				{:else if admin.pveImages.length === 0 && !admin.isoLoading}
+				{#if pve.error}
+					<p class="text-xs text-red-400">{pve.error}</p>
+				{:else if pve.images.length === 0 && !pve.loading}
 					<p class="text-xs text-muted-foreground">
 						No imported images found. Use Upload/Import Image first.
 					</p>
 				{/if}
-				{#if admin.imgDuplicateVersions.length > 0}
+				{#if editor.duplicateVersions.length > 0}
 					<p class="text-xs text-amber-600 dark:text-amber-400">
-						Heads up: {admin.imgDuplicateVersions.join(', ')} is listed more than once.
+						Heads up: {editor.duplicateVersions.join(', ')} is listed more than once.
 					</p>
 				{/if}
-				{#if !isNewImage && admin.imgActiveRows.length === 0}
+				{#if !editor.isNew && editor.activeRows.length === 0}
 					<p class="text-xs text-red-400">
 						Every version is marked for removal. Saving will delete this image entirely.
 					</p>
@@ -691,35 +655,33 @@
 		</div>
 		<Dialog.Footer class="items-center sm:justify-between">
 			<div class="flex items-center gap-3">
-				{#if !isNewImage}
+				{#if !editor.isNew}
 					<Button
 						variant="ghost"
 						size="sm"
 						class="h-8 gap-1 px-2 text-xs text-red-400 hover:text-red-300"
-						onclick={() => admin.imgRemoveAll()}
-						disabled={admin.imgSaving || admin.imgActiveRows.length === 0}
+						onclick={() => editor.removeAll()}
+						disabled={editor.saving || editor.activeRows.length === 0}
 						><Trash2 class="h-3 w-3" />
 						Delete image</Button
 					>
 				{/if}
-				{#if pendingSummary && !isNewImage}
-					<span class="text-xs text-muted-foreground">Pending: {pendingSummary}</span>
+				{#if editor.pendingSummary && !editor.isNew}
+					<span class="text-xs text-muted-foreground">Pending: {editor.pendingSummary}</span>
 				{/if}
 			</div>
 			<div class="flex items-center gap-2">
-				<Button variant="outline" size="sm" onclick={() => (admin.imgDialogOpen = false)}
-					>Cancel</Button
-				>
+				<Button variant="outline" size="sm" onclick={() => (editor.open = false)}>Cancel</Button>
 				<Button
 					size="sm"
-					variant={saveLabel === 'Delete image' ? 'destructive' : 'default'}
-					onclick={() => admin.imgSave()}
-					disabled={!admin.imgCanSave}
+					variant={editor.saveLabel === 'Delete image' ? 'destructive' : 'default'}
+					onclick={() => editor.save()}
+					disabled={!editor.canSave}
 				>
-					{#if admin.imgSaving}
+					{#if editor.saving}
 						<Loader2 class="h-3 w-3 animate-spin" />
 					{/if}
-					{saveLabel}
+					{editor.saveLabel}
 				</Button>
 			</div>
 		</Dialog.Footer>

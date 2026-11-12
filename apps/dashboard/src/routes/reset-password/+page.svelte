@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { authClient } from '#lib/auth-client.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
+	import AuthError from '#lib/components/auth-error.svelte';
+	import AuthLogo from '#lib/components/auth-logo.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { goto } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
-	import AlertCircle from '~icons/nucleo/alert-circle';
 	import Eye from '~icons/nucleo/eye';
 	import EyeOff from '~icons/nucleo/eye-off';
 	import type { PageData } from './$types';
@@ -52,22 +52,13 @@
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">
-		<div class="mb-10 flex items-center justify-center gap-2">
-			<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
-			<span class="text-base font-semibold tracking-tight text-foreground">Stack</span>
-			<Badge class="h-4 px-1.5 text-[10px]" variant="secondary">Alpha</Badge>
-		</div>
+		<AuthLogo />
 
 		<div class="space-y-5">
 			<h1 class="text-center text-lg font-medium text-foreground">Choose a new password</h1>
 
 			{#if data.invalidToken}
-				<div
-					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-				>
-					<AlertCircle class="size-4 shrink-0" />
-					This reset link is invalid or has expired.
-				</div>
+				<AuthError>This reset link is invalid or has expired.</AuthError>
 
 				<p class="text-center text-xs text-muted-foreground">
 					<a
@@ -79,12 +70,7 @@
 				</p>
 			{:else}
 				{#if errorMessage}
-					<div
-						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-					>
-						<AlertCircle class="size-4 shrink-0" />
-						{errorMessage}
-					</div>
+					<AuthError>{errorMessage}</AuthError>
 				{/if}
 
 				<form

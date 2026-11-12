@@ -1,14 +1,12 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
+	import { BilledUsage, currentMonthStart } from '#lib/billed-usage.svelte.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import {
-		getVmBillingUsage,
-		reverseVmBillingUsage,
-		type VmBillingUsage
-	} from '#lib/remote/admin-billing.remote.js';
+	import { formatDecimal, formatIsoDate, formatUsd } from '#lib/format.js';
+	import { reverseVmBillingUsage } from '#lib/remote/admin-billing.remote.js';
 	import { getErrorMessage } from '#lib/utils.js';
 	import Loader2 from '~icons/lucide/loader-2';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
@@ -24,22 +22,19 @@
 		$props();
 
 	function monthStartIso() {
-		const now = new Date();
-		return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+		return formatIsoDate(currentMonthStart());
 	}
 
 	function todayIso() {
-		return new Date().toISOString().slice(0, 10);
+		return formatIsoDate(new Date());
 	}
 
+	const billed = new BilledUsage();
+	const usage = $derived(billed.usage);
 	let startDate = $state(monthStartIso());
 	let endDate = $state(todayIso());
 	let note = $state('');
-	let usage = $state<VmBillingUsage | null>(null);
-	let loading = $state(false);
-	let loadError = $state('');
 	let submitting = $state(false);
-	let request = 0;
 	let wasOpen = false;
 
 	const periodStart = $derived(Date.parse(`${startDate}T00:00:00Z`));
@@ -56,50 +51,19 @@
 			startDate = monthStartIso();
 			endDate = todayIso();
 			note = '';
-			usage = null;
-			loadError = '';
 		}
 		wasOpen = open;
 
 		const target = vm;
-		if (!(open && target)) {
+		if (!(open && target && windowValid)) {
+			billed.reset();
 			return;
 		}
-		if (!windowValid) {
-			usage = null;
-			return;
-		}
-		loadUsage(target.id, periodStart, periodEnd);
+		billed.load(target.id, periodStart, periodEnd);
 	});
 
-	async function loadUsage(vmId: string, start: number, end: number) {
-		request += 1;
-		const current = request;
-		loading = true;
-		loadError = '';
-		try {
-			const usageQuery = getVmBillingUsage({ vmId, periodStart: start, periodEnd: end });
-			await usageQuery.refresh();
-			const result = await usageQuery;
-			if (current !== request) {
-				return;
-			}
-			usage = result;
-		} catch (err) {
-			if (current !== request) {
-				return;
-			}
-			usage = null;
-			loadError = getErrorMessage(err, 'Failed to load billed usage');
-		} finally {
-			if (current === request) {
-				loading = false;
-			}
-		}
-	}
-
 	const canSubmit = $derived(
-		!(submitting || loading) && usage !== null && usage.reversibleHours > 0
+		!(submitting || billed.loading) && usage !== null && usage.reversibleHours > 0
 	);
 
 	async function submit() {
@@ -115,7 +79,7 @@
 				...(note.trim() ? { note: note.trim() } : {})
 			});
 			const amount =
-				result.estimatedAmount === null ? '' : ` (about $${result.estimatedAmount.toFixed(2)})`;
+				result.estimatedAmount === null ? '' : ` (about ${formatUsd(result.estimatedAmount)})`;
 			if (result.syncStatus === 'synced') {
 				toast.success(`Reversed ${result.reversedHours} unit-hours${amount} for ${vm.name}`);
 			} else {
@@ -129,10 +93,6 @@
 		} finally {
 			submitting = false;
 		}
-	}
-
-	function formatHours(value: number) {
-		return value.toFixed(2);
 	}
 </script>
 
@@ -170,15 +130,15 @@
 				</div>
 			</div>
 
-			{#if loadError}
+			{#if billed.error}
 				<div
 					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
 				>
-					<AlertTriangle class="size-4 shrink-0" />{loadError}
+					<AlertTriangle class="size-4 shrink-0" />{billed.error}
 				</div>
 			{:else if !windowValid}
 				<p class="text-xs text-muted-foreground">Pick a valid window to compute billed usage.</p>
-			{:else if loading}
+			{:else if billed.loading}
 				<div class="flex items-center gap-2 py-2 text-xs text-muted-foreground">
 					<Loader2 class="h-3.5 w-3.5 animate-spin" />
 					Computing billed usage...
@@ -187,23 +147,23 @@
 				<div class="flex flex-col gap-2 rounded-sm border border-border/60 bg-muted/20 p-3">
 					<div class="flex items-center justify-between text-xs">
 						<span class="text-muted-foreground">Billed in window</span>
-						<span class="text-foreground">{formatHours(usage.billedHours)} unit-hours</span>
+						<span class="text-foreground">{formatDecimal(usage.billedHours)} unit-hours</span>
 					</div>
 					<div class="flex items-center justify-between text-xs">
 						<span class="text-muted-foreground">Already reversed</span>
-						<span class="text-foreground">{formatHours(usage.reversedHours)} unit-hours</span>
+						<span class="text-foreground">{formatDecimal(usage.reversedHours)} unit-hours</span>
 					</div>
 					<div class="flex items-center justify-between text-xs">
 						<span class="text-muted-foreground">To reverse</span>
 						<span class="font-medium text-foreground"
-							>{formatHours(usage.reversibleHours)}
+							>{formatDecimal(usage.reversibleHours)}
 							unit-hours</span
 						>
 					</div>
 					{#if usage.estimatedAmount !== null}
 						<div class="flex items-center justify-between text-xs">
 							<span class="text-muted-foreground">Estimated credit (before caps)</span>
-							<span class="font-medium text-violet-400">${usage.estimatedAmount.toFixed(2)}</span>
+							<span class="font-medium text-violet-400">{formatUsd(usage.estimatedAmount)}</span>
 						</div>
 					{/if}
 				</div>
@@ -250,7 +210,7 @@
 					Reversing...
 				{:else}
 					<CreditCard class="h-3 w-3" />
-					Reverse {usage ? formatHours(usage.reversibleHours) : '0.00'} unit-hours
+					Reverse {formatDecimal(usage?.reversibleHours ?? 0)} unit-hours
 				{/if}
 			</Button>
 		</Dialog.Footer>

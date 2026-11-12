@@ -1,6 +1,10 @@
 <script lang="ts">
 	import type { AnnouncementImageInput } from 'stack-backend/types';
-	import type { AnnouncementImageType } from 'stack-shared/announcements';
+	import {
+		type AnnouncementImageType,
+		announcementImageTypes,
+		MAX_ANNOUNCEMENT_IMAGE_BYTES
+	} from 'stack-shared/announcements';
 	import { toast } from 'svelte-sonner';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -10,6 +14,8 @@
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { dependencies } from '#lib/dependencies.js';
+	import { formatDate } from '#lib/format.js';
 	import {
 		createAnnouncement,
 		deleteAnnouncement,
@@ -29,15 +35,6 @@
 	let { data }: { data: PageData } = $props();
 
 	type AdminAnnouncement = PageData['announcements'][number];
-
-	const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
-	const imageTypes: AnnouncementImageType[] = [
-		'image/png',
-		'image/jpeg',
-		'image/webp',
-		'image/gif'
-	];
-	const MAX_IMAGE_BYTES = 1024 * 1024;
 
 	let dialogOpen = $state(false);
 	let editingId = $state<string | null>(null);
@@ -85,7 +82,7 @@
 	}
 
 	function isImageType(value: string): value is AnnouncementImageType {
-		return imageTypes.some((imageType) => imageType === value);
+		return announcementImageTypes.some((imageType) => imageType === value);
 	}
 
 	function readAsDataUrl(file: File) {
@@ -107,7 +104,7 @@
 			formError = 'Image must be a PNG, JPEG, WebP, or GIF';
 			return;
 		}
-		if (file.size > MAX_IMAGE_BYTES) {
+		if (file.size > MAX_ANNOUNCEMENT_IMAGE_BYTES) {
 			formError = 'Image must be 1 MB or smaller';
 			return;
 		}
@@ -146,7 +143,7 @@
 			} else {
 				await createAnnouncement(fields);
 			}
-			await invalidate('app:admin-announcements');
+			await invalidate(dependencies.admin.announcements);
 			dialogOpen = false;
 		} catch (err) {
 			formError = getErrorMessage(err, 'Failed to save announcement');
@@ -166,7 +163,7 @@
 		}
 		try {
 			await deleteAnnouncement({ announcementId: announcement.id });
-			await invalidate('app:admin-announcements');
+			await invalidate(dependencies.admin.announcements);
 		} catch (err) {
 			toast.error(getErrorMessage(err, 'Failed to delete announcement'));
 		}
@@ -229,9 +226,7 @@
 						<td
 							class="hidden px-5 py-3 text-sm whitespace-nowrap text-muted-foreground sm:table-cell"
 						>
-							{announcement.publishedAt === null
-								? '—'
-								: dateFormat.format(announcement.publishedAt)}
+							{announcement.publishedAt === null ? '—' : formatDate(announcement.publishedAt)}
 						</td>
 						<td
 							class="hidden px-5 py-3 text-right text-sm text-muted-foreground tabular-nums sm:table-cell"
@@ -304,7 +299,7 @@
 						bind:this={imageInput}
 						id="announcement-image"
 						type="file"
-						accept={imageTypes.join(',')}
+						accept={announcementImageTypes.join(',')}
 						class="sr-only"
 						onchange={selectImage}
 					/>

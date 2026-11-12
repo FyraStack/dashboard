@@ -1,7 +1,18 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import type { VerificationMethod } from 'stack-shared/auth';
+	import type { Snippet } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { authClient } from '#lib/auth-client.js';
+	import type { IconComponent } from '#lib';
+	import { ownerOptions } from '#lib/admin-users.js';
+	import { describeDeletionVerification } from '#lib/admin-verification.js';
+	import {
+		AdminVmActions,
+		adminVmStatusKey,
+		describeAdminVmStatusKey
+	} from '#lib/admin-vm-actions.svelte.js';
+	import FilterMenu from '#lib/components/admin/filter-menu.svelte';
+	import { adminMenuItemClass } from '#lib/components/admin/menu-item-class.js';
+	import VmActionsMenu from '#lib/components/admin/vm-actions-menu.svelte';
 	import VmBillingReversalDialog from '#lib/components/admin/vm-billing-reversal-dialog.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
@@ -11,21 +22,29 @@
 	import { Separator } from '#lib/components/ui/separator/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
+	import VerificationDialog from '#lib/components/verification-dialog.svelte';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { dependencies } from '#lib/dependencies.js';
+	import { formatDate } from '#lib/format.js';
 	import { idempotent } from '#lib/idempotency.js';
 	import { generateServerName } from '#lib/name-generator.js';
+	import { runOptimistic } from '#lib/optimistic.js';
 	import {
 		type AdminProject,
 		beginDeleteProject,
 		createAdminProject,
 		createAdminVm,
 		deleteProjectWithVerification,
+		setProjectBillingExempt,
 		setProjectDisabled
 	} from '#lib/remote/admin-projects.remote.js';
-	import { getUserResources, type UserSshKey } from '#lib/remote/admin-users.remote.js';
-	import type { AdminVm } from '#lib/remote/admin-vms.remote.js';
-	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
+	import {
+		getUserResources,
+		setUserBillingExempt,
+		type UserSshKey
+	} from '#lib/remote/admin-users.remote.js';
 	import { getErrorMessage } from '#lib/utils.js';
+	import { type StatusTone, statusBadgeClass } from '#lib/vm-status.js';
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -33,54 +52,28 @@
 	import ChevronDown from '~icons/lucide/chevron-down';
 	import ChevronRight from '~icons/lucide/chevron-right';
 	import Loader2 from '~icons/lucide/loader-2';
-	import MoreHorizontal from '~icons/lucide/more-horizontal';
 	import Plus from '~icons/lucide/plus';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
 	import Calendar from '~icons/nucleo/calendar';
 	import CreditCard from '~icons/nucleo/credit-card';
-	import Fingerprint from '~icons/nucleo/fingerprint';
 	import FolderOpen from '~icons/nucleo/folder-open';
 	import HardDrive from '~icons/nucleo/hard-drive';
 	import Hash from '~icons/nucleo/hash';
 	import Play from '~icons/nucleo/play';
-	import Power from '~icons/nucleo/power';
 	import PowerOff from '~icons/nucleo/power-off';
-	import RotateCw from '~icons/nucleo/rotate-cw';
 	import Search from '~icons/nucleo/search';
 	import Server from '~icons/nucleo/server';
 	import ShieldOff from '~icons/nucleo/shield-off';
 	import Trash2 from '~icons/nucleo/trash';
 	import User from '~icons/nucleo/user';
+	import type { PageProps } from './$types';
 
-	let { data }: { data: AdminPageData } = $props();
-	const admin = new AdminState(untrack(() => data));
-	$effect(() => {
-		admin.sync(data);
-	});
-
-	let search = $state('');
-	let ownerFilter = $state('all');
-	let billingFilter = $state('all');
-
-	const ownerOptions = $derived(
-		[
-			...new Map(
-				admin.adminProjects.flatMap((project) =>
-					project.ownerEmail
-						? [[project.ownerEmail, project.ownerName ?? project.ownerEmail] as const]
-						: []
-				)
-			).entries()
-		]
-			.map(([email, name]) => ({ email, name }))
-			.sort((a, b) => a.name.localeCompare(b.name))
-	);
-	const ownerFilterLabel = $derived(
-		ownerFilter === 'all'
-			? 'All'
-			: (ownerOptions.find((owner) => owner.email === ownerFilter)?.name ?? ownerFilter)
-	);
-
+	const billingViews: Record<AdminProject['billingStatus'], { label: string; tone: StatusTone }> = {
+		suspended: { label: 'suspended', tone: 'danger' },
+		past_due: { label: 'past due', tone: 'warning' },
+		configured: { label: 'configured', tone: 'success' },
+		none: { label: 'no billing', tone: 'muted' }
+	};
 	const billingFilterOptions = [
 		{ value: 'exempt', label: 'Exempt' },
 		{ value: 'configured', label: 'Configured' },
@@ -89,11 +82,63 @@
 		{ value: 'none', label: 'No billing' }
 	] as const;
 
-	const billingFilterLabel = $derived(
-		billingFilterOptions.find((option) => option.value === billingFilter)?.label ?? 'All'
+	let { data }: PageProps = $props();
+
+	const actions = new AdminVmActions();
+
+	let projects = $derived<AdminProject[]>(data.adminProjects);
+	let errorMessage = $state('');
+	let projectExemptSaving = $state<Record<string, boolean>>({});
+	let ownerExemptSaving = $state<Record<string, boolean>>({});
+
+	let search = $state('');
+	let ownerFilter = $state('all');
+	let billingFilter = $state<'all' | AdminProject['billingStatus'] | 'exempt'>('all');
+
+	let createProjectOpen = $state(false);
+	let createProjectName = $state('');
+	let createProjectOwnerId = $state('');
+	let createProjectOwnerSearch = $state('');
+	let createProjectSaving = $state(false);
+	let createProjectError = $state('');
+
+	let createVmOpen = $state(false);
+	let createVmProject = $state<AdminProject | null>(null);
+	let createVmName = $state('');
+	let createVmTypeId = $state('');
+	let createVmImageId = $state('');
+	let createVmNetworking = $state<'both' | 'ipv6'>('both');
+	let createVmPassword = $state('');
+	let createVmSshKeyIds = $state<string[]>([]);
+	let createVmOwnerKeys = $state<UserSshKey[]>([]);
+	let createVmOwnerKeysLoading = $state(false);
+	let createVmSaving = $state(false);
+	let createVmError = $state('');
+
+	let disableSaving = $state(false);
+
+	let deletePreparing = $state(false);
+	let deleteOpen = $state(false);
+	let deletion = $state<{
+		id: string;
+		name: string;
+		method: VerificationMethod;
+		verificationEmail: string;
+	} | null>(null);
+
+	const projectsBase = resolve('admin/projects');
+	const selectedProject = $derived(
+		page.params.id ? (projects.find((project) => project.id === page.params.id) ?? null) : null
+	);
+	const ownerFilterOptions = $derived(
+		ownerOptions(projects).map((owner) => ({
+			value: owner.email,
+			label: owner.name,
+			detail: owner.email
+		}))
 	);
 	const filteredProjects = $derived(
-		admin.adminProjects.filter((project) => {
+		projects.filter((project) => {
 			if (ownerFilter !== 'all' && project.ownerEmail !== ownerFilter) {
 				return false;
 			}
@@ -114,23 +159,31 @@
 			);
 		})
 	);
-
-	const withVmsCount = $derived(admin.adminProjects.filter((p) => p.vmCount > 0).length);
+	const withVmsCount = $derived(projects.filter((p) => p.vmCount > 0).length);
 	const billingConfiguredCount = $derived(
-		admin.adminProjects.filter((p) => p.billingStatus !== 'none').length
+		projects.filter((p) => p.billingStatus !== 'none').length
 	);
 	const attentionCount = $derived(
-		admin.adminProjects.filter(
-			(p) => p.billingStatus === 'past_due' || p.billingStatus === 'suspended'
-		).length
+		projects.filter((p) => p.billingStatus === 'past_due' || p.billingStatus === 'suspended').length
 	);
-	const projectsBase = resolve('admin/projects');
-
-	const selectedProject = $derived(
-		page.params.id
-			? (admin.adminProjects.find((project) => project.id === page.params.id) ?? null)
-			: null
+	const createProjectOwners = $derived(
+		[...data.adminUsers]
+			.sort((a, b) => a.name.localeCompare(b.name))
+			.filter((account) => {
+				const term = createProjectOwnerSearch.trim().toLowerCase();
+				if (!term) {
+					return true;
+				}
+				return [account.name, account.email].some((value) => value.toLowerCase().includes(term));
+			})
 	);
+	const createVmTypeLabel = $derived(
+		data.vmTypes.find((vmType) => vmType.id === createVmTypeId)?.name ?? 'Select a plan'
+	);
+	const createVmImageLabel = $derived.by(() => {
+		const image = data.images.find((item) => item.id === createVmImageId);
+		return image ? `${image.name} ${image.version}`.trim() : 'No image';
+	});
 
 	function openProjectSheet(project: AdminProject) {
 		goto(resolve(`admin/projects/${project.id}`), { reset: false });
@@ -141,96 +194,55 @@
 	}
 
 	function projectVms(projectId: string) {
-		return admin.adminVms.filter((vm) => vm.projectId === projectId && vm.active);
+		return data.adminVms.filter((vm) => vm.projectId === projectId && vm.active);
 	}
 
-	function vmStatusInfo(vm: AdminVm) {
-		if (vm.status === 'deleting') {
-			return {
-				label: 'deleting',
-				class:
-					'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
-			};
+	async function updateProjects(
+		patch: (project: AdminProject) => AdminProject,
+		commit: () => Promise<unknown>,
+		invalidates: string[],
+		failureMessage: string
+	) {
+		errorMessage = '';
+		try {
+			await runOptimistic({
+				apply: () => {
+					const previous = projects;
+					projects = projects.map(patch);
+					return () => {
+						projects = previous;
+					};
+				},
+				commit,
+				invalidates
+			});
+		} catch (err) {
+			errorMessage = getErrorMessage(err, failureMessage);
 		}
-		if (vm.status === 'error') {
-			return {
-				label: 'error',
-				class:
-					'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
-			};
-		}
-		if (vm.status === 'provisioning') {
-			return {
-				label: 'provisioning',
-				class:
-					'border-sky-300 bg-sky-100 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-400'
-			};
-		}
-		if (vm.liveStatus === 'running') {
-			return {
-				label: 'running',
-				class:
-					'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400'
-			};
-		}
-		if (vm.liveStatus === 'paused') {
-			return {
-				label: 'paused',
-				class:
-					'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400'
-			};
-		}
-		return { label: 'stopped', class: 'border-ring/20 bg-muted/30 text-muted-foreground' };
 	}
 
-	function billingInfo(project: AdminProject) {
-		if (project.billingStatus === 'suspended') {
-			return {
-				label: 'suspended',
-				class:
-					'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400'
-			};
-		}
-		if (project.billingStatus === 'past_due') {
-			return {
-				label: 'past due',
-				class:
-					'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400'
-			};
-		}
-		if (project.billingStatus === 'configured') {
-			return {
-				label: 'configured',
-				class:
-					'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400'
-			};
-		}
-		return { label: 'no billing', class: 'border-ring/20 bg-muted/30 text-muted-foreground' };
+	async function changeProjectBillingExempt(projectId: string, billingExempt: boolean) {
+		projectExemptSaving[projectId] = true;
+		await updateProjects(
+			(project) => (project.id === projectId ? { ...project, billingExempt } : project),
+			() => setProjectBillingExempt({ projectId, billingExempt }),
+			[dependencies.admin.projects],
+			'Failed to update billing exemption'
+		);
+		delete projectExemptSaving[projectId];
 	}
 
-	function formatDate(timestamp: number) {
-		return new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(timestamp));
+	async function changeOwnerBillingExempt(userId: string, billingExempt: boolean) {
+		ownerExemptSaving[userId] = true;
+		await updateProjects(
+			(project) =>
+				project.ownerId === userId ? { ...project, ownerBillingExempt: billingExempt } : project,
+			() => setUserBillingExempt({ userId, billingExempt }),
+			[dependencies.admin.users, dependencies.admin.projects],
+			'Failed to update billing exemption'
+		);
+		delete ownerExemptSaving[userId];
 	}
-
-	type DeletionVerificationMethod = 'passkey' | 'totp' | 'email';
-
-	let createProjectOpen = $state(false);
-	let createProjectName = $state('');
-	let createProjectOwnerId = $state('');
-	let createProjectOwnerSearch = $state('');
-	let createProjectSaving = $state(false);
-	let createProjectError = $state('');
-	const createProjectOwners = $derived(
-		[...admin.adminUsers]
-			.sort((a, b) => a.name.localeCompare(b.name))
-			.filter((account) => {
-				const term = createProjectOwnerSearch.trim().toLowerCase();
-				if (!term) {
-					return true;
-				}
-				return [account.name, account.email].some((value) => value.toLowerCase().includes(term));
-			})
-	);
 
 	function openCreateProject() {
 		createProjectName = '';
@@ -249,7 +261,7 @@
 		try {
 			const payload = { name: createProjectName.trim(), ownerUserId: createProjectOwnerId };
 			const created = await idempotent(createAdminProject, 'admin.createProject', payload);
-			await invalidate('app:admin-projects');
+			await invalidate(dependencies.admin.projects);
 			createProjectOpen = false;
 			toast.success('Project created');
 			goto(resolve(`admin/projects/${created.id}`), { reset: false });
@@ -260,31 +272,11 @@
 		}
 	}
 
-	let createVmOpen = $state(false);
-	let createVmProject = $state<AdminProject | null>(null);
-	let createVmName = $state('');
-	let createVmTypeId = $state('');
-	let createVmImageId = $state('');
-	let createVmNetworking = $state<'both' | 'ipv6'>('both');
-	let createVmPassword = $state('');
-	let createVmSshKeyIds = $state<string[]>([]);
-	let createVmOwnerKeys = $state<UserSshKey[]>([]);
-	let createVmOwnerKeysLoading = $state(false);
-	let createVmSaving = $state(false);
-	let createVmError = $state('');
-	const createVmTypeLabel = $derived(
-		admin.vmTypes.find((vmType) => vmType.id === createVmTypeId)?.name ?? 'Select a plan'
-	);
-	const createVmImageLabel = $derived.by(() => {
-		const image = admin.images.find((item) => item.id === createVmImageId);
-		return image ? `${image.name} ${image.version}`.trim() : 'No image';
-	});
-
 	function openCreateVm(project: AdminProject) {
 		createVmProject = project;
 		createVmName = generateServerName();
-		createVmTypeId = admin.vmTypes[0]?.id ?? '';
-		createVmImageId = admin.images[0]?.id ?? '';
+		createVmTypeId = data.vmTypes[0]?.id ?? '';
+		createVmImageId = data.images[0]?.id ?? '';
 		createVmNetworking = 'both';
 		createVmPassword = '';
 		createVmSshKeyIds = [];
@@ -333,7 +325,10 @@
 				...(createVmPassword.trim() ? { password: createVmPassword.trim() } : {})
 			};
 			await idempotent(createAdminVm, 'admin.createVm', payload);
-			await Promise.all([invalidate('app:admin-vms'), invalidate('app:admin-projects')]);
+			await Promise.all([
+				invalidate(dependencies.admin.vms),
+				invalidate(dependencies.admin.projects)
+			]);
 			createVmOpen = false;
 			toast.success('Server created');
 		} catch (err) {
@@ -343,7 +338,6 @@
 		}
 	}
 
-	let disableSaving = $state(false);
 	async function toggleProjectDisabled(project: AdminProject) {
 		if (disableSaving) {
 			return;
@@ -362,7 +356,7 @@
 		disableSaving = true;
 		try {
 			await setProjectDisabled({ projectId: project.id, disabled: disabling });
-			await invalidate('app:admin-projects');
+			await invalidate(dependencies.admin.projects);
 		} catch (err) {
 			toast.error(getErrorMessage(err, 'Failed to update project'));
 		} finally {
@@ -370,47 +364,8 @@
 		}
 	}
 
-	let deleteDialogOpen = $state(false);
-	let deletePreparing = $state(false);
-	let deleteVerifying = $state(false);
-	let deleteError = $state('');
-	let deleteProjectId = $state('');
-	let deleteProjectName = $state('');
-	let deleteVerificationMethod = $state<DeletionVerificationMethod>('email');
-	let deleteVerificationEmail = $state('');
-	let deleteVerificationCode = $state('');
-	const normalizedDeleteVerificationCode = $derived(deleteVerificationCode.replace(/\D/g, ''));
-	const deleteVerificationDescription = $derived.by(() => {
-		if (deleteVerificationMethod === 'passkey') {
-			return `Use your registered passkey to confirm permanently deleting ${deleteProjectName}.`;
-		}
-
-		if (deleteVerificationMethod === 'totp') {
-			return `Enter a code from your authenticator app to confirm permanently deleting ${deleteProjectName}.`;
-		}
-
-		return `Enter the code sent to ${deleteVerificationEmail} to confirm permanently deleting ${deleteProjectName}.`;
-	});
-
-	const deleteVerificationDisabled = $derived(
-		deleteVerifying ||
-			deletePreparing ||
-			!deleteProjectId ||
-			(deleteVerificationMethod !== 'passkey' && normalizedDeleteVerificationCode.length !== 6)
-	);
-
-	function resetDeleteDialog() {
-		deleteDialogOpen = false;
-		deleteError = '';
-		deleteProjectId = '';
-		deleteProjectName = '';
-		deleteVerificationMethod = 'email';
-		deleteVerificationEmail = '';
-		deleteVerificationCode = '';
-	}
-
-	async function openDeleteProject(project: AdminProject) {
-		if (deletePreparing || deleteVerifying) {
+	async function beginDelete(project: AdminProject) {
+		if (deletePreparing) {
 			return;
 		}
 
@@ -428,13 +383,13 @@
 		deletePreparing = true;
 		try {
 			const result = await beginDeleteProject({ projectId: project.id });
-			deleteProjectId = project.id;
-			deleteProjectName = result.projectName;
-			deleteVerificationMethod = result.method;
-			deleteVerificationEmail = result.email;
-			deleteVerificationCode = '';
-			deleteError = '';
-			deleteDialogOpen = true;
+			deletion = {
+				id: project.id,
+				name: result.projectName,
+				method: result.method,
+				verificationEmail: result.email
+			};
+			deleteOpen = true;
 		} catch (err) {
 			toast.error(getErrorMessage(err, 'Failed to prepare project deletion'));
 		} finally {
@@ -442,60 +397,21 @@
 		}
 	}
 
-	async function confirmDeleteProject() {
-		if (deleteVerificationDisabled) {
+	async function confirmDelete(code: string) {
+		if (!deletion) {
 			return;
 		}
-
-		deleteVerifying = true;
-		deleteError = '';
-
-		try {
-			if (deleteVerificationMethod === 'passkey') {
-				const { error } = await authClient.signIn.passkey({ autoFill: false });
-
-				if (error) {
-					deleteError = error.message ?? 'Failed to verify passkey.';
-					return;
-				}
-			}
-
-			await deleteProjectWithVerification({
-				projectId: deleteProjectId,
-				method: deleteVerificationMethod,
-				code: normalizedDeleteVerificationCode
-			});
-			resetDeleteDialog();
-			closeProjectSheet();
-			await Promise.all([invalidate('app:admin-projects'), invalidate('app:admin-vms')]);
-			toast.success('Project deleted');
-		} catch (err) {
-			deleteError = getErrorMessage(err, 'Failed to delete project');
-		} finally {
-			deleteVerifying = false;
-		}
-	}
-
-	let reversalOpen = $state(false);
-	let reversalVm = $state<{ id: string; name: string; projectName: string | null } | null>(null);
-
-	function openReversal(vm: AdminVm) {
-		reversalVm = { id: vm.id, name: vm.name, projectName: vm.projectName };
-		reversalOpen = true;
-	}
-
-	async function deleteVm(vm: AdminVm) {
-		const ok = await confirmDestructive({
-			title: `Delete ${vm.name}?`,
-			description:
-				'This deprovisions the server in Proxmox, releases its networking, and records final usage.',
-			confirmWord: vm.name,
-			confirmLabel: 'Delete server'
+		await deleteProjectWithVerification({
+			projectId: deletion.id,
+			method: deletion.method,
+			code
 		});
-		if (!ok) {
-			return;
-		}
-		await admin.adminVmDelete(vm.id).catch(() => undefined);
+		closeProjectSheet();
+		await Promise.all([
+			invalidate(dependencies.admin.projects),
+			invalidate(dependencies.admin.vms)
+		]);
+		toast.success('Project deleted');
 	}
 </script>
 
@@ -503,335 +419,92 @@
 	<title>Projects</title>
 </svelte:head>
 
-{#snippet projectDetail(
+{#snippet statCard(
+	Icon: IconComponent,
+	tint: string,
+	iconClass: string,
+	value: number,
+	label: string
+)}
+	<div
+		class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
+	>
+		<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md {tint}">
+			<Icon class="h-4 w-4 {iconClass}" />
+		</div>
+		<div class="flex flex-col">
+			<span class="text-lg leading-none font-semibold text-foreground">{value}</span>
+			<span class="mt-0.5 text-[10px] text-muted-foreground">{label}</span>
+		</div>
+	</div>
+{/snippet}
+
+{#snippet sectionTitle(
+	title: string
+)}
+	<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase">{title}</span>
+{/snippet}
+
+{#snippet projectTags(
 	project: AdminProject
 )}
-	{@const vmsForProject = projectVms(project.id)}
-	{@const billing = billingInfo(project)}
-	<div class="flex flex-col gap-6">
-		<div class="flex items-start justify-between gap-3">
-			<div class="flex min-w-0 flex-col gap-0.5">
-				<span class="truncate text-base font-semibold text-foreground">{project.name}</span>
-				<span class="truncate font-mono text-xs text-muted-foreground">{project.slug}</span>
-			</div>
-			<div class="flex shrink-0 items-center gap-1.5">
-				{#if project.disabled}
-					<span
-						class="inline-flex items-center gap-1 rounded-sm border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
-					>
-						<PowerOff class="h-2.5 w-2.5" />disabled
-					</span>
-				{/if}
-				{#if project.billingExempt}
-					<span
-						class="inline-flex items-center gap-1 rounded-sm border border-violet-500/20 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-400"
-					>
-						<ShieldOff class="h-2.5 w-2.5" />exempt
-					</span>
-				{/if}
-				<span
-					class="inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium {billing.class}"
-				>
-					{billing.label}
-				</span>
+	{@const billing = billingViews[project.billingStatus]}
+	{#if project.disabled}
+		<span
+			class="inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium {statusBadgeClass.danger}"
+		>
+			<PowerOff class="h-2.5 w-2.5" />disabled
+		</span>
+	{/if}
+	{#if project.billingExempt}
+		<span
+			class="inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium {statusBadgeClass.accent}"
+		>
+			<ShieldOff class="h-2.5 w-2.5" />exempt
+		</span>
+	{/if}
+	<span
+		class="inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium {statusBadgeClass[
+			billing.tone
+		]}"
+	>
+		{billing.label}
+	</span>
+{/snippet}
+
+{#snippet switchRow(
+	Icon: IconComponent,
+	active: boolean,
+	title: string,
+	description: string,
+	isSaving: boolean,
+	toggle: Snippet
+)}
+	<div class="flex items-center justify-between">
+		<div class="flex items-center gap-2">
+			<Icon class="h-4 w-4 {active ? 'text-violet-400' : 'text-muted-foreground'}" />
+			<div class="flex flex-col">
+				<span class="text-sm font-medium text-foreground">{title}</span>
+				<span class="text-[11px] text-muted-foreground">{description}</span>
 			</div>
 		</div>
-
-		<div class="grid grid-cols-3 gap-2">
-			<div class="flex flex-col gap-0.5 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5">
-				<span class="text-sm font-semibold text-foreground">{project.memberCount}</span>
-				<span class="text-[10px] text-muted-foreground">Members</span>
-			</div>
-			<div class="flex flex-col gap-0.5 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5">
-				<span class="text-sm font-semibold text-foreground">{project.vmCount}</span>
-				<span class="text-[10px] text-muted-foreground">VMs</span>
-			</div>
-			<div class="flex flex-col gap-0.5 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5">
-				<span class="text-sm font-semibold text-foreground">{project.volumeCount}</span>
-				<span class="text-[10px] text-muted-foreground">Volumes</span>
-			</div>
-		</div>
-
-		<div class="flex flex-col gap-3">
-			<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase">Owner</span>
-			<div class="flex items-center justify-between gap-3">
-				<div class="flex min-w-0 items-center gap-2">
-					<User class="size-4 shrink-0 text-muted-foreground" />
-					<div class="flex min-w-0 flex-col">
-						{#if project.ownerId}
-							<a
-								class="truncate text-sm font-medium text-foreground hover:underline"
-								href={resolve(`admin/users/${project.ownerId}`)}
-								>{project.ownerName ?? 'No owner'}</a
-							>
-						{:else}
-							<span class="truncate text-sm font-medium text-foreground">No owner</span>
-						{/if}
-						<span class="truncate text-[11px] text-muted-foreground"
-							>{project.ownerEmail ?? '-'}</span
-						>
-					</div>
-				</div>
-				{#if project.ownerBillingExempt}
-					<span
-						class="inline-flex shrink-0 items-center gap-1 rounded-sm border border-violet-500/20 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-400"
-					>
-						<ShieldOff class="h-2.5 w-2.5" />Billing exempt
-					</span>
-				{/if}
-			</div>
-			{#if project.ownerId}
-				{@const ownerId = project.ownerId}
-				<div class="flex items-center justify-between">
-					<div class="flex items-center gap-2">
-						<CreditCard
-							class="h-4 w-4 {project.ownerBillingExempt
-								? 'text-violet-400'
-								: 'text-muted-foreground'}"
-						/>
-						<div class="flex flex-col">
-							<span class="text-sm font-medium text-foreground">Owner billing exempt</span>
-							<span class="text-[11px] text-muted-foreground">
-								{project.ownerBillingExempt
-									? 'No usage is billed in any project they own'
-									: 'Usage is metered and billed normally'}
-							</span>
-						</div>
-					</div>
-					<div class="flex items-center gap-2">
-						{#if admin.userSheetSaving[ownerId]?.field === 'billingExempt' &&
-							admin.userSheetSaving[ownerId]?.saving}
-							<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-						{/if}
-						<Switch
-							bind:checked={
-								() => project.ownerBillingExempt,
-								(v) => admin.setUserBillingExempt(ownerId, v)
-							}
-						/>
-					</div>
-				</div>
+		<div class="flex items-center gap-2">
+			{#if isSaving}
+				<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 			{/if}
-		</div>
-
-		<Separator class="bg-muted" />
-
-		<div class="flex flex-col gap-3">
-			<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
-				>Billing</span
-			>
-			<div class="flex items-center justify-between">
-				<div class="flex items-center gap-2">
-					<CreditCard
-						class="h-4 w-4 {project.billingExempt ? 'text-violet-400' : 'text-muted-foreground'}"
-					/>
-					<div class="flex flex-col">
-						<span class="text-sm font-medium text-foreground">Project billing exempt</span>
-						<span class="text-[11px] text-muted-foreground">
-							{project.billingExempt
-								? 'Usage in this project is not metered or billed'
-								: 'Usage in this project is metered and billed normally'}
-						</span>
-					</div>
-				</div>
-				<div class="flex items-center gap-2">
-					{#if admin.adminProjectSaving[project.id]}
-						<Loader2 class="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-					{/if}
-					<Switch
-						bind:checked={
-							() => project.billingExempt,
-							(v) => admin.setProjectBillingExempt(project.id, v)
-						}
-					/>
-				</div>
-			</div>
-		</div>
-
-		<Separator class="bg-muted" />
-
-		<div class="flex flex-col gap-3">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
-					>Virtual machines</span
-				>
-				<Button
-					variant="outline"
-					size="sm"
-					class="h-7 gap-1.5 border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-					disabled={project.disabled}
-					onclick={() => openCreateVm(project)}
-				>
-					<Plus class="h-3 w-3" />
-					Create VM
-				</Button>
-			</div>
-			{#if vmsForProject.length === 0}
-				<p class="text-xs text-muted-foreground">No active VMs in this project</p>
-			{:else}
-				<div class="flex flex-col divide-y divide-border/50 rounded-sm border border-border/60">
-					{#each vmsForProject as vm (vm.id)}
-						{@const info = vmStatusInfo(vm)}
-						{@const saving = admin.adminVmSaving[vm.id]}
-						<div class="flex items-center justify-between gap-3 px-3 py-2.5">
-							<div class="flex min-w-0 flex-col gap-0.5">
-								<a
-									class="truncate text-xs font-medium text-foreground hover:underline"
-									href={resolve(`admin/vms/${vm.id}`)}
-									>{vm.name}</a
-								>
-
-								<span class="truncate font-mono text-[10px] text-muted-foreground"
-									>{vm.vmTypeName ?? '-'}
-									· {vm.lastKnownIpv4 ?? vm.lastKnownIpv6 ?? vm.id}</span
-								>
-							</div>
-							<div class="flex shrink-0 items-center gap-2">
-								<span
-									class="inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium {info.class}"
-								>
-									{info.label}
-								</span>
-								<DropdownMenu.Root>
-									<DropdownMenu.Trigger
-										disabled={Boolean(saving)}
-										class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-									>
-										{#if saving}
-											<Loader2 class="h-3.5 w-3.5 animate-spin" />
-										{:else}
-											<MoreHorizontal class="h-4 w-4" />
-										{/if}
-									</DropdownMenu.Trigger>
-									<DropdownMenu.Content class="w-44 border-border bg-background" align="end">
-										<DropdownMenu.Item
-											class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-											disabled={vm.liveStatus === 'running'}
-											onSelect={() => admin.adminVmPower(vm.id, 'start')}
-										>
-											<Play class="size-4 text-emerald-400" />Start
-										</DropdownMenu.Item>
-										<DropdownMenu.Item
-											class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-											disabled={vm.liveStatus !== 'running'}
-											onSelect={() => admin.adminVmPower(vm.id, 'stop')}
-										>
-											<Power class="size-4 text-muted-foreground" />Shut down
-										</DropdownMenu.Item>
-										<DropdownMenu.Item
-											class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-											disabled={vm.liveStatus !== 'running'}
-											onSelect={() => admin.adminVmPower(vm.id, 'reboot')}
-										>
-											<RotateCw class="size-4 text-sky-400" />Reboot
-										</DropdownMenu.Item>
-										<DropdownMenu.Item
-											class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-											disabled={vm.liveStatus !== 'running'}
-											onSelect={() => admin.adminVmPower(vm.id, 'kill')}
-										>
-											<PowerOff class="size-4 text-amber-400" />Force stop
-										</DropdownMenu.Item>
-										<DropdownMenu.Separator class="bg-muted" />
-										<DropdownMenu.Item
-											class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-											onSelect={() => openReversal(vm)}
-										>
-											<CreditCard class="size-4 text-violet-400" />Reverse billing
-										</DropdownMenu.Item>
-										<DropdownMenu.Separator class="bg-muted" />
-										<DropdownMenu.Item
-											class="flex cursor-pointer items-center gap-2 text-xs text-red-400 data-[highlighted]:bg-red-500/10"
-											onSelect={() => deleteVm(vm)}
-										>
-											<Trash2 class="size-4" />Delete
-										</DropdownMenu.Item>
-									</DropdownMenu.Content>
-								</DropdownMenu.Root>
-							</div>
-						</div>
-					{/each}
-				</div>
-			{/if}
-		</div>
-
-		<Separator class="bg-muted" />
-
-		<div class="flex flex-col gap-2">
-			<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
-				>Details</span
-			>
-			<div class="flex items-center justify-between">
-				<span class="flex items-center gap-2 text-xs text-muted-foreground">
-					<Hash class="h-3 w-3" />Project ID
-				</span>
-				<span class="font-mono text-xs text-muted-foreground">{project.id}</span>
-			</div>
-			<div class="flex items-center justify-between">
-				<span class="flex items-center gap-2 text-xs text-muted-foreground">
-					<Calendar class="h-3 w-3" />Created
-				</span>
-				<span class="text-xs text-muted-foreground">{formatDate(project.createdAt)}</span>
-			</div>
-		</div>
-
-		<Separator class="bg-muted" />
-
-		<div class="flex flex-col gap-3 rounded-sm border border-red-500/20 bg-red-500/5 p-3">
-			<div class="flex items-start gap-2">
-				<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-				<div class="flex flex-col gap-1">
-					<span class="text-sm font-medium text-red-300">Danger zone</span>
-					<span class="text-[11px] leading-4 text-red-300/70">
-						Disabling blocks all member access and stops new provisioning. Deleting deprovisions
-						every VM and volume and cancels billing.
-					</span>
-				</div>
-			</div>
-			<div class="flex items-center gap-2">
-				<Button
-					variant="outline"
-					size="sm"
-					class="gap-1.5 border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-					disabled={disableSaving}
-					onclick={() => toggleProjectDisabled(project)}
-				>
-					{#if disableSaving}
-						<Loader2 class="h-3 w-3 animate-spin" />
-					{:else if project.disabled}
-						<Play class="h-3 w-3" />
-					{:else}
-						<PowerOff class="h-3 w-3" />
-					{/if}
-					{project.disabled ? 'Enable project' : 'Disable project'}
-				</Button>
-				<Button
-					variant="destructive"
-					size="sm"
-					class="gap-1.5 text-xs"
-					disabled={deletePreparing || deleteVerifying}
-					onclick={() => openDeleteProject(project)}
-				>
-					{#if deletePreparing}
-						<Loader2 class="h-3 w-3 animate-spin" />
-					{:else}
-						<Trash2 class="h-3 w-3" />
-					{/if}
-					Delete project
-				</Button>
-			</div>
+			{@render toggle()}
 		</div>
 	</div>
 {/snippet}
 
 <div class="flex-1 overflow-auto">
 	<div class="flex flex-col gap-5 p-5">
-		{#if admin.adminVmError || admin.adminProjectError}
+		{#if actions.error || errorMessage}
 			<div
 				class="flex items-center gap-2 rounded-md border border-red-300 bg-red-100 px-3 py-2 text-xs text-red-800 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-400"
 			>
 				<AlertTriangle class="size-4 shrink-0" />
-				{admin.adminVmError || admin.adminProjectError}
+				{actions.error || errorMessage}
 			</div>
 		{/if}
 
@@ -849,54 +522,28 @@
 		</div>
 
 		<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-			<div
-				class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
-			>
-				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-sky-500/10">
-					<FolderOpen class="h-4 w-4 text-sky-400" />
-				</div>
-				<div class="flex flex-col">
-					<span class="text-lg leading-none font-semibold text-foreground"
-						>{admin.adminProjects.length}</span
-					>
-					<span class="mt-0.5 text-[10px] text-muted-foreground">Total projects</span>
-				</div>
-			</div>
-			<div
-				class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
-			>
-				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-500/10">
-					<Server class="h-4 w-4 text-emerald-400" />
-				</div>
-				<div class="flex flex-col">
-					<span class="text-lg leading-none font-semibold text-foreground">{withVmsCount}</span>
-					<span class="mt-0.5 text-[10px] text-muted-foreground">With VMs</span>
-				</div>
-			</div>
-			<div
-				class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
-			>
-				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-violet-500/10">
-					<CreditCard class="h-4 w-4 text-violet-400" />
-				</div>
-				<div class="flex flex-col">
-					<span class="text-lg leading-none font-semibold text-foreground"
-						>{billingConfiguredCount}</span
-					>
-					<span class="mt-0.5 text-[10px] text-muted-foreground">Billing configured</span>
-				</div>
-			</div>
-			<div
-				class="flex items-center gap-3 rounded-md border border-border/60 bg-background/30 px-4 py-3"
-			>
-				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-500/10">
-					<AlertTriangle class="h-4 w-4 text-red-400" />
-				</div>
-				<div class="flex flex-col">
-					<span class="text-lg leading-none font-semibold text-foreground">{attentionCount}</span>
-					<span class="mt-0.5 text-[10px] text-muted-foreground">Needs attention</span>
-				</div>
-			</div>
+			{@render statCard(
+				FolderOpen,
+				'bg-sky-500/10',
+				'text-sky-400',
+				projects.length,
+				'Total projects'
+			)}
+			{@render statCard(Server, 'bg-emerald-500/10', 'text-emerald-400', withVmsCount, 'With VMs')}
+			{@render statCard(
+				CreditCard,
+				'bg-violet-500/10',
+				'text-violet-400',
+				billingConfiguredCount,
+				'Billing configured'
+			)}
+			{@render statCard(
+				AlertTriangle,
+				'bg-red-500/10',
+				'text-red-400',
+				attentionCount,
+				'Needs attention'
+			)}
 		</div>
 
 		<div class="flex flex-wrap items-center gap-3">
@@ -908,77 +555,19 @@
 					class="h-8 pl-8 text-xs"
 				/>
 			</div>
-			<DropdownMenu.Root>
-				<DropdownMenu.Trigger
-					class="flex h-8 items-center gap-1.5 rounded-md border border-border/50 px-3 text-xs transition-colors hover:bg-muted hover:text-foreground {ownerFilter ===
-					'all'
-						? 'text-muted-foreground'
-						: 'text-foreground'}"
-				>
-					Owner: {ownerFilterLabel}
-					<ChevronDown class="h-3 w-3 text-muted-foreground" />
-				</DropdownMenu.Trigger>
-				<DropdownMenu.Content class="max-h-72 w-56 overflow-y-auto border-border bg-background">
-					<DropdownMenu.Item
-						class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-						onSelect={() => (ownerFilter = 'all')}
-					>
-						All owners
-						{#if ownerFilter === 'all'}
-							<Check class="ml-auto h-3 w-3 text-emerald-400" />
-						{/if}
-					</DropdownMenu.Item>
-					<DropdownMenu.Separator class="bg-muted" />
-					{#each ownerOptions as owner (owner.email)}
-						<DropdownMenu.Item
-							class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-							onSelect={() => (ownerFilter = owner.email)}
-						>
-							<span class="flex min-w-0 flex-col">
-								<span class="truncate">{owner.name}</span>
-								<span class="truncate text-[10px] text-muted-foreground">{owner.email}</span>
-							</span>
-							{#if ownerFilter === owner.email}
-								<Check class="ml-auto h-3 w-3 shrink-0 text-emerald-400" />
-							{/if}
-						</DropdownMenu.Item>
-					{/each}
-				</DropdownMenu.Content>
-			</DropdownMenu.Root>
-			<DropdownMenu.Root>
-				<DropdownMenu.Trigger
-					class="flex h-8 items-center gap-1.5 rounded-md border border-border/50 px-3 text-xs transition-colors hover:bg-muted hover:text-foreground {billingFilter ===
-					'all'
-						? 'text-muted-foreground'
-						: 'text-foreground'}"
-				>
-					Billing: {billingFilterLabel}
-					<ChevronDown class="h-3 w-3 text-muted-foreground" />
-				</DropdownMenu.Trigger>
-				<DropdownMenu.Content class="w-44 border-border bg-background">
-					<DropdownMenu.Item
-						class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-						onSelect={() => (billingFilter = 'all')}
-					>
-						All billing states
-						{#if billingFilter === 'all'}
-							<Check class="ml-auto h-3 w-3 text-emerald-400" />
-						{/if}
-					</DropdownMenu.Item>
-					<DropdownMenu.Separator class="bg-muted" />
-					{#each billingFilterOptions as option (option.value)}
-						<DropdownMenu.Item
-							class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-							onSelect={() => (billingFilter = option.value)}
-						>
-							{option.label}
-							{#if billingFilter === option.value}
-								<Check class="ml-auto h-3 w-3 text-emerald-400" />
-							{/if}
-						</DropdownMenu.Item>
-					{/each}
-				</DropdownMenu.Content>
-			</DropdownMenu.Root>
+			<FilterMenu
+				label="Owner"
+				allLabel="All owners"
+				options={ownerFilterOptions}
+				bind:value={ownerFilter}
+				contentClass="max-h-72 w-56 overflow-y-auto"
+			/>
+			<FilterMenu
+				label="Billing"
+				allLabel="All billing states"
+				options={billingFilterOptions}
+				bind:value={billingFilter}
+			/>
 		</div>
 
 		{#if filteredProjects.length === 0}
@@ -1006,7 +595,6 @@
 					</thead>
 					<tbody class="divide-y divide-border/50">
 						{#each filteredProjects as project (project.id)}
-							{@const billing = billingInfo(project)}
 							<tr
 								class="cursor-pointer transition-colors hover:bg-muted/20"
 								onclick={() => openProjectSheet(project)}
@@ -1024,7 +612,7 @@
 											{project.ownerEmail ?? 'no owner'}
 											{#if project.ownerBillingExempt}
 												<span
-													class="inline-flex items-center gap-0.5 rounded-sm border border-violet-500/20 bg-violet-500/10 px-1 py-px font-medium text-violet-400"
+													class="inline-flex items-center gap-0.5 rounded-sm border px-1 py-px font-medium {statusBadgeClass.accent}"
 												>
 													<ShieldOff class="h-2.5 w-2.5" />No billing
 												</span>
@@ -1044,27 +632,7 @@
 									</div>
 								</td>
 								<td class="px-4 py-3">
-									<div class="flex items-center gap-1.5">
-										{#if project.disabled}
-											<span
-												class="inline-flex items-center gap-1 rounded-sm border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
-											>
-												<PowerOff class="h-2.5 w-2.5" />disabled
-											</span>
-										{/if}
-										{#if project.billingExempt}
-											<span
-												class="inline-flex items-center gap-1 rounded-sm border border-violet-500/20 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-400"
-											>
-												<ShieldOff class="h-2.5 w-2.5" />exempt
-											</span>
-										{/if}
-										<span
-											class="inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium {billing.class}"
-										>
-											{billing.label}
-										</span>
-									</div>
+									<div class="flex items-center gap-1.5">{@render projectTags(project)}</div>
 								</td>
 								<td class="px-4 py-3 text-muted-foreground">{formatDate(project.createdAt)}</td>
 								<td class="px-4 py-3 text-right">
@@ -1092,12 +660,230 @@
 <Sheet.Root open={selectedProject !== null} onOpenChange={(value) => !value && closeProjectSheet()}>
 	<Sheet.Content side="right" class="w-full border-border bg-background p-6 sm:max-w-md">
 		{#if selectedProject}
-			{@render projectDetail(selectedProject)}
+			{@const project = selectedProject}
+			<div class="flex flex-col gap-6">
+				<div class="flex items-start justify-between gap-3">
+					<div class="flex min-w-0 flex-col gap-0.5">
+						<span class="truncate text-base font-semibold text-foreground">{project.name}</span>
+						<span class="truncate font-mono text-xs text-muted-foreground">{project.slug}</span>
+					</div>
+					<div class="flex shrink-0 items-center gap-1.5">{@render projectTags(project)}</div>
+				</div>
+
+				<div class="grid grid-cols-3 gap-2">
+					{#each [
+						{ value: project.memberCount, label: 'Members' },
+						{ value: project.vmCount, label: 'VMs' },
+						{ value: project.volumeCount, label: 'Volumes' }
+					] as stat (stat.label)}
+						<div
+							class="flex flex-col gap-0.5 rounded-sm border border-border/60 bg-muted/20 px-3 py-2.5"
+						>
+							<span class="text-sm font-semibold text-foreground">{stat.value}</span>
+							<span class="text-[10px] text-muted-foreground">{stat.label}</span>
+						</div>
+					{/each}
+				</div>
+
+				<div class="flex flex-col gap-3">
+					{@render sectionTitle('Owner')}
+					<div class="flex items-center justify-between gap-3">
+						<div class="flex min-w-0 items-center gap-2">
+							<User class="size-4 shrink-0 text-muted-foreground" />
+							<div class="flex min-w-0 flex-col">
+								{#if project.ownerId}
+									<a
+										class="truncate text-sm font-medium text-foreground hover:underline"
+										href={resolve(`admin/users/${project.ownerId}`)}
+										>{project.ownerName ?? 'No owner'}</a
+									>
+								{:else}
+									<span class="truncate text-sm font-medium text-foreground">No owner</span>
+								{/if}
+								<span class="truncate text-[11px] text-muted-foreground"
+									>{project.ownerEmail ?? '-'}</span
+								>
+							</div>
+						</div>
+						{#if project.ownerBillingExempt}
+							<span
+								class="inline-flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium {statusBadgeClass.accent}"
+							>
+								<ShieldOff class="h-2.5 w-2.5" />Billing exempt
+							</span>
+						{/if}
+					</div>
+					{#if project.ownerId}
+						{@const ownerId = project.ownerId}
+						{#snippet ownerExemptSwitch()}
+							<Switch
+								bind:checked={
+									() => project.ownerBillingExempt,
+									(value) => changeOwnerBillingExempt(ownerId, value)
+								}
+							/>
+						{/snippet}
+						{@render switchRow(
+							CreditCard,
+							project.ownerBillingExempt,
+							'Owner billing exempt',
+							project.ownerBillingExempt
+								? 'No usage is billed in any project they own'
+								: 'Usage is metered and billed normally',
+							Boolean(ownerExemptSaving[ownerId]),
+							ownerExemptSwitch
+						)}
+					{/if}
+				</div>
+
+				<Separator class="bg-muted" />
+
+				<div class="flex flex-col gap-3">
+					{@render sectionTitle('Billing')}
+					{#snippet projectExemptSwitch()}
+						<Switch
+							bind:checked={
+								() => project.billingExempt,
+								(value) => changeProjectBillingExempt(project.id, value)
+							}
+						/>
+					{/snippet}
+					{@render switchRow(
+						CreditCard,
+						project.billingExempt,
+						'Project billing exempt',
+						project.billingExempt
+							? 'Usage in this project is not metered or billed'
+							: 'Usage in this project is metered and billed normally',
+						Boolean(projectExemptSaving[project.id]),
+						projectExemptSwitch
+					)}
+				</div>
+
+				<Separator class="bg-muted" />
+
+				<div class="flex flex-col gap-3">
+					<div class="flex items-center justify-between">
+						{@render sectionTitle('Virtual machines')}
+						<Button
+							variant="outline"
+							size="sm"
+							class="h-7 gap-1.5 border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+							disabled={project.disabled}
+							onclick={() => openCreateVm(project)}
+						>
+							<Plus class="h-3 w-3" />
+							Create VM
+						</Button>
+					</div>
+					{#each [projectVms(project.id)] as vmsForProject}
+						{#if vmsForProject.length === 0}
+							<p class="text-xs text-muted-foreground">No active VMs in this project</p>
+						{:else}
+							<div
+								class="flex flex-col divide-y divide-border/50 rounded-sm border border-border/60"
+							>
+								{#each vmsForProject as vm (vm.id)}
+									{@const view = describeAdminVmStatusKey(adminVmStatusKey(vm))}
+									<div class="flex items-center justify-between gap-3 px-3 py-2.5">
+										<div class="flex min-w-0 flex-col gap-0.5">
+											<a
+												class="truncate text-xs font-medium text-foreground hover:underline"
+												href={resolve(`admin/vms/${vm.id}`)}
+												>{vm.name}</a
+											>
+											<span class="truncate font-mono text-[10px] text-muted-foreground"
+												>{vm.vmTypeName ?? '-'}
+												· {vm.lastKnownIpv4 ?? vm.lastKnownIpv6 ?? vm.id}</span
+											>
+										</div>
+										<div class="flex shrink-0 items-center gap-2">
+											<span
+												class="inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium {statusBadgeClass[
+													view.tone
+												]}"
+											>
+												{view.label}
+											</span>
+											<VmActionsMenu {vm} {actions} />
+										</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
+					{/each}
+				</div>
+
+				<Separator class="bg-muted" />
+
+				<div class="flex flex-col gap-2">
+					{@render sectionTitle('Details')}
+					<div class="flex items-center justify-between">
+						<span class="flex items-center gap-2 text-xs text-muted-foreground">
+							<Hash class="h-3 w-3" />Project ID
+						</span>
+						<span class="font-mono text-xs text-muted-foreground">{project.id}</span>
+					</div>
+					<div class="flex items-center justify-between">
+						<span class="flex items-center gap-2 text-xs text-muted-foreground">
+							<Calendar class="h-3 w-3" />Created
+						</span>
+						<span class="text-xs text-muted-foreground">{formatDate(project.createdAt)}</span>
+					</div>
+				</div>
+
+				<Separator class="bg-muted" />
+
+				<div class="flex flex-col gap-3 rounded-sm border border-red-500/20 bg-red-500/5 p-3">
+					<div class="flex items-start gap-2">
+						<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+						<div class="flex flex-col gap-1">
+							<span class="text-sm font-medium text-red-300">Danger zone</span>
+							<span class="text-[11px] leading-4 text-red-300/70">
+								Disabling blocks all member access and stops new provisioning. Deleting deprovisions
+								every VM and volume and cancels billing.
+							</span>
+						</div>
+					</div>
+					<div class="flex items-center gap-2">
+						<Button
+							variant="outline"
+							size="sm"
+							class="gap-1.5 border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+							disabled={disableSaving}
+							onclick={() => toggleProjectDisabled(project)}
+						>
+							{#if disableSaving}
+								<Loader2 class="h-3 w-3 animate-spin" />
+							{:else if project.disabled}
+								<Play class="h-3 w-3" />
+							{:else}
+								<PowerOff class="h-3 w-3" />
+							{/if}
+							{project.disabled ? 'Enable project' : 'Disable project'}
+						</Button>
+						<Button
+							variant="destructive"
+							size="sm"
+							class="gap-1.5 text-xs"
+							disabled={deletePreparing}
+							onclick={() => beginDelete(project)}
+						>
+							{#if deletePreparing}
+								<Loader2 class="h-3 w-3 animate-spin" />
+							{:else}
+								<Trash2 class="h-3 w-3" />
+							{/if}
+							Delete project
+						</Button>
+					</div>
+				</div>
+			</div>
 		{/if}
 	</Sheet.Content>
 </Sheet.Root>
 
-<VmBillingReversalDialog bind:open={reversalOpen} vm={reversalVm} />
+<VmBillingReversalDialog bind:open={actions.reversalOpen} vm={actions.reversalVm} />
 
 <Dialog.Root bind:open={createProjectOpen}>
 	<Dialog.Content class="border-border bg-background sm:max-w-md">
@@ -1226,9 +1012,9 @@
 							<ChevronDown class="h-3 w-3 shrink-0 text-muted-foreground" />
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content class="max-h-64 w-56 overflow-y-auto border-border bg-background">
-							{#each admin.vmTypes as vmType (vmType.id)}
+							{#each data.vmTypes as vmType (vmType.id)}
 								<DropdownMenu.Item
-									class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
+									class={adminMenuItemClass}
 									onSelect={() => (createVmTypeId = vmType.id)}
 								>
 									<span class="flex min-w-0 flex-col">
@@ -1257,19 +1043,16 @@
 							<ChevronDown class="h-3 w-3 shrink-0 text-muted-foreground" />
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content class="max-h-64 w-56 overflow-y-auto border-border bg-background">
-							<DropdownMenu.Item
-								class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
-								onSelect={() => (createVmImageId = '')}
-							>
+							<DropdownMenu.Item class={adminMenuItemClass} onSelect={() => (createVmImageId = '')}>
 								No image
 								{#if !createVmImageId}
 									<Check class="ml-auto h-3 w-3 text-emerald-400" />
 								{/if}
 							</DropdownMenu.Item>
 							<DropdownMenu.Separator class="bg-muted" />
-							{#each admin.images as image (image.id)}
+							{#each data.images as image (image.id)}
 								<DropdownMenu.Item
-									class="flex cursor-pointer items-center gap-2 text-xs text-foreground data-[highlighted]:bg-muted"
+									class={adminMenuItemClass}
 									onSelect={() => (createVmImageId = image.id)}
 								>
 									<span class="truncate">{image.name} {image.version}</span>
@@ -1286,27 +1069,21 @@
 			<div class="flex flex-col gap-1.5">
 				<Label>Networking</Label>
 				<div class="grid grid-cols-2 gap-2">
-					<button
-						type="button"
-						class="rounded-sm border px-3 py-2 text-left text-xs transition-colors {createVmNetworking ===
-						'both'
-							? 'border-ring/60 bg-muted/30 text-foreground'
-							: 'border-border/60 text-muted-foreground hover:bg-muted/20'}"
-						onclick={() => (createVmNetworking = 'both')}
-					>
-						IPv4 + IPv6
-					</button>
-
-					<button
-						type="button"
-						class="rounded-sm border px-3 py-2 text-left text-xs transition-colors {createVmNetworking ===
-						'ipv6'
-							? 'border-ring/60 bg-muted/30 text-foreground'
-							: 'border-border/60 text-muted-foreground hover:bg-muted/20'}"
-						onclick={() => (createVmNetworking = 'ipv6')}
-					>
-						IPv6 only
-					</button>
+					{#each [
+						{ value: 'both', label: 'IPv4 + IPv6' },
+						{ value: 'ipv6', label: 'IPv6 only' }
+					] as const as option (option.value)}
+						<button
+							type="button"
+							class="rounded-sm border px-3 py-2 text-left text-xs transition-colors {createVmNetworking ===
+							option.value
+								? 'border-ring/60 bg-muted/30 text-foreground'
+								: 'border-border/60 text-muted-foreground hover:bg-muted/20'}"
+							onclick={() => (createVmNetworking = option.value)}
+						>
+							{option.label}
+						</button>
+					{/each}
 				</div>
 			</div>
 
@@ -1391,97 +1168,32 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<Dialog.Root
-	bind:open={deleteDialogOpen}
-	onOpenChange={(value) => {
-		if (!(value || deleteVerifying)) {
-			resetDeleteDialog();
-		}
-	}}
->
-	<Dialog.Content class="border-border bg-background sm:max-w-md">
-		<Dialog.Header>
-			<Dialog.Title class="text-base text-foreground">Delete {deleteProjectName}?</Dialog.Title>
-			<Dialog.Description class="text-xs text-muted-foreground">
-				{deleteVerificationDescription}
-			</Dialog.Description>
-		</Dialog.Header>
-
-		<form
-			class="flex flex-col gap-4 pt-4"
-			onsubmit={(event) => {
-				event.preventDefault();
-				confirmDeleteProject();
-			}}
+{#if deletion}
+	<VerificationDialog
+		bind:open={deleteOpen}
+		method={deletion.method}
+		title="Delete {deletion.name}?"
+		description={describeDeletionVerification(
+			deletion.method,
+			deletion.name,
+			deletion.verificationEmail
+		)}
+		emailHint="We sent a deletion code to {deletion.verificationEmail}."
+		destructive
+		submitLabel="Delete project"
+		passkeySubmitLabel="Verify and delete"
+		submittingLabel="Deleting..."
+		failureMessage="Failed to delete project"
+		confirm={confirmDelete}
+	>
+		<div
+			class="flex flex-col gap-2 rounded-sm border border-red-500/20 bg-red-500/5 p-3 text-xs leading-5 text-red-200/80"
 		>
-			<div
-				class="flex flex-col gap-2 rounded-sm border border-red-500/20 bg-red-500/5 p-3 text-xs leading-5 text-red-200/80"
-			>
-				<p class="font-medium text-red-200">This action cannot be undone.</p>
-				<p>
-					Deleting {deleteProjectName} deprovisions every server, deletes volumes and invitations,
-					records final usage, and cancels billing for this project.
-				</p>
-			</div>
-
-			{#if deleteVerificationMethod === 'passkey'}
-				<div class="flex items-center gap-3 rounded-sm border border-border bg-background/40 p-3">
-					<Fingerprint class="size-5 shrink-0 text-muted-foreground" />
-					<p class="text-sm text-muted-foreground">
-						Your browser will ask you to authenticate with your registered passkey.
-					</p>
-				</div>
-			{:else}
-				<div class="flex flex-col gap-1.5">
-					<Label>
-						{deleteVerificationMethod === 'totp' ? 'Authenticator Code' : 'Email Verification Code'}
-					</Label>
-					<Input
-						bind:value={deleteVerificationCode}
-						inputmode="numeric"
-						placeholder="000000"
-						maxlength={6}
-						autocomplete="one-time-code"
-					/>
-					{#if deleteVerificationMethod === 'email'}
-						<p class="text-xs text-muted-foreground">
-							We sent a deletion code to {deleteVerificationEmail}.
-						</p>
-					{/if}
-				</div>
-			{/if}
-
-			{#if deleteError}
-				<p class="text-xs text-red-400">{deleteError}</p>
-			{/if}
-
-			<Dialog.Footer class="flex items-center gap-2 pt-2">
-				<Button
-					variant="outline"
-					type="button"
-					size="sm"
-					class="border-border/50 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-					onclick={() => resetDeleteDialog()}
-					disabled={deleteVerifying}
-				>
-					Cancel
-				</Button>
-				<Button
-					variant="destructive"
-					type="submit"
-					size="sm"
-					class="gap-1.5 text-xs"
-					disabled={deleteVerificationDisabled}
-				>
-					{#if deleteVerifying}
-						<Loader2 class="h-3 w-3 animate-spin" />
-						Deleting...
-					{:else}
-						<Trash2 class="h-3 w-3" />
-						{deleteVerificationMethod === 'passkey' ? 'Verify and delete' : 'Delete project'}
-					{/if}
-				</Button>
-			</Dialog.Footer>
-		</form>
-	</Dialog.Content>
-</Dialog.Root>
+			<p class="font-medium text-red-200">This action cannot be undone.</p>
+			<p>
+				Deleting {deletion.name} deprovisions every server, deletes volumes and invitations, records
+				final usage, and cancels billing for this project.
+			</p>
+		</div>
+	</VerificationDialog>
+{/if}

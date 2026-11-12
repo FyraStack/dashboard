@@ -1,10 +1,11 @@
 <script lang="ts">
+	import { resetPasswordPath } from 'stack-shared/routes';
 	import { authClient } from '#lib/auth-client.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
+	import AuthError from '#lib/components/auth-error.svelte';
+	import AuthLogo from '#lib/components/auth-logo.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import Loader2 from '~icons/lucide/loader-2';
-	import AlertCircle from '~icons/nucleo/alert-circle';
 	import CheckCircle2 from '~icons/nucleo/check-circle';
 
 	let email = $state('');
@@ -21,7 +22,7 @@
 
 		const { error: err } = await authClient.requestPasswordReset({
 			email,
-			redirectTo: '/reset-password'
+			redirectTo: resetPasswordPath
 		});
 
 		loading = false;
@@ -41,11 +42,7 @@
 
 <main class="flex min-h-screen items-center justify-center bg-background px-4">
 	<div class="w-full max-w-xs">
-		<div class="mb-10 flex items-center justify-center gap-2">
-			<img src="/logo.svg" alt="Stack" class="h-5 w-5" />
-			<span class="text-base font-semibold tracking-tight text-foreground">Stack</span>
-			<Badge class="h-4 px-1.5 text-[10px]" variant="secondary">Alpha</Badge>
-		</div>
+		<AuthLogo />
 
 		<div class="space-y-5">
 			<h1 class="text-center text-lg font-medium text-foreground">Reset your password</h1>
@@ -63,12 +60,7 @@
 				</p>
 
 				{#if errorMessage}
-					<div
-						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-					>
-						<AlertCircle class="size-4 shrink-0" />
-						{errorMessage}
-					</div>
+					<AuthError>{errorMessage}</AuthError>
 				{/if}
 
 				<form

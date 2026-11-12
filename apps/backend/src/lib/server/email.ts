@@ -1,28 +1,22 @@
+import type { Renderer } from '@better-svelte-email/server';
 import appStyles from '#lib/emails/theme.css?raw';
 import { getRuntimeEnv } from '#lib/server/env.js';
 import { instrument } from '#lib/server/observability.js';
 
-interface EmailRenderer {
-	render: (
-		component: unknown,
-		options: { props?: Record<string, unknown> }
-	) => string | Promise<string>;
-	toPlainText: (html: string) => string;
-}
+const emailServerModule = () => import('@better-svelte-email/server');
 
-let emailRendererPromise: Promise<EmailRenderer> | undefined;
+let emailRendererPromise: Promise<Renderer> | undefined;
 
-function getEmailRenderer(): Promise<EmailRenderer> {
-	emailRendererPromise ??= import('@better-svelte-email/server').then(
-		({ Renderer, toPlainText }) => {
-			const renderer = new Renderer({ customCSS: appStyles });
-			return {
-				render: (component, options) => renderer.render(component, options),
-				toPlainText
-			};
-		}
+function getEmailRenderer() {
+	emailRendererPromise ??= emailServerModule().then(
+		({ Renderer: EmailRenderer }) => new EmailRenderer({ customCSS: appStyles })
 	);
 	return emailRendererPromise;
+}
+
+export async function emailToPlainText(html: string) {
+	const { toPlainText } = await emailServerModule();
+	return toPlainText(html);
 }
 
 interface SendRenderedEmailParams {
@@ -47,6 +41,24 @@ type CloudflareAccountsResponse = CloudflareEmailResponse & {
 	result?: { id: string; name?: string }[];
 };
 
+async function readCloudflareBody<T>(response: Response): Promise<T | string> {
+	try {
+		return (await response.json()) as T;
+	} catch {
+		return response.text();
+	}
+}
+
+function describeCloudflareErrors(body: CloudflareEmailResponse | string) {
+	if (typeof body === 'string') {
+		return body;
+	}
+	return [...(body.errors ?? []), ...(body.messages ?? [])]
+		.map((entry) => entry.message ?? entry.code)
+		.filter(Boolean)
+		.join(', ');
+}
+
 let cachedCloudflareAccountId: string | null = null;
 
 async function getCloudflareAccountId(apiToken: string) {
@@ -58,21 +70,10 @@ async function getCloudflareAccountId(apiToken: string) {
 		headers: { Authorization: `Bearer ${apiToken}` }
 	});
 
-	let body: CloudflareAccountsResponse | string;
-	try {
-		body = (await response.json()) as CloudflareAccountsResponse;
-	} catch {
-		body = await response.text();
-	}
+	const body = await readCloudflareBody<CloudflareAccountsResponse>(response);
 
 	if (!response.ok) {
-		const details =
-			typeof body === 'string'
-				? body
-				: [...(body.errors ?? []), ...(body.messages ?? [])]
-						.map((entry) => entry.message ?? entry.code)
-						.filter(Boolean)
-						.join(', ');
+		const details = describeCloudflareErrors(body);
 
 		throw new Error(
 			`Unable to discover Cloudflare account ID (${response.status}${details ? `: ${details}` : ''}). Set CLOUDFLARE_ACCOUNT_ID explicitly.`
@@ -138,12 +139,7 @@ async function sendCloudflareEmail({
 		}
 	);
 
-	let body: CloudflareEmailResponse | string;
-	try {
-		body = (await response.json()) as CloudflareEmailResponse;
-	} catch {
-		body = await response.text();
-	}
+	const body = await readCloudflareBody<CloudflareEmailResponse>(response);
 
 	if (response.ok) {
 		console.info('[Email sent with Cloudflare REST API]', {
@@ -154,13 +150,7 @@ async function sendCloudflareEmail({
 		return;
 	}
 
-	const details =
-		typeof body === 'string'
-			? body
-			: [...(body.errors ?? []), ...(body.messages ?? [])]
-					.map((entry) => entry.message ?? entry.code)
-					.filter(Boolean)
-					.join(', ');
+	const details = describeCloudflareErrors(body);
 
 	throw new Error(
 		`Cloudflare Email REST send failed (${response.status}${details ? `: ${details}` : ''})`
@@ -168,14 +158,9 @@ async function sendCloudflareEmail({
 }
 
 export async function renderEmail(component: unknown, props?: Record<string, unknown>) {
-	const { render, toPlainText } = await getEmailRenderer();
-	const html = await instrument('email.render', () => render(component, { props }));
-	return { html, text: toPlainText(html) };
-}
-
-export async function emailToPlainText(html: string) {
-	const { toPlainText } = await getEmailRenderer();
-	return toPlainText(html);
+	const renderer = await getEmailRenderer();
+	const html = await instrument('email.render', () => renderer.render(component, { props }));
+	return { html, text: await emailToPlainText(html) };
 }
 
 interface SendEmailParams {

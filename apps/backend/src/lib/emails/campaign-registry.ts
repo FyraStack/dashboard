@@ -1,6 +1,16 @@
+import { placeholder } from 'stack-shared/email-campaign';
+import BillingNoticeEmail from '#lib/emails/billing-notice.svelte';
+import BillingReminderEmail from '#lib/emails/billing-reminder.svelte';
+import EmptyEmail from '#lib/emails/empty.svelte';
+import OrganizationInvitationEmail from '#lib/emails/organization-invitation.svelte';
+import ResetPasswordEmail from '#lib/emails/reset-password.svelte';
+import SecurityAlertEmail from '#lib/emails/security-alert.svelte';
+import ServiceDisruptionEmail from '#lib/emails/service-disruption.svelte';
+import VerifyEmailEmail from '#lib/emails/verify-email.svelte';
+
 export const CAMPAIGN_BATCH_SIZE = 25;
 
-export interface CampaignField {
+interface CampaignField {
 	defaultValue?: string;
 	inline: boolean;
 	label: string;
@@ -18,18 +28,23 @@ export interface CampaignTemplate {
 	label: string;
 }
 
+export interface CampaignTemplateEntry extends CampaignTemplate {
+	component: unknown;
+}
+
 const userNameField: CampaignField = {
 	name: 'userName',
 	label: 'Recipient name',
 	inline: true,
 	required: false,
-	placeholder: '{{name}}',
-	defaultValue: '{{name}}'
+	placeholder: placeholder('name'),
+	defaultValue: placeholder('name')
 };
 
-export const campaignTemplates: CampaignTemplate[] = [
+export const campaignTemplates: CampaignTemplateEntry[] = [
 	{
 		key: 'empty',
+		component: EmptyEmail,
 		label: 'Empty',
 		description: 'Blank template: just your text on the standard email shell.',
 		defaultSubject: '',
@@ -55,15 +70,16 @@ export const campaignTemplates: CampaignTemplate[] = [
 				inline: true,
 				required: true,
 				placeholder: 'Write your message here',
-				defaultValue: 'Hi {{name}},\n\nWrite your message here. Blank lines start new paragraphs.'
+				defaultValue: `Hi ${placeholder('name')},\n\nWrite your message here. Blank lines start new paragraphs.`
 			}
 		]
 	},
 	{
 		key: 'service-disruption',
+		component: ServiceDisruptionEmail,
 		label: 'Service disruption',
 		description: 'Incident notice with a status banner, affected services, and status page link.',
-		defaultSubject: 'Service disruption: {{incident}}',
+		defaultSubject: `Service disruption: ${placeholder('incident')}`,
 		fields: [
 			userNameField,
 			{
@@ -139,6 +155,7 @@ export const campaignTemplates: CampaignTemplate[] = [
 	},
 	{
 		key: 'billing-notice',
+		component: BillingNoticeEmail,
 		label: 'Billing notice',
 		description: 'General notice with a heading, body text, and an action button.',
 		defaultSubject: 'A notice about your Stack account',
@@ -188,9 +205,10 @@ export const campaignTemplates: CampaignTemplate[] = [
 	},
 	{
 		key: 'security-alert',
+		component: SecurityAlertEmail,
 		label: 'Security alert',
 		description: 'Alert with a message, timestamp, optional details, and optional action link.',
-		defaultSubject: 'Security alert: {{alert}}',
+		defaultSubject: `Security alert: ${placeholder('alert')}`,
 		fields: [
 			userNameField,
 			{
@@ -235,9 +253,10 @@ export const campaignTemplates: CampaignTemplate[] = [
 	},
 	{
 		key: 'billing-reminder',
+		component: BillingReminderEmail,
 		label: 'Billing reminder',
 		description: 'Payment reminder with an amount, due date, and invoice link.',
-		defaultSubject: 'Stack invoice ready: {{amount}}',
+		defaultSubject: `Stack invoice ready: ${placeholder('amount')}`,
 		fields: [
 			userNameField,
 			{
@@ -246,7 +265,7 @@ export const campaignTemplates: CampaignTemplate[] = [
 				inline: true,
 				required: true,
 				placeholder: 'Amount',
-				defaultValue: '{{amount}}'
+				defaultValue: placeholder('amount')
 			},
 			{
 				name: 'dueDate',
@@ -275,9 +294,10 @@ export const campaignTemplates: CampaignTemplate[] = [
 	},
 	{
 		key: 'organization-invitation',
+		component: OrganizationInvitationEmail,
 		label: 'Organization invitation',
 		description: 'Invitation to join an organization with an accept link.',
-		defaultSubject: "You're invited to join {{organization}} on Stack",
+		defaultSubject: `You're invited to join ${placeholder('organization')} on Stack`,
 		fields: [
 			{
 				name: 'organizationName',
@@ -285,20 +305,21 @@ export const campaignTemplates: CampaignTemplate[] = [
 				inline: true,
 				required: true,
 				placeholder: 'Organization name',
-				defaultValue: '{{organization}}'
+				defaultValue: placeholder('organization')
 			},
 			{
 				name: 'invitationUrl',
 				label: 'Invitation URL',
 				inline: false,
 				required: true,
-				placeholder: 'https://stack.wtf/invite/{{token}}',
-				defaultValue: 'https://stack.wtf/invite/{{token}}'
+				placeholder: `https://stack.wtf/invite/${placeholder('token')}`,
+				defaultValue: `https://stack.wtf/invite/${placeholder('token')}`
 			}
 		]
 	},
 	{
 		key: 'verify-email',
+		component: VerifyEmailEmail,
 		label: 'Verify email',
 		description: 'Email verification with a confirmation button.',
 		defaultSubject: 'Verify your Stack email',
@@ -309,13 +330,14 @@ export const campaignTemplates: CampaignTemplate[] = [
 				label: 'Verification URL',
 				inline: false,
 				required: true,
-				placeholder: 'https://stack.wtf/verify/{{token}}',
-				defaultValue: 'https://stack.wtf/verify/{{token}}'
+				placeholder: `https://stack.wtf/verify/${placeholder('token')}`,
+				defaultValue: `https://stack.wtf/verify/${placeholder('token')}`
 			}
 		]
 	},
 	{
 		key: 'reset-password',
+		component: ResetPasswordEmail,
 		label: 'Reset password',
 		description: 'Password reset with a reset button.',
 		defaultSubject: 'Reset your Stack password',
@@ -326,81 +348,9 @@ export const campaignTemplates: CampaignTemplate[] = [
 				label: 'Reset URL',
 				inline: false,
 				required: true,
-				placeholder: 'https://stack.wtf/reset/{{token}}',
-				defaultValue: 'https://stack.wtf/reset/{{token}}'
-			}
-		]
-	},
-	{
-		key: 'password-change-code',
-		label: 'Password change code',
-		description: 'One-time code confirming a password change.',
-		defaultSubject: 'Confirm your Stack password change',
-		fields: [
-			userNameField,
-			{
-				name: 'code',
-				label: 'Code',
-				inline: true,
-				required: true,
-				placeholder: 'Code',
-				defaultValue: '{{code}}'
-			},
-			{
-				name: 'expiresInMinutes',
-				label: 'Expires in (minutes)',
-				inline: true,
-				required: true,
-				placeholder: '10',
-				defaultValue: '10'
-			}
-		]
-	},
-	{
-		key: 'admin-user-deletion-code',
-		label: 'User deletion code',
-		description: 'One-time code confirming an account deletion.',
-		defaultSubject: 'Confirm Stack user deletion',
-		fields: [
-			userNameField,
-			{
-				name: 'targetEmail',
-				label: 'Target email',
-				inline: true,
-				required: true,
-				placeholder: 'Target email',
-				defaultValue: '{{email}}'
-			},
-			{
-				name: 'code',
-				label: 'Code',
-				inline: true,
-				required: true,
-				placeholder: 'Code',
-				defaultValue: '{{code}}'
-			},
-			{
-				name: 'expiresInMinutes',
-				label: 'Expires in (minutes)',
-				inline: true,
-				required: true,
-				placeholder: '10',
-				defaultValue: '10'
+				placeholder: `https://stack.wtf/reset/${placeholder('token')}`,
+				defaultValue: `https://stack.wtf/reset/${placeholder('token')}`
 			}
 		]
 	}
 ];
-
-export function fieldToken(name: string): string {
-	return `[[FIELD:${name}]]`;
-}
-
-const placeholderPattern = /\{\{\s*([^{}]+?)\s*\}\}/g;
-
-export function applyPlaceholders(template: string, row: Record<string, string>): string {
-	return template.replace(placeholderPattern, (_, name: string) => row[name.trim()] ?? '');
-}
-
-export function extractPlaceholders(template: string): string[] {
-	return [...template.matchAll(placeholderPattern)].map((match) => match[1].trim());
-}

@@ -10,6 +10,7 @@ import { ac, organizationRoles } from 'stack-shared/access-control';
 import { pendingPasskeyHintCookie } from 'stack-shared/auth';
 import { resetPasswordPath } from 'stack-shared/routes';
 import { ulid } from 'ulid';
+import { supportEmail } from '#lib/emails/brand.js';
 import EmailChangeConfirmationEmail from '#lib/emails/email-change-confirmation.svelte';
 import OrganizationInvitationEmail from '#lib/emails/organization-invitation.svelte';
 import ResetPasswordEmail from '#lib/emails/reset-password.svelte';
@@ -223,7 +224,7 @@ function buildAuth() {
 		plugins: [
 			admin({
 				defaultRole: 'user',
-				bannedUserMessage: 'Please contact support: support@fyrastack.com'
+				bannedUserMessage: `Please contact support: ${supportEmail}`
 			}),
 			{
 				id: 'verified-two-factor-disable',

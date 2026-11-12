@@ -25,6 +25,7 @@ interface VyosStaticRouteParams {
 }
 
 const TRAILING_SLASHES = /\/+$/;
+const COMMIT_TIMEOUT_MS = 120_000;
 
 class VyosError extends ServiceError {
 	constructor(message: string, options: ServiceErrorOptions) {
@@ -85,9 +86,14 @@ export class VyosClient {
 		return form;
 	}
 
-	private async post<T = unknown>(endpoint: string, data: Record<string, unknown>) {
+	private async post<T = unknown>(
+		endpoint: string,
+		data: Record<string, unknown>,
+		options: { timeout?: number } = {}
+	) {
 		const response = await this.api.post(endpoint, {
-			body: this.toForm(data)
+			body: this.toForm(data),
+			...options
 		});
 		const raw = await response.text();
 
@@ -133,7 +139,7 @@ export class VyosClient {
 	}
 
 	private async saveConfig() {
-		await this.post('config-file', { op: 'save' });
+		await this.post('config-file', { op: 'save' }, { timeout: COMMIT_TIMEOUT_MS });
 	}
 
 	async createDelegatedRoute(params: VyosStaticRouteParams): Promise<VyosApiResponse | null> {
@@ -141,6 +147,7 @@ export class VyosClient {
 		const existingRoute = existingRoutes.route6?.[params.destination];
 
 		if (VyosClient.routeHasNextHop(existingRoute, params.gateway)) {
+			await this.saveConfig();
 			return null;
 		}
 
@@ -148,10 +155,14 @@ export class VyosClient {
 			await this.deleteDelegatedRouteWithoutSavingConfig(params.destination);
 		}
 
-		const response = await this.post('configure', {
-			op: 'set',
-			path: ['protocols', 'static', 'route6', params.destination, 'next-hop', params.gateway]
-		});
+		const response = await this.post(
+			'configure',
+			{
+				op: 'set',
+				path: ['protocols', 'static', 'route6', params.destination, 'next-hop', params.gateway]
+			},
+			{ timeout: COMMIT_TIMEOUT_MS }
+		);
 		await this.saveConfig();
 		return response;
 	}
@@ -170,9 +181,13 @@ export class VyosClient {
 	private async deleteDelegatedRouteWithoutSavingConfig(
 		destination: string
 	): Promise<VyosApiResponse | null> {
-		return await this.post('configure', {
-			op: 'delete',
-			path: ['protocols', 'static', 'route6', destination]
-		});
+		return await this.post(
+			'configure',
+			{
+				op: 'delete',
+				path: ['protocols', 'static', 'route6', destination]
+			},
+			{ timeout: COMMIT_TIMEOUT_MS }
+		);
 	}
 }

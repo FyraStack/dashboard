@@ -346,8 +346,13 @@ export class VmProvisioningWorkflow extends WorkflowEntrypoint<Env, Provisioning
 						proxmox().finishProvisioning(vm.id, vm.proxmoxId, { diskGb: vm.diskGb })
 					)
 			);
-			await step.do('create delegated route', () =>
-				inSystemScope(() => ensureVmDelegatedRoute(initDrizzle(), vm.id))
+			await step.do(
+				'create delegated route',
+				{
+					retries: { limit: 5, delay: '15 seconds', backoff: 'exponential' },
+					timeout: '10 minutes'
+				},
+				() => inSystemScope(() => ensureVmDelegatedRoute(initDrizzle(), vm.id))
 			);
 		} catch (err) {
 			const statusError = errorMessage(err);

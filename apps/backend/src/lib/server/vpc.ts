@@ -11,7 +11,13 @@ async function toUrlAndInit(
 		const body = hasBody ? await input.arrayBuffer() : undefined;
 		return [
 			input.url,
-			{ method: input.method, headers: new Headers(input.headers), body, ...init }
+			{
+				method: input.method,
+				headers: new Headers(input.headers),
+				body,
+				signal: input.signal,
+				...init
+			}
 		];
 	}
 

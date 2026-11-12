@@ -20,7 +20,12 @@ export type AdminVmStatusKey = ServerStatus | 'deleted';
 
 export const adminVmStatusKeys: readonly AdminVmStatusKey[] = [...serverStatuses, 'deleted'];
 
-const deletedView: StatusView = { label: 'Deleted', tone: 'muted', pending: false };
+const deletedView: StatusView = {
+	badgeLabel: 'deleted',
+	label: 'Deleted',
+	tone: 'muted',
+	pending: false
+};
 
 export function describeAdminVmStatusKey(key: AdminVmStatusKey): StatusView {
 	return key === 'deleted' ? deletedView : describeServerStatus(key);

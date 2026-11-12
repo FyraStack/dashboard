@@ -25,19 +25,25 @@ export const statusDotClass: Record<StatusTone, string> = {
 };
 
 export interface StatusView {
+	badgeLabel: string;
 	label: string;
 	pending: boolean;
 	tone: StatusTone;
 }
 
 const statusViews: Record<ServerStatus, StatusView> = {
-	running: { label: 'Running', tone: 'success', pending: false },
-	stopped: { label: 'Stopped', tone: 'danger', pending: false },
-	restarting: { label: 'Restarting', tone: 'warning', pending: true },
-	provisioning: { label: 'Provisioning', tone: 'info', pending: true },
-	deleting: { label: 'Deleting', tone: 'danger', pending: true },
-	error: { label: 'Error', tone: 'danger', pending: false },
-	unknown: { label: 'Unknown', tone: 'muted', pending: false }
+	running: { badgeLabel: 'running', label: 'Running', tone: 'success', pending: false },
+	stopped: { badgeLabel: 'stopped', label: 'Stopped', tone: 'danger', pending: false },
+	restarting: { badgeLabel: 'restarting', label: 'Restarting', tone: 'warning', pending: true },
+	provisioning: {
+		badgeLabel: 'provisioning...',
+		label: 'Provisioning',
+		tone: 'info',
+		pending: true
+	},
+	deleting: { badgeLabel: 'deleting...', label: 'Deleting', tone: 'danger', pending: true },
+	error: { badgeLabel: 'error', label: 'Error', tone: 'danger', pending: false },
+	unknown: { badgeLabel: 'unknown', label: 'Unknown', tone: 'muted', pending: false }
 };
 
 export const serverStatuses = Object.keys(statusViews) as ServerStatus[];

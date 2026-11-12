@@ -121,7 +121,7 @@
 	<div class="flex min-w-0 items-center gap-2">
 		<span class="truncate text-sm font-medium text-foreground">{selectedServer.name}</span>
 		<Badge variant="outline" class="text-[10px] {statusBadgeClass[status.tone]}">
-			{status.label}
+			{status.badgeLabel}
 		</Badge>
 	</div>
 	<div class="flex shrink-0 items-center gap-1.5">

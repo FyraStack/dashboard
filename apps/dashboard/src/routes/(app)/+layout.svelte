@@ -20,14 +20,12 @@
 	import { formatLongDate } from '#lib/format.js';
 	import { markAnnouncementsRead } from '#lib/remote/announcements.remote.js';
 	import { listVms } from '#lib/remote/vms.remote.js';
-	import { toServerInfo } from '#lib/server-info.js';
 	import {
 		clearUserSettingsHref,
 		UserSettingsState,
 		type UserSettingsTab
 	} from '#lib/state/user-settings.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
-	import { describeServerStatus } from '#lib/vm-status.js';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -286,6 +284,25 @@
 		return values.some((value) => value?.toLowerCase().includes(normalizedCommandSearch));
 	}
 
+	function formatVmStatus(status: string, liveStatus?: string | null) {
+		if (status === 'deleting') {
+			return 'Deleting';
+		}
+		if (liveStatus === 'running') {
+			return 'Running';
+		}
+		if (status === 'provisioning') {
+			return 'Provisioning';
+		}
+		if (status === 'error') {
+			return 'Error';
+		}
+		if (!liveStatus || liveStatus === 'unknown') {
+			return 'Ready';
+		}
+		return liveStatus.charAt(0).toUpperCase() + liveStatus.slice(1);
+	}
+
 	async function loadCommandServers(projectId = selectedProjectId) {
 		if (!projectId || commandServersLoading || commandServersLoadedProjectId === projectId) {
 			return;
@@ -303,23 +320,20 @@
 			}
 			commandServers = vms
 				.filter((vm) => vm.active)
-				.map((vm) => {
-					const info = toServerInfo(vm);
-					return {
-						id: vm.id,
-						name: vm.name,
-						plan: vm.vmType?.name ?? 'Custom',
-						status: describeServerStatus(info.status, info.liveLoaded).label,
-						detail:
-							[
-								vm.vmType?.cores ? `${vm.vmType.cores} vCPU` : null,
-								vm.vmType?.ramCapacity ? `${vm.vmType.ramCapacity}MB RAM` : null,
-								vm.vmType?.storageAmount ? `${vm.vmType.storageAmount}GB disk` : null
-							]
-								.filter(Boolean)
-								.join(' • ') || 'Server'
-					};
-				});
+				.map((vm) => ({
+					id: vm.id,
+					name: vm.name,
+					plan: vm.vmType?.name ?? 'Custom',
+					status: formatVmStatus(vm.status, vm.live?.status),
+					detail:
+						[
+							vm.vmType?.cores ? `${vm.vmType.cores} vCPU` : null,
+							vm.vmType?.ramCapacity ? `${vm.vmType.ramCapacity}MB RAM` : null,
+							vm.vmType?.storageAmount ? `${vm.vmType.storageAmount}GB disk` : null
+						]
+							.filter(Boolean)
+							.join(' • ') || 'Server'
+				}));
 			commandServersLoadedProjectId = projectId;
 		} catch (error) {
 			if (requestId !== commandServersRequestId) {

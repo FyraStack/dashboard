@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Clipboard } from '#lib/clipboard.svelte.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import Check from '~icons/lucide/check';
 	import Copy from '~icons/nucleo/copy';
@@ -8,17 +9,11 @@
 	import { getColocationContext } from '../../colocation-context.svelte';
 
 	const colo = getColocationContext();
-	let copied = $state('');
+	const clipboard = new Clipboard();
 	let ipmiPassword = $state('');
 	let showIpmi = $state(false);
 	let ipmiAction = $state('');
 	let generatingIpmiPassword = $state(false);
-
-	function copyText(text: string, label: string) {
-		navigator.clipboard.writeText(text);
-		copied = label;
-		setTimeout(() => (copied = ''), 1500);
-	}
 
 	function generateIpmiPassword() {
 		if (generatingIpmiPassword) {
@@ -71,6 +66,25 @@
 	}
 </script>
 
+{#snippet copyButton(
+	label: string,
+	text: string,
+	key: string
+)}
+	<button
+		type="button"
+		class="text-muted-foreground hover:text-foreground"
+		aria-label={label}
+		onclick={() => clipboard.copy(text, key)}
+	>
+		{#if clipboard.copiedKey === key}
+			<Check class="h-3 w-3 text-emerald-500" />
+		{:else}
+			<Copy class="h-3 w-3" />
+		{/if}
+	</button>
+{/snippet}
+
 {#if colo.selectedUnit}
 	<div class="flex-1 overflow-auto">
 		<div class="divide-y divide-border/50">
@@ -88,18 +102,11 @@
 								<span class="font-mono text-xs text-foreground"
 									>ipmi-{colo.selectedUnit.id}.stack.sh</span
 								>
-								<button
-									type="button"
-									class="text-muted-foreground hover:text-foreground"
-									aria-label="Copy IPMI address"
-									onclick={() => copyText(`ipmi-${colo.selectedUnitId}.stack.sh`, 'ipmi-host')}
-								>
-									{#if copied === 'ipmi-host'}
-										<Check class="h-3 w-3 text-emerald-500" />
-									{:else}
-										<Copy class="h-3 w-3" />
-									{/if}
-								</button>
+								{@render copyButton(
+									'Copy IPMI address',
+									`ipmi-${colo.selectedUnitId}.stack.sh`,
+									'ipmi-host'
+								)}
 							</div>
 						</div>
 						<div class="flex items-center justify-between">
@@ -112,18 +119,7 @@
 								<code class="bg-muted px-2 py-0.5 font-mono text-xs text-foreground"
 									>{ipmiPassword}</code
 								>
-								<button
-									type="button"
-									class="text-muted-foreground hover:text-foreground"
-									aria-label="Copy IPMI password"
-									onclick={() => copyText(ipmiPassword, 'ipmi-pw')}
-								>
-									{#if copied === 'ipmi-pw'}
-										<Check class="h-3 w-3 text-emerald-500" />
-									{:else}
-										<Copy class="h-3 w-3" />
-									{/if}
-								</button>
+								{@render copyButton('Copy IPMI password', ipmiPassword, 'ipmi-pw')}
 							</div>
 						</div>
 						<Button

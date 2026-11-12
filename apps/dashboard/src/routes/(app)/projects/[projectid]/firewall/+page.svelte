@@ -1,5 +1,4 @@
 <script lang="ts">
-	import CreateFirewallGroupDialog from '#lib/components/dialogs/create-firewall-group-dialog.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
@@ -113,7 +112,6 @@
 	let selectedGroupId = $state('fw-web');
 	let selectedGroup = $derived(groups.find((g) => g.id === selectedGroupId) ?? groups[0]);
 
-	// Add rule dialog
 	let addRuleOpen = $state(false);
 	let newDirection = $state<'inbound' | 'outbound'>('inbound');
 	let newProtocol = $state('TCP');
@@ -121,7 +119,6 @@
 	let newSource = $state('0.0.0.0/0');
 	let addingRule = $state(false);
 
-	// Create group dialog
 	let createGroupOpen = $state(false);
 	let newGroupName = $state('');
 	let groupCounter = $state(2);
@@ -188,12 +185,69 @@
 	}
 </script>
 
+{#snippet ruleTable(
+	direction: FirewallRule['direction'],
+	title: string,
+	addressHeader: string
+)}
+	{@const rules = selectedGroup.rules.filter((r) => r.direction === direction)}
+	<div class="px-5 py-3">
+		<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+			>{title}</span
+		>
+	</div>
+	<table class="w-full whitespace-nowrap">
+		<thead>
+			<tr class="border-y border-border/50">
+				<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">Protocol</th>
+				<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">Ports</th>
+				<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">
+					{addressHeader}
+				</th>
+				<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">Enabled</th>
+				<th class="px-5 py-2 text-right text-xs font-medium text-muted-foreground"></th>
+			</tr>
+		</thead>
+		<tbody class="divide-y divide-border/30">
+			{#each rules as rule (rule.id)}
+				<tr class="transition-colors duration-100 hover:bg-muted/20">
+					<td class="px-5 py-2.5">
+						<Badge variant="outline" class="text-[10px]">{rule.protocol}</Badge>
+					</td>
+					<td class="px-5 py-2.5 font-mono text-sm text-foreground">{rule.ports}</td>
+					<td class="px-5 py-2.5 font-mono text-sm text-muted-foreground">{rule.source}</td>
+					<td class="px-5 py-2.5">
+						<Switch bind:checked={rule.enabled} size="sm" />
+					</td>
+					<td class="px-5 py-2.5 text-right">
+						<Button
+							variant="ghost"
+							size="sm"
+							class="h-7 w-7 p-0 text-red-400 hover:text-red-300"
+							aria-label={`Delete ${direction} rule ${rule.protocol} ${rule.ports}`}
+							onclick={() => deleteRule(rule.id)}
+						>
+							<Trash2 class="h-3 w-3" />
+						</Button>
+					</td>
+				</tr>
+			{/each}
+			{#if rules.length === 0}
+				<tr>
+					<td colspan="5" class="px-5 py-6 text-center text-xs text-muted-foreground">
+						No {direction} rules
+					</td>
+				</tr>
+			{/if}
+		</tbody>
+	</table>
+{/snippet}
+
 <div class="flex flex-1 flex-col overflow-hidden">
 	<div class="border-b border-border bg-background/40 px-5 py-2 text-xs text-muted-foreground">
 		Preview: firewall isn't live yet. Changes here aren't saved.
 	</div>
 	<div class="flex flex-1 flex-col overflow-hidden lg:flex-row">
-		<!-- Groups sidebar -->
 		<div
 			class="flex max-h-[38vh] w-full shrink-0 flex-col border-b border-border lg:max-h-none lg:w-64 lg:border-r lg:border-b-0"
 		>
@@ -242,10 +296,8 @@
 			</div>
 		</div>
 
-		<!-- Rules panel -->
 		{#if selectedGroup}
 			<div class="flex flex-1 flex-col overflow-hidden">
-				<!-- Group header -->
 				<div class="flex h-10 shrink-0 items-center justify-between border-b border-border px-5">
 					<div class="flex items-center gap-2">
 						<span class="text-sm font-medium text-foreground">{selectedGroup.name}</span>
@@ -281,126 +333,16 @@
 					</div>
 				</div>
 
-				<!-- Inbound rules -->
 				<div class="flex-1 overflow-auto">
-					<div class="px-5 py-3">
-						<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
-							>Inbound Rules</span
-						>
-					</div>
-					<table class="w-full whitespace-nowrap">
-						<thead>
-							<tr class="border-y border-border/50">
-								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">
-									Protocol
-								</th>
-								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">Ports</th>
-								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">
-									Source
-								</th>
-								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">
-									Enabled
-								</th>
-								<th class="px-5 py-2 text-right text-xs font-medium text-muted-foreground"></th>
-							</tr>
-						</thead>
-						<tbody class="divide-y divide-border/30">
-							{#each selectedGroup.rules.filter((r) => r.direction === 'inbound') as rule (rule.id)}
-								<tr class="transition-colors duration-100 hover:bg-muted/20">
-									<td class="px-5 py-2.5">
-										<Badge variant="outline" class="text-[10px]">{rule.protocol}</Badge>
-									</td>
-									<td class="px-5 py-2.5 font-mono text-sm text-foreground">{rule.ports}</td>
-									<td class="px-5 py-2.5 font-mono text-sm text-muted-foreground">{rule.source}</td>
-									<td class="px-5 py-2.5">
-										<Switch bind:checked={rule.enabled} size="sm" />
-									</td>
-									<td class="px-5 py-2.5 text-right">
-										<Button
-											variant="ghost"
-											size="sm"
-											class="h-7 w-7 p-0 text-red-400 hover:text-red-300"
-											aria-label={`Delete inbound rule ${rule.protocol} ${rule.ports}`}
-											onclick={() => deleteRule(rule.id)}
-										>
-											<Trash2 class="h-3 w-3" />
-										</Button>
-									</td>
-								</tr>
-							{/each}
-							{#if selectedGroup.rules.filter((r) => r.direction === 'inbound').length === 0}
-								<tr>
-									<td colspan="5" class="px-5 py-6 text-center text-xs text-muted-foreground">
-										No inbound rules
-									</td>
-								</tr>
-							{/if}
-						</tbody>
-					</table>
-
-					<div class="mt-4 px-5 py-3">
-						<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
-							>Outbound Rules</span
-						>
-					</div>
-					<table class="w-full whitespace-nowrap">
-						<thead>
-							<tr class="border-y border-border/50">
-								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">
-									Protocol
-								</th>
-								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">Ports</th>
-								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">
-									Destination
-								</th>
-								<th class="px-5 py-2 text-left text-xs font-medium text-muted-foreground">
-									Enabled
-								</th>
-								<th class="px-5 py-2 text-right text-xs font-medium text-muted-foreground"></th>
-							</tr>
-						</thead>
-						<tbody class="divide-y divide-border/30">
-							{#each selectedGroup.rules.filter(
-								(r) => r.direction === 'outbound'
-							) as rule (rule.id)}
-								<tr class="transition-colors duration-100 hover:bg-muted/20">
-									<td class="px-5 py-2.5">
-										<Badge variant="outline" class="text-[10px]">{rule.protocol}</Badge>
-									</td>
-									<td class="px-5 py-2.5 font-mono text-sm text-foreground">{rule.ports}</td>
-									<td class="px-5 py-2.5 font-mono text-sm text-muted-foreground">{rule.source}</td>
-									<td class="px-5 py-2.5">
-										<Switch bind:checked={rule.enabled} size="sm" />
-									</td>
-									<td class="px-5 py-2.5 text-right">
-										<Button
-											variant="ghost"
-											size="sm"
-											class="h-7 w-7 p-0 text-red-400 hover:text-red-300"
-											aria-label={`Delete outbound rule ${rule.protocol} ${rule.ports}`}
-											onclick={() => deleteRule(rule.id)}
-										>
-											<Trash2 class="h-3 w-3" />
-										</Button>
-									</td>
-								</tr>
-							{/each}
-							{#if selectedGroup.rules.filter((r) => r.direction === 'outbound').length === 0}
-								<tr>
-									<td colspan="5" class="px-5 py-6 text-center text-xs text-muted-foreground">
-										No outbound rules
-									</td>
-								</tr>
-							{/if}
-						</tbody>
-					</table>
+					{@render ruleTable('inbound', 'Inbound Rules', 'Source')}
+					<div class="mt-4"></div>
+					{@render ruleTable('outbound', 'Outbound Rules', 'Destination')}
 				</div>
 			</div>
 		{/if}
 	</div>
 </div>
 
-<!-- Add Rule Dialog -->
 <Dialog.Root bind:open={addRuleOpen}>
 	<Dialog.Content class="border-border bg-background sm:max-w-md">
 		<Dialog.Header>
@@ -457,10 +399,29 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<!-- Create Group Dialog -->
-<CreateFirewallGroupDialog
-	bind:open={createGroupOpen}
-	bind:name={newGroupName}
-	submitting={creatingGroup}
-	onSubmit={createGroup}
-/>
+<Dialog.Root bind:open={createGroupOpen}>
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>Create Firewall Group</Dialog.Title>
+			<Dialog.Description>Create a new group to organize firewall rules.</Dialog.Description>
+		</Dialog.Header>
+		<div class="flex flex-col gap-4 py-4">
+			<div class="flex flex-col gap-2">
+				<Label>Name</Label>
+				<Input bind:value={newGroupName} placeholder="my-firewall" />
+			</div>
+		</div>
+		<Dialog.Footer>
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={() => (createGroupOpen = false)}
+				disabled={creatingGroup}
+				>Cancel</Button
+			>
+			<Button size="sm" onclick={createGroup} disabled={!newGroupName.trim() || creatingGroup}
+				>{creatingGroup ? 'Creating...' : 'Create'}</Button
+			>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>

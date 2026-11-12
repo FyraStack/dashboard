@@ -1,7 +1,7 @@
 import { dependencies } from '#lib/dependencies.js';
 import { listVms } from '#lib/remote/vms.remote.js';
+import { toServerInfo } from '#lib/server-info.js';
 import type { LayoutServerLoad } from './$types';
-import { toServerInfo } from './lib/server-summary.ts';
 
 export const load: LayoutServerLoad = async ({ parent, depends }) => {
 	depends(dependencies.project.vms);

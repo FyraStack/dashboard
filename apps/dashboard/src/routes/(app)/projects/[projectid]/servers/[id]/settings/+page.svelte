@@ -7,23 +7,20 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { dependencies } from '#lib/dependencies.js';
 	import { deleteVm, renameVm } from '#lib/remote/vms.remote.js';
-	import {
-		getServer,
-		getServerWithFallback,
-		requestServerStatusRefresh
-	} from '#lib/state/servers.svelte.js';
+	import { getServer, requestServerStatusRefresh } from '#lib/state/servers.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
+	import { isLocked } from '#lib/vm-status.js';
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import Check from '~icons/lucide/check';
 	import X from '~icons/lucide/x';
 	import Pencil from '~icons/nucleo/pencil';
-	import type { PageProps } from './$types';
+	import { useServer } from '../lib/server-context';
 
-	let { data }: PageProps = $props();
-	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
+	const server = useServer();
 	let nameValue = $state('');
 	let syncedServerId = $state('');
 	let syncedServerName = $state('');
@@ -34,17 +31,17 @@
 	let deleting = $state(false);
 	let renameError = $state('');
 	let deleteError = $state('');
-	let nameChanged = $derived(Boolean(nameValue.trim()) && nameValue.trim() !== selectedServer.name);
+	let nameChanged = $derived(Boolean(nameValue.trim()) && nameValue.trim() !== server.current.name);
 	let hostnameValid = $derived(isValidPtrHostname(nameValue.trim()));
 
 	$effect(() => {
-		if (selectedServer.id === syncedServerId && selectedServer.name === syncedServerName) {
+		if (server.current.id === syncedServerId && server.current.name === syncedServerName) {
 			return;
 		}
 
-		syncedServerId = selectedServer.id;
-		syncedServerName = selectedServer.name;
-		nameValue = selectedServer.name;
+		syncedServerId = server.current.id;
+		syncedServerName = server.current.name;
+		nameValue = server.current.name;
 		editingName = false;
 		renameDialogOpen = false;
 		updateHostname = false;
@@ -61,7 +58,7 @@
 	}
 
 	function cancelNameEdit() {
-		nameValue = selectedServer.name;
+		nameValue = server.current.name;
 		editingName = false;
 	}
 
@@ -86,12 +83,12 @@
 
 		try {
 			const result = await renameVm({
-				vmId: selectedServer.id,
+				vmId: server.current.id,
 				name,
 				updateHostname: shouldUpdateHostname
 			});
 			nameValue = result.name;
-			await invalidate('project:vms');
+			await invalidate(dependencies.project.vms);
 			editingName = false;
 			renameDialogOpen = false;
 			toast.success(
@@ -110,12 +107,12 @@
 		if (deleting) {
 			return;
 		}
-		const server = selectedServer;
+		const target = server.current;
 		const projectId = page.params.projectid;
 		const ok = await confirmDestructive({
 			title: 'Delete server',
-			description: `This permanently deletes ${server.name} and all of its data. This cannot be undone.`,
-			confirmWord: server.name,
+			description: `This permanently deletes ${target.name} and all of its data. This cannot be undone.`,
+			confirmWord: target.name,
 			confirmLabel: 'Delete server'
 		});
 		if (!ok) {
@@ -126,19 +123,21 @@
 		deleteError = '';
 
 		try {
-			await deleteVm({ vmId: server.id });
-			const current = getServer(server.id);
+			await deleteVm({ vmId: target.id });
+			const current = getServer(target.id);
 			if (current) {
 				current.status = 'deleting';
 			}
 			requestServerStatusRefresh();
-			if (page.params.projectid !== projectId || page.params.id !== server.id) {
+			if (page.params.projectid !== projectId || page.params.id !== target.id) {
 				return;
 			}
 
-			await goto(resolve(`projects/${projectId}/servers`), { invalidate: ['project:vms'] });
-		} catch {
-			deleteError = 'Failed to delete server.';
+			await goto(resolve(`projects/${projectId}/servers`), {
+				invalidate: [dependencies.project.vms]
+			});
+		} catch (error) {
+			deleteError = getErrorMessage(error, 'Failed to delete server.');
 			deleting = false;
 		}
 	}
@@ -148,7 +147,7 @@
 	<div>
 		<h2 class="text-base font-semibold text-foreground sm:text-sm">Server settings</h2>
 		<p class="mt-1 text-base text-pretty text-muted-foreground sm:text-sm">
-			Manage basic settings for {selectedServer.name}.
+			Manage basic settings for {server.current.name}.
 		</p>
 	</div>
 	<div class="space-y-2">
@@ -195,8 +194,7 @@
 					variant="ghost"
 					size="sm"
 					class="size-7 p-0"
-					disabled={selectedServer.status === 'provisioning' ||
-						selectedServer.status === 'deleting'}
+					disabled={isLocked(server.current.status)}
 					onclick={() => (editingName = true)}
 					><Pencil class="size-3" /></Button
 				>
@@ -211,7 +209,7 @@
 		<Input
 			id="server-id-input"
 			name="serverId"
-			value={selectedServer.id}
+			value={server.current.id}
 			disabled
 			class="font-mono"
 		/>
@@ -223,11 +221,11 @@
 		<Button
 			variant="outline"
 			size="sm"
-			disabled={deleting || selectedServer.status === 'deleting'}
+			disabled={deleting || server.current.status === 'deleting'}
 			onclick={handleDelete}
 			class="border-red-300 text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950"
 		>
-			{deleting || selectedServer.status === 'deleting' ? 'Deleting...' : 'Delete Server'}</Button
+			{deleting || server.current.status === 'deleting' ? 'Deleting...' : 'Delete Server'}</Button
 		>
 	</div>
 </div>
@@ -244,7 +242,7 @@
 		<Dialog.Header>
 			<Dialog.Title>Rename server?</Dialog.Title>
 			<Dialog.Description class="text-base text-pretty sm:text-sm">
-				This changes <strong>{selectedServer.name}</strong> to
+				This changes <strong>{server.current.name}</strong> to
 				<strong>{nameValue.trim()}</strong>
 				in the dashboard.
 			</Dialog.Description>

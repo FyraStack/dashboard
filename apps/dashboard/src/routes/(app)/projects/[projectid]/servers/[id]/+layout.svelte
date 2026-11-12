@@ -1,98 +1,75 @@
 <script lang="ts">
-	import type { FeatureFlags } from 'stack-shared/feature-flags';
+	import { vpsServerTabFeatureFlags } from 'stack-shared/feature-flags';
 	import { toast } from 'svelte-sonner';
+	import type { IconComponent } from '#lib';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
 	import { killVm, rebootVm, startVm, stopVm } from '#lib/remote/vms.remote.js';
-	import {
-		getServerWithFallback,
-		requestServerStatusRefresh,
-		type ServerInfo
-	} from '#lib/state/servers.svelte.js';
+	import { getServerWithFallback, requestServerStatusRefresh } from '#lib/state/servers.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
+	import {
+		canPowerOff,
+		canPowerOn,
+		canReboot,
+		describeServerStatus,
+		statusBadgeClass
+	} from '#lib/vm-status.js';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import ArrowUpDown from '~icons/lucide/arrow-up-down';
 	import Loader2 from '~icons/lucide/loader-2';
+	import Activity from '~icons/nucleo/activity';
+	import Camera from '~icons/nucleo/camera';
+	import Clock from '~icons/nucleo/clock';
+	import Disc from '~icons/nucleo/disc';
+	import FileText from '~icons/nucleo/file-text';
+	import Globe from '~icons/nucleo/globe';
 	import Play from '~icons/nucleo/play';
 	import Power from '~icons/nucleo/power';
 	import PowerOff from '~icons/nucleo/power-off';
 	import RotateCw from '~icons/nucleo/rotate-cw';
-	import { type ServerTab, serverTabs } from './lib/server-detail';
+	import Settings from '~icons/nucleo/settings';
+	import Terminal from '~icons/nucleo/terminal';
+	import { provideServer } from './lib/server-context';
 
-	type ServerTabHref =
-		| `projects/${string}/servers/${string}`
-		| `projects/${string}/servers/${string}/backups`
-		| `projects/${string}/servers/${string}/console`
-		| `projects/${string}/servers/${string}/images`
-		| `projects/${string}/servers/${string}/logs`
-		| `projects/${string}/servers/${string}/networking`
-		| `projects/${string}/servers/${string}/rebuild`
-		| `projects/${string}/servers/${string}/rescue`
-		| `projects/${string}/servers/${string}/resize`
-		| `projects/${string}/servers/${string}/settings`
-		| `projects/${string}/servers/${string}/snapshots`;
+	type ServerTab = 'overview' | keyof typeof vpsServerTabFeatureFlags;
+
+	const serverTabs: { icon: IconComponent; id: ServerTab; label: string }[] = [
+		{ id: 'overview', label: 'Overview', icon: Activity },
+		{ id: 'console', label: 'Console', icon: Terminal },
+		{ id: 'logs', label: 'Logs', icon: FileText },
+		{ id: 'networking', label: 'Networking', icon: Globe },
+		{ id: 'images', label: 'Images', icon: Disc },
+		{ id: 'snapshots', label: 'Snapshots', icon: Camera },
+		{ id: 'backups', label: 'Backups', icon: Clock },
+		{ id: 'rebuild', label: 'Rebuild', icon: RotateCw },
+		{ id: 'resize', label: 'Resize', icon: ArrowUpDown },
+		{ id: 'rescue', label: 'Rescue', icon: Terminal },
+		{ id: 'settings', label: 'Settings', icon: Settings }
+	];
 
 	type PowerAction = 'start' | 'shutdown' | 'kill' | 'restart';
 
 	let { data, children } = $props();
 	let powerAction = $state<PowerAction | null>(null);
 	const powerLoading = $derived(powerAction !== null);
-	const featureFlags = $derived((data.featureFlags ?? {}) as FeatureFlags);
 	const visibleServerTabs = $derived(
-		serverTabs.filter((tab) => !tab.featureFlag || featureFlags[tab.featureFlag])
+		serverTabs.filter(
+			(tab) => tab.id === 'overview' || data.featureFlags[vpsServerTabFeatureFlags[tab.id]]
+		)
 	);
-	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
-	let serverId = $derived(selectedServer.id);
+	const selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
+	const status = $derived(describeServerStatus(selectedServer.status, selectedServer.liveLoaded));
+	provideServer(() => selectedServer);
 	let activeTab = $derived.by<ServerTab>(() => {
-		const tab = page.url.pathname.split('/').pop();
-		return visibleServerTabs.some((entry) => entry.id === tab) ? (tab as ServerTab) : 'overview';
+		const segment = page.url.pathname.split('/').pop();
+		return visibleServerTabs.find((entry) => entry.id === segment)?.id ?? 'overview';
 	});
 
-	const statusBadgeClasses = {
-		danger:
-			'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400',
-		running:
-			'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400',
-		provisioning:
-			'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-400',
-		restarting:
-			'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400',
-		unloaded: 'border-border bg-background/40 text-muted-foreground'
-	};
-
-	function statusBadgeClass(server: ServerInfo): string {
-		if (server.status === 'deleting') {
-			return statusBadgeClasses.danger;
-		}
-		if (!server.liveLoaded) {
-			return statusBadgeClasses.unloaded;
-		}
-		switch (server.status) {
-			case 'running':
-				return statusBadgeClasses.running;
-			case 'provisioning':
-				return statusBadgeClasses.provisioning;
-			case 'restarting':
-				return statusBadgeClasses.restarting;
-			default:
-				return statusBadgeClasses.danger;
-		}
-	}
-
-	function statusBadgeLabel(server: ServerInfo): string {
-		if (server.status === 'deleting') {
-			return 'deleting...';
-		}
-		if (!server.liveLoaded) {
-			return 'unknown';
-		}
-		return server.status === 'provisioning' ? 'provisioning...' : server.status;
-	}
-
-	function tabHref(tab: ServerTab): ServerTabHref {
-		const base = `projects/${page.params.projectid}/servers/${serverId}`;
-		return (tab === 'overview' ? base : `${base}/${tab}`) as ServerTabHref;
+	function tabHref(tab: ServerTab) {
+		const base = `projects/${page.params.projectid}/servers/${selectedServer.id}` as const;
+		return tab === 'overview' ? base : (`${base}/${tab}` as const);
 	}
 
 	const powerMessages = {
@@ -103,7 +80,7 @@
 	} as const;
 
 	async function power(action: PowerAction) {
-		if (!selectedServer || powerLoading) {
+		if (powerLoading) {
 			return;
 		}
 
@@ -143,8 +120,8 @@
 <div class="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
 	<div class="flex min-w-0 items-center gap-2">
 		<span class="truncate text-sm font-medium text-foreground">{selectedServer.name}</span>
-		<Badge variant="outline" class="text-[10px] {statusBadgeClass(selectedServer)}">
-			{statusBadgeLabel(selectedServer)}
+		<Badge variant="outline" class="text-[10px] {statusBadgeClass[status.tone]}">
+			{status.badgeLabel}
 		</Badge>
 	</div>
 	<div class="flex shrink-0 items-center gap-1.5">
@@ -153,11 +130,7 @@
 			size="sm"
 			class="h-7 gap-1.5 px-2.5 text-xs sm:px-3"
 			aria-label="Start"
-			disabled={powerLoading ||
-				selectedServer.status === 'running' ||
-				selectedServer.status === 'restarting' ||
-				selectedServer.status === 'provisioning' ||
-				selectedServer.status === 'deleting'}
+			disabled={powerLoading || !canPowerOn(selectedServer.status)}
 			onclick={() => power('start')}
 		>
 			{#if powerAction === 'start'}
@@ -172,11 +145,7 @@
 			size="sm"
 			class="h-7 gap-1.5 px-2.5 text-xs sm:px-3"
 			aria-label="Restart"
-			disabled={powerLoading ||
-				selectedServer.status === 'stopped' ||
-				selectedServer.status === 'restarting' ||
-				selectedServer.status === 'provisioning' ||
-				selectedServer.status === 'deleting'}
+			disabled={powerLoading || !canReboot(selectedServer.status)}
 			onclick={() => power('restart')}
 		>
 			{#if powerAction === 'restart'}
@@ -191,10 +160,7 @@
 			size="sm"
 			class="h-7 gap-1.5 px-2.5 text-xs sm:px-3"
 			aria-label="Shutdown"
-			disabled={powerLoading ||
-				selectedServer.status === 'stopped' ||
-				selectedServer.status === 'provisioning' ||
-				selectedServer.status === 'deleting'}
+			disabled={powerLoading || !canPowerOff(selectedServer.status)}
 			onclick={() => power('shutdown')}
 		>
 			{#if powerAction === 'shutdown'}
@@ -209,10 +175,7 @@
 			size="sm"
 			class="h-7 gap-1.5 border-red-300 px-2.5 text-xs text-red-700 hover:bg-red-100 sm:px-3 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950"
 			aria-label="Kill"
-			disabled={powerLoading ||
-				selectedServer.status === 'stopped' ||
-				selectedServer.status === 'provisioning' ||
-				selectedServer.status === 'deleting'}
+			disabled={powerLoading || !canPowerOff(selectedServer.status)}
 			onclick={() => power('kill')}
 		>
 			{#if powerAction === 'kill'}

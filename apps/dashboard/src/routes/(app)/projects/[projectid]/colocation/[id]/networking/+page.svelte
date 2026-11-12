@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Clipboard } from '#lib/clipboard.svelte.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
@@ -18,7 +19,7 @@
 	}
 
 	const colo = getColocationContext();
-	let copied = $state('');
+	const clipboard = new Clipboard();
 	let addIpOpen = $state(false);
 	let newIpAddr = $state('');
 	let newIpRdns = $state('');
@@ -35,12 +36,6 @@
 	});
 
 	let currentIps = $derived(ips[colo.selectedUnitId] ?? []);
-
-	function copyText(text: string, label: string) {
-		navigator.clipboard.writeText(text);
-		copied = label;
-		setTimeout(() => (copied = ''), 1500);
-	}
 
 	function openAddIpDialog() {
 		newIpAddr = '';
@@ -141,9 +136,9 @@
 								type="button"
 								class="text-muted-foreground hover:text-foreground"
 								aria-label="Copy IP address"
-								onclick={() => copyText(ip.address, `colo-ip-${idx}`)}
+								onclick={() => clipboard.copy(ip.address, `colo-ip-${idx}`)}
 							>
-								{#if copied === `colo-ip-${idx}`}
+								{#if clipboard.copiedKey === `colo-ip-${idx}`}
 									<Check class="h-3 w-3 text-emerald-500" />
 								{:else}
 									<Copy class="h-3 w-3" />

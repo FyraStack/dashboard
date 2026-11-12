@@ -8,6 +8,7 @@ import {
 import { untrack } from 'svelte';
 import { toast } from 'svelte-sonner';
 import { config } from '#lib/config.js';
+import { compareVersionsDesc, guessVersionFromFilename } from '#lib/image-versions.js';
 import { type AdminProject, setProjectBillingExempt } from '#lib/remote/admin-projects.remote.js';
 import {
 	type AdminUser,
@@ -111,25 +112,6 @@ export interface ImageGroup {
 	name: string;
 	representative: BaseImage;
 	versions: BaseImage[];
-}
-
-export function compareVersionsDesc(a: string, b: string): number {
-	return b.localeCompare(a, undefined, { numeric: true });
-}
-
-const ARCH_TOKEN_PATTERN = /(x86[-_]64|amd64|aarch64|arm64|i[3-6]86|ppc64le|s390x)/gi;
-const IMAGE_EXTENSION_PATTERN = /\.(qcow2|img|raw|vmdk|ova|xz|gz|zst)$/i;
-const PATH_SEPARATOR_PATTERN = /[/:]/;
-const VERSION_TOKEN_PATTERN = /(?:^|[^0-9a-z])v?(\d+(?:\.\d+)*)(?=$|[^0-9])/i;
-
-/** Best-effort version guess from an image filename, e.g. "debian-12-genericcloud-amd64.qcow2" -> "12". */
-export function guessVersionFromFilename(filePath: string): string {
-	let name = filePath.split(PATH_SEPARATOR_PATTERN).pop() ?? '';
-	while (IMAGE_EXTENSION_PATTERN.test(name)) {
-		name = name.replace(IMAGE_EXTENSION_PATTERN, '');
-	}
-	name = name.replace(ARCH_TOKEN_PATTERN, '');
-	return name.match(VERSION_TOKEN_PATTERN)?.[1] ?? '';
 }
 
 export interface PveImageImportTarget {

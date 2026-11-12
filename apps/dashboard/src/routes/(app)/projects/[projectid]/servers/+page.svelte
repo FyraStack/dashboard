@@ -1,23 +1,18 @@
 <script lang="ts">
+	import { createServerPath } from 'stack-shared/routes';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
-	import { serversState } from '#lib/state/servers.svelte.js';
+	import { listedServers } from '#lib/state/servers.svelte.js';
 	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
 	import Plus from '~icons/lucide/plus';
 	import Server from '~icons/nucleo/server';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	const servers = $derived(
-		(serversState.projectId === data.projectId ? serversState.servers : data.servers).filter(
-			(server) => server.status !== 'deleting' && server.status !== 'error'
-		)
-	);
-	const shouldShowEmptyState = $derived(servers.length === 0);
+	const servers = $derived(listedServers(data.projectId, data.servers));
 </script>
 
-{#if shouldShowEmptyState}
+{#if servers.length === 0}
 	<div class="flex h-full flex-col items-center justify-center text-muted-foreground">
 		<div class="flex w-full flex-col items-center px-4 text-center">
 			<div
@@ -34,7 +29,7 @@
 					variant="outline"
 					size="sm"
 					class="mt-2 h-10 gap-1.5 border-border text-sm text-muted-foreground hover:border-ring hover:bg-muted hover:text-foreground sm:h-8 sm:text-xs"
-					onclick={() => goto(`/projects/${page.params.projectid}/servers/create`)}
+					onclick={() => goto(createServerPath(data.projectId))}
 				>
 					<Plus class="size-3.5" />
 					New Server

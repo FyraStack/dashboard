@@ -1,77 +1,46 @@
-export interface ServerInfo {
-	agentConnected: boolean;
-	backups: boolean;
-	created: string;
-	disk: string;
-	id: string;
-	ip: string;
-	ipv6: string;
-	liveLoaded: boolean;
-	metrics: {
-		cpu?: number | null;
-		memory?: number | null;
-		disk?: number | null;
-		networkIn?: number | null;
-		networkOut?: number | null;
-		diskRead?: number | null;
-		diskWrite?: number | null;
-	} | null;
-	name: string;
-	plan: string;
-	ram: string;
-	region: string;
-	status: 'running' | 'stopped' | 'restarting' | 'provisioning' | 'deleting' | 'error' | 'unknown';
-	uptime: string;
-	vcpu: number;
-}
+import type { listVmStatuses } from '#lib/remote/vms.remote.js';
+import { mergeListWithLive, mergeLive, type ServerInfo, toServerLive } from '#lib/server-info.js';
+import { isListedStatus } from '#lib/vm-status.js';
 
 export const serversState = $state({
 	projectId: null as string | null,
 	servers: [] as ServerInfo[],
-	loading: false,
 	statusRefreshing: false,
 	firstStatusRefreshComplete: false,
 	refreshVersion: 0
 });
-
-export function sortServers(items: ServerInfo[]): ServerInfo[] {
-	return [...items].sort((a, b) => a.id.localeCompare(b.id));
-}
 
 export function syncServers(projectId: string | null, incoming: ServerInfo[]): void {
 	const sameProject = serversState.projectId === projectId;
 	const currentById = new Map(
 		(sameProject ? serversState.servers : []).map((server) => [server.id, server])
 	);
-	serversState.servers = sortServers(
-		incoming.map((server) => {
-			const current = currentById.get(server.id);
-			if (!current?.liveLoaded) {
-				return server;
-			}
-
-			// List data contains cached snapshots. Keep fresher live values during invalidation.
-			return {
-				...server,
-				liveLoaded: true,
-				status:
-					server.status === 'deleting' ||
-					server.status === 'error' ||
-					server.status === 'provisioning'
-						? server.status
-						: current.status,
-				agentConnected: current.agentConnected,
-				ip: current.ip === '-' ? server.ip : current.ip,
-				ipv6: current.ipv6 === '-' ? server.ipv6 : current.ipv6,
-				uptime: current.uptime === '-' ? server.uptime : current.uptime,
-				metrics: current.metrics ?? server.metrics
-			};
-		})
-	);
+	serversState.servers = incoming.map((server) => {
+		const current = currentById.get(server.id);
+		return current?.liveLoaded ? mergeListWithLive(server, current) : server;
+	});
 	serversState.projectId = projectId;
-	serversState.loading = false;
 	serversState.firstStatusRefreshComplete =
 		incoming.length === 0 || (sameProject && serversState.firstStatusRefreshComplete);
+}
+
+export function applyLiveStatuses(
+	statuses: Awaited<ReturnType<typeof listVmStatuses>>,
+	requestedServerIds: Set<string>
+): void {
+	const statusById = new Map(statuses.map((status) => [status.id, status]));
+	serversState.servers = serversState.servers
+		.filter((server) => statusById.has(server.id) || !requestedServerIds.has(server.id))
+		.map((server) => {
+			const status = statusById.get(server.id);
+			return status ? mergeLive(server, toServerLive(status)) : server;
+		});
+}
+
+export function listedServers(projectId: string, initial: ServerInfo[]): ServerInfo[] {
+	return (serversState.projectId === projectId ? serversState.servers : initial).filter((server) =>
+		isListedStatus(server.status)
+	);
 }
 
 export function requestServerStatusRefresh(): void {
@@ -91,18 +60,4 @@ export function getServerWithFallback(id: string, fallback: ServerInfo): ServerI
 		return fallback;
 	}
 	return server;
-}
-
-export function upsertServer(server: ServerInfo): void {
-	const index = serversState.servers.findIndex((item) => item.id === server.id);
-
-	if (index === -1) {
-		serversState.servers = sortServers([...serversState.servers, server]);
-		return;
-	}
-
-	serversState.servers[index] = {
-		...serversState.servers[index],
-		...server
-	};
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { projectBillingPath } from 'stack-shared/routes';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -10,21 +11,19 @@
 	import Info from '~icons/nucleo/info';
 	import ShieldAlert from '~icons/nucleo/shield-alert';
 
-	type Mode = 'server-create' | 'billing-page';
-
 	let {
 		open = $bindable(false),
 		projectId,
 		billingReady = false,
 		canManageBilling = false,
-		mode = 'billing-page',
-		returnTo = `/projects/${projectId}/billing`
+		blockedResource = 'resources',
+		returnTo = projectBillingPath(projectId)
 	}: {
 		open?: boolean;
 		projectId: string;
 		billingReady?: boolean;
 		canManageBilling?: boolean;
-		mode?: Mode;
+		blockedResource?: string;
 		returnTo?: string;
 	} = $props();
 
@@ -33,7 +32,6 @@
 	let discountCode = $state('');
 
 	const title = $derived(billingReady ? 'Manage billing' : 'Set up billing');
-	const blockedResource = $derived(mode === 'server-create' ? 'servers' : 'resources');
 	const description = $derived(
 		billingReady
 			? 'Manage payment methods, invoices, and project billing settings.'

@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { type Snippet, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
+	import { Clipboard } from '#lib/clipboard.svelte.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { setVmPtrRecord } from '#lib/remote/networking.remote.js';
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';
@@ -14,12 +14,13 @@
 	import X from '~icons/lucide/x';
 	import Copy from '~icons/nucleo/copy';
 	import Pencil from '~icons/nucleo/pencil';
+	import { useServer } from '../lib/server-context';
 	import type { PageProps } from './$types';
 
 	const PREFIX_LENGTH_SUFFIX = /::\/\d+$/;
 
 	let { data }: PageProps = $props();
-	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
+	const server = useServer();
 	let allocations = $state(untrack(() => data.networking.allocations));
 	$effect(() => {
 		({ allocations } = data.networking);
@@ -27,7 +28,7 @@
 
 	type Allocation = (typeof allocations)[number];
 
-	let copied = $state('');
+	const clipboard = new Clipboard();
 	let editingKey = $state<string | null>(null);
 	let rdnsValue = $state('');
 	let savingKey = $state<string | null>(null);
@@ -54,12 +55,6 @@
 	const ipv6PrefixAllocations = $derived(
 		allocations.filter((allocation) => allocation.family === 'ipv6' && allocation.prefix)
 	);
-
-	function copyToClipboard(text: string, label: string) {
-		navigator.clipboard.writeText(text);
-		copied = label;
-		setTimeout(() => (copied = ''), 1500);
-	}
 
 	function ptrValueFor(allocation: Allocation, address: string | null) {
 		if (!address) {
@@ -287,6 +282,38 @@
 	</div>
 {/snippet}
 
+{#snippet addressRow(
+	title: string,
+	value: string | null,
+	copyKey: string,
+	copyLabel: string,
+	actions?: Snippet
+)}
+	<div class="flex items-center justify-between">
+		<div>
+			<p class="text-sm font-medium text-foreground">{title}</p>
+			<p class="mt-0.5 font-mono text-xs text-muted-foreground">{value ?? '-'}</p>
+		</div>
+		<div class="flex items-center gap-2">
+			{@render actions?.()}
+			{#if value}
+				<button
+					type="button"
+					aria-label={copyLabel}
+					class="text-muted-foreground hover:text-foreground"
+					onclick={() => clipboard.copy(value, copyKey)}
+				>
+					{#if clipboard.copiedKey === copyKey}
+						<Check class="h-3.5 w-3.5 text-emerald-500" />
+					{:else}
+						<Copy class="size-4" />
+					{/if}
+				</button>
+			{/if}
+		</div>
+	</div>
+{/snippet}
+
 <div class="flex-1 divide-y divide-border/50 overflow-auto">
 	<div class="px-5 py-3">
 		<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
@@ -295,24 +322,12 @@
 	</div>
 	{#each ipv4Allocations as allocation (allocation.id)}
 		<div class="px-5 py-3">
-			<div class="flex items-center justify-between">
-				<div>
-					<p class="text-sm font-medium text-foreground">IPv4 Address</p>
-					<p class="mt-0.5 font-mono text-xs text-muted-foreground">{allocation.address}</p>
-				</div>
-				<button
-					type="button"
-					aria-label="Copy IPv4 address"
-					class="text-muted-foreground hover:text-foreground"
-					onclick={() => copyToClipboard(allocation.address ?? '', `ipv4-${allocation.id}`)}
-				>
-					{#if copied === `ipv4-${allocation.id}`}
-						<Check class="h-3.5 w-3.5 text-emerald-500" />
-					{:else}
-						<Copy class="size-4" />
-					{/if}
-				</button>
-			</div>
+			{@render addressRow(
+				'IPv4 Address',
+				allocation.address,
+				`ipv4-${allocation.id}`,
+				'Copy IPv4 address'
+			)}
 			{#if allocation.address}
 				{@render rdnsEditor(allocation, allocation.address)}
 			{/if}
@@ -320,65 +335,42 @@
 	{/each}
 	{#each ipv6AddressAllocations as allocation (allocation.id)}
 		<div class="px-5 py-3">
-			<div class="flex items-center justify-between">
-				<div>
-					<p class="text-sm font-medium text-foreground">IPv6 Address</p>
-					<p class="mt-0.5 font-mono text-xs text-muted-foreground">{allocation.address}</p>
-				</div>
-				<button
-					type="button"
-					aria-label="Copy IPv6 address"
-					class="text-muted-foreground hover:text-foreground"
-					onclick={() => copyToClipboard(allocation.address ?? '', `ipv6-${allocation.id}`)}
-				>
-					{#if copied === `ipv6-${allocation.id}`}
-						<Check class="h-3.5 w-3.5 text-emerald-500" />
-					{:else}
-						<Copy class="size-4" />
-					{/if}
-				</button>
-			</div>
+			{@render addressRow(
+				'IPv6 Address',
+				allocation.address,
+				`ipv6-${allocation.id}`,
+				'Copy IPv6 address'
+			)}
 			{#if allocation.address}
 				{@render rdnsEditor(allocation, allocation.address)}
 			{/if}
 		</div>
 	{/each}
 	{#each ipv6PrefixAllocations as allocation (allocation.id)}
-		<div class="px-5 py-3">
-			<div class="flex items-center justify-between">
-				<div>
-					<p class="text-sm font-medium text-foreground">IPv6 Subnet</p>
-					<p class="mt-0.5 font-mono text-xs text-muted-foreground">{allocation.prefix}</p>
-				</div>
-				<div class="flex items-center gap-2">
-					{#if allocation.ptrEditable}
-						<Button
-							variant="outline"
-							size="sm"
-							class="h-7 gap-1.5 px-3 text-xs"
-							onclick={() => openSubnetDialog(allocation)}
-						>
-							{#if allocation.ptrRecords.length > 0}
-								<Pencil class="h-3 w-3" />Edit Reverse DNS
-							{:else}
-								<Plus class="h-3 w-3" />Add Reverse DNS
-							{/if}
-						</Button>
+		{#snippet subnetActions()}
+			{#if allocation.ptrEditable}
+				<Button
+					variant="outline"
+					size="sm"
+					class="h-7 gap-1.5 px-3 text-xs"
+					onclick={() => openSubnetDialog(allocation)}
+				>
+					{#if allocation.ptrRecords.length > 0}
+						<Pencil class="h-3 w-3" />Edit Reverse DNS
+					{:else}
+						<Plus class="h-3 w-3" />Add Reverse DNS
 					{/if}
-					<button
-						type="button"
-						aria-label="Copy IPv6 subnet"
-						class="text-muted-foreground hover:text-foreground"
-						onclick={() => copyToClipboard(allocation.prefix ?? '', `prefix-${allocation.id}`)}
-					>
-						{#if copied === `prefix-${allocation.id}`}
-							<Check class="h-3.5 w-3.5 text-emerald-500" />
-						{:else}
-							<Copy class="size-4" />
-						{/if}
-					</button>
-				</div>
-			</div>
+				</Button>
+			{/if}
+		{/snippet}
+		<div class="px-5 py-3">
+			{@render addressRow(
+				'IPv6 Subnet',
+				allocation.prefix,
+				`prefix-${allocation.id}`,
+				'Copy IPv6 subnet',
+				subnetActions
+			)}
 		</div>
 		{#each allocation.ptrRecords as record (record.address)}
 			<div class="flex items-center justify-between px-5 py-2.5">
@@ -391,44 +383,10 @@
 	{/each}
 	{#if allocations.length === 0}
 		<div class="px-5 py-3">
-			<div class="flex items-center justify-between">
-				<div>
-					<p class="text-sm font-medium text-foreground">IPv4 Address</p>
-					<p class="mt-0.5 font-mono text-xs text-muted-foreground">{selectedServer.ip}</p>
-				</div>
-				<button
-					type="button"
-					aria-label="Copy IPv4 address"
-					class="text-muted-foreground hover:text-foreground"
-					onclick={() => copyToClipboard(selectedServer.ip, 'net-ipv4')}
-				>
-					{#if copied === 'net-ipv4'}
-						<Check class="h-3.5 w-3.5 text-emerald-500" />
-					{:else}
-						<Copy class="size-4" />
-					{/if}
-				</button>
-			</div>
+			{@render addressRow('IPv4 Address', server.current.ip, 'net-ipv4', 'Copy IPv4 address')}
 		</div>
 		<div class="px-5 py-3">
-			<div class="flex items-center justify-between">
-				<div>
-					<p class="text-sm font-medium text-foreground">IPv6 Address</p>
-					<p class="mt-0.5 font-mono text-xs text-muted-foreground">{selectedServer.ipv6}</p>
-				</div>
-				<button
-					type="button"
-					aria-label="Copy IPv6 address"
-					class="text-muted-foreground hover:text-foreground"
-					onclick={() => copyToClipboard(selectedServer.ipv6, 'net-ipv6')}
-				>
-					{#if copied === 'net-ipv6'}
-						<Check class="h-3.5 w-3.5 text-emerald-500" />
-					{:else}
-						<Copy class="size-4" />
-					{/if}
-				</button>
-			</div>
+			{@render addressRow('IPv6 Address', server.current.ipv6, 'net-ipv6', 'Copy IPv6 address')}
 		</div>
 	{/if}
 </div>

@@ -1,5 +1,9 @@
 <script lang="ts">
-	import { projectRoleLabels } from 'stack-shared/project-roles';
+	import {
+		hasProjectRole,
+		type PermissionLevel,
+		projectRoleLabels
+	} from 'stack-shared/project-roles';
 	import { toast } from 'svelte-sonner';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -7,6 +11,7 @@
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
+	import { dependencies } from '#lib/dependencies.js';
 	import {
 		addMember as addMemberRpc,
 		deleteProject as deleteProjectRpc,
@@ -23,17 +28,12 @@
 	import Settings from '~icons/nucleo/settings';
 	import Trash2 from '~icons/nucleo/trash';
 	import User from '~icons/nucleo/user';
+	import type { PageProps } from './$types';
 
-	let { data } = $props();
+	let { data }: PageProps = $props();
 
-	type ProjectRole = 'owner' | 'admin' | 'read_write' | 'read';
-	type MemberRole = Exclude<ProjectRole, 'owner'>;
-	interface ProjectMember {
-		email: string;
-		name: string;
-		permissions: ProjectRole;
-		userId: string;
-	}
+	type MemberRole = PermissionLevel;
+	type ProjectMember = PageProps['data']['project']['members'][number];
 
 	let projectName = $derived(data.project.projectName);
 	let projectOwnerName = $derived(data.project.ownerName);
@@ -43,11 +43,9 @@
 	let saved = $state(false);
 	let savedTimeout: ReturnType<typeof setTimeout> | undefined;
 
-	// Delete
 	let deleteConfirm = $state('');
 	let deleting = $state(false);
 
-	// Add member
 	let addMemberOpen = $state(false);
 	let memberInviteEmail = $state('');
 	let selectedMemberRole = $state<MemberRole>('read_write');
@@ -58,12 +56,9 @@
 
 	let projectId = $derived(data.project.id);
 
-	const viewerRole = $derived(data.viewerRole as ProjectRole);
-	const isOwner = $derived(viewerRole === 'owner');
-	const canManageMembers = $derived(viewerRole === 'owner' || viewerRole === 'admin');
+	const isOwner = $derived(hasProjectRole(data.viewerRole, 'owner'));
+	const canManageMembers = $derived(hasProjectRole(data.viewerRole, 'admin'));
 	const currentUserId = $derived(data.user?.id);
-
-	const roleLabels = projectRoleLabels;
 
 	const memberRoleOptions: { value: MemberRole; description: string }[] = [
 		{ value: 'admin', description: 'Manage members, project settings, and all resources' },
@@ -89,7 +84,7 @@
 		saved = false;
 		try {
 			await updateProjectRpc({ projectId, name: projectName.trim() });
-			await invalidate('app:projects');
+			await invalidate(dependencies.app.projects);
 			saved = true;
 			clearSavedTimeout();
 			savedTimeout = setTimeout(() => {
@@ -134,7 +129,7 @@
 			selectedMemberRole = 'read_write';
 			addMemberOpen = false;
 			toast.success(`Invitation sent to ${email}`);
-			await invalidate('app:projects');
+			await invalidate(dependencies.app.projects);
 		} catch (e) {
 			toast.error(getErrorMessage(e, 'Failed to add member'));
 		} finally {
@@ -210,7 +205,6 @@
 		<div class="max-w-2xl px-6 py-6">
 			<h1 class="sr-only">Project Settings</h1>
 			<div class="flex flex-col gap-6">
-				<!-- Project Name -->
 				<div class="rounded-xs border border-border/60 p-5">
 					<div class="mb-4 flex items-center gap-2 border-b border-border/50 pb-3">
 						<Settings class="h-4 w-4 text-red-400" />
@@ -244,7 +238,6 @@
 					</div>
 				</div>
 
-				<!-- Members -->
 				<div class="rounded-xs border border-border/60 p-5">
 					<div class="mb-4 flex items-center justify-between border-b border-border/50 pb-3">
 						<div class="flex items-center gap-2">
@@ -266,7 +259,6 @@
 						{/if}
 					</div>
 					<div class="max-h-48 overflow-y-auto">
-						<!-- Owner -->
 						<div class="flex items-center justify-between py-2.5">
 							<div class="min-w-0">
 								<p class="truncate text-sm font-medium text-foreground">{projectOwnerName}</p>
@@ -275,7 +267,6 @@
 							<Badge variant="secondary" class="shrink-0 text-[10px]">Owner</Badge>
 						</div>
 						<div class="border-b border-border/30"></div>
-						<!-- Other members -->
 						{#each members as member (member.userId)}
 							<div class="flex items-center justify-between gap-3 py-2.5">
 								<div class="min-w-0">
@@ -304,7 +295,7 @@
 												<Badge
 													variant="secondary"
 													class="text-[10px] transition-colors hover:bg-muted"
-													>{roleLabels[member.permissions]}</Badge
+													>{projectRoleLabels[member.permissions]}</Badge
 												>
 											</DropdownMenu.Trigger>
 											<DropdownMenu.Content align="end" class="border-border bg-background">
@@ -313,14 +304,14 @@
 														class="cursor-pointer text-xs text-muted-foreground focus:bg-muted focus:text-foreground"
 														disabled={updatingMemberIds.includes(member.userId)}
 														onclick={() => updateMemberRole(member.userId, option.value)}
-														>{roleLabels[option.value]}</DropdownMenu.Item
+														>{projectRoleLabels[option.value]}</DropdownMenu.Item
 													>
 												{/each}
 											</DropdownMenu.Content>
 										</DropdownMenu.Root>
 									{:else}
 										<Badge variant="secondary" class="text-[10px]"
-											>{roleLabels[member.permissions]}</Badge
+											>{projectRoleLabels[member.permissions]}</Badge
 										>
 									{/if}
 								</div>
@@ -333,7 +324,6 @@
 				</div>
 
 				{#if isOwner}
-					<!-- Delete Project -->
 					<div
 						class="rounded-xs border border-red-300 bg-red-100 p-5 dark:border-red-900/30 dark:bg-red-950/10"
 					>
@@ -433,7 +423,7 @@
 							onclick={() => (selectedMemberRole = option.value)}
 							disabled={addingMember}
 						>
-							<p class="text-sm font-medium text-foreground">{roleLabels[option.value]}</p>
+							<p class="text-sm font-medium text-foreground">{projectRoleLabels[option.value]}</p>
 							<p class="mt-0.5 text-xs text-muted-foreground">{option.description}</p>
 						</button>
 					{/each}

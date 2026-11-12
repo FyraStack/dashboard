@@ -61,6 +61,17 @@
 	}
 </script>
 
+{#snippet errorAlert(
+	message: string
+)}
+	<div
+		class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
+	>
+		<AlertCircle class="size-4 shrink-0" />
+		{message}
+	</div>
+{/snippet}
+
 <svelte:head>
 	<title>Invitation / Stack</title>
 </svelte:head>
@@ -77,12 +88,7 @@
 			<div class="space-y-5">
 				<h1 class="text-center text-lg font-medium text-foreground">Invitation</h1>
 
-				<div
-					class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-				>
-					<AlertCircle class="size-4 shrink-0" />
-					{data.error}
-				</div>
+				{@render errorAlert(data.error)}
 
 				{#if data.wrongAccount}
 					<p class="text-center text-xs text-muted-foreground">
@@ -104,12 +110,7 @@
 				<p class="text-center text-xs text-muted-foreground">{invitationSummary}</p>
 
 				{#if errorMessage}
-					<div
-						class="flex items-center gap-2 border border-red-700 bg-red-950 px-3 py-2 text-sm text-red-400"
-					>
-						<AlertCircle class="size-4 shrink-0" />
-						{errorMessage}
-					</div>
+					{@render errorAlert(errorMessage)}
 				{/if}
 
 				<Button class="w-full" loading={accepting} disabled={declining} onclick={accept}>

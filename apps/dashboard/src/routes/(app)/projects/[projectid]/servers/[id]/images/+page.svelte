@@ -10,7 +10,6 @@
 		type OfficialImage,
 		officialImages
 	} from '#lib/data/images.js';
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 	import ChevronLeft from '~icons/lucide/chevron-left';
 	import ChevronRight from '~icons/lucide/chevron-right';
 	import Disc from '~icons/nucleo/disc';
@@ -19,9 +18,9 @@
 	import Search from '~icons/nucleo/search';
 	import Trash2 from '~icons/nucleo/trash';
 	import Upload from '~icons/nucleo/upload';
+	import { useServer } from '../lib/server-context';
 
-	let { data } = $props();
-	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
+	const server = useServer();
 	let imgSearch = $state('');
 	let imgPage = $state(0);
 	const imgPerPage = 6;
@@ -124,7 +123,7 @@
 				<input
 					bind:value={rebuildImageConfirm}
 					{...autofillAttributes()}
-					placeholder={selectedServer.id}
+					placeholder={server.current.id}
 					class="h-8 w-56 border border-border bg-muted px-3 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
 				/>
 				<Button

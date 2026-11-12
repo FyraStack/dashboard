@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import AttachVolumeDialog from '#lib/components/dialogs/attach-volume-dialog.svelte';
-	import CreateVolumeDialog from '#lib/components/dialogs/create-volume-dialog.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
+	import { dependencies } from '#lib/dependencies.js';
+	import { bytesToGib, formatUsd } from '#lib/format.js';
+	import { runOptimistic } from '#lib/optimistic.js';
 	import {
 		attachVolume as attachProjectVolume,
 		createVolume as createProjectVolume,
@@ -14,31 +16,14 @@
 		detachVolume as detachProjectVolume
 	} from '#lib/remote/volumes.remote.js';
 	import { getErrorMessage } from '#lib/utils.js';
+	import { invalidate } from '$app/navigation';
 	import { page } from '$app/state';
 	import Plus from '~icons/lucide/plus';
 	import HardDrive from '~icons/nucleo/hard-drive';
 	import Link from '~icons/nucleo/link';
 	import Trash2 from '~icons/nucleo/trash';
 	import Unlink from '~icons/nucleo/unlink';
-
-	interface PageData {
-		currentProject: { id: string } | null;
-		vms?: LoadedVm[];
-		volumes?: LoadedVolume[];
-	}
-
-	interface LoadedVolume {
-		associatedVmId: string | null;
-		id: string;
-		name: string;
-		size: number;
-	}
-
-	interface LoadedVm {
-		active: boolean;
-		id: string;
-		live: { disk?: number | null } | null;
-	}
+	import type { PageProps } from './$types';
 
 	interface Volume {
 		id: string;
@@ -51,7 +36,7 @@
 		used: number;
 	}
 
-	let { data }: { data: PageData } = $props();
+	let { data }: PageProps = $props();
 	let volumes = $state<Volume[]>([]);
 
 	function usageBarClass(usedRatio: number): string {
@@ -68,8 +53,9 @@
 		if (history.length === 0) {
 			return '';
 		}
+		const lastIndex = Math.max(history.length - 1, 1);
 		const points = history.map((val, i) => {
-			const x = (i / (history.length - 1)) * width;
+			const x = (i / lastIndex) * width;
 			const y = height - (val / max) * height;
 			return `${x},${y}`;
 		});
@@ -98,7 +84,7 @@
 		return '#fb7185';
 	}
 
-	const serverOptions = $derived((data.vms ?? []).filter((vm) => vm.active).map((vm) => vm.id));
+	const serverOptions = $derived(data.vms.filter((vm) => vm.active).map((vm) => vm.id));
 
 	let createOpen = $state(false);
 	let newName = $state('');
@@ -120,10 +106,10 @@
 	}
 
 	$effect(() => {
-		const vmMap = new Map((data.vms ?? []).map((vm) => [vm.id, vm]));
-		const incoming = (data.volumes ?? []).map((volume) => {
+		const vmMap = new Map(data.vms.map((vm) => [vm.id, vm]));
+		const incoming = data.volumes.map((volume) => {
 			const vm = volume.associatedVmId ? vmMap.get(volume.associatedVmId) : null;
-			const diskGb = Math.round((vm?.live?.disk ?? 0) / (1024 * 1024 * 1024));
+			const diskGb = Math.round(bytesToGib(vm?.live?.disk ?? 0));
 			const used = volume.associatedVmId
 				? Math.min(volume.size, diskGb || Math.round(volume.size * 0.7))
 				: 0;
@@ -154,27 +140,11 @@
 		actionError = '';
 		creatingVolume = true;
 		try {
-			const created = await createProjectVolume({
-				projectId,
-				name: newName.trim(),
-				size: newSize
-			});
-			volumes = [
-				...volumes,
-				{
-					id: created.id,
-					name: newName.trim(),
-					size: newSize,
-					used: 0,
-					usageHistory: buildUsageHistory(newSize, 0),
-					server: null,
-					region: 'Chicago',
-					status: 'available'
-				}
-			];
+			await createProjectVolume({ projectId, name: newName.trim(), size: newSize });
 			newName = '';
 			newSize = 25;
 			createOpen = false;
+			await invalidate(dependencies.project.volumes);
 		} catch (err) {
 			actionError = getErrorMessage(err, 'Failed to create volume.');
 		} finally {
@@ -201,12 +171,20 @@
 		}
 		actionError = '';
 		deletingVolumeIds = [...deletingVolumeIds, id];
-		volumes[idx].status = 'deleting';
 		try {
-			await deleteProjectVolume({ volumeId: id });
-			volumes = volumes.filter((v) => v.id !== id);
+			await runOptimistic({
+				apply: () => {
+					const volume = volumes[idx];
+					const previousStatus = volume.status;
+					volume.status = 'deleting';
+					return () => {
+						volume.status = previousStatus;
+					};
+				},
+				commit: () => deleteProjectVolume({ volumeId: id }),
+				invalidates: [dependencies.project.volumes]
+			});
 		} catch (err) {
-			volumes[idx].status = volumes[idx].server ? 'attached' : 'available';
 			actionError = getErrorMessage(err, 'Failed to delete volume.');
 		} finally {
 			deletingVolumeIds = deletingVolumeIds.filter((item) => item !== id);
@@ -217,18 +195,11 @@
 		if (detachingVolumeIds.includes(id)) {
 			return;
 		}
-		const idx = volumes.findIndex((v) => v.id === id);
-		if (idx === -1) {
-			return;
-		}
 		actionError = '';
 		detachingVolumeIds = [...detachingVolumeIds, id];
 		try {
 			await detachProjectVolume({ volumeId: id });
-			volumes[idx].server = null;
-			volumes[idx].used = 0;
-			volumes[idx].usageHistory = buildUsageHistory(volumes[idx].size, 0);
-			volumes[idx].status = 'available';
+			await invalidate(dependencies.project.volumes);
 		} catch (err) {
 			actionError = getErrorMessage(err, 'Failed to detach volume.');
 		} finally {
@@ -247,20 +218,13 @@
 			return;
 		}
 		const volumeId = attachTarget.id;
-		const idx = volumes.findIndex((v) => v.id === volumeId);
-		if (idx === -1) {
-			return;
-		}
 		actionError = '';
 		attachingVolume = true;
 		try {
 			await attachProjectVolume({ volumeId, vmId: attachServer });
-			volumes[idx].server = attachServer;
-			volumes[idx].used = Math.round(volumes[idx].size * 0.7);
-			volumes[idx].usageHistory = buildUsageHistory(volumes[idx].size, volumes[idx].used);
-			volumes[idx].status = 'attached';
 			attachOpen = false;
 			attachTarget = null;
+			await invalidate(dependencies.project.volumes);
 		} catch (err) {
 			actionError = getErrorMessage(err, 'Failed to attach volume.');
 		} finally {
@@ -270,7 +234,6 @@
 </script>
 
 <div class="flex flex-1 flex-col overflow-hidden">
-	<!-- Header -->
 	<div class="flex h-10 shrink-0 items-center justify-between border-b border-border px-5">
 		<div class="flex items-center gap-2">
 			<HardDrive class="h-4 w-4 text-muted-foreground" />
@@ -295,7 +258,6 @@
 		</div>
 	{/if}
 
-	<!-- Volume List -->
 	<div class="flex-1 overflow-auto">
 		{#each volumes as vol (vol.id)}
 			{@const colorClass = getUsageColor(vol.used, vol.size)}
@@ -306,7 +268,6 @@
 					? 'opacity-40'
 					: ''}"
 			>
-				<!-- Icon -->
 				<div
 					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg {vol.status ===
 					'attached'
@@ -320,7 +281,6 @@
 					/>
 				</div>
 
-				<!-- Info -->
 				<div class="min-w-0 flex-1">
 					<div class="flex items-center gap-2">
 						<span class="text-sm font-medium text-foreground">{vol.name}</span>
@@ -341,7 +301,6 @@
 						<span class="h-1 w-1 rounded-full bg-muted"></span>
 						<span>{vol.region}</span>
 					</div>
-					<!-- Storage Graph (mobile only) -->
 					<div class="mt-2 flex items-center gap-2 lg:hidden">
 						<div class="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
 							<div
@@ -357,7 +316,6 @@
 					</div>
 				</div>
 
-				<!-- Usage Chart (desktop only) -->
 				<div class="hidden shrink-0 items-center gap-2 lg:flex">
 					<div class="relative" style="width: 90px; height: 24px">
 						<svg width="90" height="24" class="overflow-visible" aria-hidden="true">
@@ -398,17 +356,14 @@
 					</span>
 				</div>
 
-				<!-- Size -->
 				<div class="w-20 text-right">
 					<span class="text-sm font-semibold text-foreground">{vol.size} GB</span>
 				</div>
 
-				<!-- Server -->
 				<div class="w-28">
 					<span class="text-xs text-muted-foreground">{vol.server ?? '-'}</span>
 				</div>
 
-				<!-- Actions -->
 				<div class="flex items-center gap-1">
 					{#if vol.status === 'attached'}
 						<Button
@@ -457,21 +412,78 @@
 	</div>
 </div>
 
-<!-- Create Volume Dialog -->
-<CreateVolumeDialog
-	bind:open={createOpen}
-	bind:name={newName}
-	bind:size={newSize}
-	submitting={creatingVolume}
-	onSubmit={createVolume}
-/>
+<Dialog.Root bind:open={createOpen}>
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>Create Volume</Dialog.Title>
+			<Dialog.Description>Provision a new block storage volume in Chicago.</Dialog.Description>
+		</Dialog.Header>
+		<div class="flex flex-col gap-4 py-4">
+			<div class="flex flex-col gap-2">
+				<Label>Name</Label>
+				<Input bind:value={newName} placeholder="my-volume" />
+			</div>
+			<div class="flex flex-col gap-2">
+				<Label>Size (GB)</Label>
+				<div class="flex items-center gap-3">
+					<input
+						type="range"
+						min="10"
+						max="500"
+						step="10"
+						bind:value={newSize}
+						class="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-muted accent-red-500"
+					/>
+					<span class="w-16 text-right text-sm font-medium text-foreground">{newSize} GB</span>
+				</div>
+				<p class="text-xs text-muted-foreground">{formatUsd(newSize * 0.1)}/mo at $0.10/GB</p>
+			</div>
+		</div>
+		<Dialog.Footer>
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={() => (createOpen = false)}
+				disabled={creatingVolume}
+				>Cancel</Button
+			>
+			<Button size="sm" onclick={createVolume} disabled={!newName.trim() || creatingVolume}
+				>{creatingVolume ? 'Creating...' : 'Create'}</Button
+			>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>
 
-<!-- Attach Volume Dialog -->
-<AttachVolumeDialog
-	bind:open={attachOpen}
-	volumeName={attachTarget?.name}
-	bind:server={attachServer}
-	{serverOptions}
-	submitting={attachingVolume}
-	onSubmit={confirmAttach}
-/>
+<Dialog.Root bind:open={attachOpen}>
+	<Dialog.Content class="border-border bg-background sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>Attach Volume</Dialog.Title>
+			<Dialog.Description
+				>Attach {attachTarget?.name ?? 'this volume'} to a server.</Dialog.Description
+			>
+		</Dialog.Header>
+		<div class="flex flex-col gap-2 py-4">
+			<Label>Server</Label>
+			<select
+				bind:value={attachServer}
+				class="w-full appearance-none border border-border bg-muted px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none"
+			>
+				{#each serverOptions as option (option)}
+					<option value={option}>{option}</option>
+				{/each}
+			</select>
+		</div>
+		<Dialog.Footer>
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={() => (attachOpen = false)}
+				disabled={attachingVolume}
+				>Cancel</Button
+			>
+			<Button size="sm" onclick={confirmAttach} disabled={attachingVolume || !attachServer}
+				>{attachingVolume ? 'Attaching...' : 'Attach'}</Button
+			>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>

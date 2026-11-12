@@ -2,11 +2,9 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
-	import type { PageProps } from './$types';
+	import { useServer } from '../lib/server-context';
 
-	let { data }: PageProps = $props();
-	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
+	const server = useServer();
 	let rebuildOs = $state('Ultramarine Linux 40');
 	const osOptions = [
 		'Ultramarine Linux 40',
@@ -21,7 +19,7 @@
 	<div>
 		<h2 class="text-sm font-semibold text-foreground">Rebuild Server</h2>
 		<p class="mt-1 text-xs text-muted-foreground">
-			Reinstall {selectedServer.name} with a fresh operating system.
+			Reinstall {server.current.name} with a fresh operating system.
 		</p>
 	</div>
 	<p class="border border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground">
@@ -41,7 +39,7 @@
 	</div>
 	<div class="space-y-2">
 		<Label for="rebuild-confirm-input">Type server ID to confirm</Label>
-		<Input id="rebuild-confirm-input" placeholder={selectedServer.id} class="font-mono" />
+		<Input id="rebuild-confirm-input" placeholder={server.current.id} class="font-mono" />
 	</div>
 	<Button
 		variant="outline"

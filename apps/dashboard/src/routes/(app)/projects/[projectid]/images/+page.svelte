@@ -3,37 +3,16 @@
 	import { autofillAttributes } from '#lib/components/ui/input/autofill.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import { imageTypeColors } from '#lib/data/images.js';
+	import type { listImages } from '#lib/remote/images.remote.js';
 	import ChevronLeft from '~icons/lucide/chevron-left';
 	import ChevronRight from '~icons/lucide/chevron-right';
 	import Disc from '~icons/nucleo/disc';
 	import Search from '~icons/nucleo/search';
+	import type { PageProps } from './$types';
 
-	interface PageData {
-		images?: DbImage[];
-		proxmoxIsos?: ProxmoxIso[];
-	}
+	type DbImage = Awaited<ReturnType<typeof listImages>>[number];
 
-	interface DbImage {
-		accentColor: string;
-		description: string;
-		filePath: string;
-		id: string;
-		imageType: string;
-		isa: string;
-		isOfficial: boolean;
-		logoSvg: string | null | undefined;
-		name: string;
-		version: string;
-	}
-
-	interface ProxmoxIso {
-		filename: string;
-		node: string;
-		size: number;
-		volid: string;
-	}
-
-	let { data }: { data: PageData } = $props();
+	let { data }: PageProps = $props();
 
 	const perPage = 9;
 	let page = $state(0);
@@ -41,7 +20,7 @@
 	let sheetOpen = $state(false);
 	let selectedImage = $state<DbImage | null>(null);
 
-	const images = $derived(data.images ?? []);
+	const images = $derived(data.images);
 	const officialImages = $derived(images.filter((image) => image.isOfficial));
 	const customImages = $derived(images.filter((image) => !image.isOfficial));
 
@@ -202,12 +181,6 @@
 			<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
 				Your Images ({customImages.length})
 			</span>
-			{#if data.proxmoxIsos?.length}
-				<span class="text-[10px] text-muted-foreground"
-					>{data.proxmoxIsos.length}
-					Proxmox ISOs found</span
-				>
-			{/if}
 		</div>
 
 		{#if filteredCustomImages.length > 0}

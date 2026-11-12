@@ -13,6 +13,7 @@
 		type OfficialImage,
 		officialImages
 	} from '#lib/data/images.js';
+	import { formatIsoDate } from '#lib/format.js';
 	import ChevronLeft from '~icons/lucide/chevron-left';
 	import ChevronRight from '~icons/lucide/chevron-right';
 	import Disc from '~icons/nucleo/disc';
@@ -176,7 +177,7 @@
 			name: uploadName.trim(),
 			type: uploadDetectedType ?? 'img',
 			size: sizes[Math.floor(Math.random() * sizes.length)],
-			uploaded: new Date().toISOString().slice(0, 10),
+			uploaded: formatIsoDate(new Date()),
 			status: 'uploading',
 			progress: 0
 		};

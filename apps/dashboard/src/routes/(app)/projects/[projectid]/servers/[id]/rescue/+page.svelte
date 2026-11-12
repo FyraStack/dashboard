@@ -1,17 +1,16 @@
 <script lang="ts">
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
+	import { useServer } from '../lib/server-context';
 
-	let { data } = $props();
-	let selectedServer = $derived(getServerWithFallback(data.serverId, data.server));
+	const server = useServer();
 </script>
 
 <div class="max-w-xl space-y-5 p-5">
 	<div>
 		<h2 class="text-sm font-semibold text-foreground">Rescue Mode</h2>
 		<p class="mt-1 text-xs text-muted-foreground">
-			Boot {selectedServer.name} into a temporary rescue environment.
+			Boot {server.current.name} into a temporary rescue environment.
 		</p>
 	</div>
 	<p class="border border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground">

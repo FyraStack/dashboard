@@ -1,5 +1,9 @@
 import AxeBuilder from '@axe-core/playwright';
 import { test as base } from '@playwright/test';
+import {
+	accessibilityFixtureProjectId,
+	accessibilityFixtureServerId
+} from '../src/lib/server/accessibility-fixtures.ts';
 
 interface AxeFixture {
 	makeAxeBuilder: () => AxeBuilder;
@@ -7,16 +11,18 @@ interface AxeFixture {
 
 export const localURL = 'http://127.0.0.1:4173';
 
+const projectPath = `/projects/${accessibilityFixtureProjectId}`;
+
 export const pages = [
 	{ label: 'login', path: '/login' },
 	{ label: 'login verified state', path: '/login?verified=1' },
 	{ label: 'register', path: '/register' },
 	{ label: 'signup redirect', path: '/signup' },
 	{ label: 'project dashboard', path: '/' },
-	{ label: 'server list', path: '/projects/accessibility-project/servers' },
-	{ label: 'server detail', path: '/projects/accessibility-project/servers/accessibility-server' },
-	{ label: 'project settings', path: '/projects/accessibility-project/settings' },
-	{ label: 'project billing', path: '/projects/accessibility-project/billing' },
+	{ label: 'server list', path: `${projectPath}/servers` },
+	{ label: 'server detail', path: `${projectPath}/servers/${accessibilityFixtureServerId}` },
+	{ label: 'project settings', path: `${projectPath}/settings` },
+	{ label: 'project billing', path: `${projectPath}/billing` },
 	{ label: 'admin users', path: '/admin/users' },
 	{ label: 'admin projects', path: '/admin/projects' },
 	{ label: 'admin vms', path: '/admin/vms' },

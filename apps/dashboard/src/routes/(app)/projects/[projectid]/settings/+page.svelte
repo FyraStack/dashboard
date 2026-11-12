@@ -1,6 +1,6 @@
 <script lang="ts">
+	import { projectRoleLabels } from 'stack-shared/project-roles';
 	import { toast } from 'svelte-sonner';
-	import { projectRoleLabels } from '#lib/auth/organization-permissions.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';

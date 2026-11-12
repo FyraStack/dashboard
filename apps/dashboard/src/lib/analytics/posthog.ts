@@ -1,8 +1,7 @@
 import posthog from 'posthog-js';
+import { posthogProxyPath } from '#lib/posthog-proxy-path.js';
 import { browser, dev } from '$app/env';
 import { PUBLIC_POSTHOG_HOST, PUBLIC_POSTHOG_KEY } from '$app/env/public';
-
-export const posthogProxyPath = '/internal/phog_in';
 
 let initialized = false;
 

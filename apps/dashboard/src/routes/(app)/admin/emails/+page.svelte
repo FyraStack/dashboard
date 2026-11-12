@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { extractPlaceholders, fieldToken } from 'stack-shared/email-campaign';
 	import { onMount, untrack } from 'svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
@@ -6,7 +7,6 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
-	import { extractPlaceholders, fieldToken } from '#lib/emails/campaign.js';
 	import { idempotencyScope } from '#lib/idempotency.js';
 	import type { AdminUser } from '#lib/remote/admin-users.remote.js';
 	import {

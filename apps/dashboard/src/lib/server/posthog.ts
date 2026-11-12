@@ -1,12 +1,11 @@
 import { waitUntil } from 'cloudflare:workers';
 import type { RequestEvent } from '@sveltejs/kit';
 import { PostHog } from 'posthog-node/edge';
+import { posthogRegion } from 'stack-shared/posthog';
 import { PUBLIC_POSTHOG_HOST, PUBLIC_POSTHOG_KEY } from '$app/env/public';
 
 function ingestHost(): string {
-	return PUBLIC_POSTHOG_HOST?.includes('eu.')
-		? 'https://eu.i.posthog.com'
-		: 'https://us.i.posthog.com';
+	return `https://${posthogRegion(PUBLIC_POSTHOG_HOST)}.i.posthog.com`;
 }
 
 export function captureServerException(error: unknown, event: RequestEvent) {

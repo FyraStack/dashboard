@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { type Cookies, error } from '@sveltejs/kit';
 import type { Api } from 'stack-backend';
+import { decodeHttpError } from 'stack-shared/http-error';
 import { getRequestEvent } from '$app/server';
 
 export type Me = Awaited<ReturnType<Service<Api>['as']>>;
@@ -12,8 +13,6 @@ interface SetCookie {
 	options: CookieOptions;
 	value: string;
 }
-
-const httpErrorMarker = 'stack-http-error:';
 
 const forwardedHeaderNames = [
 	'cookie',
@@ -27,7 +26,7 @@ const forwardedHeaderNames = [
 	'baggage'
 ];
 
-export function forwardedHeaders(request: Request): Record<string, string> {
+function forwardedHeaders(request: Request): Record<string, string> {
 	const headers: Record<string, string> = {};
 	for (const name of forwardedHeaderNames) {
 		const value = request.headers.get(name);
@@ -38,38 +37,17 @@ export function forwardedHeaders(request: Request): Record<string, string> {
 	return headers;
 }
 
-function decodeHttpError(cause: unknown): { status: number; message: string } | null {
-	if (!(cause instanceof Error)) {
-		return null;
+async function createCaller(request: Request): Promise<Me> {
+	if (process.env.ACCESSIBILITY_FIXTURES === '1') {
+		const { createFixtureCaller } = await import('#lib/server/accessibility-fixtures.js');
+		return createFixtureCaller() as unknown as Me;
 	}
-
-	const start = cause.message.indexOf(httpErrorMarker);
-	if (start === -1) {
-		return null;
-	}
-
-	try {
-		const decoded: unknown = JSON.parse(cause.message.slice(start + httpErrorMarker.length));
-		if (
-			typeof decoded === 'object' &&
-			decoded !== null &&
-			'status' in decoded &&
-			'message' in decoded &&
-			typeof decoded.status === 'number' &&
-			typeof decoded.message === 'string'
-		) {
-			return { status: decoded.status, message: decoded.message };
-		}
-	} catch {
-		return null;
-	}
-
-	return null;
+	return env.BACKEND.as(forwardedHeaders(request), request.url);
 }
 
 function requestCaller(): Promise<Me> {
 	const { locals, request } = getRequestEvent();
-	locals.backend ??= Promise.resolve(env.BACKEND.as(forwardedHeaders(request), request.url));
+	locals.backend ??= createCaller(request);
 	return locals.backend;
 }
 
@@ -186,4 +164,11 @@ export function applySetCookies(setCookie: readonly string[]) {
 			cookies.set(cookie.name, cookie.value, { ...cookie.options, encode: keepEncoded });
 		}
 	}
+}
+
+export async function withSetCookie(
+	call: (me: Me) => Promise<{ setCookie: readonly string[] }>
+): Promise<void> {
+	const { setCookie } = await backend(call);
+	applySetCookies(setCookie);
 }

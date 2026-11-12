@@ -25,7 +25,7 @@
 	import { getUserResources, type UserSshKey } from '#lib/remote/admin-users.remote.js';
 	import type { AdminVm } from '#lib/remote/admin-vms.remote.js';
 	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
-	import { getErrorMessage, runQuery } from '#lib/utils.js';
+	import { getErrorMessage } from '#lib/utils.js';
 	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -299,7 +299,9 @@
 	async function loadOwnerSshKeys(ownerId: string) {
 		createVmOwnerKeysLoading = true;
 		try {
-			const resources = await runQuery(getUserResources({ userId: ownerId }));
+			const resourcesQuery = getUserResources({ userId: ownerId });
+			await resourcesQuery.refresh();
+			const resources = await resourcesQuery;
 			createVmOwnerKeys = resources.sshKeys;
 		} catch {
 			createVmOwnerKeys = [];

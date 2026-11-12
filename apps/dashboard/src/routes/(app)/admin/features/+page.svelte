@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
-	import type { IconComponent } from '#lib';
 	import {
 		type FeatureFlagCategory,
 		type FeatureFlagKey,
@@ -9,7 +7,9 @@
 		featureFlagDescriptions,
 		featureFlagKeys,
 		featureFlagLabels
-	} from '#lib/feature-flags.js';
+	} from 'stack-shared/feature-flags';
+	import { untrack } from 'svelte';
+	import type { IconComponent } from '#lib';
 	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
 	import Check from '~icons/lucide/check';
 	import Loader2 from '~icons/lucide/loader-2';

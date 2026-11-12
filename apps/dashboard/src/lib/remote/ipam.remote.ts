@@ -1,19 +1,10 @@
 import { type } from 'arktype';
-import {
-	accessibilityFixtureEnabled,
-	accessibilityFixtureIpamPrefixes
-} from '#lib/server/accessibility-fixtures.js';
 import { backend } from '#lib/server/backend.js';
 import { command, query } from '$app/server';
 
-export const listIpamPrefixes = query(async () => {
-	if (accessibilityFixtureEnabled) {
-		return accessibilityFixtureIpamPrefixes;
-	}
-	return await backend((me) => me.admin().ipam().listPrefixes());
-});
+export const listIpamPrefixes = query(() => backend((me) => me.admin().ipam().listPrefixes()));
 
-const prefixParams = type({
+const prefixFields = {
 	name: 'string',
 	cidr: 'string',
 	whitelistStart: 'string?',
@@ -22,23 +13,13 @@ const prefixParams = type({
 	bunnyDnsZone: 'string?',
 	disabled: 'boolean?',
 	ipv6UseTransitAddress: 'boolean?'
-});
+} as const;
 
-export const createIpamPrefix = command(prefixParams, (input) =>
+export const createIpamPrefix = command(type(prefixFields), (input) =>
 	backend((me) => me.admin().ipam().createPrefix(input))
 );
 
-const updatePrefixParams = type({
-	prefixId: 'string',
-	name: 'string',
-	cidr: 'string',
-	whitelistStart: 'string?',
-	whitelistEnd: 'string?',
-	gatewayAddress: 'string?',
-	bunnyDnsZone: 'string?',
-	disabled: 'boolean?',
-	ipv6UseTransitAddress: 'boolean?'
-});
+const updatePrefixParams = type({ prefixId: 'string', ...prefixFields });
 
 export const updateIpamPrefix = command(updatePrefixParams, (input) =>
 	backend((me) => me.admin().ipam().updatePrefix(input))
@@ -56,12 +37,9 @@ export const deleteIpamPrefix = command(deleteParams, (input) =>
 	backend((me) => me.admin().ipam().deletePrefix(input))
 );
 
-export const getIpamPtrDefaultFormats = query(async () => {
-	if (accessibilityFixtureEnabled) {
-		return { defaultPtrFormatIpv4: '', defaultPtrFormatIpv6: '' };
-	}
-	return await backend((me) => me.admin().ipam().ptrDefaultFormats());
-});
+export const getIpamPtrDefaultFormats = query(() =>
+	backend((me) => me.admin().ipam().ptrDefaultFormats())
+);
 
 const ptrDefaultsParams = type({
 	defaultPtrFormatIpv4: 'string',

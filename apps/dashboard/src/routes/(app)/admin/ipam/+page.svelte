@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { reverseDnsZoneForCidr } from 'stack-shared/ptr';
 	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { Badge } from '#lib/components/ui/badge/index.js';
@@ -7,7 +8,6 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
-	import { reverseDnsZoneForCidr } from '#lib/ptr.js';
 	import {
 		createIpamPrefix,
 		deleteIpamPrefix,
@@ -18,7 +18,7 @@
 		updateIpamPtrDefaultFormats
 	} from '#lib/remote/ipam.remote.js';
 	import { type AdminPageData, AdminState, type IpamPrefix } from '#lib/state/admin.svelte.js';
-	import { getErrorMessage, runQuery } from '#lib/utils.js';
+	import { getErrorMessage } from '#lib/utils.js';
 	import { invalidate } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Plus from '~icons/lucide/plus';
@@ -107,7 +107,9 @@
 	}
 
 	async function refreshPrefixes() {
-		admin.ipamPrefixes = await runQuery(listIpamPrefixes());
+		const prefixesQuery = listIpamPrefixes();
+		await prefixesQuery.refresh();
+		admin.ipamPrefixes = await prefixesQuery;
 		await invalidate('app:ipam-prefixes');
 	}
 
@@ -172,7 +174,9 @@
 		ptrDialogOpen = true;
 		ptrLoading = true;
 		try {
-			const defaults = await runQuery(getIpamPtrDefaultFormats());
+			const defaultsQuery = getIpamPtrDefaultFormats();
+			await defaultsQuery.refresh();
+			const defaults = await defaultsQuery;
 			ptrFormatIpv4 = defaults.defaultPtrFormatIpv4;
 			ptrFormatIpv6 = defaults.defaultPtrFormatIpv6;
 		} catch (err) {

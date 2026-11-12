@@ -1,7 +1,7 @@
 import { type } from 'arktype';
-import { totpResetChoices, twoFactorDisableMethods } from 'stack-shared/auth';
-import { applySetCookies, backend } from '#lib/server/backend.js';
-import { TOTP_RESET_UI_CHOICES } from '#lib/totp-reset-flow.js';
+import { twoFactorDisableMethods } from 'stack-shared/auth';
+import { totpResetChoice } from '#lib/remote/schemas.js';
+import { backend, withSetCookie } from '#lib/server/backend.js';
 import { command } from '$app/server';
 
 const disableTwoFactorParams = type({
@@ -10,14 +10,8 @@ const disableTwoFactorParams = type({
 	code: 'string'
 });
 
-export const disableTwoFactorWithVerification = command(
-	disableTwoFactorParams,
-	async ({ code, method, password }) => {
-		const { setCookie } = await backend((me) =>
-			me.account().disableTwoFactor({ code, method, password })
-		);
-		applySetCookies(setCookie);
-	}
+export const disableTwoFactorWithVerification = command(disableTwoFactorParams, (input) =>
+	withSetCookie((me) => me.account().disableTwoFactor(input))
 );
 
 export const sendTotpResetCode = command(async () => {
@@ -30,10 +24,7 @@ export const verifyTotpResetCode = command(verifyTotpResetParams, ({ code }) =>
 	backend((me) => me.twoFactorReset().verifyCode({ code }))
 );
 
-const confirmTotpResetParams = type({
-	password: 'string',
-	choice: type.enumerated(...totpResetChoices, ...TOTP_RESET_UI_CHOICES)
-});
+const confirmTotpResetParams = type({ password: 'string', choice: totpResetChoice });
 
 export const confirmTotpResetChoice = command(confirmTotpResetParams, ({ choice, password }) =>
 	backend((me) => me.twoFactorReset().confirmChoice({ choice, password }))

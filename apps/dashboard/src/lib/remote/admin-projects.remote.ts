@@ -1,21 +1,11 @@
 import { type } from 'arktype';
-import type { AdminProject } from 'stack-backend/types';
-import { verificationMethods } from 'stack-shared/auth';
-import {
-	accessibilityFixtureAdminProjects,
-	accessibilityFixtureEnabled
-} from '#lib/server/accessibility-fixtures.js';
+import { createVmFields, idempotencyKeySchema, verificationMethod } from '#lib/remote/schemas.js';
 import { backend } from '#lib/server/backend.js';
 import { command, query } from '$app/server';
 
 export type { AdminProject, AdminProjectBillingStatus } from 'stack-backend/types';
 
-export const listAdminProjects = query(async (): Promise<AdminProject[]> => {
-	if (accessibilityFixtureEnabled) {
-		return accessibilityFixtureAdminProjects;
-	}
-	return await backend((me) => me.admin().projects().list());
-});
+export const listAdminProjects = query(() => backend((me) => me.admin().projects().list()));
 
 const setBillingExemptParams = type({ projectId: 'string', billingExempt: 'boolean' });
 export const setProjectBillingExempt = command(setBillingExemptParams, (input) =>
@@ -25,22 +15,13 @@ export const setProjectBillingExempt = command(setBillingExemptParams, (input) =
 const createProjectParams = type({
 	name: 'string',
 	ownerUserId: 'string',
-	idempotencyKey: '0 < string <= 128'
+	idempotencyKey: idempotencyKeySchema
 });
 export const createAdminProject = command(createProjectParams, (input) =>
 	backend((me) => me.admin().projects().create(input))
 );
 
-const createVmParams = type({
-	projectId: 'string',
-	vmTypeId: 'string',
-	name: 'string',
-	networkingMode: "'both' | 'ipv6'?",
-	imageId: 'string?',
-	sshKeyIds: 'string[]?',
-	password: 'string?',
-	idempotencyKey: '0 < string <= 128'
-});
+const createVmParams = type({ projectId: 'string', ...createVmFields });
 export const createAdminVm = command(createVmParams, (input) =>
 	backend((me) => me.admin().projects().createVm(input))
 );
@@ -57,7 +38,7 @@ export const beginDeleteProject = command(beginDeleteProjectParams, (input) =>
 
 const deleteProjectParams = type({
 	projectId: 'string',
-	method: type.enumerated(...verificationMethods),
+	method: verificationMethod,
 	code: 'string?'
 });
 export const deleteProjectWithVerification = command(deleteProjectParams, (input) =>

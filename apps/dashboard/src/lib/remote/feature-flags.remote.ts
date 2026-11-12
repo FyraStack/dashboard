@@ -1,12 +1,10 @@
 import { type } from 'arktype';
+import { featureFlagKey } from '#lib/remote/schemas.js';
 import { backend } from '#lib/server/backend.js';
 import { command } from '$app/server';
 
-const featureFlagParam =
-	"'colocation' | 'firewall' | 'images' | 'volumes' | 'vpsConsole' | 'vpsLogs' | 'vpsNetworking' | 'vpsImages' | 'vpsSnapshots' | 'vpsBackups' | 'vpsRebuild' | 'vpsResize' | 'vpsRescue' | 'vpsSettings'";
-
 const updateFeatureFlagParams = type({
-	flag: featureFlagParam,
+	flag: featureFlagKey,
 	enabled: 'boolean'
 });
 

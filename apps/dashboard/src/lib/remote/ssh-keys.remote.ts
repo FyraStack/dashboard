@@ -1,4 +1,5 @@
 import { type } from 'arktype';
+import { idempotencyKeySchema } from '#lib/remote/schemas.js';
 import { backend } from '#lib/server/backend.js';
 import { command, query } from '$app/server';
 
@@ -8,7 +9,7 @@ const createParams = type({
 	name: 'string',
 	publicKey: 'string',
 	description: 'string?',
-	idempotencyKey: '0 < string <= 128'
+	idempotencyKey: idempotencyKeySchema
 });
 
 export const createSshKey = command(createParams, (params) =>

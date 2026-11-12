@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { findPlanDowngrades } from 'stack-shared/vm-plans';
 	import { toast } from 'svelte-sonner';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
@@ -6,7 +7,6 @@
 	import { getVm, resizeVm } from '#lib/remote/vms.remote.js';
 	import { getServerWithFallback } from '#lib/state/servers.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
-	import { findPlanDowngrades } from '#lib/vm-plans.js';
 	import { invalidate } from '$app/navigation';
 	import Loader2 from '~icons/lucide/loader-2';
 	import { formatBytes } from '../../lib/server-summary';

@@ -1,5 +1,5 @@
+import type { FeatureFlagKey } from 'stack-shared/feature-flags';
 import type { IconComponent } from '#lib';
-import type { FeatureFlagKey } from '#lib/feature-flags.js';
 import ArrowUpDown from '~icons/lucide/arrow-up-down';
 import Activity from '~icons/nucleo/activity';
 import Camera from '~icons/nucleo/camera';

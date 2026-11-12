@@ -1,10 +1,5 @@
 import { type } from 'arktype';
-import type { AdminUser } from 'stack-backend/types';
-import { verificationMethods } from 'stack-shared/auth';
-import {
-	accessibilityFixtureAdminUsers,
-	accessibilityFixtureEnabled
-} from '#lib/server/accessibility-fixtures.js';
+import { verificationMethod } from '#lib/remote/schemas.js';
 import { backend } from '#lib/server/backend.js';
 import { command, query } from '$app/server';
 
@@ -17,12 +12,7 @@ export type {
 	UserSshKey
 } from 'stack-backend/types';
 
-export const listAdminUsers = query(async (): Promise<AdminUser[]> => {
-	if (accessibilityFixtureEnabled) {
-		return accessibilityFixtureAdminUsers;
-	}
-	return await backend((me) => me.admin().users().list());
-});
+export const listAdminUsers = query(() => backend((me) => me.admin().users().list()));
 
 const setAdminParams = type({ userId: 'string', isAdmin: 'boolean' });
 export const setUserAdmin = command(setAdminParams, (input) =>
@@ -49,11 +39,7 @@ export const beginDeleteUser = command(beginDeleteUserParams, (input) =>
 	backend((me) => me.admin().users().beginDelete(input))
 );
 
-const deleteUserParams = type({
-	userId: 'string',
-	method: type.enumerated(...verificationMethods),
-	code: 'string?'
-});
+const deleteUserParams = type({ userId: 'string', method: verificationMethod, code: 'string?' });
 export const deleteUserWithVerification = command(deleteUserParams, (input) =>
 	backend((me) => me.admin().users().deleteWithVerification(input))
 );

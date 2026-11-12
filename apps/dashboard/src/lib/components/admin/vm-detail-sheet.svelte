@@ -5,7 +5,7 @@
 	import { getVmBillingUsage, type VmBillingUsage } from '#lib/remote/admin-billing.remote.js';
 	import type { AdminVm } from '#lib/remote/admin-vms.remote.js';
 	import type { AdminState } from '#lib/state/admin.svelte.js';
-	import { getErrorMessage, runQuery } from '#lib/utils.js';
+	import { getErrorMessage } from '#lib/utils.js';
 	import { resolve } from '$app/paths';
 	import Loader2 from '~icons/lucide/loader-2';
 	import Activity from '~icons/nucleo/activity';
@@ -70,9 +70,9 @@
 		try {
 			const now = new Date();
 			const periodStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
-			const result = await runQuery(
-				getVmBillingUsage({ vmId, periodStart, periodEnd: Date.now() })
-			);
+			const usageQuery = getVmBillingUsage({ vmId, periodStart, periodEnd: Date.now() });
+			await usageQuery.refresh();
+			const result = await usageQuery;
 			if (current !== usageRequest) {
 				return;
 			}

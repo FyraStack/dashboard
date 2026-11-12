@@ -1,11 +1,11 @@
 <script lang="ts">
+	import type { FeatureFlags } from 'stack-shared/feature-flags';
 	import { onMount } from 'svelte';
 	import BillingSetupDialog from '#lib/components/billing-setup-dialog.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { autofillAttributes } from '#lib/components/ui/input/autofill.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import type { FeatureFlags } from '#lib/feature-flags.js';
 	import { idempotent } from '#lib/idempotency.js';
 	import { generateServerName } from '#lib/name-generator.js';
 	import { createVm } from '#lib/remote/vms.remote.js';

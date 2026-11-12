@@ -1,7 +1,7 @@
 <script lang="ts">
+	import { featureFlagKeys } from 'stack-shared/feature-flags';
 	import { type Snippet, untrack } from 'svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { featureFlagKeys } from '#lib/feature-flags.js';
 	import { type AdminPageData, AdminState } from '#lib/state/admin.svelte.js';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';

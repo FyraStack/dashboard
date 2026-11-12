@@ -1,4 +1,5 @@
 import { type } from 'arktype';
+import { announcementImageTypes, MAX_ANNOUNCEMENT_IMAGE_BYTES } from 'stack-shared/announcements';
 import { backend } from '#lib/server/backend.js';
 import { command, query } from '$app/server';
 
@@ -7,8 +8,8 @@ export const listAdminAnnouncements = query(() =>
 );
 
 const announcementImage = type({
-	type: "'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'",
-	data: '0 < string <= 1400000'
+	type: type.enumerated(...announcementImageTypes),
+	data: type.string.atLeastLength(1).atMostLength(Math.ceil(MAX_ANNOUNCEMENT_IMAGE_BYTES / 3) * 4)
 });
 
 const announcementFields = {

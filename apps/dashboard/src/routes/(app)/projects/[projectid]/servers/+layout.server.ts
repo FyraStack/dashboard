@@ -1,16 +1,11 @@
-import { error } from '@sveltejs/kit';
+import { dependencies } from '#lib/dependencies.js';
 import { listVms } from '#lib/remote/vms.remote.js';
 import type { LayoutServerLoad } from './$types';
 import { toServerInfo } from './lib/server-summary.ts';
 
-export const load: LayoutServerLoad = async ({ params, parent, depends }) => {
-	depends('project:vms');
-	const { projects } = await parent();
-	const project = projects.find((item) => item.id === params.projectid);
-
-	if (!project) {
-		error(404, 'Project not found');
-	}
+export const load: LayoutServerLoad = async ({ parent, depends }) => {
+	depends(dependencies.project.vms);
+	const { project } = await parent();
 
 	const vms = await listVms({ projectId: project.id });
 	const servers = vms

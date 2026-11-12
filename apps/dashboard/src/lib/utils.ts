@@ -1,50 +1,7 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import type { RemoteQuery } from '$app/server';
-
-type ClientTimingAttributes = Record<string, string | number | boolean | undefined>;
-
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
-}
-
-function roundMs(value: number): number {
-	return Math.round(value * 100) / 100;
-}
-
-export function clientTimingLog(name: string, attributes?: ClientTimingAttributes) {
-	if (typeof window === 'undefined') {
-		return;
-	}
-
-	console.info({
-		message: `[timing] ${name}`,
-		timing: {
-			name,
-			timestamp: new Date().toISOString(),
-			'client.now_ms': roundMs(performance.now()),
-			...attributes
-		}
-	});
-}
-
-export async function runQuery<T>(query: RemoteQuery<T>, label = 'remote.query'): Promise<T> {
-	const started = performance.now();
-	clientTimingLog('remote.query.refresh.start', { 'remote.query': label });
-	await query.refresh();
-	clientTimingLog('remote.query.refresh.end', {
-		'remote.query': label,
-		duration_ms: roundMs(performance.now() - started)
-	});
-
-	const awaitStarted = performance.now();
-	const result = await query;
-	clientTimingLog('remote.query.await.end', {
-		'remote.query': label,
-		duration_ms: roundMs(performance.now() - awaitStarted),
-		total_duration_ms: roundMs(performance.now() - started)
-	});
-	return result;
 }
 
 export function getErrorMessage(err: unknown, fallback: string): string {

@@ -1,17 +1,9 @@
-import { error } from '@sveltejs/kit';
+import { requireFeature } from '#lib/feature-gate.js';
 import { listImages } from '#lib/remote/images.remote.js';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ parent }) => {
-	const { featureFlags } = await parent();
+	await requireFeature(parent, 'images');
 
-	if (!featureFlags.images) {
-		error(404, 'Not found');
-	}
-
-	const images = await listImages();
-
-	return {
-		images
-	};
+	return { images: await listImages() };
 };

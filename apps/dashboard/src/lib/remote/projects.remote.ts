@@ -1,30 +1,16 @@
 import { type } from 'arktype';
-import {
-	accessibilityFixtureEnabled,
-	accessibilityFixtureProjectDetails,
-	accessibilityFixtureProjects
-} from '#lib/server/accessibility-fixtures.js';
+import { idempotencyKeySchema, permissionLevel } from '#lib/remote/schemas.js';
 import { backend } from '#lib/server/backend.js';
 import { command, query } from '$app/server';
 
-export const listProjects = query(async () => {
-	if (accessibilityFixtureEnabled) {
-		return accessibilityFixtureProjects;
-	}
-
-	return await backend((me) => me.projects().list());
-});
+export const listProjects = query(() => backend((me) => me.projects().list()));
 
 const getParams = type({ projectId: 'string' });
-export const getProject = query(getParams, async ({ projectId }) => {
-	if (accessibilityFixtureEnabled && projectId === accessibilityFixtureProjectDetails.id) {
-		return accessibilityFixtureProjectDetails;
-	}
+export const getProject = query(getParams, ({ projectId }) =>
+	backend((me) => me.project(projectId).get())
+);
 
-	return await backend((me) => me.project(projectId).get());
-});
-
-const createParams = type({ name: 'string', idempotencyKey: '0 < string <= 128' });
+const createParams = type({ name: 'string', idempotencyKey: idempotencyKeySchema });
 export const createProject = command(createParams, ({ idempotencyKey, name }) =>
 	backend((me) => me.projects().create({ idempotencyKey, name }))
 );
@@ -42,7 +28,7 @@ export const updateProject = command(updateParams, ({ name, projectId }) =>
 const addMemberParams = type({
 	projectId: 'string',
 	email: 'string',
-	permissions: "'admin' | 'read_write' | 'read'"
+	permissions: permissionLevel
 });
 export const addMember = command(addMemberParams, ({ email, permissions, projectId }) =>
 	backend((me) => me.project(projectId).addMember({ email, permissions }))
@@ -51,7 +37,7 @@ export const addMember = command(addMemberParams, ({ email, permissions, project
 const updateMemberRoleParams = type({
 	projectId: 'string',
 	userId: 'string',
-	permissions: "'admin' | 'read_write' | 'read'"
+	permissions: permissionLevel
 });
 export const updateMemberRole = command(
 	updateMemberRoleParams,

@@ -15,6 +15,7 @@ export interface SerialConsoleTarget {
 type SessionState = 'connecting' | 'connected' | 'closed';
 
 type ClientMessage =
+	| { type: 'claim' }
 	| { type: 'input'; data: string }
 	| { type: 'resize'; cols: number; rows: number };
 
@@ -44,6 +45,9 @@ function parseClientMessage(message: string): ClientMessage | null {
 		const parsed: unknown = JSON.parse(message);
 		if (typeof parsed !== 'object' || parsed === null || !('type' in parsed)) {
 			return null;
+		}
+		if (parsed.type === 'claim') {
+			return { type: 'claim' };
 		}
 		if (parsed.type === 'input' && 'data' in parsed && typeof parsed.data === 'string') {
 			return { type: 'input', data: parsed.data };
@@ -116,6 +120,7 @@ export class SerialConsoleDurableObject extends DurableObject<Env> {
 	private state: SessionState = 'closed';
 	private pingTimer: ReturnType<typeof setInterval> | null = null;
 	private lastSize: { cols: number; rows: number } | null = null;
+	private writer: WebSocket | null = null;
 	private readonly replay = new ReplayBuffer(REPLAY_BUFFER_BYTES);
 
 	async fetch(request: Request) {
@@ -141,15 +146,28 @@ export class SerialConsoleDurableObject extends DurableObject<Env> {
 		return new Response(null, { status: 101, webSocket: client });
 	}
 
-	webSocketMessage(_socket: WebSocket, message: string | ArrayBuffer) {
+	webSocketMessage(socket: WebSocket, message: string | ArrayBuffer) {
 		if (typeof message !== 'string') {
 			return;
 		}
 
 		const parsed = parseClientMessage(message);
-		if (parsed?.type === 'input') {
+		if (!parsed) {
+			return;
+		}
+		if (parsed.type === 'claim') {
+			this.writer = socket;
+			return;
+		}
+		if (parsed.type === 'input') {
+			this.writer ??= socket;
+		}
+		if (this.writer !== socket) {
+			return;
+		}
+		if (parsed.type === 'input') {
 			this.sendUpstream(termProxyInput(parsed.data));
-		} else if (parsed?.type === 'resize') {
+		} else {
 			this.lastSize = { cols: parsed.cols, rows: parsed.rows };
 			this.sendUpstream(termProxyResize(parsed.cols, parsed.rows));
 		}
@@ -175,6 +193,9 @@ export class SerialConsoleDurableObject extends DurableObject<Env> {
 
 	private async dropClient(socket: WebSocket) {
 		tryClose(socket);
+		if (this.writer === socket) {
+			this.writer = null;
+		}
 		const remaining = this.clients().filter((client) => client !== socket);
 		if (remaining.length === 0) {
 			await this.ctx.storage.setAlarm(Date.now() + IDLE_GRACE_MS);

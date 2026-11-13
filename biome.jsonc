@@ -87,6 +87,16 @@
 			}
 		},
 		{
+			"includes": ["apps/dashboard/src/routes/**/+*@*.svelte"],
+			"linter": {
+				"rules": {
+					"style": {
+						"useFilenamingConvention": "off"
+					}
+				}
+			}
+		},
+		{
 			"includes": ["apps/dashboard/src/app.d.ts"],
 			"linter": {
 				"rules": {

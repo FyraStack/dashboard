@@ -172,3 +172,9 @@ export interface PveAgentNetworkInterface {
 	}[];
 	name: string;
 }
+
+export interface PveTermProxyTicket {
+	port: number | string;
+	ticket: string;
+	user: string;
+}

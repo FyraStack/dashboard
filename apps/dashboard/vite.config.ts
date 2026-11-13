@@ -3,6 +3,7 @@ import { sentrySvelteKit } from '@sentry/sveltekit/vite';
 import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
+import { serialConsoleBasePath } from 'stack-shared/routes';
 import { FileSystemIconLoader } from 'unplugin-icons/loaders';
 import Icons from 'unplugin-icons/vite';
 import { defineConfig, loadEnv } from 'vite';
@@ -23,7 +24,10 @@ export default defineConfig(({ command, mode }) => {
 
 	return {
 		server: {
-			host: 'localhost'
+			host: 'localhost',
+			proxy: {
+				[serialConsoleBasePath]: { target: 'http://127.0.0.1:5174', ws: true }
+			}
 		},
 		plugins: [
 			tailwindcss(),

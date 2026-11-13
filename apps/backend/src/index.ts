@@ -1,11 +1,18 @@
 import { WorkerEntrypoint } from 'cloudflare:workers';
-import { instrumentWorkflowWithSentry, withSentry } from '@sentry/cloudflare';
+import {
+	instrumentDurableObjectWithSentry,
+	instrumentWorkflowWithSentry,
+	withSentry
+} from '@sentry/cloudflare';
 import { authBasePath } from 'stack-shared/auth';
+import { isSerialConsolePath } from 'stack-shared/routes';
 import { initAuth } from '#lib/server/auth.js';
 import { proxmox } from '#lib/server/backends/index.js';
 import { runBilling, runMaintenance } from '#lib/server/jobs.js';
 import { inScope, inSystemScope } from '#lib/server/scope.js';
 import { rememberSentryClient, sentryOptions } from '#lib/server/sentry.js';
+import { connectSerialConsole } from '#lib/server/serial-console.js';
+import { SerialConsoleDurableObject } from '#lib/server/serial-console-session.js';
 import { VmDeletionWorkflow } from '#lib/server/vm-deletion.js';
 import { VmProvisioningWorkflow } from '#lib/server/vm-provisioning.js';
 import { Caller } from './rpc/caller.ts';
@@ -53,7 +60,11 @@ async function runJob(label: string, job: () => Promise<unknown>) {
 
 class Api extends WorkerEntrypoint<Env> {
 	fetch(request: Request) {
-		if (!isAuthPath(new URL(request.url).pathname)) {
+		const { pathname } = new URL(request.url);
+		if (isSerialConsolePath(pathname)) {
+			return connectSerialConsole(request);
+		}
+		if (!isAuthPath(pathname)) {
 			return new Response('Not found', { status: 404 });
 		}
 
@@ -91,6 +102,11 @@ export class VmDeletion extends instrumentWorkflowWithSentry(
 export class VmProvisioning extends instrumentWorkflowWithSentry(
 	(env: Env) => sentryOptions(env) ?? {},
 	VmProvisioningWorkflow
+) {}
+
+export class SerialConsoleSession extends instrumentDurableObjectWithSentry(
+	(env: Env) => sentryOptions(env) ?? {},
+	SerialConsoleDurableObject
 ) {}
 
 export type { Api };

@@ -30,6 +30,7 @@
 		"lineWidth": 100
 	},
 	"javascript": {
+		"globals": ["WebSocketPair"],
 		"formatter": {
 			"quoteStyle": "single",
 			"trailingCommas": "none"

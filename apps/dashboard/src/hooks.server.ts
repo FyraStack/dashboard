@@ -3,7 +3,7 @@ import { handleErrorWithSentry, initCloudflareSentryHandle, sentryHandle } from 
 import { type RequestEvent, redirect } from '@sveltejs/kit';
 import { type Handle, type HandleServerError, sequence } from '@sveltejs/kit/hooks';
 import { authBasePath, passwordResetTokenCookie, sessionCookieNames } from 'stack-shared/auth';
-import { resetPasswordPath } from 'stack-shared/routes';
+import { isSerialConsolePath, resetPasswordPath } from 'stack-shared/routes';
 import { applySetCookies, backend } from '#lib/server/backend.js';
 import { captureServerException } from '#lib/server/posthog.js';
 import { handlePostHogProxy } from '#lib/server/posthog-proxy.js';
@@ -120,6 +120,13 @@ const handleBackendRelease: Handle = async ({ event, resolve }) => {
 	return releaseAfterBody(response, event);
 };
 
+const handleSerialConsole: Handle = ({ event, resolve }) => {
+	if (isSerialConsolePath(event.url.pathname)) {
+		return env.BACKEND.fetch(event.request);
+	}
+	return resolve(event);
+};
+
 const passwordResetTokenMaxAge = 60 * 60;
 
 const handlePasswordResetToken: Handle = ({ event, resolve }) => {
@@ -156,6 +163,7 @@ const handleSentryInit: Handle = (input) => {
 };
 
 export const handle: Handle = sequence(
+	handleSerialConsole,
 	handlePasswordResetToken,
 	handleSentryInit,
 	sentryHandle({ injectFetchProxyScript: false }),

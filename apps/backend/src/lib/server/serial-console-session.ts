@@ -16,6 +16,7 @@ type SessionState = 'connecting' | 'connected' | 'closed';
 
 type ClientMessage =
 	| { type: 'claim' }
+	| { type: 'ping' }
 	| { type: 'input'; data: string }
 	| { type: 'resize'; cols: number; rows: number };
 
@@ -25,6 +26,7 @@ const REPLAY_BUFFER_BYTES = 64 * 1024;
 const TARGET_NODE_PARAM = 'node';
 const TARGET_VMID_PARAM = 'vmid';
 const MAX_CLOSE_REASON_LENGTH = 120;
+const SESSION_LOST_REASON = 'Serial console session was reset';
 
 export function serialConsoleSessionRequest(request: Request, target: SerialConsoleTarget) {
 	const url = new URL('https://serial-console/connect');
@@ -48,6 +50,9 @@ function parseClientMessage(message: string): ClientMessage | null {
 		}
 		if (parsed.type === 'claim') {
 			return { type: 'claim' };
+		}
+		if (parsed.type === 'ping') {
+			return { type: 'ping' };
 		}
 		if (parsed.type === 'input' && 'data' in parsed && typeof parsed.data === 'string') {
 			return { type: 'input', data: parsed.data };
@@ -147,12 +152,16 @@ export class SerialConsoleDurableObject extends DurableObject<Env> {
 	}
 
 	webSocketMessage(socket: WebSocket, message: string | ArrayBuffer) {
+		if (this.state === 'closed') {
+			this.closeUpstream(SESSION_LOST_REASON);
+			return;
+		}
 		if (typeof message !== 'string') {
 			return;
 		}
 
 		const parsed = parseClientMessage(message);
-		if (!parsed) {
+		if (!parsed || parsed.type === 'ping') {
 			return;
 		}
 		if (parsed.type === 'claim') {

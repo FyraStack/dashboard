@@ -27,6 +27,7 @@
 	const TERMINAL_PADDING_PX = 24;
 	const MIN_FONT_PX = 6;
 	const RECONNECT_DELAY_MS = 3000;
+	const HEARTBEAT_INTERVAL_MS = 30_000;
 	const DEFAULT_EXTENT: ScreenSize = { cols: 80, rows: 25 };
 
 	let { vmId, vmName, running }: { vmId: string; vmName: string; running: boolean } = $props();
@@ -45,6 +46,7 @@
 	let socket: WebSocket | null = null;
 	let lastSize: { cols: number; rows: number } | null = null;
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 	const showOverlay = $derived(consoleState !== 'connected');
 
@@ -255,8 +257,25 @@
 		reconnecting = false;
 	}
 
+	function stopHeartbeat() {
+		if (heartbeatTimer) {
+			clearInterval(heartbeatTimer);
+		}
+		heartbeatTimer = null;
+	}
+
+	function startHeartbeat(ws: WebSocket) {
+		stopHeartbeat();
+		heartbeatTimer = setInterval(() => {
+			if (ws.readyState === WebSocket.OPEN) {
+				ws.send(JSON.stringify({ type: 'ping' }));
+			}
+		}, HEARTBEAT_INTERVAL_MS);
+	}
+
 	function disconnect() {
 		clearReconnect();
+		stopHeartbeat();
 		const current = socket;
 		socket = null;
 		if (current && current.readyState <= WebSocket.OPEN) {
@@ -292,6 +311,7 @@
 		const ws = new WebSocket(consoleSocketUrl());
 		ws.binaryType = 'arraybuffer';
 		socket = ws;
+		startHeartbeat(ws);
 
 		ws.onmessage = (event) => {
 			if (socket === ws) {
@@ -303,6 +323,7 @@
 				return;
 			}
 			socket = null;
+			stopHeartbeat();
 			if (consoleState === 'connected' || consoleState === 'connecting') {
 				consoleState = 'closed';
 				statusMessage = event.reason || 'Console disconnected';

@@ -17,6 +17,25 @@ function parseNodeList(value: string | undefined): string[] {
 		.filter(Boolean);
 }
 
+interface ProxmoxCredentials {
+	tokenId: string;
+	tokenSecret: string;
+}
+
+function nodeClientFactory(apiUrl: string, credentials: ProxmoxCredentials) {
+	const nodeDomain = env.PROXMOX_NODE_DOMAIN;
+	if (!nodeDomain) {
+		return;
+	}
+
+	const fetch = createVpcFetch([env.PROXMOX_NODES_VPC], env.PROXMOX_USE_VPC);
+	return (node: string) => {
+		const nodeUrl = new URL(apiUrl);
+		nodeUrl.hostname = `${node}.${nodeDomain}`;
+		return new ProxmoxClient({ baseUrl: nodeUrl.origin, ...credentials, fetch });
+	};
+}
+
 function createProxmox(): ProxmoxBackend {
 	const tokenSecret = env.PROXMOX_TOKEN_SECRET ?? env.PROXMOX_API_SECRET;
 
@@ -38,14 +57,15 @@ function createProxmox(): ProxmoxBackend {
 		);
 	}
 
+	const credentials = { tokenId: env.PROXMOX_TOKEN_ID, tokenSecret };
 	const client = new ProxmoxClient({
 		baseUrl: env.PROXMOX_API_URL,
-		tokenId: env.PROXMOX_TOKEN_ID,
-		tokenSecret,
+		...credentials,
 		fetch: createVpcFetch([env.PROXMOX_VPC], env.PROXMOX_USE_VPC)
 	});
 
 	return new ProxmoxBackend(client, {
+		clientForNode: nodeClientFactory(env.PROXMOX_API_URL, credentials),
 		snippetsFetch: createVpcFetch([env.SNIPPETS], env.PROXMOX_SNIPPETS_USE_VPC),
 		snippetsEndpointUrl: env.PROXMOX_SNIPPETS_ENDPOINT_URL,
 		snippetsEndpointUsername: env.PROXMOX_SNIPPETS_ENDPOINT_USERNAME,

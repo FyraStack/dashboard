@@ -23,6 +23,7 @@
 		"VYOS_USE_VPC": "true",
 		"PROXMOX_API_URL": "https://pxmx-01.barking-kokanue.ts.net:8006",
 		"PROXMOX_USE_VPC": "true",
+		"PROXMOX_NODE_DOMAIN": "internal.fyra.network",
 		"PROXMOX_VM_FIREWALL_SECURITY_GROUP": "public_vms_tenant",
 		"PROXMOX_TOKEN_ID": "stack@pve!dashboard",
 		"PROXMOX_SNIPPETS_USE_VPC": "true",
@@ -99,6 +100,13 @@
 			"remote": true
 		}
 	],
+	"vpc_networks": [
+		{
+			"binding": "PROXMOX_NODES_VPC",
+			"tunnel_id": "b3c36b2e-32ce-4ca4-ac41-1c6bf82a58fa",
+			"remote": true
+		}
+	],
 	"placement": {
 		"mode": "targeted",
 		"region": "azure:northcentralus"
@@ -140,6 +148,7 @@
 				"VYOS_USE_VPC": "true",
 				"PROXMOX_API_URL": "https://pxmx-01.barking-kokanue.ts.net:8006",
 				"PROXMOX_USE_VPC": "true",
+				"PROXMOX_NODE_DOMAIN": "internal.fyra.network",
 				"PROXMOX_VM_FIREWALL_SECURITY_GROUP": "public_vms_tenant",
 				"PROXMOX_TOKEN_ID": "addison@pve!cf-preview",
 				"PROXMOX_SNIPPETS_USE_VPC": "true",
@@ -213,6 +222,13 @@
 				{
 					"binding": "SNIPPETS",
 					"service_id": "019ef777-604a-7a52-8fc2-e7827c6abd78",
+					"remote": true
+				}
+			],
+			"vpc_networks": [
+				{
+					"binding": "PROXMOX_NODES_VPC",
+					"tunnel_id": "b3c36b2e-32ce-4ca4-ac41-1c6bf82a58fa",
 					"remote": true
 				}
 			],

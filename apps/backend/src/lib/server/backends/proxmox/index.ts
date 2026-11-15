@@ -128,6 +128,7 @@ function clearProxmoxReadCaches() {
 }
 
 interface ProxmoxBackendOptions {
+	clientForNode?: (node: string) => ProxmoxClient;
 	excludedNodes: string[];
 	firewallSecurityGroup?: string;
 	snippetsEndpointPassword: string;
@@ -732,7 +733,8 @@ export class ProxmoxBackend {
 	}
 
 	openSerialTerminal(node: string, vmid: number) {
-		return connectSerialTerminal(this.client, node, vmid);
+		const nodeClient = this.options.clientForNode?.(node) ?? this.client;
+		return connectSerialTerminal(nodeClient, node, vmid);
 	}
 
 	async getVm(id: string, proxmoxId?: number, options: VmLookupOptions = {}): Promise<VmInfo> {

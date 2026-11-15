@@ -20,6 +20,7 @@ import type {
 } from '../types.ts';
 import { VmNotFoundError, VmResizeError } from '../types.ts';
 import type { ProxmoxClient } from './client.ts';
+import { connectSerialTerminal } from './serial-terminal.ts';
 import type { PveClusterResource } from './types.ts';
 
 const TAG_SEPARATORS = /[;,]/;
@@ -728,6 +729,10 @@ export class ProxmoxBackend {
 	async getTaskStatus(node: string, upid: string) {
 		const status = await this.client.getTaskStatus(node, upid);
 		return { status: status.status, exitstatus: status.exitstatus };
+	}
+
+	openSerialTerminal(node: string, vmid: number) {
+		return connectSerialTerminal(this.client, node, vmid);
 	}
 
 	async getVm(id: string, proxmoxId?: number, options: VmLookupOptions = {}): Promise<VmInfo> {

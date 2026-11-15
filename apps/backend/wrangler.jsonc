@@ -52,6 +52,20 @@
 			"class_name": "VmProvisioning"
 		}
 	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "SERIAL_CONSOLE",
+				"class_name": "SerialConsoleSession"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1-serial-console",
+			"new_sqlite_classes": ["SerialConsoleSession"]
+		}
+	],
 	"kv_namespaces": [
 		{
 			"binding": "FEATURE_FLAGS",
@@ -153,6 +167,20 @@
 					"name": "stack-vm-provisioning-preview",
 					"binding": "VM_PROVISIONING",
 					"class_name": "VmProvisioning"
+				}
+			],
+			"durable_objects": {
+				"bindings": [
+					{
+						"name": "SERIAL_CONSOLE",
+						"class_name": "SerialConsoleSession"
+					}
+				]
+			},
+			"migrations": [
+				{
+					"tag": "v1-serial-console",
+					"new_sqlite_classes": ["SerialConsoleSession"]
 				}
 			],
 			"kv_namespaces": [

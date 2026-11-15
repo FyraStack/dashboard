@@ -139,6 +139,15 @@ importers:
       '@sentry/sveltekit':
         specifier: 11.8.0
         version: 11.8.0(@cloudflare/workers-types@5.20261002.1)(@sveltejs/kit@3.0.0(patch_hash=23d774da9e3a3be4123e57685d9d068cb501b78d7351d58be33d0146d70ab205)(@sveltejs/vite-plugin-svelte@7.2.0(svelte@5.56.6)(vite@8.1.5(@types/node@26.1.1)))(svelte@5.56.6)(typescript@6.0.3)(vite@8.1.5(@types/node@26.1.1)))(svelte@5.56.6)(vite@8.1.5(@types/node@26.1.1))(wrangler@4.156.1(@cloudflare/workers-types@5.20261002.1)(@types/node@26.1.1))
+      '@wterm/dom':
+        specifier: 0.5.10
+        version: 0.5.10
+      '@wterm/ghostty':
+        specifier: 0.5.10
+        version: 0.5.10
+      '@wterm/svelte':
+        specifier: 0.5.10
+        version: 0.5.10(@wterm/dom@0.5.10)(svelte@5.56.6)
       arktype:
         specifier: ^2.2.3
         version: 2.2.3
@@ -2301,6 +2310,21 @@ packages:
 
   '@ungap/structured-clone@1.3.3':
     resolution: {integrity: sha512-60YRaenCQcVjYEKOcG824+DRGGIQ3VKErcBoAEDJZz5bKIs2ZG+X/H9Nk+Q6EVkwJk5QNApxbrc5QtBSwtrXAg==}
+
+  '@wterm/core@0.5.10':
+    resolution: {integrity: sha512-kVzgs094y/9z/w2IVaYUd75F+bUFa14cn7uhec0g9QDI1kalh8W7Ft6ckOER478gncsPrf7a9oRf1bAOe3ERgQ==}
+
+  '@wterm/dom@0.5.10':
+    resolution: {integrity: sha512-Tcdig0gqVgqpoWB/i9pp4z3+ZI2Rf5MOeCy3geOuRvGSSXMGgeF6xcA/PD667tCe8Te47ldVeKYsM92uUgijCg==}
+
+  '@wterm/ghostty@0.5.10':
+    resolution: {integrity: sha512-CQMlo/y/9nghQQdvQMigzjurN9j0jpszVZecehL1zEBEQ3T5QYBzcpEtEGfrZlvw/IRYSGZsUadzviNCJRcUiQ==}
+
+  '@wterm/svelte@0.5.10':
+    resolution: {integrity: sha512-oPhJydybXCx40sAgKsBFqa05eLPxA0EW2dcByEeePEVhYUfDO4hVKRYfyTFudsANFvoBBxYTNJhWraxH27e7+w==}
+    peerDependencies:
+      '@wterm/dom': 0.5.10
+      svelte: ^5.57.0
 
   acorn@8.17.0:
     resolution: {integrity: sha512-xRQbDb9BnwDafYNn6Vwl839DYVjqXYb1XVGtWAZ1kcDc6iwAL4hg3B1dZlRiuENFeO2H53gFG3in621AdERVAg==}
@@ -5966,6 +5990,21 @@ snapshots:
       '@typescript/native-preview-win32-x64': 7.0.0-dev.20260707.2
 
   '@ungap/structured-clone@1.3.3': {}
+
+  '@wterm/core@0.5.10': {}
+
+  '@wterm/dom@0.5.10':
+    dependencies:
+      '@wterm/core': 0.5.10
+
+  '@wterm/ghostty@0.5.10':
+    dependencies:
+      '@wterm/core': 0.5.10
+
+  '@wterm/svelte@0.5.10(@wterm/dom@0.5.10)(svelte@5.56.6)':
+    dependencies:
+      '@wterm/dom': 0.5.10
+      svelte: 5.56.6
 
   acorn@8.17.0: {}
 

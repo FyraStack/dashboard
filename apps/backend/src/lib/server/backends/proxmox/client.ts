@@ -16,7 +16,8 @@ import type {
 	PveStorage,
 	PveStorageContent,
 	PveTaskLogLine,
-	PveTaskStatus
+	PveTaskStatus,
+	PveTermProxyTicket
 } from './types.ts';
 
 interface ProxmoxClientConfig {
@@ -44,14 +45,20 @@ const isTaskWarning = (exitstatus?: string): exitstatus is string =>
 
 export class ProxmoxClient {
 	private readonly api: KyInstance;
+	private readonly apiUrl: string;
+	private readonly authorization: string;
+	private readonly fetch: VpcFetch;
 
 	constructor(config: ProxmoxClientConfig) {
 		const { baseUrl, tokenId, tokenSecret, fetch } = config;
 
+		this.apiUrl = `${baseUrl.replace(TRAILING_SLASHES, '')}/api2/json`;
+		this.authorization = `PVEAPIToken=${tokenId}=${tokenSecret}`;
+		this.fetch = fetch;
 		this.api = ky.create({
-			prefix: `${baseUrl.replace(TRAILING_SLASHES, '')}/api2/json`,
+			prefix: this.apiUrl,
 			headers: {
-				Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}`,
+				Authorization: this.authorization,
 				Accept: 'application/json'
 			},
 			timeout: 30_000,
@@ -340,6 +347,42 @@ export class ProxmoxClient {
 			.post(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/reboot`)
 			.json<PveResponse<string>>();
 		return res.data;
+	}
+
+	async createTermProxy(node: string, vmid: number, serial: string): Promise<PveTermProxyTicket> {
+		const res = await this.api
+			.post(`nodes/${encodeURIComponent(node)}/qemu/${vmid}/termproxy`, {
+				body: this.toForm({ serial })
+			})
+			.json<PveResponse<PveTermProxyTicket>>();
+		return res.data;
+	}
+
+	async openVncWebSocket(
+		node: string,
+		vmid: number,
+		ticket: PveTermProxyTicket
+	): Promise<WebSocket> {
+		const url = new URL(
+			`${this.apiUrl}/nodes/${encodeURIComponent(node)}/qemu/${vmid}/vncwebsocket`
+		);
+		url.searchParams.set('port', String(ticket.port));
+		url.searchParams.set('vncticket', ticket.ticket);
+
+		const response = await this.fetch(url.toString(), {
+			headers: {
+				Authorization: this.authorization,
+				Upgrade: 'websocket',
+				'Sec-WebSocket-Protocol': 'binary'
+			}
+		});
+		const socket = response.webSocket;
+		if (!socket) {
+			throw new Error(`Proxmox refused the console WebSocket (${response.status})`);
+		}
+		socket.binaryType = 'arraybuffer';
+		socket.accept();
+		return socket;
 	}
 
 	async listStorage(node: string): Promise<PveStorage[]> {

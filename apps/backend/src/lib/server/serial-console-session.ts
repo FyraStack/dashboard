@@ -12,7 +12,7 @@ export interface SerialConsoleTarget {
 	vmid: number;
 }
 
-type SessionState = 'connecting' | 'connected' | 'closed';
+type SessionState = 'connecting' | 'connected' | 'stopped' | 'retrying' | 'closed';
 
 type ClientMessage =
 	| { type: 'claim' }
@@ -21,6 +21,8 @@ type ClientMessage =
 	| { type: 'resize'; cols: number; rows: number };
 
 const UPSTREAM_PING_INTERVAL_MS = 30_000;
+const VM_START_POLL_MS = 1000;
+const ATTACH_RETRY_MS = 3000;
 const IDLE_GRACE_MS = 5 * 60_000;
 const REPLAY_BUFFER_BYTES = 64 * 1024;
 const TARGET_NODE_PARAM = 'node';
@@ -122,7 +124,12 @@ class ReplayBuffer {
 
 export class SerialConsoleDurableObject extends DurableObject<Env> {
 	private upstream: WebSocket | null = null;
+	private target: SerialConsoleTarget | null = null;
 	private state: SessionState = 'closed';
+	private statusMessage: string | undefined;
+	private session = 0;
+	private attaching = false;
+	private attachTimer: ReturnType<typeof setTimeout> | null = null;
 	private pingTimer: ReturnType<typeof setInterval> | null = null;
 	private lastSize: { cols: number; rows: number } | null = null;
 	private writer: WebSocket | null = null;
@@ -133,19 +140,18 @@ export class SerialConsoleDurableObject extends DurableObject<Env> {
 		if (!target) {
 			return new Response('Missing console target', { status: 400 });
 		}
+		this.target = target;
 
 		const { 0: client, 1: server } = new WebSocketPair();
 		this.ctx.acceptWebSocket(server);
 		await this.ctx.storage.deleteAlarm();
 
-		if (this.state === 'connected') {
-			this.sendStatus(server, 'connected');
-			this.sendReplay(server);
+		if (this.state === 'closed') {
+			this.setState('connecting');
+			this.attach();
 		} else {
-			this.sendStatus(server, 'connecting');
-			if (this.state === 'closed') {
-				this.openUpstream(target);
-			}
+			this.sendStatus(server);
+			this.sendReplay(server);
 		}
 
 		return new Response(null, { status: 101, webSocket: client });
@@ -211,60 +217,100 @@ export class SerialConsoleDurableObject extends DurableObject<Env> {
 		}
 	}
 
-	private openUpstream(target: SerialConsoleTarget) {
-		this.state = 'connecting';
-		proxmox()
-			.openSerialTerminal(target.node, target.vmid)
-			.then(
-				({ socket, greeting }) => this.attachUpstream(socket, greeting),
-				(cause: unknown) => {
-					console.warn(`Serial console for VM ${target.vmid} on ${target.node} failed`, cause);
-					this.closeUpstream(
-						cause instanceof Error ? cause.message : 'Serial console connection failed'
-					);
+	private attach() {
+		const { target, session } = this;
+		if (!target || this.attaching || this.upstream) {
+			return;
+		}
+		this.attaching = true;
+		this.openWhenRunning(target, session).then(
+			() => {
+				this.attaching = false;
+			},
+			(cause: unknown) => {
+				this.attaching = false;
+				if (session !== this.session) {
+					return;
 				}
-			);
+				console.warn(`Serial console for VM ${target.vmid} on ${target.node} failed`, cause);
+				this.scheduleAttach(
+					'retrying',
+					ATTACH_RETRY_MS,
+					cause instanceof Error ? cause.message : 'Serial console connection failed'
+				);
+			}
+		);
+	}
+
+	private async openWhenRunning(target: SerialConsoleTarget, session: number) {
+		const running = await proxmox().isVmRunning(target.node, target.vmid);
+		if (session !== this.session) {
+			return;
+		}
+		if (!running) {
+			this.scheduleAttach('stopped', VM_START_POLL_MS);
+			return;
+		}
+		const { socket, greeting } = await proxmox().openSerialTerminal(target.node, target.vmid);
+		if (session === this.session) {
+			this.attachUpstream(socket, greeting);
+		} else {
+			tryClose(socket);
+		}
+	}
+
+	private scheduleAttach(state: 'stopped' | 'retrying', delayMs: number, message?: string) {
+		if (this.clients().length === 0) {
+			this.closeUpstream('No clients attached');
+			return;
+		}
+		this.setState(state, message);
+		this.attachTimer = setTimeout(() => {
+			this.attachTimer = null;
+			this.attach();
+		}, delayMs);
 	}
 
 	private attachUpstream(upstream: WebSocket, greeting: Uint8Array) {
 		this.upstream = upstream;
-		this.state = 'connected';
+		this.setState('connected');
 		upstream.addEventListener('message', (event) => {
 			if (this.upstream === upstream) {
 				this.broadcast(toBytes(event.data));
 			}
 		});
-		upstream.addEventListener('close', (event) => {
-			if (this.upstream === upstream) {
-				this.closeUpstream(event.reason || 'Serial console disconnected');
-			}
-		});
-		upstream.addEventListener('error', () => {
-			if (this.upstream === upstream) {
-				this.closeUpstream('Serial console error');
-			}
-		});
+		upstream.addEventListener('close', () => this.detachUpstream(upstream));
+		upstream.addEventListener('error', () => this.detachUpstream(upstream));
 
 		if (this.lastSize) {
 			this.sendUpstream(termProxyResize(this.lastSize.cols, this.lastSize.rows));
 		}
 		this.pingTimer = setInterval(() => this.sendUpstream(termProxyPing), UPSTREAM_PING_INTERVAL_MS);
-		for (const client of this.clients()) {
-			this.sendStatus(client, 'connected');
-		}
 		if (greeting.length > 0) {
 			this.broadcast(greeting);
 		}
 	}
 
+	private detachUpstream(upstream: WebSocket) {
+		if (this.upstream !== upstream) {
+			return;
+		}
+		this.stopPing();
+		this.upstream = null;
+		tryClose(upstream);
+		this.setState('connecting');
+		this.attach();
+	}
+
 	private sendUpstream(payload: string) {
-		if (this.state !== 'connected' || !this.upstream) {
+		const { upstream } = this;
+		if (this.state !== 'connected' || !upstream) {
 			return;
 		}
 		try {
-			this.upstream.send(payload);
+			upstream.send(payload);
 		} catch {
-			this.closeUpstream('Serial console disconnected');
+			this.detachUpstream(upstream);
 		}
 	}
 
@@ -279,22 +325,44 @@ export class SerialConsoleDurableObject extends DurableObject<Env> {
 	private sendReplay(client: WebSocket) {
 		const buffer = this.replay.snapshot();
 		if (buffer) {
+			trySend(client, JSON.stringify({ type: 'replay' }));
 			trySend(client, buffer);
 		}
 	}
 
-	private sendStatus(client: WebSocket, state: SessionState, message?: string) {
+	private setState(state: SessionState, message?: string) {
+		if (this.state === state && this.statusMessage === message) {
+			return;
+		}
+		this.state = state;
+		this.statusMessage = message;
+		for (const client of this.clients()) {
+			this.sendStatus(client);
+		}
+	}
+
+	private sendStatus(client: WebSocket, state = this.state, message = this.statusMessage) {
 		trySend(client, JSON.stringify({ type: 'status', state, message }));
 	}
 
-	private closeUpstream(reason: string) {
+	private stopPing() {
 		if (this.pingTimer) {
 			clearInterval(this.pingTimer);
 			this.pingTimer = null;
 		}
+	}
+
+	private closeUpstream(reason: string) {
+		this.session += 1;
+		this.stopPing();
+		if (this.attachTimer) {
+			clearTimeout(this.attachTimer);
+			this.attachTimer = null;
+		}
 		const { upstream } = this;
 		this.upstream = null;
 		this.state = 'closed';
+		this.statusMessage = undefined;
 		this.replay.clear();
 		if (upstream) {
 			tryClose(upstream, reason);

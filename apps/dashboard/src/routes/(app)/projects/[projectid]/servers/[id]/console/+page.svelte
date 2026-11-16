@@ -31,9 +31,5 @@
 			Pop out
 		</Button>
 	</div>
-	<SerialConsole
-		vmId={server.current.id}
-		vmName={server.current.name}
-		running={server.current.status === 'running'}
-	/>
+	<SerialConsole vmId={server.current.id} vmName={server.current.name} />
 </div>

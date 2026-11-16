@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { toast } from 'svelte-sonner';
 	import { Clipboard } from '#lib/clipboard.svelte.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { formatPercent } from '#lib/format.js';
@@ -6,13 +7,17 @@
 	import { primaryAddress } from '#lib/server-info.js';
 	import { serversState } from '#lib/state/servers.svelte.js';
 	import { browser } from '$app/env';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import Check from '~icons/lucide/check';
+	import ExternalLink from '~icons/lucide/external-link';
 	import AlertTriangle from '~icons/nucleo/alert-triangle';
 	import Copy from '~icons/nucleo/copy';
 	import FileText from '~icons/nucleo/file-text';
 	import Terminal from '~icons/nucleo/terminal';
 	import Trash2 from '~icons/nucleo/trash';
 	import type { PageProps } from './$types';
+	import SerialConsole from './console/serial-console.svelte';
 	import { useServer } from './lib/server-context';
 
 	let { data }: PageProps = $props();
@@ -176,11 +181,26 @@
 		];
 	});
 
-	const terminalLines = [
-		{ type: 'prompt' as const, text: 'ls /var/log' },
-		{ type: 'output' as const, text: 'www.log  gamer.log  uwaa.log  fyra.log  chicago.log' },
-		{ type: 'cursor' as const, text: '' }
-	];
+	let consoleServerId = $state<string | null>(null);
+	const consoleOpen = $derived(
+		data.featureFlags.vpsConsole && consoleServerId === server.current.id
+	);
+
+	function popOutConsole() {
+		const href = resolve(
+			`projects/${page.params.projectid ?? ''}/servers/${server.current.id}/console/window`
+		);
+		const popout = window.open(
+			href,
+			`serial-console-${server.current.id}`,
+			'popup,width=1024,height=640'
+		);
+		if (popout) {
+			popout.focus();
+		} else {
+			toast.error('Allow pop-ups for this site to pop out the console.');
+		}
+	}
 
 	const currentLogs = [
 		{
@@ -362,17 +382,42 @@
 	</div>
 
 	<div class="col-span-3 flex flex-col bg-background">
-		<div class="flex items-center gap-2 border-b border-border px-4 py-2.5">
+		<div class="flex h-9 items-center gap-2 border-b border-border px-4">
 			<Terminal class="h-3 w-3 text-muted-foreground" />
 			<span class="text-xs font-semibold text-muted-foreground">Console</span>
+			{#if consoleOpen}
+				<div class="-mr-2 ml-auto flex items-center gap-1">
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-7 gap-1.5 px-2 text-xs"
+						onclick={popOutConsole}
+					>
+						<ExternalLink class="h-3.5 w-3.5" />
+						Pop out
+					</Button>
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-7 px-2 text-xs"
+						onclick={() => (consoleServerId = null)}
+					>
+						Disconnect
+					</Button>
+				</div>
+			{/if}
 		</div>
-		<div
-			class="min-h-[180px] flex-1 bg-background p-4 font-mono text-sm leading-relaxed text-muted-foreground"
-		>
-			{#if !data.featureFlags.vpsConsole}
-				<div class="flex h-full min-h-[148px] flex-col items-center justify-center gap-3">
+		{#if consoleOpen}
+			<div class="flex min-h-[260px] flex-1 flex-col">
+				<SerialConsole vmId={server.current.id} vmName={server.current.name} />
+			</div>
+		{:else}
+			<div
+				class="flex min-h-[180px] flex-1 flex-col items-center justify-center gap-3 bg-background p-4 text-center"
+			>
+				{#if !data.featureFlags.vpsConsole}
 					<Terminal class="h-8 w-8 text-muted-foreground/60" />
-					<div class="text-center">
+					<div>
 						<p class="text-sm font-medium text-muted-foreground">Coming soon</p>
 						<p class="mt-1 text-xs text-muted-foreground">Console access is not available yet.</p>
 					</div>
@@ -382,35 +427,18 @@
 							'ssh-console',
 							'Copy SSH command',
 							'Connect over',
-							'text-xs',
-							'text-[11px]'
+							'font-mono text-xs',
+							'font-mono text-[11px]'
 						)}
 					{/if}
-				</div>
-			{:else if server.current.status === 'running'}
-				{#each terminalLines as line (line.type + line.text)}
-					{#if line.type === 'prompt'}
-						<div>
-							<span class="text-muted-foreground">user@{server.current.name}~:</span>
-							{line.text}
-						</div>
-					{:else if line.type === 'output'}
-						<div class="text-muted-foreground">{line.text}</div>
-					{:else}
-						<div>
-							<span class="text-muted-foreground">user@{server.current.name}~:</span>
-							<span class="inline-block h-4 w-1.5 animate-pulse bg-muted-foreground"></span>
-						</div>
-					{/if}
-				{/each}
-			{:else if server.current.status === 'restarting'}
-				<div class="text-amber-500">Restarting server...</div>
-			{:else if server.current.status === 'unknown'}
-				<div class="text-muted-foreground">Server status unavailable. Reconnecting...</div>
-			{:else}
-				<div class="text-muted-foreground">Server is offline. Start the server to connect.</div>
-			{/if}
-		</div>
+				{:else}
+					<Terminal class="h-8 w-8 text-muted-foreground/60" />
+					<Button size="sm" variant="outline" onclick={() => (consoleServerId = server.current.id)}>
+						Connect serial console
+					</Button>
+				{/if}
+			</div>
+		{/if}
 	</div>
 </div>
 

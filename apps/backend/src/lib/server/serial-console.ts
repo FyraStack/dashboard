@@ -27,9 +27,6 @@ async function authorizeSerialConsole(vmId: string): Promise<SerialConsoleTarget
 	const live = await proxmox().getVm(row.id, row.proxmoxId ?? undefined, {
 		proxmoxNode: row.proxmoxNode ?? undefined
 	});
-	if (live.status !== 'running') {
-		error(409, 'Start the server to use the serial console');
-	}
 	if (!live.proxmoxNode || live.proxmoxId === undefined) {
 		error(503, 'The serial console is unavailable for this server');
 	}

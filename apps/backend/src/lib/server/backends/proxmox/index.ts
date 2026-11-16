@@ -732,6 +732,11 @@ export class ProxmoxBackend {
 		return { status: status.status, exitstatus: status.exitstatus };
 	}
 
+	async isVmRunning(node: string, vmid: number) {
+		const status = await this.client.getQemuVm(node, vmid);
+		return status.status === 'running';
+	}
+
 	openSerialTerminal(node: string, vmid: number) {
 		const nodeClient = this.options.clientForNode?.(node) ?? this.client;
 		return connectSerialTerminal(nodeClient, node, vmid);

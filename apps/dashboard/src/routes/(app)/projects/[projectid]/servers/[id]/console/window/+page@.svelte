@@ -7,18 +7,8 @@
 	import TerminalIcon from '~icons/nucleo/terminal';
 	import SerialConsole from '../serial-console.svelte';
 
-	const STATUS_REFRESH_MS = 10_000;
-
 	const vmQuery = $derived(getVm({ vmId: page.params.id ?? '' }));
 	const server = $derived(vmQuery.current ? toServerInfo(vmQuery.current) : null);
-
-	$effect(() => {
-		const query = vmQuery;
-		const timer = setInterval(() => {
-			query.refresh().catch(() => null);
-		}, STATUS_REFRESH_MS);
-		return () => clearInterval(timer);
-	});
 </script>
 
 <svelte:head>
@@ -27,7 +17,7 @@
 
 <div class="fixed inset-0 flex flex-col bg-background">
 	{#if server}
-		<SerialConsole vmId={server.id} vmName={server.name} running={server.status === 'running'} />
+		<SerialConsole vmId={server.id} vmName={server.name} />
 	{:else if vmQuery.error}
 		<div class="flex flex-1 flex-col items-center justify-center gap-3 text-center">
 			<TerminalIcon class="h-8 w-8 text-muted-foreground" />

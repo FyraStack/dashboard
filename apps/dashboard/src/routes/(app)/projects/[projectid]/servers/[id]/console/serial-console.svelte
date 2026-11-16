@@ -5,13 +5,23 @@
 	import '@wterm/dom/src/terminal.css';
 	import { serialConsolePath } from 'stack-shared/routes';
 	import { onDestroy } from 'svelte';
+	import { toast } from 'svelte-sonner';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { startVm } from '#lib/remote/vms.remote.js';
+	import { requestServerStatusRefresh } from '#lib/state/servers.svelte.js';
 	import { getErrorMessage } from '#lib/utils.js';
 	import Loader2 from '~icons/lucide/loader-2';
 	import TerminalIcon from '~icons/nucleo/terminal';
 	import { OvmfSerialFilter, type ScreenSize } from './ovmf';
 
-	type ConsoleState = 'idle' | 'connecting' | 'connected' | 'closed' | 'error';
+	type ConsoleState =
+		| 'idle'
+		| 'connecting'
+		| 'connected'
+		| 'stopped'
+		| 'retrying'
+		| 'closed'
+		| 'error';
 	interface FirmwareLayout {
 		extent: ScreenSize;
 		grid: ScreenSize;
@@ -23,6 +33,10 @@
 		type: 'status';
 	}
 
+	interface ReplayMarker {
+		type: 'replay';
+	}
+
 	const BASE_FONT_PX = 13;
 	const TERMINAL_PADDING_PX = 24;
 	const MIN_FONT_PX = 6;
@@ -30,7 +44,7 @@
 	const HEARTBEAT_INTERVAL_MS = 30_000;
 	const DEFAULT_EXTENT: ScreenSize = { cols: 80, rows: 25 };
 
-	let { vmId, vmName, running }: { vmId: string; vmName: string; running: boolean } = $props();
+	let { vmId, vmName }: { vmId: string; vmName: string } = $props();
 
 	let terminal = $state<TerminalHandle | null>(null);
 	let wterm = $state<WTerm | null>(null);
@@ -40,6 +54,7 @@
 	let consoleState = $state<ConsoleState>('idle');
 	let statusMessage = $state<string | null>(null);
 	let reconnecting = $state(false);
+	let starting = $state(false);
 	let filter = new OvmfSerialFilter();
 	let firmware: FirmwareLayout | null = null;
 	let baseRowHeight: string | null = null;
@@ -47,6 +62,8 @@
 	let lastSize: { cols: number; rows: number } | null = null;
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+	let replayPending = false;
+	let replaying = false;
 
 	const showOverlay = $derived(consoleState !== 'connected');
 
@@ -207,14 +224,32 @@
 	}
 
 	function handleData(input: string) {
-		if (consoleState !== 'connected' || socket?.readyState !== WebSocket.OPEN) {
+		if (replaying || consoleState !== 'connected' || socket?.readyState !== WebSocket.OPEN) {
 			return;
 		}
 		socket.send(JSON.stringify({ type: 'input', data: input }));
 	}
 
+	function endUpstreamStream() {
+		const held = filter.flush();
+		if (held.length) {
+			terminal?.write(held);
+		}
+		resetStream();
+	}
+
 	function handleStatus(payload: StatusPayload) {
-		if (payload.state === 'connected') {
+		if (
+			payload.state === 'connecting' ||
+			payload.state === 'stopped' ||
+			payload.state === 'retrying'
+		) {
+			if (consoleState === 'connected') {
+				endUpstreamStream();
+			}
+			consoleState = payload.state;
+			statusMessage = payload.message ?? null;
+		} else if (payload.state === 'connected') {
 			consoleState = 'connected';
 			statusMessage = null;
 			if (lastSize) {
@@ -229,23 +264,40 @@
 		}
 	}
 
-	function parseStatus(text: string): StatusPayload | null {
+	function parseControl(text: string): StatusPayload | ReplayMarker | null {
 		try {
 			const payload = JSON.parse(text);
-			return payload?.type === 'status' ? payload : null;
+			return payload?.type === 'status' || payload?.type === 'replay' ? payload : null;
 		} catch {
 			return null;
 		}
 	}
 
+	function receiveReplay(bytes: Uint8Array) {
+		replaying = true;
+		try {
+			receive(bytes);
+		} finally {
+			replaying = false;
+		}
+	}
+
 	function handleSocketMessage(event: MessageEvent) {
 		if (typeof event.data !== 'string') {
-			receive(new Uint8Array(event.data as ArrayBuffer));
+			const bytes = new Uint8Array(event.data as ArrayBuffer);
+			if (replayPending) {
+				replayPending = false;
+				receiveReplay(bytes);
+			} else {
+				receive(bytes);
+			}
 			return;
 		}
-		const status = parseStatus(event.data);
-		if (status) {
-			handleStatus(status);
+		const control = parseControl(event.data);
+		if (control?.type === 'replay') {
+			replayPending = true;
+		} else if (control) {
+			handleStatus(control);
 		}
 	}
 
@@ -293,9 +345,7 @@
 		reconnectTimer = setTimeout(() => {
 			reconnectTimer = null;
 			reconnecting = false;
-			if (running) {
-				connect();
-			}
+			connect();
 		}, RECONNECT_DELAY_MS);
 	}
 
@@ -306,6 +356,7 @@
 		disconnect();
 		consoleState = 'connecting';
 		statusMessage = null;
+		replayPending = false;
 		resetStream();
 
 		const ws = new WebSocket(consoleSocketUrl());
@@ -341,14 +392,22 @@
 	}
 
 	$effect(() => {
-		if (running && terminal && consoleState === 'idle') {
+		if (terminal && consoleState === 'idle') {
 			connect();
-		} else if (!running && consoleState !== 'idle') {
-			disconnect();
-			consoleState = 'idle';
-			statusMessage = null;
 		}
 	});
+
+	async function startServer() {
+		starting = true;
+		try {
+			await startVm({ vmId });
+			requestServerStatusRefresh();
+		} catch (error) {
+			toast.error(getErrorMessage(error, 'Failed to start server'));
+		} finally {
+			starting = false;
+		}
+	}
 
 	$effect(() => {
 		if (!host) {
@@ -387,13 +446,22 @@
 			{#if coreError}
 				<TerminalIcon class="h-8 w-8 text-muted-foreground" />
 				<p class="text-sm text-foreground">{coreError}</p>
-			{:else if !core || consoleState === 'connecting' || (running && consoleState === 'idle')}
+			{:else if !core || consoleState === 'connecting' || consoleState === 'idle'}
 				<Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
 				<p class="text-sm text-muted-foreground">Opening serial console…</p>
-			{:else if !running}
+			{:else if consoleState === 'stopped'}
 				<TerminalIcon class="h-8 w-8 text-muted-foreground" />
-				<p class="text-sm text-foreground">Serial console for {vmName}</p>
-				<p class="max-w-xs text-xs text-muted-foreground">Start the server to use the console.</p>
+				<p class="text-sm text-foreground">{vmName} is off</p>
+				<Button size="sm" variant="outline" disabled={starting} onclick={startServer}>
+					{#if starting}
+						<Loader2 class="h-3.5 w-3.5 animate-spin" />
+					{/if}
+					Start server
+				</Button>
+			{:else if consoleState === 'retrying'}
+				<TerminalIcon class="h-8 w-8 text-muted-foreground" />
+				<p class="text-sm text-foreground">{statusMessage ?? 'Console connection failed'}</p>
+				<p class="text-xs text-muted-foreground">Retrying…</p>
 			{:else}
 				<TerminalIcon class="h-8 w-8 text-muted-foreground" />
 				<p class="text-sm text-foreground">{statusMessage ?? 'Console disconnected'}</p>

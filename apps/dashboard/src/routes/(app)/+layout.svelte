@@ -593,7 +593,9 @@
 				<a
 					href={resolve('support')}
 					aria-label={data.ticketsAwaitingReply > 0 ? 'Support, reply needed' : 'Support'}
-					class="relative flex h-8 shrink-0 items-center gap-1.5 border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
+					class="relative {isOnProjectRoute
+						? 'hidden sm:flex'
+						: 'flex'} h-8 shrink-0 items-center gap-1.5 border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
 				>
 					<LifeRing class="size-4 shrink-0" />
 					<span class="hidden sm:inline">Support</span>

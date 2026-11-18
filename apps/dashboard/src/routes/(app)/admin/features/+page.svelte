@@ -168,7 +168,7 @@
 										>
 										{#if enabled}
 											<span
-												class="hidden items-center gap-1 text-[10px] font-medium text-emerald-400 sm:flex"
+												class="hidden items-center gap-1 text-[10px] font-medium text-emerald-700 sm:flex dark:text-emerald-400"
 												><Check class="h-2.5 w-2.5" />Active</span
 											>
 										{/if}

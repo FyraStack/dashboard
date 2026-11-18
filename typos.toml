@@ -1,0 +1,9 @@
+[files]
+extend-exclude = ["pnpm-lock.yaml", "apps/backend/drizzle/"]
+
+[default.extend-words]
+ba = "ba"
+bse = "bse"
+
+[default.extend-identifiers]
+dum0 = "dum0"

@@ -1,3 +1,4 @@
+import { env } from 'cloudflare:workers';
 import { and, eq, exists, inArray, or, sql } from 'drizzle-orm';
 import { adminSupportTicketPath, supportTicketPath } from 'stack-shared/routes';
 import { type TicketCategory, ticketCategoryLabels } from 'stack-shared/support';
@@ -10,6 +11,7 @@ import { renderEmail, sendEmail } from '#lib/server/email.js';
 import { getRuntimeEnv } from '#lib/server/env.js';
 
 const EXCERPT_LENGTH = 500;
+const DISCORD_AUTHOR_NAME_LIMIT = 256;
 
 export interface NotifiedTicket {
 	category: TicketCategory;
@@ -26,6 +28,22 @@ function onOneLine(value: string) {
 	return value.replace(/\s+/g, ' ').trim();
 }
 
+function describeTicket(ticket: NotifiedTicket, message: string) {
+	const excerpt = onOneLine(message);
+	return {
+		subject: onOneLine(ticket.subject),
+		details: [
+			`#${ticket.number}`,
+			ticketCategoryLabels[ticket.category],
+			ticket.projectName ?? 'Account-level',
+			ticket.vmName
+		]
+			.filter(Boolean)
+			.join(' · '),
+		excerpt: excerpt.length > EXCERPT_LENGTH ? `${excerpt.slice(0, EXCERPT_LENGTH)}…` : excerpt
+	};
+}
+
 async function sendTicketNotification(
 	ticket: NotifiedTicket,
 	recipients: string[],
@@ -35,25 +53,45 @@ async function sendTicketNotification(
 		return;
 	}
 
-	const subject = onOneLine(ticket.subject);
-	const excerpt = onOneLine(notification.message);
+	const { subject, details, excerpt } = describeTicket(ticket, notification.message);
 	const { html, text } = await renderEmail(SupportTicketNotificationEmail, {
 		heading: subject,
 		summary: notification.summary,
-		details: [
-			`#${ticket.number}`,
-			ticketCategoryLabels[ticket.category],
-			ticket.projectName ?? 'Account-level',
-			ticket.vmName
-		]
-			.filter(Boolean)
-			.join(' · '),
-		excerpt: excerpt.length > EXCERPT_LENGTH ? `${excerpt.slice(0, EXCERPT_LENGTH)}…` : excerpt,
+		details,
+		excerpt,
 		actionUrl: `${getRuntimeEnv().ORIGIN}${notification.actionPath}`
 	});
 	const emailSubject = `[Support #${ticket.number}] ${notification.subjectPrefix}: ${subject}`;
 
 	await Promise.all(recipients.map((to) => sendEmail({ subject: emailSubject, to, html, text })));
+}
+
+async function postToStaffDiscord(ticket: NotifiedTicket, summary: string, message: string) {
+	const webhookUrl = env.SUPPORT_DISCORD_WEBHOOK_URL;
+	if (!webhookUrl) {
+		return;
+	}
+
+	const { subject, details, excerpt } = describeTicket(ticket, message);
+	const response = await fetch(webhookUrl, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({
+			allowed_mentions: { parse: [] },
+			embeds: [
+				{
+					author: { name: summary.slice(0, DISCORD_AUTHOR_NAME_LIMIT) },
+					title: `#${ticket.number} ${subject}`,
+					url: `${getRuntimeEnv().ORIGIN}${adminSupportTicketPath(ticket.id)}`,
+					description: excerpt,
+					footer: { text: details }
+				}
+			]
+		})
+	});
+	if (!response.ok) {
+		throw new Error(`Discord webhook responded with ${response.status}`);
+	}
 }
 
 async function listStaffEmails(db: Database) {
@@ -100,12 +138,16 @@ export async function notifyStaffOfCustomerMessage(
 	event: 'opened' | 'replied',
 	message: string
 ) {
-	await sendTicketNotification(ticket, await listStaffEmails(db), {
-		message,
-		subjectPrefix: event === 'opened' ? 'New ticket' : 'New reply',
-		summary: `${authorName} (${authorEmail}) ${event === 'opened' ? 'opened a ticket' : 'replied'}.`,
-		actionPath: adminSupportTicketPath(ticket.id)
-	});
+	const summary = `${authorName} (${authorEmail}) ${event === 'opened' ? 'opened a ticket' : 'replied'}.`;
+	await Promise.all([
+		postToStaffDiscord(ticket, summary, message),
+		sendTicketNotification(ticket, await listStaffEmails(db), {
+			message,
+			summary,
+			subjectPrefix: event === 'opened' ? 'New ticket' : 'New reply',
+			actionPath: adminSupportTicketPath(ticket.id)
+		})
+	]);
 }
 
 export async function notifyCustomersOfStaffMessage(

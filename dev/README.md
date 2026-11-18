@@ -58,4 +58,4 @@ pnpm --filter stack-dashboard run dev --host localhost --port 5173
 ## Caveats
 
 - this currently only works on linux.
-- no gurantees on vm performance.
+- no guarantees on vm performance.

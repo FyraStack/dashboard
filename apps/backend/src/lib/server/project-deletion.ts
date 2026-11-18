@@ -16,6 +16,7 @@ import {
 	vms,
 	volumes
 } from '#lib/server/db/schema.js';
+import { deleteProjectSupportFiles } from '#lib/server/support-attachments.js';
 import { DELETED_RETENTION_MS, deleteVmRows, queueVmDeletion } from '#lib/server/vm-deletion.js';
 
 export async function softDeleteOrganizationResources(
@@ -84,6 +85,7 @@ export async function purgeExpiredDeletedOrganizations(now = Date.now(), limit =
 		}
 		await db.delete(volumes).where(eq(volumes.ownerProjectId, id));
 		await db.delete(projectBillingCustomers).where(eq(projectBillingCustomers.projectId, id));
+		await deleteProjectSupportFiles(db, id);
 		await db.delete(organization).where(eq(organization.id, id));
 		purged += 1;
 	}

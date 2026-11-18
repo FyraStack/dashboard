@@ -10,6 +10,10 @@ import { initDrizzle } from '#lib/server/db/index.js';
 import { purgeExpiredIdempotencyKeys } from '#lib/server/idempotency.js';
 import { reconcileOrphanedIpamAllocations } from '#lib/server/ipam.js';
 import { purgeExpiredDeletedOrganizations } from '#lib/server/project-deletion.js';
+import {
+	purgeAbandonedSupportUploads,
+	purgeExpiredSupportTickets
+} from '#lib/server/support-attachments.js';
 import { purgeExpiredDeletedVms } from '#lib/server/vm-deletion.js';
 
 async function runSteps(steps: Record<string, () => Promise<unknown>>) {
@@ -51,6 +55,8 @@ export function runMaintenance() {
 		idempotencyKeys: () => purgeExpiredIdempotencyKeys(),
 		deletedVms: () => purgeExpiredDeletedVms(),
 		deletedProjects: () => purgeExpiredDeletedOrganizations(),
+		supportTickets: () => purgeExpiredSupportTickets(),
+		supportUploads: () => purgeAbandonedSupportUploads(),
 		ipam: () => reconcileOrphanedIpamAllocations(initDrizzle())
 	});
 }

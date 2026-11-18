@@ -3,7 +3,11 @@ import { handleErrorWithSentry, initCloudflareSentryHandle, sentryHandle } from 
 import { type RequestEvent, redirect } from '@sveltejs/kit';
 import { type Handle, type HandleServerError, sequence } from '@sveltejs/kit/hooks';
 import { authBasePath, passwordResetTokenCookie, sessionCookieNames } from 'stack-shared/auth';
-import { isSerialConsolePath, resetPasswordPath } from 'stack-shared/routes';
+import {
+	isSerialConsolePath,
+	isSupportAttachmentPath,
+	resetPasswordPath
+} from 'stack-shared/routes';
 import { applySetCookies, backend } from '#lib/server/backend.js';
 import { captureServerException } from '#lib/server/posthog.js';
 import { handlePostHogProxy } from '#lib/server/posthog-proxy.js';
@@ -120,8 +124,9 @@ const handleBackendRelease: Handle = async ({ event, resolve }) => {
 	return releaseAfterBody(response, event);
 };
 
-const handleSerialConsole: Handle = ({ event, resolve }) => {
-	if (isSerialConsolePath(event.url.pathname)) {
+const handleBackendRoutes: Handle = ({ event, resolve }) => {
+	const { pathname } = event.url;
+	if (isSerialConsolePath(pathname) || isSupportAttachmentPath(pathname)) {
 		return env.BACKEND.fetch(event.request);
 	}
 	return resolve(event);
@@ -163,7 +168,7 @@ const handleSentryInit: Handle = (input) => {
 };
 
 export const handle: Handle = sequence(
-	handleSerialConsole,
+	handleBackendRoutes,
 	handlePasswordResetToken,
 	handleSentryInit,
 	sentryHandle({ injectFetchProxyScript: false }),

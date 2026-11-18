@@ -43,6 +43,7 @@
 	import FolderOpen from '~icons/nucleo/folder-open';
 	import HardDrive from '~icons/nucleo/hard-drive';
 	import Key from '~icons/nucleo/key';
+	import LifeRing from '~icons/nucleo/life-ring';
 	import Megaphone from '~icons/nucleo/megaphone';
 	import Search from '~icons/nucleo/search';
 	import Server from '~icons/nucleo/server';
@@ -119,15 +120,37 @@
 		return `projects/${projectId}/${section.path}`;
 	}
 
-	const navItems = $derived(
-		currentProject
-			? visibleProjectSections.map((section) => ({
-					icon: section.icon,
-					label: section.label,
-					pathname: projectSectionPathname(section, currentProject.id)
-				}))
-			: []
+	const supportEnabled = $derived(data.featureFlags.support);
+
+	const isSupportPage = $derived(
+		page.url.pathname === '/support' || page.url.pathname.startsWith('/support/')
 	);
+	const navProject = $derived(isSupportPage ? data.currentProject : currentProject);
+
+	const navItems = $derived.by(() => {
+		if (!navProject) {
+			return [];
+		}
+		const projectId = navProject.id;
+		const sectionItems = visibleProjectSections.map((section) => ({
+			icon: section.icon,
+			label: section.label,
+			pathname: projectSectionPathname(section, projectId),
+			search: ''
+		}));
+		if (!supportEnabled) {
+			return sectionItems;
+		}
+		return [
+			...sectionItems,
+			{
+				icon: LifeRing,
+				label: 'Support',
+				pathname: 'support' as const,
+				search: `?project=${projectId}`
+			}
+		];
+	});
 
 	const navLinkStyles = {
 		rail: {
@@ -503,7 +526,7 @@
 	{@const active = isActive(item.pathname)}
 	<a
 		{...props}
-		href={resolve(item.pathname)}
+		href="{resolve(item.pathname)}{item.search}"
 		aria-current={active ? 'page' : undefined}
 		onclick={onNavigate}
 		class="{styles.base} {active ? styles.active : styles.inactive}"
@@ -566,6 +589,23 @@
 		</div>
 
 		<div class="flex min-w-0 flex-1 items-center justify-end gap-3">
+			{#if supportEnabled}
+				<a
+					href={resolve('support')}
+					aria-label={data.ticketsAwaitingReply > 0 ? 'Support, reply needed' : 'Support'}
+					class="relative flex h-8 shrink-0 items-center gap-1.5 border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
+				>
+					<LifeRing class="size-4 shrink-0" />
+					<span class="hidden sm:inline">Support</span>
+					{#if data.ticketsAwaitingReply > 0}
+						<span
+							class="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-amber-500"
+							aria-hidden="true"
+						></span>
+					{/if}
+				</a>
+			{/if}
+
 			{#if data.isAdmin}
 				{@render adminLink(
 					'flex h-8 shrink-0 items-center gap-1.5 border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground',
@@ -612,12 +652,8 @@
 		</div>
 	</header>
 
-	{#if isRootPage || isAdminPage}
-		<main class="flex flex-1 overflow-hidden">
-			{@render children()}
-		</main>
-	{:else}
-		<div class="flex flex-1 overflow-hidden">
+	<div class="flex flex-1 overflow-hidden">
+		{#if !(isRootPage || isAdminPage) && navItems.length > 0}
 			<aside
 				class="hidden w-12 shrink-0 flex-col items-center gap-1 border-r border-border py-3 lg:flex"
 			>
@@ -636,12 +672,12 @@
 					</Tooltip.Root>
 				{/each}
 			</aside>
+		{/if}
 
-			<main class="flex flex-1 overflow-hidden">
-				{@render children()}
-			</main>
-		</div>
-	{/if}
+		<main class="flex flex-1 overflow-hidden">
+			{@render children()}
+		</main>
+	</div>
 </div>
 
 <Sheet.Root bind:open={mobileNavOpen}>

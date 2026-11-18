@@ -14,6 +14,7 @@ import {
 	text,
 	uniqueIndex
 } from 'drizzle-orm/pg-core';
+import type { TicketCategory, TicketPriority, TicketStatus } from 'stack-shared/support';
 import type { VmLifecycleStatus } from 'stack-shared/vm-status';
 import { ulid } from 'ulid';
 import { organization, user } from './auth.schema.ts';
@@ -487,3 +488,93 @@ export const userPreferences = pgTable('user_preferences', {
 	announcementsEnabled: boolean('announcements_enabled').notNull().default(true),
 	updatedAt: bigint('updated_at', { mode: 'number' }).notNull()
 });
+
+export const supportTicketCategoryEnum = pgEnum(
+	'support_ticket_category',
+	exactValues<TicketCategory>()(['technical', 'billing', 'account', 'abuse', 'other'])
+);
+
+export const supportTicketStatusEnum = pgEnum(
+	'support_ticket_status',
+	exactValues<TicketStatus>()(['open', 'pending', 'closed'])
+);
+
+export const supportTicketPriorityEnum = pgEnum(
+	'support_ticket_priority',
+	exactValues<TicketPriority>()(['low', 'normal', 'high', 'urgent'])
+);
+
+export const supportTicketNumberSequence = pgSequence('support_ticket_number_seq', {
+	startWith: 1001,
+	minValue: 1001
+});
+
+export const supportTickets = pgTable(
+	'support_tickets',
+	{
+		id: ulidPk(),
+		number: integer('number').notNull().default(sql`nextval('support_ticket_number_seq')`),
+		subject: text('subject').notNull(),
+		category: supportTicketCategoryEnum('category').notNull(),
+		status: supportTicketStatusEnum('status').notNull(),
+		priority: supportTicketPriorityEnum('priority').notNull().default('normal'),
+		projectId: ulidFk('project_id').references(() => organization.id, { onDelete: 'cascade' }),
+		vmId: ulidFk('vm_id').references(() => vms.id, { onDelete: 'set null' }),
+		requesterUserId: text('requester_user_id').references(() => user.id, {
+			onDelete: 'set null'
+		}),
+		assigneeUserId: text('assignee_user_id').references(() => user.id, { onDelete: 'set null' }),
+		openedByStaff: boolean('opened_by_staff').notNull(),
+		createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+		updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+		closedAt: bigint('closed_at', { mode: 'number' }),
+		purgeAt: bigint('purge_at', { mode: 'number' })
+	},
+	(table) => [
+		uniqueIndex('support_tickets_number_uidx').on(table.number),
+		index('support_tickets_project_id_index').on(table.projectId),
+		index('support_tickets_requester_user_id_index').on(table.requesterUserId),
+		index('support_tickets_status_updated_at_index').on(table.status, table.updatedAt),
+		index('support_tickets_purge_at_index').on(table.purgeAt)
+	]
+);
+
+export const supportTicketMessages = pgTable(
+	'support_ticket_messages',
+	{
+		id: ulidPk(),
+		ticketId: text('ticket_id')
+			.notNull()
+			.references(() => supportTickets.id, { onDelete: 'cascade' }),
+		authorUserId: text('author_user_id').references(() => user.id, { onDelete: 'set null' }),
+		staff: boolean('staff').notNull(),
+		internal: boolean('internal').notNull().default(false),
+		body: text('body').notNull(),
+		createdAt: bigint('created_at', { mode: 'number' }).notNull()
+	},
+	(table) => [
+		index('support_ticket_messages_ticket_created_index').on(table.ticketId, table.createdAt),
+		index('support_ticket_messages_author_created_index').on(table.authorUserId, table.createdAt)
+	]
+);
+
+export const supportTicketAttachments = pgTable(
+	'support_ticket_attachments',
+	{
+		id: ulidPk(),
+		messageId: text('message_id').references(() => supportTicketMessages.id, {
+			onDelete: 'cascade'
+		}),
+		uploaderUserId: text('uploader_user_id').references(() => user.id, { onDelete: 'set null' }),
+		name: text('name').notNull(),
+		size: integer('size').notNull(),
+		createdAt: bigint('created_at', { mode: 'number' }).notNull()
+	},
+	(table) => [
+		index('support_ticket_attachments_message_id_index').on(table.messageId),
+		index('support_ticket_attachments_uploader_created_index').on(
+			table.uploaderUserId,
+			table.createdAt
+		)
+	]
+);

@@ -4,11 +4,13 @@ import type {
 	AdminEmails,
 	AdminIpam,
 	AdminProjects,
+	AdminSupport,
 	AdminUsers,
 	AdminVms,
 	Caller,
 	Project,
 	Projects,
+	Support,
 	Vm
 } from 'stack-backend';
 import type { AppSession, AppUser } from 'stack-backend/types';
@@ -49,6 +51,7 @@ const featureFlags: Resolved<Admin['layout']>['featureFlags'] = {
 	colocation: false,
 	firewall: false,
 	images: false,
+	support: true,
 	volumes: false,
 	vpsConsole: false,
 	vpsLogs: false,
@@ -415,7 +418,10 @@ function fixtureVm(vmId: string) {
 }
 
 function fixtureAdmin() {
-	const layout: Pick<Admin, 'layout'> = { layout: async () => ({ featureFlags }) };
+	const layout: Pick<Admin, 'layout'> = {
+		layout: async () => ({ featureFlags, ticketsAwaitingStaff: 0 })
+	};
+	const support: Pick<AdminSupport, 'list'> = { list: async () => [] };
 	const users: Pick<AdminUsers, 'list'> = { list: async () => adminUsers };
 	const projects: Pick<AdminProjects, 'list'> = { list: async () => adminProjects };
 	const vms: Pick<AdminVms, 'list'> = { list: async () => adminVms };
@@ -433,7 +439,8 @@ function fixtureAdmin() {
 		projects: () => strict('admin.projects', projects),
 		vms: () => strict('admin.vms', vms),
 		ipam: () => strict('admin.ipam', ipam),
-		emails: () => strict('admin.emails', emails)
+		emails: () => strict('admin.emails', emails),
+		support: () => strict('admin.support', support)
 	});
 }
 
@@ -443,10 +450,12 @@ export function createFixtureCaller() {
 			isAdmin: true,
 			featureFlags,
 			announcementsEnabled: true,
-			unreadAnnouncements: []
+			unreadAnnouncements: [],
+			ticketsAwaitingReply: 0
 		})
 	};
 	const projects: Pick<Projects, 'list'> = { list: async () => [projectSummary] };
+	const support: Pick<Support, 'list'> = { list: async () => [] };
 	const root: Pick<Caller, 'release' | 'session' | 'listImages' | 'listVmTypes'> = {
 		release: () => undefined,
 		session: async () => ({ current: { session, user }, setCookie: [] }),
@@ -457,6 +466,7 @@ export function createFixtureCaller() {
 		...root,
 		account: () => strict('account', account),
 		projects: () => strict('projects', projects),
+		support: () => strict('support', support),
 		project: fixtureProject,
 		vm: fixtureVm,
 		admin: fixtureAdmin

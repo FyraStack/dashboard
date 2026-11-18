@@ -1,11 +1,11 @@
-import { and, asc, count, desc, eq, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ne } from 'drizzle-orm';
 import type { VerificationMethod } from 'stack-shared/auth';
 import AdminUserDeletionCodeEmail from '#lib/emails/admin-user-deletion-code.svelte';
 import {
 	beginAdminVerification,
 	consumeAdminVerification
 } from '#lib/server/admin-verification.js';
-import { isAdminUser, requireAdminUser } from '#lib/server/auth-context.js';
+import { adminUserCondition, isAdminUser, requireAdminUser } from '#lib/server/auth-context.js';
 import { updateProjectCustomer } from '#lib/server/billing/customers.js';
 import { makeCountMap } from '#lib/server/count-map.js';
 import {
@@ -19,10 +19,12 @@ import {
 import type { Database } from '#lib/server/db/index.js';
 import { apiTokens, sshKeys } from '#lib/server/db/schema.js';
 import { sendRenderedEmail } from '#lib/server/email.js';
+import { scheduleAccountTicketPurge } from '#lib/server/handlers/support.js';
 import { error } from '#lib/server/http.js';
 import { captureServerEvent } from '#lib/server/posthog.js';
 import { softDeleteOrganizationResources } from '#lib/server/project-deletion.js';
 import { VERIFICATION_CODE_TTL_MS } from '#lib/server/verification-codes.js';
+import { DELETED_RETENTION_MS } from '#lib/server/vm-deletion.js';
 
 export interface UserSession {
 	createdAt: Date;
@@ -111,11 +113,6 @@ export interface GetUserResourcesInput {
 	userId: string;
 }
 
-const adminUserCondition = or(
-	eq(user.isAdmin, true),
-	sql`'admin' = any(string_to_array(${user.role}, ','))`
-);
-
 async function requireUserRecord(db: Database, userId: string) {
 	const target = await db.query.user.findFirst({ where: eq(user.id, userId) });
 	if (!target) {
@@ -153,6 +150,7 @@ async function assertCanDeleteUser(db: Database, adminUserId: string, targetUser
 
 async function deleteUserData(db: Database, targetUserId: string) {
 	await settleUserOrganizations(db, targetUserId);
+	await scheduleAccountTicketPurge(db, targetUserId, Date.now() + DELETED_RETENTION_MS);
 	await db.delete(apiTokens).where(eq(apiTokens.userId, targetUserId));
 	await db.delete(sshKeys).where(eq(sshKeys.userId, targetUserId));
 	await db.delete(user).where(eq(user.id, targetUserId));

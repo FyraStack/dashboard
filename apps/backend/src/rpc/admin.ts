@@ -12,6 +12,7 @@ import { AdminEmails } from './admin/emails.ts';
 import { AdminImages } from './admin/images.ts';
 import { AdminIpam } from './admin/ipam.ts';
 import { AdminProjects } from './admin/projects.ts';
+import { AdminSupport } from './admin/support.ts';
 import { AdminUsers } from './admin/users.ts';
 import { AdminVmTypes } from './admin/vm-types.ts';
 import { AdminVms } from './admin/vms.ts';
@@ -42,6 +43,10 @@ export class Admin extends RpcTarget {
 
 	vms() {
 		return new AdminVms(this.#scope);
+	}
+
+	support() {
+		return new AdminSupport(this.#scope);
 	}
 
 	billing() {

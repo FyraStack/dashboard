@@ -16,19 +16,27 @@ export const load: LayoutServerLoad = async ({ depends }) => {
 		dependencies.admin.vms,
 		dependencies.admin.projects,
 		dependencies.admin.vmTypes,
-		dependencies.admin.images
+		dependencies.admin.images,
+		dependencies.admin.tickets
 	);
 
-	const [{ featureFlags }, vmTypes, images, adminUsers, ipamPrefixes, adminVms, adminProjects] =
-		await Promise.all([
-			backend((me) => me.admin().layout()),
-			listVmTypes(),
-			listImages(),
-			listAdminUsers(),
-			listIpamPrefixes(),
-			listAllAdminVms(),
-			listAdminProjects()
-		]);
+	const [
+		{ featureFlags, ticketsAwaitingStaff },
+		vmTypes,
+		images,
+		adminUsers,
+		ipamPrefixes,
+		adminVms,
+		adminProjects
+	] = await Promise.all([
+		backend((me) => me.admin().layout()),
+		listVmTypes(),
+		listImages(),
+		listAdminUsers(),
+		listIpamPrefixes(),
+		listAllAdminVms(),
+		listAdminProjects()
+	]);
 
 	return {
 		vmTypes,
@@ -37,6 +45,7 @@ export const load: LayoutServerLoad = async ({ depends }) => {
 		adminUsers,
 		ipamPrefixes,
 		adminVms,
-		adminProjects
+		adminProjects,
+		ticketsAwaitingStaff
 	};
 };

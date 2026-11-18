@@ -26,6 +26,7 @@
 	import LayoutGrid from '~icons/nucleo/grid';
 	import HardDrive from '~icons/nucleo/hard-drive';
 	import Image from '~icons/nucleo/layers';
+	import LifeRing from '~icons/nucleo/life-ring';
 	import Network from '~icons/nucleo/network';
 	import RefreshCw from '~icons/nucleo/refresh-cw';
 	import Server from '~icons/nucleo/server';
@@ -39,6 +40,7 @@
 		colocation: Server,
 		firewall: Shield,
 		images: Image,
+		support: LifeRing,
 		volumes: HardDrive,
 		vpsConsole: Terminal,
 		vpsLogs: FileText,

@@ -59,5 +59,11 @@
 		{
 			"name": "EMAIL"
 		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "SUPPORT_ATTACHMENTS",
+			"bucket_name": "stack-support-attachments"
+		}
 	]
 }

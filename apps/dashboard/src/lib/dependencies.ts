@@ -11,15 +11,20 @@ const project = {
 	volumes: 'project:volumes'
 } as const;
 
+const support = {
+	tickets: 'support:tickets'
+} as const;
+
 const admin = {
 	announcements: 'app:admin-announcements',
 	featureFlags: app.featureFlags,
 	images: 'app:admin-images',
 	ipamPrefixes: app.ipamPrefixes,
 	projects: 'app:admin-projects',
+	tickets: 'app:admin-tickets',
 	users: 'app:admin-users',
 	vmTypes: 'app:admin-vm-types',
 	vms: 'app:admin-vms'
 } as const;
 
-export const dependencies = { admin, app, project } as const;
+export const dependencies = { admin, app, project, support } as const;

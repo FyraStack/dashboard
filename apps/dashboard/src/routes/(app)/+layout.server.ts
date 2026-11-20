@@ -5,23 +5,22 @@ import { backend } from '#lib/server/backend.js';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ locals, depends }) => {
-	depends(dependencies.app.projects, dependencies.app.featureFlags);
+	depends(dependencies.app.projects, dependencies.app.featureFlags, dependencies.support.tickets);
 
 	const { user } = locals;
 	if (!user) {
 		error(401, 'Not signed in');
 	}
 
-	const [projects, { featureFlags, isAdmin, announcementsEnabled, unreadAnnouncements }] =
-		await Promise.all([listProjects(), backend((me) => me.account().appLayout())]);
+	const [projects, account] = await Promise.all([
+		listProjects(),
+		backend((me) => me.account().appLayout())
+	]);
 
 	return {
+		...account,
 		user,
-		isAdmin,
 		projects,
-		activeProjectId: locals.activeProjectId ?? null,
-		featureFlags,
-		announcementsEnabled,
-		unreadAnnouncements
+		activeProjectId: locals.activeProjectId ?? null
 	};
 };

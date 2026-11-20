@@ -21,6 +21,7 @@ export type * from './lib/server/handlers/project-billing-page.ts';
 export type * from './lib/server/handlers/project-invitations.ts';
 export type * from './lib/server/handlers/projects.ts';
 export type * from './lib/server/handlers/ssh-keys.ts';
+export type * from './lib/server/handlers/support.ts';
 export type * from './lib/server/handlers/two-factor.ts';
 export type * from './lib/server/handlers/vm-types.ts';
 export type * from './lib/server/handlers/vms.ts';

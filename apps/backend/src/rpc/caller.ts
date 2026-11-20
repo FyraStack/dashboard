@@ -9,6 +9,7 @@ import { Account } from './account.ts';
 import { Admin } from './admin.ts';
 import { Project } from './project.ts';
 import { Projects } from './projects.ts';
+import { Support } from './support.ts';
 import { TwoFactorReset } from './two-factor-reset.ts';
 import { Vm } from './vm.ts';
 import { Volume } from './volume.ts';
@@ -55,6 +56,10 @@ export class Caller extends RpcTarget {
 
 	vm(id: string) {
 		return new Vm(this.#scope, id);
+	}
+
+	support() {
+		return new Support(this.#scope);
 	}
 
 	volume(id: string) {

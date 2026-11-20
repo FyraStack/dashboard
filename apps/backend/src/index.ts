@@ -5,7 +5,7 @@ import {
 	withSentry
 } from '@sentry/cloudflare';
 import { authBasePath } from 'stack-shared/auth';
-import { isSerialConsolePath } from 'stack-shared/routes';
+import { isSerialConsolePath, isSupportAttachmentPath } from 'stack-shared/routes';
 import { initAuth } from '#lib/server/auth.js';
 import { proxmox } from '#lib/server/backends/index.js';
 import { runBilling, runMaintenance } from '#lib/server/jobs.js';
@@ -13,6 +13,7 @@ import { inScope, inSystemScope } from '#lib/server/scope.js';
 import { rememberSentryClient, sentryOptions } from '#lib/server/sentry.js';
 import { connectSerialConsole } from '#lib/server/serial-console.js';
 import { SerialConsoleDurableObject } from '#lib/server/serial-console-session.js';
+import { handleSupportAttachmentRequest } from '#lib/server/support-attachments.js';
 import { VmDeletionWorkflow } from '#lib/server/vm-deletion.js';
 import { VmProvisioningWorkflow } from '#lib/server/vm-provisioning.js';
 import { Caller } from './rpc/caller.ts';
@@ -24,6 +25,7 @@ export type { AdminEmails } from './rpc/admin/emails.ts';
 export type { AdminImages } from './rpc/admin/images.ts';
 export type { AdminIpam } from './rpc/admin/ipam.ts';
 export type { AdminProjects } from './rpc/admin/projects.ts';
+export type { AdminSupport } from './rpc/admin/support.ts';
 export type { AdminUsers } from './rpc/admin/users.ts';
 export type { AdminVmTypes } from './rpc/admin/vm-types.ts';
 export type { AdminVms } from './rpc/admin/vms.ts';
@@ -31,6 +33,7 @@ export type { Admin } from './rpc/admin.ts';
 export type { Caller } from './rpc/caller.ts';
 export type { Project } from './rpc/project.ts';
 export type { Projects } from './rpc/projects.ts';
+export type { Support } from './rpc/support.ts';
 export type { TwoFactorReset } from './rpc/two-factor-reset.ts';
 export type { Vm } from './rpc/vm.ts';
 export type { Volume } from './rpc/volume.ts';
@@ -63,6 +66,9 @@ class Api extends WorkerEntrypoint<Env> {
 		const { pathname } = new URL(request.url);
 		if (isSerialConsolePath(pathname)) {
 			return connectSerialConsole(request);
+		}
+		if (isSupportAttachmentPath(pathname)) {
+			return handleSupportAttachmentRequest(request);
 		}
 		if (!isAuthPath(pathname)) {
 			return new Response('Not found', { status: 404 });

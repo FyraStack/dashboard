@@ -7,6 +7,7 @@
 	import { confirmDestructive } from '#lib/confirm.svelte.js';
 	import { killVm, rebootVm, startVm, stopVm } from '#lib/remote/vms.remote.js';
 	import { getServerWithFallback, requestServerStatusRefresh } from '#lib/state/servers.svelte.js';
+	import { supportHref } from '#lib/support.js';
 	import { getErrorMessage } from '#lib/utils.js';
 	import {
 		canPowerOff,
@@ -25,6 +26,7 @@
 	import Disc from '~icons/nucleo/disc';
 	import FileText from '~icons/nucleo/file-text';
 	import Globe from '~icons/nucleo/globe';
+	import LifeRing from '~icons/nucleo/life-ring';
 	import Play from '~icons/nucleo/play';
 	import Power from '~icons/nucleo/power';
 	import PowerOff from '~icons/nucleo/power-off';
@@ -203,6 +205,15 @@
 			{tab.label}
 		</a>
 	{/each}
+	{#if data.featureFlags.support}
+		<a
+			class="ml-auto flex shrink-0 items-center gap-1.5 px-3 py-2.5 text-xs font-medium text-muted-foreground transition-colors duration-100 hover:text-foreground"
+			href={supportHref('new', { projectId: data.projectId, vmId: selectedServer.id })}
+		>
+			<LifeRing class="h-3 w-3" />
+			Get help
+		</a>
+	{/if}
 </div>
 
 <div class="flex min-h-0 flex-1 flex-col overflow-y-auto lg:overflow-hidden">

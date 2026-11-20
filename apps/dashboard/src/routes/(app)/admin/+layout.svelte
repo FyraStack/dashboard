@@ -8,6 +8,7 @@
 	import Disc from '~icons/nucleo/disc';
 	import Flag from '~icons/nucleo/flag';
 	import FolderOpen from '~icons/nucleo/folder-open';
+	import LifeRing from '~icons/nucleo/life-ring';
 	import Mail from '~icons/nucleo/mail';
 	import Megaphone from '~icons/nucleo/megaphone';
 	import Network from '~icons/nucleo/network';
@@ -38,6 +39,16 @@
 			icon: Server,
 			count: data.adminVms.filter((vm) => vm.active).length
 		},
+		...(enabledFlags.support
+			? [
+					{
+						href: resolve('admin/support'),
+						label: 'Support',
+						icon: LifeRing,
+						count: data.ticketsAwaitingStaff
+					}
+				]
+			: []),
 		{
 			href: resolve('admin/vm-types'),
 			label: 'VM Types',
@@ -84,7 +95,7 @@
 			{@const active =
 				page.url.pathname === tab.href || page.url.pathname.startsWith(`${tab.href}/`)}
 			<a
-				class="flex h-full items-center gap-1.5 border-b-2 px-5 text-xs font-medium transition-colors {active
+				class="flex h-full shrink-0 items-center gap-1.5 border-b-2 px-5 text-xs font-medium whitespace-nowrap transition-colors {active
 					? 'border-red-500 text-foreground'
 					: 'border-transparent text-muted-foreground hover:text-foreground'}"
 				href={tab.href}

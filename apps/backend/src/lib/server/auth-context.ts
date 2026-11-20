@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or, sql } from 'drizzle-orm';
 import { hasProjectRole, type PermissionLevel } from 'stack-shared/project-roles';
 import { type AppUser, context } from '#lib/server/context.js';
 import { member, organization, user } from '#lib/server/db/auth.schema.js';
@@ -8,6 +8,11 @@ import { error } from '#lib/server/http.js';
 function hasAdminRole(role: string | null | undefined): boolean {
 	return role?.split(',').includes('admin') ?? false;
 }
+
+export const adminUserCondition = or(
+	eq(user.isAdmin, true),
+	sql`'admin' = any(string_to_array(${user.role}, ','))`
+);
 
 export function isAdminUser(candidate: {
 	role?: string | null;

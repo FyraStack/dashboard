@@ -42,7 +42,9 @@
 	import Disc from '~icons/nucleo/disc';
 	import FolderOpen from '~icons/nucleo/folder-open';
 	import HardDrive from '~icons/nucleo/hard-drive';
+	import House from '~icons/nucleo/house';
 	import Key from '~icons/nucleo/key';
+	import LifeRing from '~icons/nucleo/life-ring';
 	import Megaphone from '~icons/nucleo/megaphone';
 	import Search from '~icons/nucleo/search';
 	import Server from '~icons/nucleo/server';
@@ -119,15 +121,46 @@
 		return `projects/${projectId}/${section.path}`;
 	}
 
-	const navItems = $derived(
-		currentProject
-			? visibleProjectSections.map((section) => ({
-					icon: section.icon,
-					label: section.label,
-					pathname: projectSectionPathname(section, currentProject.id)
-				}))
-			: []
+	const supportEnabled = $derived(data.featureFlags.support);
+
+	const isSupportPage = $derived(
+		page.url.pathname === '/support' || page.url.pathname.startsWith('/support/')
 	);
+	const navProject = $derived(isRootPage || isSupportPage ? data.currentProject : currentProject);
+
+	const navItems = $derived.by(() => {
+		if (!navProject) {
+			return [];
+		}
+		const projectId = navProject.id;
+		const sectionItems = visibleProjectSections.map((section) => ({
+			icon: section.icon,
+			label: section.label,
+			pathname: projectSectionPathname(section, projectId),
+			search: ''
+		}));
+		if (!supportEnabled) {
+			return sectionItems;
+		}
+		return [
+			...sectionItems,
+			{
+				icon: LifeRing,
+				label: 'Support',
+				pathname: 'support' as const,
+				search: `?project=${projectId}`
+			}
+		];
+	});
+
+	const globalNavItems = $derived([
+		{ icon: House, label: 'Home', pathname: '' as const, search: '' },
+		...(supportEnabled
+			? [{ icon: LifeRing, label: 'Support', pathname: 'support' as const, search: '' }]
+			: [])
+	]);
+
+	const drawerItems = $derived(navItems.length > 0 ? navItems : globalNavItems);
 
 	const navLinkStyles = {
 		rail: {
@@ -145,6 +178,9 @@
 	};
 
 	function isActive(pathname: string) {
+		if (pathname === '') {
+			return isRootPage;
+		}
 		return page.url.pathname.startsWith(`/${pathname}`);
 	}
 
@@ -494,7 +530,7 @@
 {/snippet}
 
 {#snippet navLink(
-	item: (typeof navItems)[number],
+	item: (typeof drawerItems)[number],
 	variant: keyof typeof navLinkStyles,
 	props: Record<string, unknown> = {},
 	onNavigate?: () => void
@@ -503,7 +539,7 @@
 	{@const active = isActive(item.pathname)}
 	<a
 		{...props}
-		href={resolve(item.pathname)}
+		href="{resolve(item.pathname)}{item.search}"
 		aria-current={active ? 'page' : undefined}
 		onclick={onNavigate}
 		class="{styles.base} {active ? styles.active : styles.inactive}"
@@ -516,16 +552,14 @@
 <div class="flex h-screen flex-col overflow-hidden bg-background">
 	<header class="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
 		<div class="flex min-w-0 items-center gap-2">
-			{#if navItems.length > 0}
-				<button
-					type="button"
-					class="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground lg:hidden"
-					aria-label="Open navigation menu"
-					onclick={() => (mobileNavOpen = true)}
-				>
-					<Menu class="h-4 w-4" />
-				</button>
-			{/if}
+			<button
+				type="button"
+				class="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground lg:hidden"
+				aria-label="Open navigation menu"
+				onclick={() => (mobileNavOpen = true)}
+			>
+				<Menu class="h-4 w-4" />
+			</button>
 			<a href={resolve('')} class="flex shrink-0 items-center gap-2">
 				<img src="/logo.svg" alt="" class="h-5 w-5" />
 				<span class="text-sm font-semibold tracking-tight text-foreground">Stack</span>
@@ -566,10 +600,27 @@
 		</div>
 
 		<div class="flex min-w-0 flex-1 items-center justify-end gap-3">
+			{#if supportEnabled}
+				<a
+					href={resolve('support')}
+					aria-label={data.ticketsAwaitingReply > 0 ? 'Support, reply needed' : 'Support'}
+					class="relative hidden h-8 shrink-0 items-center gap-1.5 border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground sm:flex"
+				>
+					<LifeRing class="size-4 shrink-0" />
+					<span class="hidden sm:inline">Support</span>
+					{#if data.ticketsAwaitingReply > 0}
+						<span
+							class="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-amber-500"
+							aria-hidden="true"
+						></span>
+					{/if}
+				</a>
+			{/if}
+
 			{#if data.isAdmin}
 				{@render adminLink(
-					'flex h-8 shrink-0 items-center gap-1.5 border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground',
-					'hidden sm:inline'
+					'hidden h-8 shrink-0 items-center gap-1.5 border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground sm:flex',
+					''
 				)}
 			{/if}
 
@@ -612,12 +663,8 @@
 		</div>
 	</header>
 
-	{#if isRootPage || isAdminPage}
-		<main class="flex flex-1 overflow-hidden">
-			{@render children()}
-		</main>
-	{:else}
-		<div class="flex flex-1 overflow-hidden">
+	<div class="flex flex-1 overflow-hidden">
+		{#if !(isRootPage || isAdminPage) && navItems.length > 0}
 			<aside
 				class="hidden w-12 shrink-0 flex-col items-center gap-1 border-r border-border py-3 lg:flex"
 			>
@@ -636,29 +683,29 @@
 					</Tooltip.Root>
 				{/each}
 			</aside>
+		{/if}
 
-			<main class="flex flex-1 overflow-hidden">
-				{@render children()}
-			</main>
-		</div>
-	{/if}
+		<main class="flex flex-1 overflow-hidden">
+			{@render children()}
+		</main>
+	</div>
 </div>
 
 <Sheet.Root bind:open={mobileNavOpen}>
 	<Sheet.Content side="left" class="flex w-64 flex-col gap-0 border-border bg-background p-0">
 		<Sheet.Header class="border-b border-border px-4 py-3 text-left">
 			<Sheet.Title class="truncate text-sm text-foreground"
-				>{currentProject?.projectName ?? 'Menu'}</Sheet.Title
+				>{navProject?.projectName ?? 'Menu'}</Sheet.Title
 			>
 		</Sheet.Header>
 		<nav class="flex flex-col p-2">
-			{#each navItems as item (item.label)}
+			{#each drawerItems as item (item.label)}
 				{@render navLink(item, 'drawer', {}, () => (mobileNavOpen = false))}
 			{/each}
 		</nav>
 
 		<div class="mt-auto">
-			{#if projects.length > 1}
+			{#if navProject && projects.length > 1}
 				<div class="border-t border-border p-2">
 					<p
 						class="px-3 py-1 text-[10px] font-medium tracking-wider text-muted-foreground uppercase"
